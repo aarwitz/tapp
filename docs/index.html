@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tapp — ship with proof</title>
+<title>tapp — ship with proof</title>
 <meta name="description" content="Autonomous QA that explores your app like a user and returns a deterministic ship/no-ship verdict with evidence — iOS simulator and web. Free npm/MCP tool, hosted PR gate for teams.">
-<meta property="og:title" content="Tapp — ship with proof">
-<meta property="og:description" content="Autonomous QA with a deterministic ship/no-ship verdict, on iOS and web. Your agent has hands; Tapp gives it judgment. No test code required.">
+<meta property="og:title" content="tapp — ship with proof">
+<meta property="og:description" content="Autonomous QA with a deterministic ship/no-ship verdict, on iOS and web. Your agent has hands; tapp gives it judgment. No test code required.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
 <style>
@@ -67,7 +67,7 @@
     backdrop-filter: blur(8px); z-index: 10;
   }
   header.nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
-  .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+  .brand { font-family: ui-rounded, -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
   .brand span { color: var(--accent); }
   nav.links { display: flex; gap: 1.5rem; font-size: 0.92rem; }
   nav.links a { color: var(--fg-dim); text-decoration: none; }
@@ -151,7 +151,7 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#">Tapp<span>.</span></a>
+    <a class="brand" href="#">tapp<span>.</span></a>
     <nav class="links">
       <a href="#gate">Release Gate</a>
       <a href="#tools">Tools</a>
@@ -164,7 +164,7 @@
 <div class="hero wrap">
   <h1>Ship with proof.</h1>
   <p class="sub">
-    Your coding agent has hands — Tapp gives it judgment. Autonomous QA that explores the app
+    Your coding agent has hands — tapp gives it judgment. Autonomous QA that explores the app
     like a user (iOS simulator or real browser), detects what's broken, and returns a
     deterministic ship/no-ship verdict with evidence. No test code. No app changes.
   </p>
@@ -207,13 +207,13 @@
       <div class="card">
         <div class="icon">🌐</div>
         <h3>Web — beta</h3>
-        <p>Built <em>on</em> Playwright: your agent already has browser hands; Tapp adds autonomous
+        <p>Built <em>on</em> Playwright: your agent already has browser hands; tapp adds autonomous
         exploration and detectors for uncaught exceptions, failed requests, dead buttons, broken
         links, and error pages.</p>
       </div>
       <div class="card">
         <div class="icon">🖥</div>
-        <h3>Tapp.app — coming soon</h3>
+        <h3>tapp.app — coming soon</h3>
         <p>A macOS cockpit around the same engine: import a project, click Run, watch QA live,
         get the decision card. Free download, in packaging.</p>
       </div>
@@ -226,7 +226,7 @@
     <span class="tag">Free, forever, local</span>
     <h2>19 tools. No test code. No app changes.</h2>
     <p class="lead">
-      Tapp explores like a user, acts like a user, screenshots what it sees. Everything runs
+      tapp explores like a user, acts like a user, screenshots what it sees. Everything runs
       locally on your Mac; nothing leaves it.
     </p>
     <div class="grid">
@@ -269,7 +269,7 @@
     <span class="tag">The verdict you can trust</span>
     <h2>Deterministic. No LLM in the run loop.</h2>
     <p class="lead">
-      Tapp explores like a user and detects crashes, failed sign-ins, dead buttons, stuck loading
+      tapp explores like a user and detects crashes, failed sign-ins, dead buttons, stuck loading
       screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
       links — then commits to a verdict. Same build in, same verdict out. A shallow run is never
       <code>ready</code>. Absence of findings is not a pass.
@@ -296,8 +296,8 @@
     <span class="tag">For teams</span>
     <h2>The release gate, hosted.</h2>
     <p class="lead">
-      Install the Tapp GitHub App on your repo and every PR gets a ship/no-ship verdict —
-      explored on Tapp's infrastructure, posted as a check + PR comment, diffed against a
+      Install the tapp GitHub App on your repo and every PR gets a ship/no-ship verdict —
+      explored on tapp's infrastructure, posted as a check + PR comment, diffed against a
       baseline. Nothing to set up: no runners, no PATs, no YAML. iOS today; web next.
     </p>
     <div class="gate-panel">

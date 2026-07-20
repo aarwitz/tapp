@@ -768,15 +768,60 @@ class ExplorerTests: XCTestCase {
                 }
 
             if let emailF = emailField, emailF.exists, let passF = passwordField, passF.exists {
+                // ---- Pause-first at credential surfaces (attended runs must never get surprise
+                // typing). When the host wired interactive input, ask BEFORE the preamble types:
+                // the prompt shows the known email as its default; Submit overrides the values,
+                // Skip skips login entirely, Use-defaults or a 30s timeout (unattended run)
+                // proceeds with the configured credentials — the old silent behavior becomes the
+                // fallback, not the default.
+                var preambleEmail = testEmail
+                var preamblePassword = testPassword
+                var skipPreambleLogin = false
+                if interactiveInputEnabled, !inputResponsePath.isEmpty {
+                    let navTitle = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.identifier : ""
+                    let promptScreen = navTitle.isEmpty ? "Sign In" : navTitle
+                    let emailKey = emailF.identifier.isEmpty ? "email" : emailF.identifier
+                    let passKey = passF.identifier.isEmpty ? "password" : passF.identifier
+                    let descriptors = [
+                        InputDescriptor(key: emailKey, label: "Email", secure: false, placeholder: emailF.placeholderValue ?? ""),
+                        InputDescriptor(key: passKey, label: "Password", secure: true, placeholder: passF.placeholderValue ?? ""),
+                    ]
+                    promptedScreens.insert(normalizeKey(promptScreen)) // don't re-ask in the main loop
+                    let action = awaitInteractiveInput(
+                        requestId: UUID().uuidString,
+                        screenTitle: promptScreen,
+                        descriptors: descriptors,
+                        responsePath: inputResponsePath,
+                        waitTimeout: inputWaitTimeout,
+                        overrides: &inputOverrides,
+                        totalWaitSeconds: &totalWaitSeconds,
+                        dontAskAgain: &dontAskAgain,
+                        interactiveEnabled: &interactiveInputEnabled
+                    )
+                    if action == "skip" {
+                        skipPreambleLogin = true
+                        print("OCQA_STATE:login_preamble_skipped_by_user")
+                    } else if action == "submit" {
+                        let screenKey = normalizeKey(promptScreen)
+                        if let v = inputOverrides["screen:\(screenKey)|\(emailKey)"] ?? inputOverrides[emailKey], !v.isEmpty {
+                            preambleEmail = v
+                        }
+                        if let v = inputOverrides["screen:\(screenKey)|\(passKey)"] ?? inputOverrides[passKey], !v.isEmpty {
+                            preamblePassword = v
+                        }
+                    } // "defaults" / "dont_ask" / "timeout" → proceed with the configured creds
+                }
+
+                if !skipPreambleLogin {
                 print("OCQA_STATE:login_preamble_attempting")
                 emailF.tap()
                 Thread.sleep(forTimeInterval: 0.3)
-                emailF.typeText(testEmail)
+                emailF.typeText(preambleEmail)
                 Thread.sleep(forTimeInterval: 0.3)
 
                 passF.tap()
                 Thread.sleep(forTimeInterval: 0.3)
-                passF.typeText(testPassword)
+                passF.typeText(preamblePassword)
                 Thread.sleep(forTimeInterval: 0.3)
 
                 // Dismiss keyboard
@@ -828,7 +873,7 @@ class ExplorerTests: XCTestCase {
                         if passFieldAfter.exists {
                             passFieldAfter.tap()
                             Thread.sleep(forTimeInterval: 0.3)
-                            passFieldAfter.typeText(testPassword)
+                            passFieldAfter.typeText(preamblePassword)
                             Thread.sleep(forTimeInterval: 0.3)
                             for label in loginLabels + continueLabels {
                                 let btn = app.buttons[label]
@@ -866,6 +911,7 @@ class ExplorerTests: XCTestCase {
                     }
                     Thread.sleep(forTimeInterval: 2.0)
                 }
+                } // !skipPreambleLogin
             }
         }
 
@@ -3229,6 +3275,9 @@ class ExplorerTests: XCTestCase {
     /// fallback timeout elapses). Submitted values are merged into `overrides` (screen-scoped) so
     /// the normal typing path picks them up via `resolveInputOverride`. Never hangs: on timeout it
     /// falls back to auto-defaults and disables further prompting for the rest of the run.
+    /// Returns the resolved action ("submit" / "defaults" / "skip" / "dont_ask" / "timeout") so
+    /// callers (e.g. the login preamble) can branch on it.
+    @discardableResult
     private func awaitInteractiveInput(
         requestId: String,
         screenTitle: String,
@@ -3239,7 +3288,7 @@ class ExplorerTests: XCTestCase {
         totalWaitSeconds: inout Double,
         dontAskAgain: inout Bool,
         interactiveEnabled: inout Bool
-    ) {
+    ) -> String {
         // Clear any stale response left over from a previous request.
         try? FileManager.default.removeItem(atPath: responsePath)
 
@@ -3282,6 +3331,7 @@ class ExplorerTests: XCTestCase {
         }
         totalWaitSeconds += Date().timeIntervalSince(start)
         print("OCQA_INPUT_RESOLVED:{\"requestId\":\"\(requestId)\",\"action\":\"\(resolvedAction)\"}")
+        return resolvedAction
     }
 
     /// In-loop vision escalation. Screenshots the current screen, asks the host (via

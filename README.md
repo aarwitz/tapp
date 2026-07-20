@@ -1,4 +1,4 @@
-# Tapp — ship with proof
+# tapp — ship with proof
 
 [![npm](https://img.shields.io/npm/v/tapp-mcp?color=cb3837&label=npm)](https://www.npmjs.com/package/tapp-mcp)
 [![npm downloads](https://img.shields.io/npm/dw/tapp-mcp?label=downloads)](https://www.npmjs.com/package/tapp-mcp)
@@ -6,20 +6,20 @@
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInRhcHAtbWNwIiwibWNwIl19)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22tapp-mcp%22%2C%22mcp%22%5D%7D)
 
-**Your coding agent has hands. Tapp gives it judgment** — autonomous QA with a deterministic
+**Your coding agent has hands. tapp gives it judgment** — autonomous QA with a deterministic
 ship/no-ship verdict, for the apps your agent builds.
 
 Coding agents can write the code, and (with Playwright & friends) they can even drive the app.
-What nobody gives them is **judgment**: did it actually work? Tapp explores your app like a user —
+What nobody gives them is **judgment**: did it actually work? tapp explores your app like a user —
 no test code, no app changes — detects what's broken, and commits to a verdict your merge queue
 can trust: `ready`, `caution`, or `blocked`, with evidence.
 
 Two platforms, one judgment layer:
 
-- **iOS** — the missing Playwright for iOS. Tapp is hands *and* judgment: a generic XCUITest
+- **iOS** — the missing Playwright for iOS. tapp is hands *and* judgment: a generic XCUITest
   harness drives any app on the simulator via the accessibility surface. Native — no Appium,
   no WebDriverAgent.
-- **Web (beta)** — built *on* Playwright. Your agent already has browser hands; Tapp adds the
+- **Web (beta)** — built *on* Playwright. Your agent already has browser hands; tapp adds the
   autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
   dead buttons, broken links, error pages), and the same verdict.
 
@@ -116,7 +116,7 @@ Or use the bundled GitHub Action (`action.yml`) on a macOS runner — see
 Commit a `.autotap/baseline.json` from a main-branch run and PRs fail only on **new**
 high/critical findings, not pre-existing debt.
 
-**Hosted gate (early access).** Don't want to run Mac CI yourself? The Tapp Release Gate
+**Hosted gate (early access).** Don't want to run Mac CI yourself? The tapp Release Gate
 runs the same engine on our infrastructure: install a GitHub App, and every PR gets the
 verdict as a check + comment with evidence and automatic regression gating — no runners,
 no PATs, no YAML. We're onboarding a small number of design partners by hand —
@@ -129,7 +129,7 @@ your agent proves its UI work instead of claiming it:
 
 ```markdown
 ## Verifying UI changes
-This repo uses Tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
+This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
 (iOS simulator, or a browser for web). After any UI change: build/serve the app, then use the
 tapp MCP tools (`npx -y tapp-mcp mcp`) to open the changed screen and screenshot it as proof.
 Before declaring a feature done, run `tapp_run_qa` (appBundleId for iOS, url for web) and
@@ -151,7 +151,7 @@ if you switch simulators). All captures land in `~/.tapp/captures/`.
 
 ## Coming soon
 
-**Tapp.app** — a macOS cockpit around the same engine: import an iOS project, click Run, watch
+**tapp.app** — a macOS cockpit around the same engine: import an iOS project, click Run, watch
 autonomous QA live, and get the ship/no-ship decision card. Free download, in packaging.
 
 ## License
