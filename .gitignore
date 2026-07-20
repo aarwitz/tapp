@@ -1,0 +1,49 @@
+# macOS / Xcode
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+.DS_Store
+
+# Generated
+AutoTap.xcodeproj/
+
+# Swift
+.swiftpm/
+.build/
+Packages/
+
+# IDE
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+
+# Misc
+*.swp
+*~
+.env
+
+# Capture artifacts (large media, not for git)
+captures/
+*.xcresult
+*.mov
+*.webm
+*.mp4
+*.bak
+
+# Python
+__pycache__/
+*.pyc
+backend/proxy/usage.jsonl
+node_modules/
+
+# Tapp Cloud — never commit runtime state or App credentials
+cloud/server/*.db*
+cloud/server/app-credentials.json

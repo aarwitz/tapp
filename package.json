@@ -1,0 +1,56 @@
+{
+  "name": "tapp-mcp",
+  "version": "0.7.0",
+  "mcpName": "io.github.aarwitz/tapp",
+  "description": "Playwright for iOS — give coding agents hands and eyes on the iOS simulator. MCP server + autonomous QA: tap, type, screenshot, explore, and get a deterministic ship/no-ship verdict. No test code required.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tapp": "bin/tapp.js"
+  },
+  "files": [
+    "bin/",
+    "mcp-server/src/",
+    "scripts/",
+    "Harness/OCQAHarness/",
+    "Harness/OCQAHarnessUITests/",
+    "Harness/OCQAHarness.xcodeproj/",
+    "Harness/generate-harness-xcodeproj.rb",
+    "AGENTS.md"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aarwitz/tapp.git"
+  },
+  "homepage": "https://github.com/aarwitz/tapp#readme",
+  "bugs": {
+    "url": "https://github.com/aarwitz/tapp/issues"
+  },
+  "keywords": [
+    "tapp",
+    "ios",
+    "simulator",
+    "mcp",
+    "mcp-server",
+    "xcuitest",
+    "e2e",
+    "testing",
+    "qa",
+    "playwright",
+    "agent",
+    "claude",
+    "cursor",
+    "copilot",
+    "automation",
+    "mobile"
+  ]
+}

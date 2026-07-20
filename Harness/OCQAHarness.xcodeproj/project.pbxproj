@@ -1,0 +1,199 @@
+// !$*UTF8*$!
+{
+  archiveVersion = 1;
+  classes = {};
+  objectVersion = 56;
+  objects = {
+    5D7C13C377373C4980FC8162 /* Project object */ = {
+      isa = PBXProject;
+      buildConfigurationList = C03EC97124C7DA0EE83E045B;
+      compatibilityVersion = "Xcode 14.0";
+      developmentRegion = en;
+      hasScannedForEncodings = 0;
+      knownRegions = (en, Base);
+      mainGroup = 97B474EE87109F337A5EDB45;
+      productRefGroup = 9A2A24D8F8E06032696AC411;
+      projectDirPath = "";
+      projectRoot = "";
+      targets = (
+        EAC02A5E44291747D888CAF7,
+        8FD0002A75D948EE79C4FDEB,
+      );
+    };
+
+    /* Main Group */
+    97B474EE87109F337A5EDB45 = {
+      isa = PBXGroup;
+      children = (
+        D5E75DDC871BCC9FA4AEB33A,
+        F1804B339745969BC4D5BD0E,
+        9A2A24D8F8E06032696AC411,
+      );
+      sourceTree = "<group>";
+    };
+    9A2A24D8F8E06032696AC411 = {
+      isa = PBXGroup;
+      children = (
+        9CEBAC16BBBB2096CF6736B7,
+        4596C27A89AAB1291984CE15,
+      );
+      name = Products;
+      sourceTree = "<group>";
+    };
+    D5E75DDC871BCC9FA4AEB33A = {
+      isa = PBXGroup;
+      children = (
+        EC2E72351C49E8A03B62A7E4,
+        C4EFB6D8BCD48E1E7CF4723F,
+      );
+      path = OCQAHarness;
+      sourceTree = "<group>";
+    };
+    F1804B339745969BC4D5BD0E = {
+      isa = PBXGroup;
+      children = (
+        02DDFAC1CE151BA9E8F1F2B0,
+        6C52E22A95C5BC114BD89C1D,
+      );
+      path = OCQAHarnessUITests;
+      sourceTree = "<group>";
+    };
+
+    /* File References */
+    EC2E72351C49E8A03B62A7E4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>";};
+    C4EFB6D8BCD48E1E7CF4723F = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>";};
+    02DDFAC1CE151BA9E8F1F2B0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplorerTests.swift; sourceTree = "<group>";};
+    6C52E22A95C5BC114BD89C1D = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>";};
+    9CEBAC16BBBB2096CF6736B7 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OCQAHarness.app; sourceTree = BUILT_PRODUCTS_DIR;};
+    4596C27A89AAB1291984CE15 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OCQAHarnessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;};
+
+    /* Build Files */
+    F58B8DB8FD10B48DA02F1FFE = {isa = PBXBuildFile; fileRef = EC2E72351C49E8A03B62A7E4;};
+    A66AE9116198ABFF81B3301F = {isa = PBXBuildFile; fileRef = 02DDFAC1CE151BA9E8F1F2B0;};
+
+    /* Source Build Phases */
+    3720DF3EB78B382E01A0C583 = {
+      isa = PBXSourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (F58B8DB8FD10B48DA02F1FFE,);
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+    40E8D5BE7C3857702461130C = {
+      isa = PBXSourcesBuildPhase;
+      buildActionMask = 2147483647;
+      files = (A66AE9116198ABFF81B3301F,);
+      runOnlyForDeploymentPostprocessing = 0;
+    };
+
+    /* Frameworks Build Phases */
+    6946B0A403DA0818C6E59688 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+    EC7DD5037A711664C61227B4 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+
+    /* App Target */
+    EAC02A5E44291747D888CAF7 = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = 941C8F0B572C7E6F731288EB;
+      buildPhases = (3720DF3EB78B382E01A0C583, 6946B0A403DA0818C6E59688,);
+      buildRules = ();
+      dependencies = ();
+      name = OCQAHarness;
+      productName = OCQAHarness;
+      productReference = 9CEBAC16BBBB2096CF6736B7;
+      productType = "com.apple.product-type.application";
+    };
+
+    /* Test Target */
+    8FD0002A75D948EE79C4FDEB = {
+      isa = PBXNativeTarget;
+      buildConfigurationList = E7719FBBADD636B07F6C0F19;
+      buildPhases = (40E8D5BE7C3857702461130C, EC7DD5037A711664C61227B4,);
+      buildRules = ();
+      dependencies = (F61C75ED91EE51D617FF76C2,);
+      name = OCQAHarnessUITests;
+      productName = OCQAHarnessUITests;
+      productReference = 4596C27A89AAB1291984CE15;
+      productType = "com.apple.product-type.bundle.ui-testing";
+    };
+
+    /* Target Dependency */
+    F61C75ED91EE51D617FF76C2 = {
+      isa = PBXTargetDependency;
+      target = EAC02A5E44291747D888CAF7;
+      targetProxy = 7BC3CFD1F9B18D721886DD65;
+    };
+    7BC3CFD1F9B18D721886DD65 = {
+      isa = PBXContainerItemProxy;
+      containerPortal = 5D7C13C377373C4980FC8162;
+      proxyType = 1;
+      remoteGlobalIDString = EAC02A5E44291747D888CAF7;
+      remoteInfo = OCQAHarness;
+    };
+
+    /* Build Configurations */
+    C03EC97124C7DA0EE83E045B = {
+      isa = XCConfigurationList;
+      buildConfigurations = (1BF3C243D6F4582A4C00E8E6,);
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Debug;
+    };
+    1BF3C243D6F4582A4C00E8E6 = {
+      isa = XCBuildConfiguration;
+      buildSettings = {
+        ALWAYS_SEARCH_USER_PATHS = NO;
+        CLANG_ENABLE_MODULES = YES;
+        CODE_SIGN_IDENTITY = "-";
+        CODE_SIGN_STYLE = Automatic;
+        DEVELOPMENT_TEAM = "";
+        ENABLE_TESTABILITY = YES;
+        IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+        SDKROOT = iphoneos;
+        SWIFT_VERSION = 5.0;
+        TARGETED_DEVICE_FAMILY = "1,2";
+      };
+      name = Debug;
+    };
+    941C8F0B572C7E6F731288EB = {
+      isa = XCConfigurationList;
+      buildConfigurations = (426B4A04FEDF3507EE7B512F,);
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Debug;
+    };
+    426B4A04FEDF3507EE7B512F = {
+      isa = XCBuildConfiguration;
+      buildSettings = {
+        ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+        CODE_SIGN_IDENTITY = "-";
+        CODE_SIGN_STYLE = Automatic;
+        DEVELOPMENT_TEAM = "";
+        INFOPLIST_FILE = OCQAHarness/Info.plist;
+        PRODUCT_BUNDLE_IDENTIFIER = ai.autotap.harness;
+        PRODUCT_NAME = "$(TARGET_NAME)";
+        SWIFT_VERSION = 5.0;
+        TARGETED_DEVICE_FAMILY = "1,2";
+      };
+      name = Debug;
+    };
+    E7719FBBADD636B07F6C0F19 = {
+      isa = XCConfigurationList;
+      buildConfigurations = (BF02330ED7194B20B63DC653,);
+      defaultConfigurationIsVisible = 0;
+      defaultConfigurationName = Debug;
+    };
+    BF02330ED7194B20B63DC653 = {
+      isa = XCBuildConfiguration;
+      buildSettings = {
+        CODE_SIGN_IDENTITY = "-";
+        CODE_SIGN_STYLE = Automatic;
+        DEVELOPMENT_TEAM = "";
+        INFOPLIST_FILE = OCQAHarnessUITests/Info.plist;
+        PRODUCT_BUNDLE_IDENTIFIER = ai.autotap.harness.uitests;
+        PRODUCT_NAME = "$(TARGET_NAME)";
+        SWIFT_VERSION = 5.0;
+        TARGETED_DEVICE_FAMILY = "1,2";
+        TEST_TARGET_NAME = OCQAHarness;
+      };
+      name = Debug;
+    };
+  };
+  rootObject = 5D7C13C377373C4980FC8162;
+}

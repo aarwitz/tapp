@@ -1,0 +1,37 @@
+# Example: AutoTap release gate in CI, self-tested against DemoApp.
+#
+# MANUAL TRIGGER ONLY (workflow_dispatch) — macOS runners bill at 10× on private repos, so this
+# does not run on every push. To gate real PRs, copy this into the app repo and swap the trigger:
+#
+#   on:
+#     pull_request:
+#       branches: [main]
+#
+# Baseline convention: commit a `.autotap/baseline.json` (the `report` output of a run on main)
+# to the app repo. PRs then fail only on NEW high/critical findings or broken Flows — existing
+# debt doesn't block, regressions do. Refresh the baseline after merges from a main-branch run.
+name: AutoTap Gate (example)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  autotap:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate DemoApp project
+        run: ruby generate-demoapp-xcodeproj.rb
+
+      - name: AutoTap release gate
+        uses: ./ # in an app repo: aarwitz/tapp@main
+        with:
+          bundle-id: com.autotap.demoapp
+          project: DemoApp/DemoApp.xcodeproj
+          scheme: DemoApp
+          max-actions: 40
+          # Explicit, because this repo's default flow dir also holds demoapp-negative.yml —
+          # a fixture that fails BY DESIGN (it asserts a screen that doesn't exist).
+          flows: ".autotap/flows/demoapp-smoke.yml DemoApp/.autotap/flows/menu-to-daily-summary.yml"

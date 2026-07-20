@@ -1,0 +1,198 @@
+name: "Tapp Release Gate"
+description: "Autonomous QA gate for iOS PRs — explores the app on a simulator, replays Tapp Flows, fails on new high/critical issues."
+author: Tapp
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  bundle-id:
+    description: "Bundle identifier of the app under test (e.g. com.example.app)"
+    required: true
+  app-path:
+    description: "Path to a prebuilt SIMULATOR .app. If omitted, the action builds one from scheme/project."
+    required: false
+    default: ""
+  project:
+    description: "Path to the .xcodeproj or .xcworkspace to build (used when app-path is not given)"
+    required: false
+    default: ""
+  scheme:
+    description: "Scheme to build (used when app-path is not given)"
+    required: false
+    default: ""
+  configuration:
+    description: "Build configuration"
+    required: false
+    default: "Debug"
+  max-actions:
+    description: "Exploration budget (number of autonomous actions)"
+    required: false
+    default: "40"
+  flows:
+    description: "Glob of Flow YAMLs to replay (default: .autotap/flows/*.yml in the workspace, if present)"
+    required: false
+    default: ""
+  baseline:
+    description: "Path to a baseline report JSON to diff against (default: .autotap/baseline.json if present). New high/critical findings vs. this baseline fail the gate."
+    required: false
+    default: ""
+  fail-on:
+    description: "Gate policy: gate (regressions + failed flows; default), blocked (verdict-based), any (any finding)"
+    required: false
+    default: "gate"
+  simulator-device:
+    description: "Simulator device to boot when none is booted"
+    required: false
+    default: "iPhone 16 Pro"
+  test-email:
+    description: "Login email for apps behind an auth wall (pass via a secret). Used by the exploration login preamble."
+    required: false
+    default: ""
+  test-password:
+    description: "Login password for apps behind an auth wall (pass via a secret)."
+    required: false
+    default: ""
+  launch-args:
+    description: 'JSON array of app launch arguments, e.g. ["--uitesting"] to bypass login on a supporting build.'
+    required: false
+    default: ""
+  launch-env:
+    description: 'JSON object of app launch environment, e.g. {"UI_TEST_BACKEND":"staging"}.'
+    required: false
+    default: ""
+  login-steps:
+    description: 'JSON array of explicit login steps for a custom login UI (see .autotap.yml app.login.steps). $TEST_EMAIL/$TEST_PASSWORD are substituted.'
+    required: false
+    default: ""
+  comment-on-pr:
+    description: "Post the report as a sticky comment on the PR (only on pull_request events)."
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to post the PR comment. Defaults to the workflow token."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  report:
+    description: "Path to the full JSON report (usable as the next baseline)"
+    value: ${{ steps.gate.outputs.report }}
+  verdict:
+    description: "The run verdict: ready | caution | blocked"
+    value: ${{ steps.gate.outputs.verdict }}
+  gate-failed:
+    description: "true when the gate failed (merge should be blocked)"
+    value: ${{ steps.gate.outputs.gate_failed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Build app for simulator
+      if: inputs.app-path == ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        [[ -n "${{ inputs.scheme }}" ]] || { echo "::error::Provide either app-path or project+scheme"; exit 2; }
+        FLAG="-project"; [[ "${{ inputs.project }}" == *.xcworkspace ]] && FLAG="-workspace"
+        xcodebuild $FLAG "${{ inputs.project }}" -scheme "${{ inputs.scheme }}" \
+          -configuration "${{ inputs.configuration }}" \
+          -destination 'generic/platform=iOS Simulator' \
+          -derivedDataPath "$RUNNER_TEMP/autotap-app-build" \
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build | tail -5
+        APP="$(find "$RUNNER_TEMP/autotap-app-build/Build/Products" -maxdepth 2 -name '*.app' -path '*iphonesimulator*' | head -1)"
+        [[ -n "$APP" ]] || { echo "::error::Build produced no simulator .app"; exit 1; }
+        echo "AUTOTAP_APP_PATH=$APP" >> "$GITHUB_ENV"
+
+    - name: Use prebuilt app
+      if: inputs.app-path != ''
+      shell: bash
+      run: echo "AUTOTAP_APP_PATH=${{ inputs.app-path }}" >> "$GITHUB_ENV"
+
+    - name: Run Tapp gate
+      id: gate
+      shell: bash
+      # Credentials / launch config for apps behind an auth wall — read by quick-capture.sh's
+      # explore config builder (inherited through ci-gate.sh). Empty inputs are skipped there.
+      env:
+        OCQA_TEST_EMAIL: ${{ inputs.test-email }}
+        OCQA_TEST_PASSWORD: ${{ inputs.test-password }}
+        OCQA_APP_LAUNCH_ARGS_JSON: ${{ inputs.launch-args }}
+        OCQA_APP_LAUNCH_ENV_JSON: ${{ inputs.launch-env }}
+        OCQA_LOGIN_STEPS_JSON: ${{ inputs.login-steps }}
+      run: |
+        set -uo pipefail
+        # PyYAML for flow_lib.py; some runner pythons are PEP-668 externally-managed.
+        python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml 2>/dev/null \
+          || pip3 install --quiet --break-system-packages pyyaml || true
+        REPORT="$RUNNER_TEMP/autotap-report.json"
+        MD="$RUNNER_TEMP/autotap-report.md"
+        ARGS=(--app "$AUTOTAP_APP_PATH" --bundle-id "${{ inputs.bundle-id }}"
+              --actions "${{ inputs.max-actions }}" --fail-on "${{ inputs.fail-on }}"
+              --device "${{ inputs.simulator-device }}" --project-dir "$GITHUB_WORKSPACE"
+              --json-out "$REPORT" --md-out "$MD")
+        [[ -n "${{ inputs.flows }}" ]] && ARGS+=(--flows "${{ inputs.flows }}")
+        [[ -n "${{ inputs.baseline }}" ]] && ARGS+=(--baseline "${{ inputs.baseline }}")
+        echo "report=$REPORT" >> "$GITHUB_OUTPUT"
+        echo "md=$MD" >> "$GITHUB_OUTPUT"
+        # Capture the gate's exit code without failing the step, so the PR comment + evidence
+        # upload still run. The job is failed at the end by "Enforce gate".
+        set +e
+        "${{ github.action_path }}/scripts/ci-gate.sh" "${ARGS[@]}"
+        RC=$?
+        set -e
+        echo "gate_failed=$([[ $RC -ne 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        VERDICT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("verdict","unknown"))' "$REPORT" 2>/dev/null || echo unknown)"
+        echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+
+    - name: Comment on PR
+      if: always() && github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const mdPath = ${{ toJSON(steps.gate.outputs.md) }};
+          let body = '## Tapp release check\n_No report was produced — the exploration did not run._';
+          try { if (mdPath && fs.existsSync(mdPath)) body = fs.readFileSync(mdPath, 'utf8'); } catch (e) {}
+          const marker = '<!-- autotap-release-check -->';
+          body = `${marker}\n${body}`;
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+          const existing = comments.find(c => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Resolve evidence path
+      if: always()
+      shell: bash
+      # github.action_path contains "/./" when the action is used as `uses: ./`, and
+      # upload-artifact rejects relative segments in patterns — normalize with pwd -P.
+      run: echo "AUTOTAP_CAPTURES_DIR=$(cd "${{ github.action_path }}" && pwd -P)/captures" >> "$GITHUB_ENV"
+
+    - name: Upload evidence
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: autotap-evidence
+        path: |
+          ${{ env.AUTOTAP_CAPTURES_DIR }}/
+          ${{ runner.temp }}/autotap-report.json
+          ${{ runner.temp }}/autotap-report.md
+        if-no-files-found: ignore
+        retention-days: 14
+
+    - name: Enforce gate
+      if: always()
+      shell: bash
+      # Runs last so the PR comment + evidence upload happen first, then blocks the merge.
+      run: |
+        if [[ "${{ steps.gate.outputs.gate_failed }}" == "true" ]]; then
+          echo "::error::Tapp gate failed (verdict: ${{ steps.gate.outputs.verdict }}). See the PR comment / step summary."
+          exit 1
+        fi
+        echo "Tapp gate passed (verdict: ${{ steps.gate.outputs.verdict }})."
