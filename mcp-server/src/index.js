@@ -212,6 +212,26 @@ async function listSimulators() {
   return { simulators: sims, booted: sims.filter((s) => s.booted) };
 }
 
+// Pre-flight for every iOS entry point: the #1 first-session failure is "no simulator
+// booted", and the harness's raw failure text is unactionable. Long-running tools
+// (run_qa) auto-boot the first available iPhone; fast tools return an instructive error
+// the agent can act on instead of a shrug.
+async function ensureBootedSim({ autoBoot = false } = {}) {
+  const sims = await listSimulators();
+  if (sims.booted && sims.booted.length) return { booted: sims.booted[0] };
+  const candidate = (sims.simulators || []).find((s) => s.name.startsWith("iPhone")) || (sims.simulators || [])[0];
+  if (!candidate) {
+    return { error: "No iOS simulators exist on this Mac. Install a simulator runtime in Xcode (Settings → Platforms), then retry." };
+  }
+  if (!autoBoot) {
+    return { error: `No simulator is booted. Call tapp_boot_simulator (e.g. udid "${candidate.udid}" — ${candidate.name}) and retry.` };
+  }
+  await runCommand("xcrun", ["simctl", "boot", candidate.udid], { timeoutMs: 2 * 60 * 1000 });
+  const st = await runCommand("xcrun", ["simctl", "bootstatus", candidate.udid, "-b"], { timeoutMs: 3 * 60 * 1000 });
+  if (st.code !== 0) return { error: `Auto-boot of ${candidate.name} failed — boot one manually with tapp_boot_simulator.` };
+  return { booted: candidate, autoBooted: true };
+}
+
 // ---- Persistent interactive session (Playwright-style tap/type/inspect loop) ----
 // The harness `testInteractiveSession` launches the app ONCE and services commands from a file,
 // emitting the fresh UI tree after each. The MCP server is a long-lived process, so it can hold the
@@ -254,6 +274,8 @@ async function startSession(bundleId, extraEnv = {}) {
   if (activeSession && !activeSession.ended) {
     return { error: "A session is already active; call tapp_session_end first.", screen: treeSnapshot() };
   }
+  const sim = await ensureBootedSim();
+  if (sim.error) return { error: sim.error };
   const token = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const cmdPath = `/tmp/ocqa-session-${token}-cmd.json`;
   const resultPath = `/tmp/ocqa-session-${token}-res.json`;
@@ -672,7 +694,7 @@ function fmtDuration(ms) {
 }
 
 /** Format a QA report as a scannable release readout with next-step suggestions. */
-function formatQaReport(report, { regression, inputHint, timedOut, bundleId } = {}) {
+function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured } = {}) {
   const c = report.findingCounts || {};
   const badge = VERDICT_BADGE[report.verdict] || report.verdict;
   const sevBits = ["critical", "high", "medium", "low"]
@@ -691,8 +713,16 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId } = 
     L.push("**Findings**");
     for (const f of report.findings.slice(0, 12)) {
       L.push(`- ${SEV[f.severity] || "•"} \`${f.severity}\` ${f.title}${f.screen ? ` — on *${f.screen}*` : ""}`);
+      if (f.aiAnalysis) L.push(`  - why: ${String(f.aiAnalysis).slice(0, 200)}`);
+      if (f.suggestedFix) L.push(`  - fix: ${String(f.suggestedFix).slice(0, 200)}`);
     }
     if (report.findings.length > 12) L.push(`- …and ${report.findings.length - 12} more`);
+    // The "why?" itch is the AI-value moment — say it exactly here, only when it's real
+    // (a key genuinely unlocks root causes + fixes), and never on a clean run.
+    if (!aiConfigured) {
+      L.push("");
+      L.push("> 💡 Want a root cause + suggested fix for each finding? Set `ANTHROPIC_API_KEY` and re-run — analysis appears inline.");
+    }
   }
   if (regression && regression.counts) {
     const g = regression.gate || {};
@@ -711,6 +741,12 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId } = 
   next.push("drive it step-by-step via `tapp_session_start`");
   L.push("");
   L.push(`**Next** — ${next.join(" · ")}`);
+  // The gate hook belongs at the moment the user thinks "I want this on every PR" —
+  // i.e. right after a verdict that found something, or after they hand-diffed a baseline.
+  if ((report.findings && report.findings.length) || regression) {
+    L.push("");
+    L.push("> 🚦 Teams: get this verdict on every PR automatically (evidence + regression gate) — https://github.com/aarwitz/tapp#ci-gate");
+  }
   return L.join("\n");
 }
 
@@ -1465,13 +1501,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const report = buildQaReport(webResult.markersPath);
       if (!report) return errorResult("Web exploration produced no markers", { capture: { id, path: outDir } });
+      const backend = resolveModelBackend();
+      if (backend && report.findings.length) {
+        const { enrichFindings } = await import("./enrich.js");
+        await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: args.url.trim() });
+      }
       const regression = computeRegression(report.findings, args.baselineFindings);
       const structured = { ...report, regression, platform: "web", capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
-      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim() }), structured);
+      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim(), aiConfigured: !!backend }), structured);
     }
 
     const captureScript = path.join(scriptsDir, "quick-capture.sh");
     if (!fs.existsSync(captureScript)) return errorResult("Capture script not found", { captureScript });
+
+    // run_qa runs for minutes anyway — auto-boot rather than bounce the user.
+    const sim = await ensureBootedSim({ autoBoot: true });
+    if (sim.error) return errorResult(sim.error);
 
     const actions = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
     const timeout = Math.max(30, Math.min(3600, asInteger(args.timeout, 600)));
@@ -1517,6 +1562,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         `If you want me to test with real values, tell me what to enter for these fields (or say "use defaults" / "skip"), ` +
         `and I'll re-run with testEmail/testPassword or inputOverrides — or I can drive it step-by-step in an interactive session so you can supply values as we go.`;
     }
+    // Post-run AI enrichment (additive, never changes the verdict) when a key is present.
+    const backend = resolveModelBackend();
+    if (backend && report.findings.length) {
+      const { enrichFindings } = await import("./enrich.js");
+      await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: String(args.appBundleId).trim() });
+    }
     // Cross-run regression vs. a caller-supplied baseline (the CI gate).
     const regression = computeRegression(report.findings, args.baselineFindings);
     const bundleId = String(args.appBundleId).trim();
@@ -1526,8 +1577,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       inputHint,
       capture: { id: created.id, path: created.path, relativePath: created.relativePath },
       timedOut,
+      autoBooted: sim.autoBooted || false,
     };
-    return richResult(formatQaReport(report, { regression, inputHint, timedOut, bundleId }), structured);
+    return richResult(formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend }), structured);
   }
 
   if (name === "tapp_flow_run") {

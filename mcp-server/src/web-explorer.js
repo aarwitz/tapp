@@ -17,6 +17,8 @@
 
 import fs from "fs";
 import path from "path";
+import { createRequire } from "module";
+import { execFileSync } from "child_process";
 
 const SETTLE_MS = 500;
 const CLICK_SETTLE_MS = 700;
@@ -24,16 +26,28 @@ const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 
+// npx installs tapp-mcp into its own cache, so a plain import("playwright") only resolves
+// for repo-dev checkouts. Probe, in order: our own node_modules; the user's project
+// (process.cwd()); the global npm root. ESM ignores NODE_PATH, so cwd/global need explicit
+// resolution + import-by-absolute-path.
 async function loadPlaywright() {
   try {
     return await import("playwright");
-  } catch {
-    throw new Error(
-      "Web exploration needs Playwright (not bundled, to keep tapp-mcp installs small). " +
-        "One-time setup: `npm i -g playwright && npx playwright install chromium` " +
-        "(or `npm i playwright` next to tapp-mcp)."
-    );
+  } catch {}
+  const probes = [path.join(process.cwd(), "noop.js")];
+  try {
+    probes.push(path.join(execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim(), "noop.js"));
+  } catch {}
+  for (const from of probes) {
+    try {
+      return await import(createRequire(from).resolve("playwright"));
+    } catch {}
   }
+  throw new Error(
+    "Web exploration needs Playwright (not bundled, to keep tapp-mcp installs small). " +
+      "One-time setup, either works: `npm i playwright` in your project, or `npm i -g playwright` — " +
+      "then `npx playwright install chromium`."
+  );
 }
 
 function slug(s) {
