@@ -1,4 +1,4 @@
-# Tapp — your coding agent has hands. Tapp gives it judgment.
+# Tapp — ship with proof
 
 [![npm](https://img.shields.io/npm/v/tapp-mcp?color=cb3837&label=npm)](https://www.npmjs.com/package/tapp-mcp)
 [![npm downloads](https://img.shields.io/npm/dw/tapp-mcp?label=downloads)](https://www.npmjs.com/package/tapp-mcp)
@@ -6,7 +6,8 @@
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInRhcHAtbWNwIiwibWNwIl19)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22tapp-mcp%22%2C%22mcp%22%5D%7D)
 
-**Autonomous QA with a deterministic ship/no-ship verdict — for the apps your agent builds.**
+**Your coding agent has hands. Tapp gives it judgment** — autonomous QA with a deterministic
+ship/no-ship verdict, for the apps your agent builds.
 
 Coding agents can write the code, and (with Playwright & friends) they can even drive the app.
 What nobody gives them is **judgment**: did it actually work? Tapp explores your app like a user —
