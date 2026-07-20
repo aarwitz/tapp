@@ -1,7 +1,8 @@
 # Tapp agent playbook
 
-You (the agent) have Tapp's `tapp_*` MCP tools: hands and eyes on the iOS simulator.
-This is the playbook for using them well.
+You (the agent) have Tapp's `tapp_*` MCP tools: hands, eyes, and judgment on real app
+surfaces — the iOS simulator, plus (beta) web apps in a real browser via `tapp_run_qa`'s
+`url` mode. This is the playbook for using them well.
 
 ## Pick the right tool for the job
 
@@ -9,7 +10,7 @@ This is the playbook for using them well.
 |---|---|---|
 | "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_run_qa` (a full multi-minute QA exploration) |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
-| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` | a manual session (QA exploration is autonomous) |
+| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` — `appBundleId` for iOS, `url` for a web app the user owns | a manual session (QA exploration is autonomous) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
 | "What's on screen right now?" | `tapp_screenshot` / `tapp_ui_tree` | relaunching the app |
 

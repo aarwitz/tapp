@@ -1,4 +1,4 @@
-# Tapp — Playwright for iOS
+# Tapp — your coding agent has hands. Tapp gives it judgment.
 
 [![npm](https://img.shields.io/npm/v/tapp-mcp?color=cb3837&label=npm)](https://www.npmjs.com/package/tapp-mcp)
 [![npm downloads](https://img.shields.io/npm/dw/tapp-mcp?label=downloads)](https://www.npmjs.com/package/tapp-mcp)
@@ -6,12 +6,21 @@
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInRhcHAtbWNwIiwibWNwIl19)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22tapp-mcp%22%2C%22mcp%22%5D%7D)
 
-**Give your coding agent hands and eyes on the iOS simulator.**
+**Autonomous QA with a deterministic ship/no-ship verdict — for the apps your agent builds.**
 
-Coding agents can write Swift, but they can't see or touch the running app. Tapp fixes that:
-an MCP server that lets Claude Code, Cursor, Copilot — any MCP client — launch your iOS app on a
-simulator, tap, type, swipe, read the screen, take screenshots, and run **autonomous QA** that
-returns a deterministic ship/no-ship verdict. No test code required. No app changes required.
+Coding agents can write the code, and (with Playwright & friends) they can even drive the app.
+What nobody gives them is **judgment**: did it actually work? Tapp explores your app like a user —
+no test code, no app changes — detects what's broken, and commits to a verdict your merge queue
+can trust: `ready`, `caution`, or `blocked`, with evidence.
+
+Two platforms, one judgment layer:
+
+- **iOS** — the missing Playwright for iOS. Tapp is hands *and* judgment: a generic XCUITest
+  harness drives any app on the simulator via the accessibility surface. Native — no Appium,
+  no WebDriverAgent.
+- **Web (beta)** — built *on* Playwright. Your agent already has browser hands; Tapp adds the
+  autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
+  dead buttons, broken links, error pages), and the same verdict.
 
 ```
 you:    "Add a logout button to the settings screen"
@@ -57,6 +66,8 @@ Then ask your agent:
 > "Open com.mycompany.app on the simulator and screenshot the home screen."
 > "Run autonomous QA on my app — is it ship-ready?"
 > "Log in with test@example.com, drive to checkout, and record it as a replayable test."
+> "Run autonomous QA on http://localhost:3000 — anything broken?" *(web beta — one-time
+> setup: `npm i -g playwright && npx playwright install chromium`)*
 
 ## What the agent gets (19 tools)
 
@@ -66,7 +77,7 @@ Then ask your agent:
 | 📸 | `tapp_screenshot` | Whatever's on the sim right now, as an inline image. |
 | 🌳 | `tapp_ui_tree` | The accessibility tree of the current screen (ids, labels, hittability). |
 | 🕹 | `tapp_session_start/act/end` | **Interactive driving** — the Playwright loop. App launches once; each act (tap/type/swipe/back/wait) returns the fresh tree. |
-| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores the app with no test code, returns `{verdict, confidence, findings[]}`. Streams live progress. |
+| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores the app with no test code, returns `{verdict, confidence, findings[]}`. Streams live progress. Takes `appBundleId` (iOS) or `url` (web beta). |
 | 🔁 | `tapp_flow_run` / `flow_save` / `flow_generate` | **Deterministic E2E tests (Flows)** — record a session as a replayable YAML test, generate one from a natural-language goal, replay with assertions. |
 | 📱 | `tapp_list_simulators` / `boot_simulator` / `install_app` | Simulator + app management. |
 | 🩺 | `tapp_health`, `tapp_capture*`, `tapp_parse_markers` | Diagnostics and capture history. |
@@ -75,9 +86,10 @@ Full agent playbook: [AGENTS.md](./AGENTS.md) — ships inside the package so ag
 
 ## The verdict you can trust
 
-`tapp_run_qa` explores like a user — via the accessibility surface — and detects crashes,
-failed sign-ins, dead buttons, stuck loading screens, error surfaces, navigation loops, and
-dead ends. The verdict is **deterministic** (no LLM in the run loop) and **honest**:
+`tapp_run_qa` explores like a user — the accessibility surface on iOS, a real browser on web —
+and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,
+navigation loops, and dead ends (plus, on web: uncaught JS exceptions, failed/5xx requests,
+broken links and assets). The verdict is **deterministic** (no LLM in the run loop) and **honest**:
 
 - `blocked` — a release-blocking issue was found.
 - `caution` — issues to review, or the run couldn't see enough.
@@ -105,24 +117,27 @@ high/critical findings, not pre-existing debt.
 
 ## Make your repo agent-verified
 
-Drop this into your iOS repo's `AGENTS.md` (read by Codex, Cursor, Copilot, Devin, Zed, …) so
+Drop this into your repo's `AGENTS.md` (read by Codex, Cursor, Copilot, Devin, Zed, …) so
 your agent proves its UI work instead of claiming it:
 
 ```markdown
 ## Verifying UI changes
-This repo uses Tapp (https://github.com/aarwitz/tapp) to verify work on the iOS simulator.
-After any UI change: build + install the app, then use the tapp MCP tools (`npx -y tapp-mcp mcp`)
-to open the changed screen and screenshot it as proof. Before declaring a feature done, run
-`tapp_run_qa` and report the ship/no-ship verdict. A change is not "done" until it has been
-seen working on the simulator.
+This repo uses Tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
+(iOS simulator, or a browser for web). After any UI change: build/serve the app, then use the
+tapp MCP tools (`npx -y tapp-mcp mcp`) to open the changed screen and screenshot it as proof.
+Before declaring a feature done, run `tapp_run_qa` (appBundleId for iOS, url for web) and
+report the ship/no-ship verdict. A change is not "done" until it has been seen working.
 ```
 
 ## How it works
 
-A generic **XCUITest harness** attaches to any app by bundle id — no SDK, no code changes, no
-re-signing your app. It reads the accessibility tree, acts like a user, and streams structured
-`OCQA_*` markers (state, actions, issues, transitions) that the MCP server parses into trees,
-screenshots, findings, and the verdict. Everything runs locally on your Mac; nothing leaves it.
+Every driver speaks one protocol: structured `OCQA_*` markers (state, actions, issues,
+transitions) that the judgment layer parses into trees, screenshots, findings, and the verdict.
+On **iOS**, a generic **XCUITest harness** attaches to any app by bundle id — no SDK, no code
+changes, no re-signing — and acts through the accessibility tree. On **web** (beta), a
+deterministic **Playwright crawler** does the same in a real browser. Same detectors' spirit,
+same dedup, same regression gate, same honest verdict. Everything runs locally on your Mac;
+nothing leaves it.
 
 The first tool call builds the harness once (~2 min, cached in `~/.tapp`; rebuilt automatically
 if you switch simulators). All captures land in `~/.tapp/captures/`.

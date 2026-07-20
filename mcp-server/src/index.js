@@ -894,16 +894,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_run_qa",
       title: "Run autonomous QA",
       description:
-        "Run autonomous QA against an installed iOS app on a BOOTED simulator and return a structured " +
+        "Run autonomous QA against an installed iOS app on a BOOTED simulator (appBundleId) OR a web app " +
+        "in a real browser (url — beta, requires Playwright installed) and return a structured " +
         "ship/no-ship verdict. Use ONLY when the user wants a QA assessment / to find bugs / a verdict — this " +
         "runs for MINUTES exploring the whole app. Do NOT use it just to view, screenshot, or reach a specific " +
         "screen — use tapp_open_app (launch + screenshot) or a session for that. Tapp explores the app " +
         "like a tester (taps, types, navigates, scrolls) and detects real issues — crashes, dead buttons, failed sign-ins, error screens, " +
-        "stuck/hung screens. Returns {verdict: ready|caution|blocked, confidence, headline, screensExplored, " +
+        "stuck/hung screens; on web also uncaught JS exceptions, failed/5xx requests, broken links and assets. " +
+        "Returns {verdict: ready|caution|blocked, confidence, headline, screensExplored, " +
         "actionsPerformed, findings:[{type,severity,category,title,screen}]}. The verdict has a coverage floor: " +
         "if the app barely explored (crash on launch / sign-in wall) it returns 'caution' + inconclusive, never a " +
-        "false pass. The app must already be installed on a booted simulator (use tapp_list_simulators / " +
-        "tapp_boot_simulator first). Tapp explores autonomously and does NOT pause to prompt for input — " +
+        "false pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
+        "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things. " +
+        "Tapp explores autonomously and does NOT pause to prompt for input — " +
         "it fills forms with safe defaults. The result includes `inputFieldsEncountered` (and `inputHint`): if " +
         "the app showed login/form fields and the user hasn't given you values, ASK THE USER what to enter (offer " +
         "to use defaults or skip), then re-run with testEmail/testPassword or inputOverrides for a real result.",
@@ -911,7 +914,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         properties: {
           authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
-          appBundleId: { type: "string", description: "Bundle id of the installed app to test, e.g. com.acme.app" },
+          appBundleId: { type: "string", description: "iOS: bundle id of the installed app to test, e.g. com.acme.app. Provide exactly one of appBundleId | url." },
+          url: { type: "string", description: "Web (beta): URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
           maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
           timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
           testEmail: { type: "string", description: "Email for the login preamble, if the app has a sign-in" },
@@ -955,7 +959,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               "baseline once, then fail the build when regression.gate.failed is true (new high/critical introduced).",
           },
         },
-        required: ["appBundleId"],
       },
     },
     {
@@ -1426,7 +1429,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "tapp_run_qa") {
     const unauthorized = ensureAuthorized(args);
     if (unauthorized) return unauthorized;
-    if (!isNonEmptyString(args.appBundleId)) return errorResult("appBundleId is required");
+    const wantsWeb = isNonEmptyString(args.url);
+    if (wantsWeb === isNonEmptyString(args.appBundleId)) {
+      return errorResult("Provide exactly one of appBundleId (iOS) or url (web beta)");
+    }
+
+    // Web (beta): same judgment layer, different driver — the Playwright crawler emits
+    // OCQA markers into a normal capture dir, and everything downstream is shared.
+    if (wantsWeb) {
+      const actions = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
+      const timeout = Math.max(30, Math.min(3600, asInteger(args.timeout, 600)));
+      const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
+      const outDir = path.join(capturesDir, id);
+      const progressToken = request.params && request.params._meta ? request.params._meta.progressToken : undefined;
+      let webResult;
+      try {
+        const { exploreWeb } = await import("./web-explorer.js");
+        webResult = await exploreWeb({
+          url: args.url.trim(),
+          maxActions: actions,
+          timeoutSec: timeout,
+          outDir,
+          testEmail: isNonEmptyString(args.testEmail) ? args.testEmail.trim() : "",
+          testPassword: isNonEmptyString(args.testPassword) ? args.testPassword.trim() : "",
+          onProgress: (p) => {
+            if (progressToken === undefined) return;
+            server.notification({
+              method: "notifications/progress",
+              params: { progressToken, progress: p.action || 0, total: p.max || actions, message: `🔍 Exploring… ${p.action}/${p.max || actions} actions · ${p.states} pages reached` },
+            }).catch(() => {});
+          },
+        });
+      } catch (err) {
+        return errorResult(String(err.message || err));
+      }
+      const report = buildQaReport(webResult.markersPath);
+      if (!report) return errorResult("Web exploration produced no markers", { capture: { id, path: outDir } });
+      const regression = computeRegression(report.findings, args.baselineFindings);
+      const structured = { ...report, regression, platform: "web", capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
+      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim() }), structured);
+    }
 
     const captureScript = path.join(scriptsDir, "quick-capture.sh");
     if (!fs.existsSync(captureScript)) return errorResult("Capture script not found", { captureScript });

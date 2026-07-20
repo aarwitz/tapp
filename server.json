@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.aarwitz/tapp",
-  "description": "Playwright for iOS — agents drive the simulator and get a deterministic ship/no-ship QA verdict",
+  "description": "Autonomous QA for iOS + web \u2014 agents get a deterministic ship/no-ship verdict, no test code",
   "repository": {
     "url": "https://github.com/aarwitz/tapp",
     "source": "github"
   },
-  "version": "0.7.0",
+  "version": "0.8.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "tapp-mcp",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       },

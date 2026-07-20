@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tapp — Playwright for iOS</title>
-<meta name="description" content="Give your coding agent hands and eyes on the iOS simulator. Autonomous QA with a deterministic ship/no-ship verdict — free npm/MCP tool, hosted PR gate for teams.">
-<meta property="og:title" content="Tapp — Playwright for iOS">
-<meta property="og:description" content="Agents drive the simulator. Get a deterministic ship/no-ship verdict. No test code required.">
+<title>Tapp — your coding agent has hands. Tapp gives it judgment.</title>
+<meta name="description" content="Autonomous QA with a deterministic ship/no-ship verdict for the apps your agent builds — iOS simulator and web. Free npm/MCP tool, hosted PR gate for teams.">
+<meta property="og:title" content="Tapp — autonomous QA with a verdict you can trust">
+<meta property="og:description" content="Your agent has hands. Tapp gives it judgment — a deterministic ship/no-ship verdict on iOS and web. No test code required.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
 <style>
@@ -162,11 +162,12 @@
 </header>
 
 <div class="hero wrap">
-  <h1>Give your coding agent<br>hands and eyes on the iOS simulator.</h1>
+  <h1>Your coding agent has hands.<br>Tapp gives it judgment.</h1>
   <p class="sub">
-    Coding agents can write Swift, but they can't see or touch the running app. Tapp fixes that —
-    an MCP server that lets Claude Code, Cursor, Copilot, or any MCP client drive your iOS app on
-    a simulator, and run autonomous QA that returns a deterministic ship/no-ship verdict.
+    Agents can write the code and even drive the app. What nobody gives them is the answer to
+    "did it actually work?" Tapp explores the app like a user — iOS simulator or real browser —
+    detects what's broken, and returns a deterministic ship/no-ship verdict with evidence.
+    No test code. No app changes.
   </p>
   <div class="cta-row">
     <a class="btn primary" href="https://github.com/aarwitz/tapp">View on GitHub</a>
@@ -189,13 +190,45 @@
   </div>
 </section>
 
+<section>
+  <div class="wrap">
+    <span class="tag">Platforms</span>
+    <h2>One judgment layer. Every surface your agent builds for.</h2>
+    <p class="lead">
+      Every driver speaks the same protocol, so the exploration, detectors, verdict, and
+      regression gate are identical everywhere.
+    </p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">📱</div>
+        <h3>iOS — the missing Playwright for iOS</h3>
+        <p>Hands <em>and</em> judgment: a generic XCUITest harness drives any app on the simulator
+        via the accessibility surface. Native — no Appium, no WebDriverAgent, no SDK.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🌐</div>
+        <h3>Web — beta</h3>
+        <p>Built <em>on</em> Playwright: your agent already has browser hands; Tapp adds autonomous
+        exploration and detectors for uncaught exceptions, failed requests, dead buttons, broken
+        links, and error pages.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🖥</div>
+        <h3>Tapp.app — coming soon</h3>
+        <p>A macOS cockpit around the same engine: import a project, click Run, watch QA live,
+        get the decision card. Free download, in packaging.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="tools">
   <div class="wrap">
     <span class="tag">Free, forever, local</span>
     <h2>19 tools. No test code. No app changes.</h2>
     <p class="lead">
-      A generic XCUITest harness attaches to any app by bundle id — reads the accessibility tree,
-      acts like a user, screenshots what it sees. Everything runs on your Mac; nothing leaves it.
+      Tapp explores like a user, acts like a user, screenshots what it sees. Everything runs
+      locally on your Mac; nothing leaves it.
     </p>
     <div class="grid">
       <div class="card">
@@ -211,7 +244,7 @@
       <div class="card">
         <div class="icon">🧪</div>
         <h3><code>tapp_run_qa</code></h3>
-        <p>Autonomous QA — explores the app, returns <code>{verdict, confidence, findings[]}</code>.</p>
+        <p>Autonomous QA — explores the app (iOS bundle id or web URL), returns <code>{verdict, confidence, findings[]}</code>.</p>
       </div>
       <div class="card">
         <div class="icon">🔁</div>
@@ -237,9 +270,10 @@
     <span class="tag">The verdict you can trust</span>
     <h2>Deterministic. No LLM in the run loop.</h2>
     <p class="lead">
-      Tapp explores like a user via the accessibility surface and detects crashes, failed sign-ins,
-      dead buttons, stuck loading screens, and navigation dead ends — then commits to a verdict.
-      A shallow run is never <code>ready</code>. Absence of findings is not a pass.
+      Tapp explores like a user and detects crashes, failed sign-ins, dead buttons, stuck loading
+      screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
+      links — then commits to a verdict. Same build in, same verdict out. A shallow run is never
+      <code>ready</code>. Absence of findings is not a pass.
     </p>
     <div class="verdicts">
       <div class="verdict ready">
@@ -263,9 +297,9 @@
     <span class="tag">For teams</span>
     <h2>The release gate, hosted.</h2>
     <p class="lead">
-      Install the Tapp GitHub App on your iOS repo and every PR gets a ship/no-ship verdict —
-      explored on Tapp's Macs, posted as a check + PR comment, diffed against a baseline. Nothing
-      to set up: no runners, no PATs, no YAML.
+      Install the Tapp GitHub App on your repo and every PR gets a ship/no-ship verdict —
+      explored on Tapp's infrastructure, posted as a check + PR comment, diffed against a
+      baseline. Nothing to set up: no runners, no PATs, no YAML. iOS today; web next.
     </p>
     <div class="gate-panel">
       <ul>
@@ -286,17 +320,6 @@
       <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?title=Design-partner%20interest&body=Repo%3A%0AApp%20store%20link%20(if%20any)%3A%0AWhat%20breaks%20your%20current%20CI%2FQA%20setup%3A">Apply for a design-partner slot</a>
       <a class="btn ghost" href="https://github.com/aarwitz/tapp/blob/main/README.md#ci-gate">Read the docs</a>
     </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap" style="text-align:center">
-    <span class="tag">Coming soon</span>
-    <h2 style="margin-bottom:0.8rem">Tapp.app</h2>
-    <p class="lead" style="margin-left:auto;margin-right:auto">
-      A macOS cockpit around the same engine: import an iOS project, click Run, watch autonomous
-      QA live, and get the ship/no-ship decision card. Free download, in packaging.
-    </p>
   </div>
 </section>
 

@@ -1,8 +1,8 @@
 {
   "name": "tapp-mcp",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "mcpName": "io.github.aarwitz/tapp",
-  "description": "Playwright for iOS — give coding agents hands and eyes on the iOS simulator. MCP server + autonomous QA: tap, type, screenshot, explore, and get a deterministic ship/no-ship verdict. No test code required.",
+  "description": "Autonomous QA for iOS + web. Your coding agent gets hands, eyes, and judgment: drive the app, explore it with no test code, and get a deterministic ship/no-ship verdict with evidence. iOS simulator native; web beta via Playwright.",
   "license": "MIT",
   "type": "module",
   "bin": {
