@@ -164,6 +164,30 @@ switch (command) {
     process.exit(r.status ?? 1);
   }
 
+  case "report": {
+    // Regenerate + open the HTML evidence page for a capture (default: the latest).
+    const capturesDir = path.join(process.env.AUTOTAP_HOME, "captures");
+    const repoCaptures = path.join(packageRoot, "captures");
+    const roots = [capturesDir, repoCaptures].filter((d) => fs.existsSync(d));
+    const runs = roots
+      .flatMap((root) => fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => path.join(root, e.name)))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    const wanted = rest[0] && rest[0] !== "latest" ? runs.find((r) => path.basename(r) === rest[0]) : runs[0];
+    if (!wanted) {
+      bad("No captures found", rest[0] ? `no capture named "${rest[0]}"` : "run a QA exploration first");
+      process.exit(1);
+    }
+    const { writeHtmlReport } = await import(path.join(packageRoot, "mcp-server", "src", "html-report.js"));
+    const out = writeHtmlReport(wanted, { label: path.basename(wanted) });
+    if (!out) {
+      bad("Capture has no markers", wanted);
+      process.exit(1);
+    }
+    ok("Evidence report", out);
+    spawnSync("open", [out], { stdio: "ignore" });
+    break;
+  }
+
   case "version":
   case "--version":
   case "-v": {
@@ -172,12 +196,13 @@ switch (command) {
   }
 
   default: {
-    console.log(`tapp v${pkg.version} — Playwright for iOS. Give your coding agent hands and eyes on the simulator.
+    console.log(`tapp v${pkg.version} — ship with proof. Autonomous QA with a deterministic ship/no-ship verdict (iOS + web beta).
 
 Usage:
   tapp mcp        Start the MCP server on stdio (this is what agents run)
   tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)
   tapp doctor     Check Xcode / simulators / toolchain
+  tapp report     Open the HTML evidence page for the latest capture (tapp report [captureId])
   tapp ci ...     Run the CI release gate (see: tapp ci --help)
 
 Hook it up to your agent:

@@ -116,6 +116,12 @@ Or use the bundled GitHub Action (`action.yml`) on a macOS runner — see
 Commit a `.autotap/baseline.json` from a main-branch run and PRs fail only on **new**
 high/critical findings, not pre-existing debt.
 
+**Hosted gate (early access).** Don't want to run Mac CI yourself? The Tapp Release Gate
+runs the same engine on our infrastructure: install a GitHub App, and every PR gets the
+verdict as a check + comment with evidence and automatic regression gating — no runners,
+no PATs, no YAML. We're onboarding a small number of design partners by hand —
+[apply here](https://github.com/aarwitz/tapp/issues/new?title=Design-partner%20interest&body=Repo%3A%0AApp%20platform%20(iOS%2Fweb)%3A%0AWhat%20breaks%20your%20current%20CI%2FQA%20setup%3A).
+
 ## Make your repo agent-verified
 
 Drop this into your repo's `AGENTS.md` (read by Codex, Cursor, Copilot, Devin, Zed, …) so

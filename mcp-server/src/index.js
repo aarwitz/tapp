@@ -694,7 +694,7 @@ function fmtDuration(ms) {
 }
 
 /** Format a QA report as a scannable release readout with next-step suggestions. */
-function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured } = {}) {
+function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml } = {}) {
   const c = report.findingCounts || {};
   const badge = VERDICT_BADGE[report.verdict] || report.verdict;
   const sevBits = ["critical", "high", "medium", "low"]
@@ -707,6 +707,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
   L.push(report.headline);
   L.push("");
   L.push(`**Coverage** — ${report.screensExplored} screens · ${report.actionsPerformed} actions${timedOut ? " · ⏱️ hit time limit" : ""}`);
+  if (reportHtml) L.push(`**Evidence** — 📄 ${reportHtml} (screenshots of every screen + findings, shareable)`);
   L.push(`**Issues** — ${c.total ? `${c.total}${sevBits ? ` (${sevBits})` : ""}` : "none found ✨"}`);
   if (Array.isArray(report.findings) && report.findings.length) {
     L.push("");
@@ -1507,8 +1508,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: args.url.trim() });
       }
       const regression = computeRegression(report.findings, args.baselineFindings);
-      const structured = { ...report, regression, platform: "web", capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
-      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim(), aiConfigured: !!backend }), structured);
+      let reportHtml = null;
+      try {
+        const { writeHtmlReport } = await import("./html-report.js");
+        reportHtml = writeHtmlReport(outDir, { report, label: args.url.trim() });
+      } catch { /* evidence page is best-effort */ }
+      const structured = { ...report, regression, platform: "web", reportHtml, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
+      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim(), aiConfigured: !!backend, reportHtml }), structured);
     }
 
     const captureScript = path.join(scriptsDir, "quick-capture.sh");
@@ -1571,15 +1577,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Cross-run regression vs. a caller-supplied baseline (the CI gate).
     const regression = computeRegression(report.findings, args.baselineFindings);
     const bundleId = String(args.appBundleId).trim();
+    let reportHtml = null;
+    try {
+      const { writeHtmlReport } = await import("./html-report.js");
+      reportHtml = writeHtmlReport(created.path, { report, label: bundleId });
+    } catch { /* evidence page is best-effort */ }
     const structured = {
       ...report,
       regression,
       inputHint,
+      reportHtml,
       capture: { id: created.id, path: created.path, relativePath: created.relativePath },
       timedOut,
       autoBooted: sim.autoBooted || false,
     };
-    return richResult(formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend }), structured);
+    return richResult(formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml }), structured);
   }
 
   if (name === "tapp_flow_run") {
