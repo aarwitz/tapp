@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapp — Playwright for iOS</title>
+<meta name="description" content="Give your coding agent hands and eyes on the iOS simulator. Autonomous QA with a deterministic ship/no-ship verdict — free npm/MCP tool, hosted PR gate for teams.">
+<meta property="og:title" content="Tapp — Playwright for iOS">
+<meta property="og:description" content="Agents drive the simulator. Get a deterministic ship/no-ship verdict. No test code required.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f6f7f9;
+    --fg: #14161a;
+    --fg-dim: #55596a;
+    --border: #e3e5ea;
+    --accent: #2f6fed;
+    --accent-fg: #ffffff;
+    --code-bg: #14161a;
+    --code-fg: #e9edf5;
+    --green: #1a7f37;
+    --amber: #9a6700;
+    --red: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d12;
+      --bg-alt: #12151c;
+      --fg: #e9edf5;
+      --fg-dim: #9aa1b2;
+      --border: #232733;
+      --accent: #6f9bff;
+      --accent-fg: #0b0d12;
+      --code-bg: #0a0c10;
+      --code-fg: #d9e0f0;
+      --green: #4ac26b;
+      --amber: #e3b341;
+      --red: #ff7b72;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --bg-alt: #f6f7f9; --fg: #14161a; --fg-dim: #55596a; --border: #e3e5ea;
+    --accent: #2f6fed; --accent-fg: #ffffff; --code-bg: #14161a; --code-fg: #e9edf5;
+    --green: #1a7f37; --amber: #9a6700; --red: #cf222e;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0d12; --bg-alt: #12151c; --fg: #e9edf5; --fg-dim: #9aa1b2; --border: #232733;
+    --accent: #6f9bff; --accent-fg: #0b0d12; --code-bg: #0a0c10; --code-fg: #d9e0f0;
+    --green: #4ac26b; --amber: #e3b341; --red: #ff7b72;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.5rem; }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  header.nav {
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(8px); z-index: 10;
+  }
+  header.nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
+  .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+  .brand span { color: var(--accent); }
+  nav.links { display: flex; gap: 1.5rem; font-size: 0.92rem; }
+  nav.links a { color: var(--fg-dim); text-decoration: none; }
+  nav.links a:hover { color: var(--fg); }
+
+  .hero { padding: 5rem 0 3.5rem; text-align: center; }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 1.1rem; }
+  .hero p.sub { font-size: 1.15rem; color: var(--fg-dim); max-width: 640px; margin: 0 auto 2.2rem; }
+  .cta-row { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.7rem 1.3rem; border-radius: 8px;
+    font-weight: 600; font-size: 0.95rem; text-decoration: none; border: 1px solid transparent; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-fg); }
+  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
+  .btn.ghost:hover { background: var(--bg-alt); }
+
+  .copybox {
+    display: inline-flex; align-items: center; gap: 0.8rem; background: var(--code-bg); color: var(--code-fg);
+    padding: 0.75rem 1.1rem; border-radius: 8px; font-size: 0.92rem; margin: 0 auto;
+  }
+  .copybox button {
+    background: transparent; border: 1px solid color-mix(in srgb, var(--code-fg) 30%, transparent);
+    color: var(--code-fg); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; cursor: pointer;
+  }
+  .copybox button:hover { background: color-mix(in srgb, var(--code-fg) 12%, transparent); }
+
+  section { padding: 3.2rem 0; border-top: 1px solid var(--border); }
+  section.flush { border-top: none; padding-top: 0; }
+  h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
+  h2 + p.lead { color: var(--fg-dim); max-width: 620px; margin: 0 0 2rem; }
+
+  .convo {
+    background: var(--code-bg); color: var(--code-fg); border-radius: 10px; padding: 1.4rem 1.6rem;
+    font-size: 0.92rem; max-width: 720px; margin: 0 auto; text-align: left; overflow-x: auto;
+  }
+  .convo .l { white-space: pre; }
+  .convo .you { color: #8ec9ff; }
+  .convo .agent { color: #b8f0c8; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+  .card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem 1.3rem; background: var(--bg-alt);
+  }
+  .card .icon { font-size: 1.3rem; }
+  .card h3 { font-size: 0.98rem; margin: 0.5rem 0 0.35rem; }
+  .card p { font-size: 0.88rem; color: var(--fg-dim); margin: 0; }
+  .card code { font-size: 0.82rem; }
+
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; max-width: 800px; margin: 0 auto; }
+  .verdict { border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; text-align: left; }
+  .verdict .badge { font-weight: 700; font-size: 0.9rem; }
+  .verdict.ready .badge { color: var(--green); }
+  .verdict.caution .badge { color: var(--amber); }
+  .verdict.blocked .badge { color: var(--red); }
+  .verdict p { font-size: 0.86rem; color: var(--fg-dim); margin: 0.4rem 0 0; }
+
+  .gate-panel {
+    border: 1px solid var(--border); border-radius: 12px; padding: 1.8rem; background: var(--bg-alt);
+    display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2rem; align-items: center;
+  }
+  @media (max-width: 720px) { .gate-panel { grid-template-columns: 1fr; } }
+  .gate-panel ul { margin: 0; padding-left: 1.1rem; color: var(--fg-dim); font-size: 0.92rem; }
+  .gate-panel li { margin-bottom: 0.45rem; }
+  .mini-comment {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.1rem;
+    font-size: 0.84rem;
+  }
+  .mini-comment .title { font-weight: 700; color: var(--green); margin-bottom: 0.4rem; }
+  .mini-comment .row { display: flex; justify-content: space-between; color: var(--fg-dim); border-top: 1px solid var(--border); padding: 0.3rem 0; }
+
+  footer { border-top: 1px solid var(--border); padding: 2.5rem 0; color: var(--fg-dim); font-size: 0.85rem; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  footer a { color: var(--fg-dim); }
+
+  .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 0.2rem 0.55rem; border-radius: 999px; margin-bottom: 0.8rem; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#">Tapp<span>.</span></a>
+    <nav class="links">
+      <a href="#gate">Release Gate</a>
+      <a href="#tools">Tools</a>
+      <a href="https://github.com/aarwitz/tapp">GitHub</a>
+      <a href="https://www.npmjs.com/package/tapp-mcp">npm</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <h1>Give your coding agent<br>hands and eyes on the iOS simulator.</h1>
+  <p class="sub">
+    Coding agents can write Swift, but they can't see or touch the running app. Tapp fixes that —
+    an MCP server that lets Claude Code, Cursor, Copilot, or any MCP client drive your iOS app on
+    a simulator, and run autonomous QA that returns a deterministic ship/no-ship verdict.
+  </p>
+  <div class="cta-row">
+    <a class="btn primary" href="https://github.com/aarwitz/tapp">View on GitHub</a>
+    <a class="btn ghost" href="#gate">Hosted release gate →</a>
+  </div>
+  <div class="copybox mono">
+    <span>claude mcp add tapp -- npx -y tapp-mcp mcp</span>
+    <button onclick="navigator.clipboard.writeText('claude mcp add tapp -- npx -y tapp-mcp mcp')">copy</button>
+  </div>
+</div>
+
+<section class="flush">
+  <div class="wrap">
+    <div class="convo">
+<div class="l"><span class="you">you:</span>    "Add a logout button to the settings screen"</div>
+<div class="l"><span class="agent">agent:</span>  *writes the Swift*</div>
+<div class="l"><span class="agent">agent:</span>  *tapp: builds, opens the app, navigates to Settings, screenshots it*</div>
+<div class="l"><span class="agent">agent:</span>  "Done — and here it is working on the simulator: [screenshot]"</div>
+    </div>
+  </div>
+</section>
+
+<section id="tools">
+  <div class="wrap">
+    <span class="tag">Free, forever, local</span>
+    <h2>19 tools. No test code. No app changes.</h2>
+    <p class="lead">
+      A generic XCUITest harness attaches to any app by bundle id — reads the accessibility tree,
+      acts like a user, screenshots what it sees. Everything runs on your Mac; nothing leaves it.
+    </p>
+    <div class="grid">
+      <div class="card">
+        <div class="icon">👁</div>
+        <h3><code>tapp_open_app</code></h3>
+        <p>Launch the app, get a screenshot + accessibility tree back in seconds.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🕹</div>
+        <h3><code>tapp_session_*</code></h3>
+        <p>Interactive driving — the Playwright loop. Tap, type, swipe, back, wait.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🧪</div>
+        <h3><code>tapp_run_qa</code></h3>
+        <p>Autonomous QA — explores the app, returns <code>{verdict, confidence, findings[]}</code>.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🔁</div>
+        <h3><code>tapp_flow_*</code></h3>
+        <p>Record a session as a replayable Flow, or generate one from a goal in plain English.</p>
+      </div>
+      <div class="card">
+        <div class="icon">📱</div>
+        <h3><code>tapp_boot_simulator</code></h3>
+        <p>Simulator + app install management — list, boot, install.</p>
+      </div>
+      <div class="card">
+        <div class="icon">🩺</div>
+        <h3><code>tapp_health</code></h3>
+        <p>Diagnostics, capture history, marker parsing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The verdict you can trust</span>
+    <h2>Deterministic. No LLM in the run loop.</h2>
+    <p class="lead">
+      Tapp explores like a user via the accessibility surface and detects crashes, failed sign-ins,
+      dead buttons, stuck loading screens, and navigation dead ends — then commits to a verdict.
+      A shallow run is never <code>ready</code>. Absence of findings is not a pass.
+    </p>
+    <div class="verdicts">
+      <div class="verdict ready">
+        <div class="badge">🟢 ready</div>
+        <p>Genuinely explored, no blockers found.</p>
+      </div>
+      <div class="verdict caution">
+        <div class="badge">🟡 caution</div>
+        <p>Issues to review, or the run couldn't see enough.</p>
+      </div>
+      <div class="verdict blocked">
+        <div class="badge">🔴 blocked</div>
+        <p>A release-blocking issue was found.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="gate">
+  <div class="wrap">
+    <span class="tag">For teams</span>
+    <h2>The release gate, hosted.</h2>
+    <p class="lead">
+      Install the Tapp GitHub App on your iOS repo and every PR gets a ship/no-ship verdict —
+      explored on Tapp's Macs, posted as a check + PR comment, diffed against a baseline. Nothing
+      to set up: no runners, no PATs, no YAML.
+    </p>
+    <div class="gate-panel">
+      <ul>
+        <li>Explores your PR build on a real simulator, no test code required</li>
+        <li>Fails the check on new high/critical findings — not pre-existing debt</li>
+        <li>Sticky PR comment with the verdict, evidence, and a full report link</li>
+        <li>Currently onboarding a small number of design partners by hand</li>
+      </ul>
+      <div class="mini-comment">
+        <div class="title">🟢 SHIP-READY</div>
+        <div class="row"><span>Confidence</span><span>100%</span></div>
+        <div class="row"><span>Screens explored</span><span>4</span></div>
+        <div class="row"><span>Findings</span><span>0</span></div>
+        <div class="row"><span>Gate</span><span>PASS</span></div>
+      </div>
+    </div>
+    <div class="cta-row" style="margin-top:1.8rem">
+      <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?title=Design-partner%20interest&body=Repo%3A%0AApp%20store%20link%20(if%20any)%3A%0AWhat%20breaks%20your%20current%20CI%2FQA%20setup%3A">Apply for a design-partner slot</a>
+      <a class="btn ghost" href="https://github.com/aarwitz/tapp/blob/main/README.md#ci-gate">Read the docs</a>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap" style="text-align:center">
+    <span class="tag">Coming soon</span>
+    <h2 style="margin-bottom:0.8rem">Tapp.app</h2>
+    <p class="lead" style="margin-left:auto;margin-right:auto">
+      A macOS cockpit around the same engine: import an iOS project, click Run, watch autonomous
+      QA live, and get the ship/no-ship decision card. Free download, in packaging.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT licensed. <a href="https://github.com/aarwitz/tapp">github.com/aarwitz/tapp</a></span>
+    <span><a href="https://www.npmjs.com/package/tapp-mcp">npmjs.com/package/tapp-mcp</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
