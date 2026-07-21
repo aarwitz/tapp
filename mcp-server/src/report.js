@@ -233,6 +233,31 @@ export function computeContentCollapse(currentCounts, baselineCounts) {
   return findings;
 }
 
+// Reachability-loss regression: screens the baseline explored that this run never reached
+// at all. Content-collapse can't see them (nothing to compare against) — but a screen
+// vanishing from the same-budget exploration usually means navigation regressed (a dead
+// back button trapping the explorer, a broken link, a crash short-circuiting a flow).
+// Found via subtle-bug seeding: a dead back button stranded the run on one screen and
+// SHIP-READY passed with 3 of 6 baseline screens missing. Guarded: only fires when the
+// current run had a comparable action budget (≥60% of baseline actions), so a legit
+// short run doesn't spray false losses.
+export function computeReachabilityLoss(current, baseline) {
+  if (!current?.screens || !baseline?.screens) return [];
+  const baseActions = baseline.actionsPerformed || 0;
+  if (baseActions > 0 && (current.actionsPerformed || 0) < baseActions * 0.6) return [];
+  const reached = new Set(current.screens);
+  return baseline.screens
+    .filter((s) => !reached.has(s))
+    .map((screen) => ({
+      type: "screen_unreachable",
+      severity: "high",
+      category: "navigation_dead_end",
+      title: "Screen explored in the baseline was never reached this run",
+      screen,
+      step: null,
+    }));
+}
+
 // Cross-run regression: diff this run's deduped findings against a baseline (the `findings` array a
 // prior tapp_run_qa returned), matched by the same stable signature the dedup uses (type|screen).
 // Mirrors the Swift FindingRegression.compute. Returns null when no baseline is supplied (first run).

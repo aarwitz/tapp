@@ -20,7 +20,7 @@
 //   blocked  fail when the verdict is blocked/inconclusive, or when any flow failed.
 //   any      fail on any finding at all, or any flow failure. Strictest.
 import fs from "fs";
-import { buildQaReport, computeRegression, computeContentCollapse } from "./report.js";
+import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss } from "./report.js";
 
 function parseArgs(argv) {
   const args = { flowLogs: [], failOn: "gate" };
@@ -86,11 +86,13 @@ function loadBaseline(baselinePath) {
   const parsed = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
   // Accept either a bare findings[] or a full report JSON (as written by --json-out).
   // Keep the full report when available — the gate needs the baseline's inconclusive flag.
-  if (Array.isArray(parsed)) return { findings: parsed, inconclusive: false, screenElementCounts: null };
+  if (Array.isArray(parsed)) return { findings: parsed, inconclusive: false, screenElementCounts: null, screens: null, actionsPerformed: 0 };
   return {
     findings: parsed.findings || [],
     inconclusive: !!parsed.inconclusive,
     screenElementCounts: parsed.screenElementCounts || null,
+    screens: parsed.screens || null,
+    actionsPerformed: parsed.actionsPerformed || 0,
   };
 }
 
@@ -147,7 +149,10 @@ if (!report) {
 const baseline = loadBaseline(args.baseline);
 // Content-collapse findings are cross-run by nature — merge them into the current findings
 // BEFORE the regression diff so they count as new-vs-baseline and drive the gate normally.
-const collapsed = computeContentCollapse(report.screenElementCounts, baseline?.screenElementCounts);
+const collapsed = [
+  ...computeContentCollapse(report.screenElementCounts, baseline?.screenElementCounts),
+  ...computeReachabilityLoss(report, baseline),
+];
 if (collapsed.length) {
   report.findings.push(...collapsed);
   report.findingCounts.high += collapsed.length;
@@ -156,7 +161,7 @@ if (collapsed.length) {
   // high costs 10 confidence; any high caps the verdict at caution).
   report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
   if (report.verdict === "ready") report.verdict = report.confidence < 50 ? "blocked" : "caution";
-  report.headline = `Proceed with caution — ${collapsed.length} screen(s) lost most of their content vs. baseline (content pipeline regression?).`;
+  report.headline = `Proceed with caution — ${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }
 const regression = computeRegression(report.findings, baseline?.findings ?? null);
 const flows = args.flowLogs.map(parseFlowLog);

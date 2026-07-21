@@ -24,6 +24,13 @@ class ExplorerTests: XCTestCase {
     var app: XCUIApplication!
     /// Set whenever OCQA_COMPLETE is printed — the crash-teardown net only fires without it.
     var didEmitComplete = false
+    /// Persistence probe: "screen|field" → text we typed AND verified visible in the a11y value.
+    /// On a later REVISIT of that screen, an empty field means the value silently didn't persist.
+    var typedFieldMemory: [String: String] = [:]
+    var reportedPersistenceKeys = Set<String>()
+    var lastProbeTitle = ""
+    /// Keyboard-occlusion memory: screen → primary-action button labels seen with NO keyboard up.
+    var settledPrimaryButtons: [String: Set<String>] = [:]
     var config: [String: Any] = [:]
     /// Detected once at setUp; avoids hardcoded device dimensions
     private var screenBounds: CGRect = .zero
@@ -670,6 +677,10 @@ class ExplorerTests: XCTestCase {
         var typedFieldKeys = Set<String>()
         // Screens where the one-shot stuck-escape dismiss has already been tried.
         var stuckDismissTried = Set<String>()
+        // Trap escapes: a screen whose back/dismiss controls are all dead (e.g. a broken custom
+        // Back button with the system gesture disabled) would otherwise strand the WHOLE remaining
+        // budget. A relaunch always returns to the root; capped so a relaunch-loop can't eat the run.
+        var relaunchEscapesUsed = 0
         var actionCooldownUntilStep: [String: Int] = [:] // actionKey -> next allowed step
         var lastActionKey: String?
         var lastActionFromStateHash: String?
@@ -1161,6 +1172,23 @@ class ExplorerTests: XCTestCase {
                     emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
                     continue
                 }
+                // Deterministic trap escape: dismiss failed (or already tried) and we're still
+                // pinned to this screen — relaunch to the root and keep exploring instead of
+                // ending the whole run. The novelty bias then steers toward unexplored screens.
+                if relaunchEscapesUsed < 2, actionCount < maxActions {
+                    relaunchEscapesUsed += 1
+                    actionCount += 1
+                    print("OCQA_ACTION:{\"type\":\"relaunch\",\"reason\":\"trap_escape\",\"step\":\(actionCount),\"screen\":\"\(escaped)\",\"narrative\":\"\(escapeJSON("The \(titleStr) screen has no working way back — relaunching the app to continue exploring elsewhere."))\"}")
+                    app.terminate()
+                    Thread.sleep(forTimeInterval: 1.0)
+                    app.launch()
+                    _ = app.wait(for: .runningForeground, timeout: 10)
+                    Thread.sleep(forTimeInterval: 1.0)
+                    actionsSinceNewState = 0
+                    sameScreenStreak = 0
+                    emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
+                    continue
+                }
                 break
             }
 
@@ -1179,6 +1207,59 @@ class ExplorerTests: XCTestCase {
             let settled = isScreenSettled()
             let atextJson = visionTextInventory(elements).map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
             print("OCQA_STATE:{\"screen\":\"\(escapedTitle)\",\"hash\":\"\(stateHash)\",\"elements\":\(elements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(screenRole))\",\"summary\":\"\(escapeJSON(screenSummary))\",\"settled\":\(settled ? "true" : "false"),\"atext\":[\(atextJson)],\"inputs\":[\(inputJsonArray)]}")
+
+            // ---- Persistence probe: on a fresh RE-ARRIVAL at a screen, fields we previously
+            // typed into (and verified visible in the a11y value) should still hold their value.
+            // An empty field here means the entered state was silently lost on navigation —
+            // the "value does not persist" bug class. Only fires on arrival from a DIFFERENT
+            // screen (same-screen re-reads can't have lost state to navigation).
+            if lastProbeTitle != titleStr, lastProbeTitle != "" {
+                for (memKey, typed) in typedFieldMemory {
+                    let parts = memKey.split(separator: "|", maxSplits: 1).map(String.init)
+                    guard parts.count == 2, parts[0] == titleStr, !reportedPersistenceKeys.contains(memKey) else { continue }
+                    let fieldKey = parts[1]
+                    guard let el = elements.first(where: {
+                        ($0.type.contains("TextField") || $0.type.contains("rawValue: 49") || $0.type.contains("TextView") || $0.type.contains("rawValue: 52"))
+                            && ($0.identifier == fieldKey || $0.label == fieldKey)
+                    }) else { continue }
+                    let current = el.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let ph = el.xcElement?.placeholderValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if current.isEmpty || current == ph {
+                        reportedPersistenceKeys.insert(memKey)
+                        let t = "Entered value did not persist: '\(fieldKey)' on \(titleStr)"
+                        print("OCQA_ISSUE:{\"type\":\"state_persistence\",\"severity\":\"medium\",\"title\":\"\(escapeJSON(t))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(fieldKey))\",\"step\":\(actionCount),\"desc\":\"Typed '\(escapeJSON(typed))' into this field earlier in the run; after navigating away and returning, the field is empty — entered state was silently lost.\"}")
+                    }
+                }
+            }
+            lastProbeTitle = titleStr
+
+            // ---- Keyboard occlusion: a keyboard-covered control DROPS OUT of the a11y tree
+            // entirely (measured: with the keyboard up, a bottom-pinned Submit vanished from the
+            // read; geometry/isHittable never see it). So the signal is disappearance: remember
+            // each screen's primary-action buttons from keyboard-DOWN reads; if the keyboard is
+            // up and a remembered primary button is gone from the tree, it's covered — the
+            // "keyboard covers the button" class (missing keyboard avoidance). Screens WITH
+            // avoidance keep the button visible/present while typing (clean-variant proof).
+            let primaryWords = ["submit", "save", "send", "sign in", "log in", "continue", "post", "confirm"]
+            let currentPrimaryButtons = Set(elements.compactMap { el -> String? in
+                guard el.type.contains("Button") || el.type.contains("rawValue: 9") else { return nil }
+                let lbl = el.label.lowercased()
+                return primaryWords.contains(where: { lbl.contains($0) }) ? el.label : nil
+            })
+            let kb = app.keyboards.firstMatch
+            if kb.exists {
+                for remembered in (settledPrimaryButtons[titleStr] ?? []) where !currentPrimaryButtons.contains(remembered) {
+                    let occKey = "kbocc:\(titleStr)|\(remembered)"
+                    guard !reportedIssueKeys.contains(occKey) else { continue }
+                    reportedIssueKeys.insert(occKey)
+                    let t = "Keyboard covers the '\(remembered)' button"
+                    issues.append((type: "keyboard_occlusion", severity: "medium", title: t,
+                                   desc: "While typing on '\(titleStr)', the '\(remembered)' button disappears under the keyboard and cannot be tapped — the screen lacks keyboard avoidance."))
+                    print("OCQA_ISSUE:{\"type\":\"keyboard_occlusion\",\"severity\":\"medium\",\"title\":\"\(escapeJSON(t))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(remembered))\",\"step\":\(actionCount)}")
+                }
+            } else if !currentPrimaryButtons.isEmpty {
+                settledPrimaryButtons[titleStr, default: []].formUnion(currentPrimaryButtons)
+            }
 
             // ---- Interactive input: pause ONLY on credential/login forms, where a real value
             // genuinely matters and a default would be wrong. Optional in-app fields (search,
@@ -1927,10 +2008,18 @@ class ExplorerTests: XCTestCase {
                         let post2 = readUITree(app)
                         if app.state == .runningForeground, !post2.isEmpty, contentSignature(post2) == preContentSig {
                             reportedIssueKeys.insert(noOpKey)
-                            let issueTitle = "Control may be unresponsive: '\(humanLabel)'"
+                            // A dead NAVIGATION control (Back/Close/Done/Cancel) is worse than a dead
+                            // feature button: it strands the user on the screen (and strands this
+                            // explorer — see the reachability-loss regression it causes). HIGH, not low.
+                            let navLabels: Set<String> = ["back", "close", "done", "cancel", "dismiss", "exit"]
+                            let isNavControl = navLabels.contains(humanLabel.lowercased())
+                            let sev = isNavControl ? "high" : "low"
+                            let issueTitle = isNavControl
+                                ? "Navigation control does nothing: '\(humanLabel)' — users may be stuck on this screen"
+                                : "Control may be unresponsive: '\(humanLabel)'"
                             let issueDesc = "Tapping '\(humanLabel)' on '\(titleStr)' produced no visible change (no navigation, content, or state change)."
-                            issues.append((type: "unresponsive_element", severity: "low", title: issueTitle, desc: issueDesc))
-                            print("OCQA_ISSUE:{\"type\":\"unresponsive_element\",\"severity\":\"low\",\"title\":\"\(escapeJSON(issueTitle))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(humanLabel))\",\"step\":\(actionCount)}")
+                            issues.append((type: "unresponsive_element", severity: sev, title: issueTitle, desc: issueDesc))
+                            print("OCQA_ISSUE:{\"type\":\"unresponsive_element\",\"severity\":\"\(sev)\",\"title\":\"\(escapeJSON(issueTitle))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(humanLabel))\",\"step\":\(actionCount)}")
                         }
                     }
                 }
@@ -2990,6 +3079,16 @@ class ExplorerTests: XCTestCase {
                 if let checkEl, checkEl.exists {
                     let v = ((checkEl.value as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     let ph = (checkEl.placeholderValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Persistence probe memory: only values PROVEN visible in the a11y value are
+                    // remembered — a11y-hidden fields must not later read as "didn't persist".
+                    // And only PERSISTENT-CLASS fields (profile/settings data users expect to
+                    // stick): transient composers (feedback, message, search, comment) clear by
+                    // design and must never fire this probe (measured FP on a clean fixture).
+                    let persistentWords = ["name", "email", "phone", "username", "address", "city", "zip", "company", "title", "nickname", "bio"]
+                    let fieldHint = (fieldName + " " + effectiveLabel).lowercased()
+                    if v.contains(testText), persistentWords.contains(where: { fieldHint.contains($0) }) {
+                        typedFieldMemory["\(screenTitle)|\(fieldName)"] = testText
+                    }
                     if v.isEmpty || v == ph {
                         valueHiddenReported.insert(screenTitle)
                         let issueTitle = "Field content invisible to accessibility: \(screenTitle)"
