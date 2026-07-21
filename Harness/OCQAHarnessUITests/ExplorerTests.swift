@@ -85,6 +85,19 @@ class ExplorerTests: XCTestCase {
             app = XCUIApplication()
         }
 
+        // Crash safety net, registered BEFORE launch: an app that dies in setUp (instant
+        // launch crash) or mid-run aborts the test on the next XCUITest query — teardown
+        // blocks still run, so a dead app + no OCQA_COMPLETE becomes a CRITICAL crash
+        // finding instead of a zero-marker run. (Corpus finding: Yattee dies at launch;
+        // the frame query at the end of setUp threw before the test body could arm a net.)
+        addTeardownBlock { [self] in
+            if !didEmitComplete, let app, app.state != .runningForeground {
+                didEmitComplete = true
+                print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App crashed at launch or during the run (terminated mid-query)\",\"screen\":\"Launch\",\"step\":0}")
+                print("OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcome\":\"crash_teardown\"}")
+            }
+        }
+
         // Handle system alerts (location, notifications, tracking, etc.)
         addUIInterruptionMonitor(withDescription: "System Alert") { alert in
             let allowLabels = ["Allow", "Allow While Using App", "OK", "Continue", "Allow Full Access"]
@@ -117,7 +130,9 @@ class ExplorerTests: XCTestCase {
             }
         }
 
-        // Detect actual screen dimensions from the running app
+        // Detect actual screen dimensions from the running app — but only if it survived
+        // launch (a frame query on a dead app throws; the teardown net reports the crash).
+        guard app.state == .runningForeground else { return }
         let windowFrame = app.windows.firstMatch.frame
         if windowFrame.width > 0 && windowFrame.height > 0 {
             screenBounds = windowFrame
@@ -642,18 +657,7 @@ class ExplorerTests: XCTestCase {
         let timeoutSeconds = Double(self.timeoutSeconds)
         var inputOverrides = (config["OCQA_INPUT_OVERRIDES"] as? [String: String]) ?? [:]
 
-        // Safety net for startup/mid-run crashes that kill the app WHILE an XCUITest query is
-        // resolving: the query throw aborts the test before any in-loop crash check can run,
-        // which used to end the run with zero markers (0 findings, and a baseline'd gate saw
-        // "nothing new"). Teardown blocks run even after test failures — if the test ends
-        // without ever emitting OCQA_COMPLETE and the app is gone, that IS a crash finding.
-        // (Found via corpus bug-seeding: a crash in a state-restored screen died mid-read.)
-        addTeardownBlock { [self] in
-            if !didEmitComplete, app.state != .runningForeground {
-                print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App crashed during startup/exploration (terminated mid-query)\",\"screen\":\"Launch\",\"step\":0}")
-                print("OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcome\":\"crash_teardown\"}")
-            }
-        }
+        // (Crash safety net registered in setUp — covers launch-phase and mid-run deaths.)
 
         var visitedStates = Set<String>()
         var stateTransitions: [(from: String, to: String, action: String)] = []
