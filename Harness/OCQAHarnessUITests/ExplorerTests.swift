@@ -1273,9 +1273,16 @@ class ExplorerTests: XCTestCase {
                needsRealInput, !promptedScreens.contains(promptKey),
                detectedInputs.contains(where: { hasNoOverride(key: $0.key, screen: titleStr, in: inputOverrides) }) {
                 promptedScreens.insert(promptKey) // mark before waiting so we never double-ask
+                // Prompt title: on unlabeled login screens, detectTitle can only grab hero copy
+                // ("Personal training.") — prose is a worse prompt header than the screen's role.
+                let titleIsProse = titleStr.hasSuffix(".") || titleStr.hasSuffix("!") || titleStr.split(separator: " ").count > 4
+                let promptTitle = titleIsProse
+                    ? (screenRole == "signup" ? "Sign Up" : "Sign In")
+                    : titleStr
                 awaitInteractiveInput(
                     requestId: UUID().uuidString,
                     screenTitle: titleStr,
+                    displayTitle: promptTitle,
                     descriptors: detectedInputs,
                     responsePath: inputResponsePath,
                     waitTimeout: inputWaitTimeout,
@@ -3416,6 +3423,7 @@ class ExplorerTests: XCTestCase {
     private func awaitInteractiveInput(
         requestId: String,
         screenTitle: String,
+        displayTitle: String? = nil,
         descriptors: [InputDescriptor],
         responsePath: String,
         waitTimeout: Double,
@@ -3432,7 +3440,9 @@ class ExplorerTests: XCTestCase {
             let def = d.secure ? "" : defaultInputValue(label: d.label, identifier: d.key, secure: d.secure)
             return "{\"key\":\"\(escapeJSON(d.key))\",\"label\":\"\(escapeJSON(d.label))\",\"secure\":\(d.secure ? "true" : "false"),\"placeholder\":\"\(escapeJSON(d.placeholder))\",\"default\":\"\(escapeJSON(def))\"}"
         }.joined(separator: ",")
-        print("OCQA_AWAIT_INPUT:{\"requestId\":\"\(requestId)\",\"screen\":\"\(escapeJSON(screenTitle))\",\"fields\":[\(fieldsJson)]}")
+        // displayTitle is what the human sees; screenTitle keys the override merge below —
+        // they must stay separate or submitted values would be scoped to the display name.
+        print("OCQA_AWAIT_INPUT:{\"requestId\":\"\(requestId)\",\"screen\":\"\(escapeJSON(displayTitle ?? screenTitle))\",\"fields\":[\(fieldsJson)]}")
 
         let start = Date()
         var resolvedAction = "timeout"
@@ -3556,6 +3566,9 @@ class ExplorerTests: XCTestCase {
     private func detectInputDescriptors(in elements: [SimpleElement]) -> [InputDescriptor] {
         var seenKeys = Set<String>()
         var descriptors: [InputDescriptor] = []
+        // Credential-form context: a completely unlabeled text field next to a secure field is
+        // the email/username (the login preamble uses the same inference to decide where to type).
+        let hasSecureSibling = elements.contains { isTextField($0.type) && isSecureTextField($0.type) }
 
         for element in elements where isTextField(element.type) {
             let key = inputFieldKey(for: element)
@@ -3565,14 +3578,26 @@ class ExplorerTests: XCTestCase {
             let inferredLabel = inferFieldLabel(for: element, in: elements)
             let rawLabel = normalizeVisibleText(element.label)
             let rawId = element.identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-            let placeholder = element.xcElement?.placeholderValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let fallback = "Field \(descriptors.count + 1)"
+            var placeholder = element.xcElement?.placeholderValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let secure = isSecureTextField(element.type) || rawId.lowercased().contains("password")
+            // XCUITest quirk that mislabeled a real production login form: custom-styled fields often
+            // return NO placeholderValue — but an EMPTY field's a11y VALUE is its placeholder
+            // text ("Email address"). Recover it from value when it reads like a label (never
+            // for secure fields, whose value is the ••• mask).
+            if placeholder.isEmpty, !secure {
+                let valueText = normalizeVisibleText(element.value)
+                // Data-shaped values (an email address, a number) mean the field has been TYPED
+                // into — that's content, not a placeholder (measured: the login preamble's typed
+                // email became the field's "label" on a post-typing read).
+                let looksLikeData = valueText.contains("@") || valueText.allSatisfy { $0.isNumber || $0.isPunctuation }
+                if !valueText.isEmpty, !looksLikeData, isLikelyFieldLabel(valueText) { placeholder = valueText }
+            }
+            let fallback = secure ? "Password" : (hasSecureSibling ? "Email or username" : "Field \(descriptors.count + 1)")
             // A field's OWN accessibility label/placeholder is authoritative; only fall back to a
             // nearby static text (inferred) when the field exposes neither. Avoids mislabeling e.g.
             // a web search box as the link sitting above it.
             let ownLabel = !rawLabel.isEmpty ? rawLabel : placeholder
             let displayLabel = !ownLabel.isEmpty ? ownLabel : (inferredLabel ?? (!rawId.isEmpty ? rawId : fallback))
-            let secure = isSecureTextField(element.type) || rawId.lowercased().contains("password")
 
             descriptors.append(InputDescriptor(
                 key: key,
@@ -3654,6 +3679,11 @@ class ExplorerTests: XCTestCase {
         if text.count < 2 || text.count > 40 { return false }
         if lower.contains("welcome") || lower.contains("create account") || lower.contains("sign in") { return false }
         if lower.contains("powered by") { return false }
+        // Sentence-like text is marketing/prose, not a field label ("Real results." was
+        // inferred as an email field's label on a real login screen). Labels don't end in
+        // sentence punctuation and rarely exceed four words.
+        if text.hasSuffix(".") || text.hasSuffix("!") || text.hasSuffix("?") { return false }
+        if text.split(separator: " ").count > 4 { return false }
         return true
     }
 
