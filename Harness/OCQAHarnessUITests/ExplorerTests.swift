@@ -22,6 +22,8 @@ class ExplorerTests: XCTestCase {
     }
 
     var app: XCUIApplication!
+    /// Set whenever OCQA_COMPLETE is printed — the crash-teardown net only fires without it.
+    var didEmitComplete = false
     var config: [String: Any] = [:]
     /// Detected once at setUp; avoids hardcoded device dimensions
     private var screenBounds: CGRect = .zero
@@ -640,6 +642,19 @@ class ExplorerTests: XCTestCase {
         let timeoutSeconds = Double(self.timeoutSeconds)
         var inputOverrides = (config["OCQA_INPUT_OVERRIDES"] as? [String: String]) ?? [:]
 
+        // Safety net for startup/mid-run crashes that kill the app WHILE an XCUITest query is
+        // resolving: the query throw aborts the test before any in-loop crash check can run,
+        // which used to end the run with zero markers (0 findings, and a baseline'd gate saw
+        // "nothing new"). Teardown blocks run even after test failures — if the test ends
+        // without ever emitting OCQA_COMPLETE and the app is gone, that IS a crash finding.
+        // (Found via corpus bug-seeding: a crash in a state-restored screen died mid-read.)
+        addTeardownBlock { [self] in
+            if !didEmitComplete, app.state != .runningForeground {
+                print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App crashed during startup/exploration (terminated mid-query)\",\"screen\":\"Launch\",\"step\":0}")
+                print("OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcome\":\"crash_teardown\"}")
+            }
+        }
+
         var visitedStates = Set<String>()
         var stateTransitions: [(from: String, to: String, action: String)] = []
         var actionCounts: [String: Int] = [:]
@@ -913,6 +928,21 @@ class ExplorerTests: XCTestCase {
                 }
                 } // !skipPreambleLogin
             }
+        }
+
+        // Early-death guard: an app that dies at launch or during the login preamble must
+        // surface as a CRITICAL crash finding — not as an XCTest "Failed to resolve query"
+        // error with zero markers (which reports 0 findings and, against a baseline, would
+        // sail through a regression gate). Found via corpus bug-seeding: a state-restoring
+        // app that crashes in its restored screen dies here, before the loop's crash checks.
+        if app.state != .runningForeground {
+            _ = app.wait(for: .runningForeground, timeout: 5)
+        }
+        if app.state != .runningForeground {
+            print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App crashed at launch/startup\",\"screen\":\"Launch\",\"step\":0}")
+            didEmitComplete = true
+            print("OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcome\":\"crash_at_launch\"}")
+            return
         }
 
         // Trigger the interruption monitor on any pending system alerts
@@ -1291,6 +1321,7 @@ class ExplorerTests: XCTestCase {
                 // If consistently blank for 3+ consecutive reads on same screen, treat as limited-surface
                 if blankCount >= 3 && sameScreenStreak >= 2 {
                     print("OCQA_ISSUE:{\"type\":\"limited_surface\",\"severity\":\"high\",\"title\":\"Limited interaction surface\",\"screen\":\"\(escapedTitle)\",\"desc\":\"App surface not accessible via standard accessibility APIs\",\"step\":\(actionCount)}")
+                    didEmitComplete = true
                     print("OCQA_COMPLETE:{\"actions\":\(actionCount),\"states\":\(visitedStates.count),\"issues\":\(issues.count + 1),\"screens\":\"\",\"outcome\":\"limited_surface\"}")
                     return
                 }
@@ -1929,6 +1960,7 @@ class ExplorerTests: XCTestCase {
 
         let uniqueScreens = screenTitles.values
         let screenList = Array(Set(uniqueScreens)).sorted().joined(separator: ",")
+        didEmitComplete = true
         print("OCQA_COMPLETE:{\"actions\":\(actionCount),\"states\":\(visitedStates.count),\"issues\":\(issues.count),\"screens\":\"\(screenList)\"}")
 
         let finalScreenshot = app.screenshot()

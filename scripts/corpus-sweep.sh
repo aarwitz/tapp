@@ -41,7 +41,9 @@ backend_signals() {
   local IFS=","; echo "${sig[*]:-none}"
 }
 
-while IFS= read -r url; do
+# fd 3 for the URL list — xcodebuild/git inside the loop consume stdin and would
+# silently swallow the remaining lines (this truncated the first sweep run).
+while IFS= read -r url <&3; do
   [[ -z "$url" || "$url" == \#* ]] && continue
   name="$(basename "$url" .git)"
   dir="$OUT/$name"
@@ -68,7 +70,10 @@ try:
   d=json.load(sys.stdin); o=d.get("workspace") or d.get("project") or {}
   print("\n".join(o.get("schemes") or []))
 except Exception: pass')"
-  scheme="$(echo "$schemes" | grep -ix "$name" | head -1)"
+  # Prefer an explicitly-iOS scheme (multi-platform repos like NetNewsWire name-match the
+  # macOS scheme first, which can't build for an iOS Simulator destination).
+  scheme="$(echo "$schemes" | grep -i "ios" | grep -iv "test\|widget\|extension\|notification\|clip" | head -1)"
+  [[ -z "$scheme" ]] && scheme="$(echo "$schemes" | grep -ix "$name" | head -1)"
   [[ -z "$scheme" ]] && scheme="$(echo "$schemes" | grep -iv "test\|uitests\|widget\|extension\|notification\|clip\|watch\|mac" | head -1)"
   [[ -z "$scheme" ]] && scheme="$(echo "$schemes" | head -1)"
   [[ -n "$scheme" ]] || { row "$name" detect "$signals" - - - - - "no schemes listed"; continue; }
@@ -109,7 +114,7 @@ try:
 except Exception: print('? ? ? ?')")"
   row "$name" explored "$signals" "$bundle" "$screens" "$acted" "$findings" "$verdict" "capture: $(basename "$cap")"
   echo "  ✅ $verdict — $screens screens"
-done < "$URLS_FILE"
+done 3< "$URLS_FILE"
 
 echo ""
 echo "═══ scoreboard: $BOARD ═══"

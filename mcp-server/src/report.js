@@ -110,6 +110,7 @@ export function buildQaReport(markersFilePath) {
   const rawIssues = [];
   const screens = new Set();
   const inputsByScreen = new Map();
+  const screenElementCounts = {}; // screen -> max elements observed (content-collapse detection)
   let anySecure = false;
   let actions = 0;
 
@@ -130,6 +131,9 @@ export function buildQaReport(markersFilePath) {
       try {
         const s = JSON.parse(t.slice("OCQA_STATE:".length));
         if (typeof s.screen === "string" && s.screen.trim()) screens.add(s.screen);
+        if (typeof s.screen === "string" && s.screen.trim() && Number.isFinite(s.elements)) {
+          screenElementCounts[s.screen] = Math.max(screenElementCounts[s.screen] || 0, s.elements);
+        }
         if (typeof s.screen === "string" && Array.isArray(s.inputs) && s.inputs.length) {
           const fields = s.inputs
             .map((f) => ({ label: f.label || f.placeholder || f.key || "", secure: !!f.secure }))
@@ -194,11 +198,39 @@ export function buildQaReport(markersFilePath) {
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },
     findings,
     screens: Array.from(screens),
+    screenElementCounts,
     inputFieldsEncountered,
     loginEncountered: anySecure,
     complete: base.complete,
     relativeMarkersFilePath: base.relativeMarkersFilePath,
   };
+}
+
+// Content-collapse regression: screens that were rich in the baseline but are near-empty now.
+// The app "works" (renders, navigates, no errors) while its content pipeline is broken — the
+// class NO per-run detector can catch deterministically (a silent empty feed looks like a legit
+// empty state). Cross-run, it's unambiguous. Found via corpus bug-seeding: a broken API host in
+// a real HN client produced SHIP-READY 100/100 until this comparison existed.
+const COLLAPSE_MIN_BASELINE = 10; // only screens that clearly HAD content
+const COLLAPSE_RATIO = 0.4;       // current below 40% of baseline = collapsed
+export function computeContentCollapse(currentCounts, baselineCounts) {
+  if (!currentCounts || !baselineCounts) return [];
+  const findings = [];
+  for (const [screen, base] of Object.entries(baselineCounts)) {
+    const cur = currentCounts[screen];
+    if (cur === undefined || base < COLLAPSE_MIN_BASELINE) continue;
+    if (cur <= base * COLLAPSE_RATIO) {
+      findings.push({
+        type: "content_collapse",
+        severity: "high",
+        category: "content_collapse",
+        title: `Screen lost most of its content (${base} → ${cur} elements)`,
+        screen,
+        step: null,
+      });
+    }
+  }
+  return findings;
 }
 
 // Cross-run regression: diff this run's deduped findings against a baseline (the `findings` array a

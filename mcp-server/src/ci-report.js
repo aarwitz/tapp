@@ -20,7 +20,7 @@
 //   blocked  fail when the verdict is blocked/inconclusive, or when any flow failed.
 //   any      fail on any finding at all, or any flow failure. Strictest.
 import fs from "fs";
-import { buildQaReport, computeRegression } from "./report.js";
+import { buildQaReport, computeRegression, computeContentCollapse } from "./report.js";
 
 function parseArgs(argv) {
   const args = { flowLogs: [], failOn: "gate" };
@@ -85,7 +85,13 @@ function loadBaseline(baselinePath) {
   if (!fs.existsSync(baselinePath)) return null; // first run: no baseline yet is not an error
   const parsed = JSON.parse(fs.readFileSync(baselinePath, "utf8"));
   // Accept either a bare findings[] or a full report JSON (as written by --json-out).
-  return Array.isArray(parsed) ? parsed : parsed.findings || [];
+  // Keep the full report when available — the gate needs the baseline's inconclusive flag.
+  if (Array.isArray(parsed)) return { findings: parsed, inconclusive: false, screenElementCounts: null };
+  return {
+    findings: parsed.findings || [],
+    inconclusive: !!parsed.inconclusive,
+    screenElementCounts: parsed.screenElementCounts || null,
+  };
 }
 
 const VERDICT_BADGE = { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" };
@@ -139,7 +145,20 @@ if (!report) {
   process.exit(1);
 }
 const baseline = loadBaseline(args.baseline);
-const regression = computeRegression(report.findings, baseline);
+// Content-collapse findings are cross-run by nature — merge them into the current findings
+// BEFORE the regression diff so they count as new-vs-baseline and drive the gate normally.
+const collapsed = computeContentCollapse(report.screenElementCounts, baseline?.screenElementCounts);
+if (collapsed.length) {
+  report.findings.push(...collapsed);
+  report.findingCounts.high += collapsed.length;
+  report.findingCounts.total += collapsed.length;
+  // Keep the displayed verdict consistent with the merged findings (same scoring as report.js:
+  // high costs 10 confidence; any high caps the verdict at caution).
+  report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
+  if (report.verdict === "ready") report.verdict = report.confidence < 50 ? "blocked" : "caution";
+  report.headline = `Proceed with caution — ${collapsed.length} screen(s) lost most of their content vs. baseline (content pipeline regression?).`;
+}
+const regression = computeRegression(report.findings, baseline?.findings ?? null);
 const flows = args.flowLogs.map(parseFlowLog);
 
 const reasons = [];
@@ -150,8 +169,18 @@ if (args.failOn === "any") {
 } else if (args.failOn === "blocked" || (args.failOn === "gate" && !regression)) {
   if (report.verdict === "blocked") reasons.push("verdict is blocked");
   if (report.inconclusive) reasons.push("run was inconclusive (coverage floor not met)");
-} else if (regression?.gate.failed) {
-  reasons.push(`${regression.gate.newCritical} new critical + ${regression.gate.newHigh} new high vs. baseline`);
+} else {
+  if (regression?.gate.failed) {
+    reasons.push(`${regression.gate.newCritical} new critical + ${regression.gate.newHigh} new high vs. baseline`);
+  }
+  // A regression gate must also catch regressions in EXPLORABILITY, not just in findings:
+  // a change that makes the app crash at launch (or reintroduces a login wall) produces an
+  // inconclusive run with zero new findings — that must never pass. (Found via corpus
+  // bug-seeding: a seeded crash-at-startup sailed through on the findings diff alone.)
+  if (report.verdict === "blocked") reasons.push("verdict is blocked");
+  if (report.inconclusive && !baseline.inconclusive) {
+    reasons.push("run became inconclusive vs. baseline (app may no longer launch/explore)");
+  }
 }
 const gate = { policy: args.failOn, failed: reasons.length > 0, reasons };
 
