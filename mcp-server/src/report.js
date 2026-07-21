@@ -188,11 +188,30 @@ export function buildQaReport(markersFilePath) {
     ? `Proceed with caution — ${crit + high} issue(s) to review.`
     : `Not ready — ${crit} critical, ${high} high.`;
 
+  // The verdict's own honesty label: exactly which defect classes this run checked, and
+  // which it structurally could NOT check. Anyone reading "ready" must be able to see the
+  // boundary of the claim — an enumerated detector list is not omniscience, and saying so
+  // is the difference between a trustworthy gate and an overclaim.
+  const checkedFor = [
+    "crashes (launch + in-run)", "hangs / stuck loading", "failed sign-ins",
+    "dead controls (incl. navigation)", "error surfaces", "blank screens",
+    "navigation traps/loops", "keyboard-covered actions",
+    "lost field state (persistent-class fields)",
+  ];
+  const notChecked = [
+    "app-specific business logic (cover with Flows: record or generate, then assert)",
+    "visual correctness — layout/images/clipping (vision review; needs an API key)",
+    "push notifications / system integrations",
+    "content & reachability regressions require a baseline" ,
+  ];
+
   return {
     verdict,
     confidence,
     headline,
     inconclusive,
+    checkedFor,
+    notChecked,
     screensExplored,
     actionsPerformed,
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },

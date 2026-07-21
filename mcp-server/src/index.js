@@ -736,6 +736,14 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     L.push("");
     L.push(`> ℹ️ ${inputHint}`);
   }
+  // The honesty label: a "ready" is a claim about exactly these classes, nothing more.
+  if (Array.isArray(report.checkedFor) && report.checkedFor.length) {
+    L.push("");
+    L.push(`> ✅ Checked: ${report.checkedFor.join(" · ")}`);
+    if (Array.isArray(report.notChecked) && report.notChecked.length) {
+      L.push(`> ⬜ Not checked this run: ${report.notChecked.join(" · ")}`);
+    }
+  }
   const next = [];
   if (report.findings && report.findings.length) next.push("open a flagged screen with `tapp_open_app`");
   next.push("re-run with `baselineFindings` to gate a fix");
