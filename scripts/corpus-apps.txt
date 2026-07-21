@@ -1,0 +1,9 @@
+# Corpus sweep list — curated from dkhamsing/open-source-ios-apps across backend classes.
+# Class coverage: self-hostable-service client (login wall), public API (no key),
+# public API (keyed), no-backend/local-first, heavyweight real-world.
+https://github.com/Dimillian/IceCubesApp
+https://github.com/weiran/Hackers
+https://github.com/Ranchero-Software/NetNewsWire
+https://github.com/yattee/yattee
+https://github.com/wikimedia/wikipedia-ios
+https://github.com/mastodon/mastodon-ios
