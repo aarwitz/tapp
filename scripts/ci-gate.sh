@@ -80,7 +80,9 @@ step "Explore ($ACTIONS actions, ${TIMEOUT}s watchdog)"
 set +e
 "$ROOT/scripts/quick-capture.sh" explore "$BUNDLE_ID" --actions "$ACTIONS" --timeout "$TIMEOUT"
 set -e
-CAPTURE_DIR="$(ls -td "$ROOT"/captures/*/ 2>/dev/null | head -1)"
+# Captures land in AUTOTAP_HOME when set (the npm-installed `tapp ci` path — the package
+# dir is read-only), else the repo root (dev checkout / GitHub Action). Mirrors quick-capture.sh.
+CAPTURE_DIR="$(ls -td "${AUTOTAP_HOME:-$ROOT}"/captures/*/ 2>/dev/null | head -1)"
 MARKERS="$CAPTURE_DIR/ocqa-markers.txt"
 [[ -f "$MARKERS" ]] || { echo "❌ Exploration produced no markers ($MARKERS)" >&2; exit 1; }
 echo "Markers: $MARKERS"

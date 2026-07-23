@@ -8,12 +8,22 @@
     {
       "name": "tapp",
       "source": "./",
-      "description": "Playwright for iOS — give your coding agent hands and eyes on the iOS simulator: tap, type, screenshot, autonomous QA with a deterministic ship/no-ship verdict, and replayable Flows. Requires macOS + Xcode.",
-      "version": "0.7.0",
-      "author": { "name": "Aaron Horowitz", "url": "https://github.com/aarwitz" },
+      "description": "Autonomous QA for iOS + web. Your coding agent gets hands, eyes, and judgment: drive any app on the simulator, explore it with no test code, and get a deterministic ship/no-ship verdict with evidence. Record replayable Flows. Requires macOS + Xcode.",
+      "version": "0.9.0",
+      "author": {
+        "name": "Aaron Horowitz",
+        "url": "https://github.com/aarwitz"
+      },
       "homepage": "https://github.com/aarwitz/tapp",
       "license": "MIT",
-      "keywords": ["ios", "simulator", "testing", "qa", "xcuitest", "mcp"]
+      "keywords": [
+        "ios",
+        "simulator",
+        "testing",
+        "qa",
+        "xcuitest",
+        "mcp"
+      ]
     }
   ]
 }

@@ -729,6 +729,13 @@ class ExplorerTests: XCTestCase {
         var knownScreenTitles = Set<String>()
         /// Step at which we last forced a tab switch
         var lastTabSwitchStep = 0
+        /// Tab-bar tabs already visited by the guaranteed early sweep (by label, or position for
+        /// unlabeled tabs). See the "Guaranteed tab sweep" block in the main loop.
+        var sweptTabLabels = Set<String>()
+        /// Sweep lifecycle: done stops the per-iteration tab-bar query entirely (it costs an XCUI
+        /// query per iteration); attempts bounds how long a no-tab-bar app keeps paying for it.
+        var tabSweepDone = false
+        var tabSweepAttempts = 0
         let startTime = Date()
 
         // ---- Interactive mid-run input ----
@@ -1515,6 +1522,49 @@ class ExplorerTests: XCTestCase {
                     continue
                 }
                 continue
+            }
+
+            // ---- Guaranteed tab sweep (coverage floor for tab-bar apps) ----
+            // The explorer prioritizes in-screen content, so a deep first tab can consume the
+            // whole action budget before another tab is ever tapped (measured: DemoApp's Settings
+            // tab was never entered across 7 separate 45-action runs — mutation-recall benchmark).
+            // Visit each tab once, early, so every tab ROOT gets registered and issue-scanned;
+            // depth exploration then continues as before. One tab per iteration, so the normal
+            // state capture/issue detection runs between sweep taps. Sheets/modals covering the
+            // tab bar make the buttons non-hittable, which naturally defers the sweep — the
+            // attempts bound keeps a no-tab-bar app from paying the query cost forever.
+            // app.state is a cheap local check; XCUI element queries against a dead/crashed app
+            // can stall for long timeouts per call — never pay that just to look for tabs.
+            if !tabSweepDone && app.state == .runningForeground {
+                let sweepTabs = app.tabBars.buttons.allElementsBoundByIndex
+                    .filter { $0.exists && $0.isHittable }
+                    .sorted { $0.frame.midX < $1.frame.midX }
+                if sweepTabs.count >= 2 {
+                    func sweepKey(_ el: XCUIElement, _ idx: Int) -> String {
+                        let label = el.label.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return label.isEmpty ? "tab_idx_\(idx)" : label
+                    }
+                    for (i, tab) in sweepTabs.enumerated() where tab.isSelected {
+                        sweptTabLabels.insert(sweepKey(tab, i))
+                    }
+                    if let (idx, target) = sweepTabs.enumerated().first(where: { i, el in
+                        !el.isSelected && !sweptTabLabels.contains(sweepKey(el, i))
+                    }) {
+                        let key = sweepKey(target, idx)
+                        sweptTabLabels.insert(key)
+                        target.tap()
+                        actionCount += 1
+                        lastTabSwitchStep = actionCount
+                        print("OCQA_ACTION:{\"type\":\"tap\",\"target\":\"\(escapeJSON(key))\",\"reason\":\"tab_sweep\",\"step\":\(actionCount),\"screen\":\"\(escapedTitle)\",\"narrative\":\"\(escapeJSON("Visiting the “\(key)” tab to map the app's main sections"))\"}")
+                        Thread.sleep(forTimeInterval: 0.8)
+                        emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
+                        continue
+                    }
+                    tabSweepDone = true   // every visible tab visited once — stop querying
+                } else {
+                    tabSweepAttempts += 1
+                    if tabSweepAttempts >= 40 { tabSweepDone = true }   // no (usable) tab bar
+                }
             }
 
             // ---- Screen-title-aware DFS action selection ----
@@ -3282,6 +3332,17 @@ class ExplorerTests: XCTestCase {
         if app.popovers.firstMatch.exists { return false }
         if app.menus.firstMatch.exists { return false }
         if app.pickerWheels.firstMatch.exists { return false }
+        // A SwiftUI Menu (bridged UIMenu) presents as NEITHER app.menus nor app.popovers in
+        // current runtimes, so the checks above miss it (verified live: a menu-open Dashboard
+        // frame carried settled:true and became the vision pass's representative screenshot —
+        // the exact mid-interaction FP class settled-selection exists to prevent). Its scrim
+        // blocks hit-testing of everything beneath, so chrome that exists but isn't hittable
+        // is a type-taxonomy-free "something is covering this screen" signal. A false negative
+        // here only deprioritizes a frame (selection falls back when no settled capture exists).
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists && !tabBar.isHittable { return false }
+        let navBar = app.navigationBars.firstMatch
+        if navBar.exists && !navBar.isHittable { return false }
         return true
     }
 

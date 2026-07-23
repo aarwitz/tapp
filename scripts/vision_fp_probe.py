@@ -46,7 +46,9 @@ SYSTEM_PROMPT = (
     "contrast, lorem/placeholder copy shipped in labels, or a broken empty/error state.\n\n"
     "The screen was captured MID-INTERACTION, so do NOT report these EXPECTED, non-defect states:\n"
     "- The on-screen keyboard covering the lower part of the screen (normal when a field is focused).\n"
-    "- An open menu, dropdown, picker, popover, or sheet overlapping the content beneath it.\n"
+    "- An open menu, dropdown, picker, popover, or sheet overlapping the content beneath it — and "
+    "text or controls partially COVERED by that open element are occluded, not clipped or broken; "
+    "report neither the overlap nor the covered text as a defect.\n"
     "- A navigation back button that shows the previous screen's title next to the chevron.\n"
     "- Values typed into fields during testing (e.g. \"test\", \"test@example.com\", \"5551234567\") "
     "— that is test input, not shipped placeholder text.\n"
@@ -56,18 +58,39 @@ SYSTEM_PROMPT = (
     "- Text or a card cut off at the very TOP or BOTTOM edge of a scrollable screen — that content "
     "simply continues off-screen when scrolled; only flag text clipped WITHIN its own container.\n\n"
     "You may also be given ACCESSIBILITY CONTEXT — the text/fields/actions the a11y tree reports on "
-    "this screen. Use it to REJECT false positives: if text you think is \"clipped\" appears in FULL "
-    "in that context, it is only scrolled off-screen (not a defect); if a field is listed with no "
+    "this screen. Use it to REJECT false positives: if the COMPLETE text appears in that context, it "
+    "is rendered and available — NEVER report it as clipped, truncated, or cut off, no matter how it "
+    "looks to you; if a field is listed with no "
     "value, an empty field showing just its label is expected. Report a defect only when you can SEE "
     "it and the accessibility context does not explain it away.\n\n"
+    "Content is NEVER a rendering defect, no matter how it looks. You cannot know if a name, word, "
+    "email address, or other text is \"correct\" — you only know what pixels are rendered. NEVER "
+    "report a name or word as \"misspelled\", \"wrong\", or a data/binding error, and NEVER file it "
+    "under text_clipping/visual_regression/etc., because it looks unusual, made-up, or like a typo "
+    "(e.g. an odd client name, an auto-generated email/relay address, a random ID, two different "
+    "people sharing a first name) — that may be real content rendering exactly as intended, not a "
+    "rendering bug, even if it looks strange. Only report text_clipping when you can see an ACTUAL "
+    "rendering artifact: characters physically cut off mid-glyph, text overflowing its container "
+    "with no ellipsis, or overlapping other elements — never based on what the text says. A "
+    "text_clipping report MUST name, in \"detail\", the exact visible characters or words that are "
+    "missing or cut; if you cannot say what is missing, it is not clipped — do not report it.\n\n"
+    "You MAY separately flag content that looks unusual enough to be worth a human glance — use the "
+    "\"content_flag\" category for this, ALWAYS at \"low\" severity, and phrase it as a question, not "
+    "a diagnosis (e.g. \"Verify this client name is intentional: 'Daviad'\" — NOT \"Client name "
+    "misspelled\"). A content_flag is not a bug report: it says \"a human should confirm this is real "
+    "data\", nothing more. Use it sparingly — only for content a reasonable person would pause on, "
+    "not every name that isn't a common English word.\n\n"
     "Do NOT report subjective style opinions or anything you are unsure is a defect. When in doubt, "
     "do not report it. Respond with ONLY a JSON array (no prose) of objects: {\"severity\":"
     "\"low|medium|high\",\"category\":\"layout_overlap|text_clipping|missing_asset|blank_screen|"
-    "visual_regression\",\"title\":\"short\",\"detail\":\"what and where\"}. If the screen looks "
-    "fine, respond with []."
+    "visual_regression|content_flag\",\"title\":\"short\",\"detail\":\"what and where\"}. If the "
+    "screen looks fine, respond with []."
 )
 
-MODEL = os.environ.get("AUTOTAP_VISION_MODEL", "claude-haiku-4-5-20251001")
+# Sonnet default mirrors makeVisionInspector (VisionInspector.swift): Haiku hallucinated a
+# clipping defect 6/6 trials on a clean settled screenshot across two prompt variants; Sonnet
+# was clean 6/6 on both. Model-bound FP class — keep the eval on the product's real default.
+MODEL = os.environ.get("AUTOTAP_VISION_MODEL", "claude-sonnet-4-6")
 ENDPOINT = "https://api.anthropic.com/v1/messages"
 
 
@@ -88,9 +111,13 @@ def parse_findings(text):
         title = str(obj.get("title", "")).strip()
         if not title:
             continue
+        category = str(obj.get("category", "visual_regression")).lower()
+        # content_flag is never a confirmed defect — cap it at low regardless of what the model
+        # said (mirrors parseVisionFindings' clamp in VisionInspector.swift).
+        severity = "low" if category == "content_flag" else str(obj.get("severity", "medium")).lower()
         out.append({
-            "severity": str(obj.get("severity", "medium")).lower(),
-            "category": str(obj.get("category", "visual_regression")).lower(),
+            "severity": severity,
+            "category": category,
             "title": title,
             "detail": str(obj.get("detail", obj.get("description", ""))).strip(),
         })
