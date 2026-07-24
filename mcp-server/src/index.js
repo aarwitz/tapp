@@ -348,7 +348,6 @@ export async function buildAppForSim({ dir, container, scheme, configuration = "
       "-configuration", configuration,
       "-destination", "generic/platform=iOS Simulator",
       "-derivedDataPath", derived,
-      "CODE_SIGNING_ALLOWED=NO",
     ],
     { cwd: path.dirname(target), timeoutMs: 25 * 60 * 1000 }
   );
@@ -578,13 +577,16 @@ async function sessionAct(cmd) {
   // A `wait` can block in the harness up to its own timeout — give the ack poll enough headroom.
   let status = "timeout";
   let typedInto = null;
-  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : 30_000;
+  let detail = null;
+  // login runs a full fill+submit+verify sequence in the harness; wait can block up to its
+  // own timeout — both need more ack headroom than a single tap.
+  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : cmd.action === "login" ? 90_000 : 30_000;
   const deadline = Date.now() + ackBudget;
   while (Date.now() < deadline && !activeSession.ended) {
     await sleep(150);
     try {
       const res = JSON.parse(fs.readFileSync(activeSession.resultPath, "utf8"));
-      if (res.seq === seq) { status = res.status; typedInto = res.typedInto || null; break; }
+      if (res.seq === seq) { status = res.status; typedInto = res.typedInto || null; detail = res.detail || null; break; }
     } catch {}
   }
   // Give the post-action tree a moment to arrive.
@@ -592,7 +594,7 @@ async function sessionAct(cmd) {
   while (activeSession.treeVersion === beforeVer && Date.now() < td && !activeSession.ended) await sleep(150);
   const snap = treeSnapshot();
   if (status === "ok") recordStep(cmd, snap); // record only successful acts
-  return { status, typedInto, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0 };
+  return { status, typedInto, detail, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0 };
 }
 
 async function endSession() {
@@ -1568,16 +1570,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       title: "Session: tap/type/inspect",
       description:
         "Perform ONE action in the active interactive session and get the resulting screen back (the fresh " +
-        "accessibility tree). Actions: 'tap' (by `id` = accessibility identifier or visible/partial label, or " +
-        "by `x`/`y` coordinates), 'type' (`text`, optional `id` to target a field), 'swipe' (`direction`), " +
-        "'back', 'wait' (block until an element with `id`/`text` appears, up to `timeoutMs` — use after " +
-        "navigation/loading), 'tree' (just re-inspect without acting), 'screenshot'. Returns {status, " +
-        "screenTitle, elements[]}; status is 'not_found'/'timeout' when an element wasn't located.",
+        "accessibility tree). Actions: 'login' (`email` + `password` — fills the login form, submits, and " +
+        "verifies IN ONE CALL; always prefer this over manual type/tap for sign-in: iOS wipes secure fields " +
+        "on refocus, so step-by-step login flows lose the password), 'tap' (by `id` = accessibility identifier " +
+        "or visible/partial label or placeholder, or by `x`/`y` coordinates), 'type' (`text`, optional `id` to " +
+        "target a field — always REPLACES the field's content), 'swipe' (`direction`), 'back', 'wait' (block " +
+        "until an element with `id`/`text` appears, up to `timeoutMs`), 'tree' (re-inspect without acting), " +
+        "'screenshot'. Returns {status, screenTitle, elements[]}; status 'not_found'/'timeout'/'still_on_login' " +
+        "etc. with a `detail` explaining login failures.",
       inputSchema: {
         type: "object",
         properties: {
           authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
-          action: { type: "string", enum: ["tap", "type", "swipe", "back", "wait", "tree", "screenshot"] },
+          action: { type: "string", enum: ["login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot"] },
+          email: { type: "string", description: "login: email/username to sign in with" },
+          password: { type: "string", description: "login: password to sign in with" },
           id: { type: "string", description: "Element accessibility id or visible/partial label (for tap/type/wait)" },
           x: { type: "number", description: "Tap X coordinate (points), if not using id" },
           y: { type: "number", description: "Tap Y coordinate (points), if not using id" },
@@ -2084,7 +2091,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       "-destination", `platform=iOS Simulator,id=${booted.udid}`,
       "-derivedDataPath", derived,
       "-sdk", "iphonesimulator",
-      "CODE_SIGNING_ALLOWED=NO",
     ];
     const build = await runCommand("xcodebuild", buildArgs, { cwd: path.dirname(target), timeoutMs: 25 * 60 * 1000 });
     if (build.code !== 0) return errorResult("Build failed", { stderr: (build.stderr || build.stdout || "").slice(-3000) });
@@ -2134,7 +2140,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const unauthorized = ensureAuthorized(args);
     if (unauthorized) return unauthorized;
     const action = isNonEmptyString(args.action) ? args.action.trim().toLowerCase() : "";
-    const allowed = new Set(["tap", "type", "swipe", "back", "wait", "tree", "screenshot"]);
+    const allowed = new Set(["tap", "type", "swipe", "back", "wait", "tree", "screenshot", "login"]);
     if (!allowed.has(action)) return errorResult("Invalid action", { allowed: Array.from(allowed), received: args.action ?? null });
     const cmd = { action };
     if (isNonEmptyString(args.id)) cmd.id = args.id.trim();
@@ -2143,18 +2149,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (typeof args.text === "string") cmd.text = args.text;
     if (isNonEmptyString(args.direction)) cmd.direction = args.direction.trim();
     if (isNonEmptyString(args.label)) cmd.label = args.label.trim();
+    if (action === "login") {
+      if (isNonEmptyString(args.email)) cmd.email = args.email.trim();
+      if (isNonEmptyString(args.password)) cmd.password = args.password;
+    }
     if (action === "wait") cmd.timeoutMs = Math.max(500, Math.min(60_000, asInteger(args.timeoutMs, 5000)));
     const r = await sessionAct(cmd);
     if (r.error) return errorResult(r.error);
     // Action-word recap: what was done → where we are now.
     const tgt = cmd.id || cmd.label || cmd.text || cmd.direction || "";
-    const verb = { tap: "👆 Tapped", type: "⌨️ Typed", swipe: "↔️ Swiped", back: "◀️ Went back", wait: "⏳ Waited for", tree: "🌳 Inspected", screenshot: "📸 Captured" }[action] || action;
+    const verb = { tap: "👆 Tapped", type: "⌨️ Typed", swipe: "↔️ Swiped", back: "◀️ Went back", wait: "⏳ Waited for", tree: "🌳 Inspected", screenshot: "📸 Captured", login: "🔐 Signed in" }[action] || action;
     const ok = r.status === "ok";
     // For `type`, say WHERE the text landed and never echo the text itself (it may be a password).
     const did = action === "type"
       ? ok ? `⌨️ Typed into \`${r.typedInto || cmd.id || "focused field"}\`` : `⌨️ Type \`${cmd.id || "?"}\``
+      : action === "login"
+      ? ok ? "🔐 Signed in" : "🔐 Sign-in"
       : tgt ? `${verb} \`${tgt}\`` : verb;
-    const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}`} → now on **${r.screenTitle || "Unknown"}**`;
+    const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
+    const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
     return richResult(head + "\n\n" + formatScreen(r.screenTitle, r.elements) + rec, r);
   }

@@ -322,8 +322,19 @@ class ExplorerTests: XCTestCase {
             lastSeq = seq
             let action = (cmd["action"] as? String ?? "").lowercased()
             var status = "ok"
+            var loginDetail = ""
 
             switch action {
+            case "login":
+                let email = (cmd["email"] as? String ?? "").isEmpty ? resolve("OCQA_TEST_EMAIL") : (cmd["email"] as? String ?? "")
+                let password = (cmd["password"] as? String ?? "").isEmpty ? resolve("OCQA_TEST_PASSWORD") : (cmd["password"] as? String ?? "")
+                if email.isEmpty || password.isEmpty {
+                    status = "missing_credentials"
+                } else {
+                    let r = sessionLogin(email: email, password: password)
+                    status = r.status
+                    loginDetail = r.detail
+                }
             case "tap":
                 if let id = cmd["id"] as? String, !id.isEmpty {
                     status = sessionTapById(id)
@@ -357,9 +368,10 @@ class ExplorerTests: XCTestCase {
 
             waitForAnimationsToSettle()
             emitSessionTree()
-            let typedIntoJson = (action == "type" && !lastTypedInto.isEmpty)
+            var extraJson = (action == "type" && !lastTypedInto.isEmpty)
                 ? ",\"typedInto\":\"\(escapeJSON(lastTypedInto))\"" : ""
-            try? "{\"seq\":\(seq),\"status\":\"\(status)\",\"action\":\"\(escapeJSON(action))\"\(typedIntoJson)}"
+            if !loginDetail.isEmpty { extraJson += ",\"detail\":\"\(escapeJSON(loginDetail))\"" }
+            try? "{\"seq\":\(seq),\"status\":\"\(status)\",\"action\":\"\(escapeJSON(action))\"\(extraJson)}"
                 .write(toFile: resultPath, atomically: true, encoding: .utf8)
         }
         print("OCQA_SESSION:timeout")
@@ -437,9 +449,25 @@ class ExplorerTests: XCTestCase {
 
     private func dismissKeyboardIfPresent() {
         guard app.keyboards.count > 0 else { return }
-        // Tap a neutral area near the top (logo/title space) to resign the keyboard without hitting a control.
+        // The keyboard's own return/done key is the only dismissal that works everywhere —
+        // SwiftUI apps don't resign focus on background taps by default.
+        let kb = app.keyboards.firstMatch
+        for label in ["Done", "done", "Return", "return", "Go", "go"] {
+            let key = kb.buttons[label]
+            if key.exists && key.isHittable {
+                key.tap()
+                Thread.sleep(forTimeInterval: 0.4)
+                break
+            }
+        }
+        if app.keyboards.count == 0 { return }
+        // Fallbacks: background tap (UIKit apps wired to endEditing), then interactive swipe-dismiss.
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
         Thread.sleep(forTimeInterval: 0.4)
+        if app.keyboards.count > 0 {
+            app.swipeDown()
+            Thread.sleep(forTimeInterval: 0.4)
+        }
     }
 
     private func sessionWaitFor(_ target: String, timeoutMs: Int) -> Bool {
@@ -492,6 +520,85 @@ class ExplorerTests: XCTestCase {
         let first = app.textFields.firstMatch
         if first.exists { replaceText(on: first, with: text); lastTypedInto = fieldDesc(first); return true }
         return false
+    }
+
+    /// One-call login: find the form, fill both fields, submit, verify — all harness-side.
+    /// Agents must never do this step-by-step: iOS clears a secure field whenever editing
+    /// re-begins, so any multi-step flow (type → dismiss keyboard → tap) can silently wipe
+    /// the password it just typed.
+    private func sessionLogin(email: String, password: String) -> (status: String, detail: String) {
+        waitForUIStability(timeout: 2.0)
+        let textFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+        let secureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+        let emailField = textFields.first { f in
+            let hint = (f.identifier + " " + (f.placeholderValue ?? "") + " " + f.label).lowercased()
+            return hint.contains("email") || hint.contains("e-mail") || hint.contains("user")
+        } ?? (secureFields.isEmpty ? nil : textFields.first)
+        guard let emailF = emailField else { return ("no_login_form", "no email/username field visible") }
+        guard let passF = secureFields.first else { return ("no_login_form", "no password (secure) field visible") }
+
+        replaceText(on: emailF, with: email)
+        replaceText(on: passF, with: password)
+
+        func formGone(within seconds: TimeInterval) -> Bool {
+            let deadline = Date().addingTimeInterval(seconds)
+            while Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.5)
+                if !(passF.exists && emailF.exists) {
+                    waitForAnimationsToSettle()
+                    // iOS offers to save the password after a successful sign-in — never wanted
+                    // in QA; decline so login lands on the app's real post-auth screen.
+                    for label in ["Not Now", "Not now", "Never", "Never for This Website"] {
+                        let b = app.buttons[label]
+                        if b.exists && b.isHittable {
+                            b.tap()
+                            waitForAnimationsToSettle()
+                            break
+                        }
+                    }
+                    return true
+                }
+            }
+            return false
+        }
+
+        // Return key first: SwiftUI forms usually wire onSubmit to sign-in, and it doubles as
+        // the one keyboard dismissal that works everywhere.
+        passF.typeText("\n")
+        if formGone(within: 4) { return ("ok", "") }
+
+        func submitButton() -> XCUIElement? {
+            let keywords = ["log in", "login", "sign in", "signin", "continue", "submit", "next", "get started"]
+            let buttons = app.buttons.allElementsBoundByIndex.filter { $0.exists }
+            return buttons.first { b in
+                let t = (b.label + " " + b.identifier).lowercased()
+                return keywords.contains { t.contains($0) }
+            }
+        }
+        guard var submit = submitButton() else { return ("submit_not_found", "no login/continue-style button found") }
+        if !submit.isHittable {
+            dismissKeyboardIfPresent()
+            // Dismissal can re-begin editing on the secure field, which wipes it (iOS security
+            // behavior). Detect and re-fill before submitting.
+            let pv = (passF.value as? String) ?? ""
+            if pv.isEmpty || pv == (passF.placeholderValue ?? "§none§") {
+                replaceText(on: passF, with: password)
+                dismissKeyboardIfPresent()
+            }
+            submit = submitButton() ?? submit
+        }
+        guard submit.isHittable else { return ("submit_not_hittable", "login button stays covered by the keyboard") }
+        submit.tap()
+
+        // Success = the form goes away; otherwise collect error-looking text for the agent.
+        if formGone(within: 8) { return ("ok", "") }
+        let errTexts = app.staticTexts.allElementsBoundByIndex.filter { $0.exists }.map { $0.label }
+            .filter { t in
+                let l = t.lowercased()
+                return l.contains("error") || l.contains("invalid") || l.contains("incorrect") || l.contains("failed")
+                    || l.contains("expired") || l.contains("malformed") || l.contains("please enter") || l.contains("wrong")
+            }
+        return ("still_on_login", errTexts.prefix(2).joined(separator: " | "))
     }
 
     private func sessionBack() {
