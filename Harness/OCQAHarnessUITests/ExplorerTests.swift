@@ -464,26 +464,33 @@ class ExplorerTests: XCTestCase {
         // Explicit target: accessibility id/label subscripts, then placeholder/semantic resolution.
         // An explicit target that matches NOTHING must fail loudly — silently typing into the
         // still-focused field is exactly how passwords end up appended to the email box.
+        // Always REPLACE, never append (Playwright fill() semantics): agents retry failed
+        // submits, and append-on-retry turns "Lemonade" into "LemonadeLemonade" — a malformed
+        // credential the server rejects with no visible cause.
         if let id = id, !id.isEmpty {
             for field in [app.textFields[id], app.secureTextFields[id]] where field.exists {
-                field.tap(); field.typeText(text); lastTypedInto = fieldDesc(field); return true
+                replaceText(on: field, with: text); lastTypedInto = fieldDesc(field); return true
             }
             if let field = resolveFieldByHint(id) {
-                field.tap(); field.typeText(text); lastTypedInto = fieldDesc(field); return true
+                replaceText(on: field, with: text); lastTypedInto = fieldDesc(field); return true
             }
             return false
         }
         // No target: type into whatever field currently has keyboard focus — this respects a prior
         // tap (e.g. tap the password field by coordinate, then type) — and report which field that is.
         if app.keyboards.firstMatch.exists {
-            if let focused = focusedField() { lastTypedInto = fieldDesc(focused) }
+            if let focused = focusedField() {
+                lastTypedInto = fieldDesc(focused)
+                replaceText(on: focused, with: text)
+                return true
+            }
             app.typeText(text)
-            if lastTypedInto.isEmpty { lastTypedInto = "focused field" }
+            lastTypedInto = "focused field"
             return true
         }
         // Nothing focused and no usable id — last resort: the first text field.
         let first = app.textFields.firstMatch
-        if first.exists { first.tap(); first.typeText(text); lastTypedInto = fieldDesc(first); return true }
+        if first.exists { replaceText(on: first, with: text); lastTypedInto = fieldDesc(first); return true }
         return false
     }
 
@@ -4184,7 +4191,11 @@ class ExplorerTests: XCTestCase {
             // Values + placeholders let the client SEE what a field contains (a mis-typed value is
             // visible immediately) and name placeholder-only fields. Secure values stay masked.
             let ph = String((el.xcElement?.placeholderValue ?? "").prefix(40))
-            let val = role == "secureField" ? (el.value.isEmpty ? "" : "•••") : String(el.value.prefix(60))
+            // Secure values: length-preserving dots (content-free, capped) — a double-typed
+            // password is then VISIBLE as 16 dots where 8 were expected.
+            let val = role == "secureField"
+                ? (el.value.isEmpty ? "" : String(repeating: "•", count: min(el.value.count, 24)))
+                : String(el.value.prefix(60))
             return "{\"type\":\"\(el.type)\",\"role\":\"\(role)\",\"id\":\"\(escapeJSON(el.identifier))\",\"label\":\"\(escapeJSON(el.label))\",\"value\":\"\(escapeJSON(val))\",\"placeholder\":\"\(escapeJSON(ph))\",\"enabled\":\(el.isEnabled),\"hittable\":\(el.isHittable),\"x\":\(Int(el.frame.midX)),\"y\":\(Int(el.frame.midY)),\"w\":\(Int(el.frame.width)),\"h\":\(Int(el.frame.height))}"
         }
         json += arr.joined(separator: ",")
