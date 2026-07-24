@@ -219,6 +219,15 @@ async function listSimulators() {
 export async function ensureBootedSim({ autoBoot = false } = {}) {
   const sims = await listSimulators();
   if (sims.booted && sims.booted.length) return { booted: sims.booted[0] };
+  // A failed listing is NOT "no simulators" — surface the real reason (was silently
+  // misdiagnosed as "No iOS simulators exist" when simctl errored in odd environments).
+  if (sims.error) {
+    return {
+      error:
+        `Could not query iOS simulators — xcrun simctl failed: ${String(sims.error).slice(0, 300)}. ` +
+        `Is Xcode installed and healthy? Try in a terminal: xcrun simctl list devices`,
+    };
+  }
   const candidate = (sims.simulators || []).find((s) => s.name.startsWith("iPhone")) || (sims.simulators || [])[0];
   if (!candidate) {
     return { error: "No iOS simulators exist on this Mac. Install a simulator runtime in Xcode (Settings → Platforms), then retry." };
@@ -276,6 +285,8 @@ export async function listInstalledUserApps() {
 // Prefer a real .xcworkspace (CocoaPods layout) over a bare .xcodeproj; ignore the
 // project.xcworkspace every .xcodeproj contains. Shallow search, dependency dirs skipped.
 export function findXcodeContainer(startDir) {
+  // The target may BE the container ("build MyApp.xcodeproj" — agents do this).
+  if (/\.(xcworkspace|xcodeproj)$/.test(startDir) && fs.existsSync(startDir)) return startDir;
   const skip = new Set(["node_modules", "Pods", "DerivedData", "build", "Carthage", ".build", ".git"]);
   const workspaces = [];
   const projects = [];

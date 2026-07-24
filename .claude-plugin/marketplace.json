@@ -9,7 +9,7 @@
       "name": "tapp",
       "source": "./",
       "description": "Autonomous QA for iOS + web. Your coding agent gets hands, eyes, and judgment: drive any app on the simulator, explore it with no test code, and get a deterministic ship/no-ship verdict with evidence. Record replayable Flows. Requires macOS + Xcode.",
-      "version": "0.11.1",
+      "version": "0.11.2",
       "author": {
         "name": "Aaron Horowitz",
         "url": "https://github.com/aarwitz"
