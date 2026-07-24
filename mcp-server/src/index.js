@@ -901,7 +901,7 @@ function fmtDuration(ms) {
 }
 
 /** Format a QA report as a scannable release readout with next-step suggestions. */
-function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml } = {}) {
+function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording } = {}) {
   const c = report.findingCounts || {};
   const badge = VERDICT_BADGE[report.verdict] || report.verdict;
   const sevBits = ["critical", "high", "medium", "low"]
@@ -915,6 +915,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
   L.push("");
   L.push(`**Coverage** — ${report.screensExplored} screens · ${report.actionsPerformed} actions${timedOut ? " · ⏱️ hit time limit" : ""}`);
   if (reportHtml) L.push(`**Evidence** — 📄 ${reportHtml} (screenshots of every screen + findings, shareable)`);
+  if (recording) L.push(`**Recording** — 🎬 ${recording} (full exploration, embedded in the evidence page)`);
   L.push(`**Issues** — ${c.total ? `${c.total}${sevBits ? ` (${sevBits})` : ""}` : "none found ✨"}`);
   if (Array.isArray(report.findings) && report.findings.length) {
     L.push("");
@@ -1089,16 +1090,19 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onPro
     const { writeHtmlReport } = await import("./html-report.js");
     reportHtml = writeHtmlReport(created.path, { report, label: bundleId });
   } catch { /* evidence page is best-effort */ }
+  const recording =
+    ["exploration.webm", "exploration.mov"].map((f) => path.join(created.path, f)).find((p) => fs.existsSync(p)) || null;
   const structured = {
     ...report,
     regression,
     inputHint,
     reportHtml,
+    recording,
     capture: { id: created.id, path: created.path, relativePath: created.relativePath },
     timedOut,
     autoBooted: sim.autoBooted || false,
   };
-  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml });
+  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml, recording });
   return { structured, text };
 }
 

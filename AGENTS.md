@@ -19,11 +19,17 @@ npx -y tapp-mcp apps            # what's installed on the simulator, with bundle
 npx -y tapp-mcp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
 ```
 
-Read the saved screenshot file to see the screen. The interactive session loop and Flow
-record/replay are MCP-only (they need a long-lived process) — the rest of this playbook
-assumes the `tapp_*` MCP tools are connected. With MCP, the no-bundle-id path is:
-`tapp_build {projectDir}` (auto-detects + builds + installs, returns the bundle id) →
-`tapp_run_qa {appBundleId}`.
+**Seeing the screen, per client:** if you can read image files into your context (Claude
+Code's Read tool, Codex's view-image), open the saved screenshot path the CLI prints —
+that IS the screen. If you cannot (Cursor, VS Code Copilot), connect the MCP server
+instead: its tool results carry the screenshot inline. Screen *recordings* are for the
+human: `tapp qa` records the full exploration and embeds it in the report.html evidence
+page — tell the user the report path so they can watch it.
+
+The interactive session loop and Flow record/replay are MCP-only (they need a long-lived
+process) — the rest of this playbook assumes the `tapp_*` MCP tools are connected. With
+MCP, the no-bundle-id path is: `tapp_build {projectDir}` (auto-detects + builds +
+installs, returns the bundle id) → `tapp_run_qa {appBundleId}`.
 
 ## Pick the right tool for the job
 
