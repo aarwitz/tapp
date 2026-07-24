@@ -34,6 +34,31 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 
 Requirements: **macOS + Xcode** (simulator runtimes installed), **Node ≥ 18**.
 
+**Zero config — get a verdict right now.** No server, no config file, no test code; your agent
+can run these directly (and so can you):
+
+```bash
+npx -y tapp-mcp qa com.mycompany.app     # autonomous QA → ship/no-ship verdict + findings + evidence page
+npx -y tapp-mcp open com.mycompany.app   # launch the app → screen summary + screenshot file
+npx -y tapp-mcp tree com.mycompany.app   # accessibility tree of the current screen
+npx -y tapp-mcp shot                     # screenshot the booted simulator
+```
+
+Web (beta): `npx -y tapp-mcp qa http://localhost:3000` *(one-time setup:
+`npm i -g playwright && npx playwright install chromium`)*
+
+Optional but recommended (prebuilds the test harness so the first run is fast):
+```bash
+npx -y tapp-mcp install    # ~2 min, one time
+npx -y tapp-mcp doctor     # verify Xcode / simulators / toolchain
+```
+
+### MCP hookup (optional)
+
+The MCP server adds the two things a CLI can't do: **screenshots inline in your agent's
+context** (the model literally sees the screen) and the **interactive session loop**
+(tap → read tree → type, with the app staying open between actions).
+
 **Claude Code:**
 ```bash
 claude mcp add tapp -- npx -y tapp-mcp mcp
@@ -57,18 +82,10 @@ args = ["-y", "tapp-mcp", "mcp"]
 
 **Any other MCP client:** stdio command `npx -y tapp-mcp mcp`.
 
-Optional but recommended (prebuilds the test harness so the first tool call is fast):
-```bash
-npx -y tapp-mcp install    # ~2 min, one time
-npx -y tapp-mcp doctor     # verify Xcode / simulators / toolchain
-```
-
 Then ask your agent:
+> "Run tapp qa on my app — is it ship-ready?"
 > "Open com.mycompany.app on the simulator and screenshot the home screen."
-> "Run autonomous QA on my app — is it ship-ready?"
 > "Log in with test@example.com, drive to checkout, and record it as a replayable test."
-> "Run autonomous QA on http://localhost:3000 — anything broken?" *(web beta — one-time
-> setup: `npm i -g playwright && npx playwright install chromium`)*
 
 ## What the agent gets (19 tools)
 
@@ -130,10 +147,11 @@ your agent proves its UI work instead of claiming it:
 ```markdown
 ## Verifying UI changes
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
-(iOS simulator, or a browser for web). After any UI change: build/serve the app, then use the
-tapp MCP tools (`npx -y tapp-mcp mcp`) to open the changed screen and screenshot it as proof.
-Before declaring a feature done, run `tapp_run_qa` (appBundleId for iOS, url for web) and
-report the ship/no-ship verdict. A change is not "done" until it has been seen working.
+(iOS simulator, or a browser for web). After any UI change: build/serve the app, then run
+`npx -y tapp-mcp open <bundleId>` and look at the screenshot it saves as proof.
+Before declaring a feature done, run `npx -y tapp-mcp qa <bundleId>` (or `qa <url>` for web)
+and report the ship/no-ship verdict. A change is not "done" until it has been seen working.
+(If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots.)
 ```
 
 ## How it works

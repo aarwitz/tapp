@@ -1,10 +1,17 @@
 #!/usr/bin/env node
-// tapp CLI — Playwright for iOS.
+// tapp CLI — ship with proof.
 //
-//   tapp mcp        Start the MCP server on stdio (what agents run)
+//   Zero-config verbs (the same engine the MCP tools use, exported by mcp-server/src/index.js):
+//   tapp qa <bundleId|url>   Autonomous QA → verdict + findings + evidence
+//   tapp open <bundleId>     Launch app → screen summary + screenshot file
+//   tapp tree <bundleId>     Accessibility tree of the current screen
+//   tapp shot                Screenshot the booted simulator
+//   tapp report [captureId]  Open the HTML evidence page
+//   tapp ci ...              Merge-blocking release gate (passthrough to ci-gate.sh)
+//
+//   tapp mcp        Start the MCP server on stdio (inline screenshots + interactive sessions)
 //   tapp install    Prebuild the exploration harness for the booted simulator
 //   tapp doctor     Check the toolchain (Xcode, simctl, node, harness cache)
-//   tapp ci ...     Run the CI release gate (passthrough to ci-gate.sh)
 //
 // All writable output (captures, harness build cache) goes to ~/.tapp (override
 // with TAPP_HOME). The package directory itself is never written to.
@@ -89,10 +96,168 @@ function harnessXctestrun() {
   }
 }
 
+// Flags/positionals for the zero-config verbs (qa/open/tree/shot). `--key value` or bare `--key`.
+function parseVerbArgs(argv) {
+  const flags = {};
+  const positionals = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--")) {
+      const key = a.slice(2);
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        flags[key] = next;
+        i++;
+      } else {
+        flags[key] = true;
+      }
+    } else {
+      positionals.push(a);
+    }
+  }
+  return { flags, positionals };
+}
+
+const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "index.js"));
+
+function saveShot(img, outFlag, name) {
+  const out = outFlag || path.join(process.env.AUTOTAP_HOME, "shots", name);
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, Buffer.from(img.data, "base64"));
+  return out;
+}
+
 switch (command) {
   case "mcp": {
-    // The MCP server self-starts on import (stdio transport) — agents spawn `tapp mcp`.
-    await import(path.join(packageRoot, "mcp-server", "src", "index.js"));
+    // Agents spawn `tapp mcp`; the engine module is import-safe, so start explicitly.
+    const { startMcpServer } = await engineImport();
+    await startMcpServer();
+    break;
+  }
+
+  // ---- Zero-config verbs: the same engine the MCP tools use (exported by index.js),
+  // invokable by any agent or human with no server setup at all.
+
+  case "qa": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const target = positionals[0];
+    if (!target) {
+      console.error(
+        "Usage: tapp qa <bundleId | http(s)://url> [--actions N] [--timeout S] [--email E] [--password P] [--baseline report.json] [--json out.json]"
+      );
+      process.exit(2);
+    }
+    let baselineFindings;
+    if (flags.baseline) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(flags.baseline, "utf8"));
+        baselineFindings = Array.isArray(parsed) ? parsed : parsed.findings;
+      } catch (e) {
+        console.error(`❌ Could not read baseline ${flags.baseline}: ${e.message}`);
+        process.exit(2);
+      }
+    }
+    const engine = await engineImport();
+    const isWeb = /^https?:\/\//i.test(target);
+    const unit = isWeb ? "pages" : "screens";
+    const onProgress = (p) =>
+      process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${unit} reached   `);
+    const r = isWeb
+      ? await engine.runQaWeb({
+          url: target,
+          maxActions: flags.actions,
+          timeout: flags.timeout,
+          testEmail: flags.email,
+          testPassword: flags.password,
+          baselineFindings,
+          onProgress,
+        })
+      : await engine.runQaIos({
+          bundleId: target,
+          maxActions: flags.actions,
+          timeout: flags.timeout,
+          args: { testEmail: flags.email, testPassword: flags.password, baselineFindings },
+          onProgress,
+        });
+    process.stderr.write("\n");
+    if (r.error) {
+      console.error(`❌ ${r.error}`);
+      process.exit(1);
+    }
+    console.log(r.text);
+    if (flags.json && typeof flags.json === "string") {
+      fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
+      console.log(`\n📄 Full report JSON: ${flags.json} (pass as --baseline next run to diff regressions)`);
+    }
+    break;
+  }
+
+  case "open": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const bundleId = positionals[0];
+    if (!bundleId) {
+      console.error("Usage: tapp open <bundleId> [--out screenshot.jpg]");
+      process.exit(2);
+    }
+    const engine = await engineImport();
+    const sim = await engine.ensureBootedSim({ autoBoot: true });
+    if (sim.error) {
+      console.error(`❌ ${sim.error}`);
+      process.exit(1);
+    }
+    if (sim.autoBooted) console.error(`📱 Booted ${sim.booted.name}`);
+    const r = await engine.openApp(bundleId, {}, 1000);
+    if (r.error) {
+      console.error(`❌ ${r.error}`);
+      process.exit(1);
+    }
+    console.log(`🚀 Launched \`${bundleId}\`\n`);
+    console.log(engine.formatScreen(r.screenTitle, r.elements));
+    if (r.img && !r.img.error) {
+      const out = saveShot(r.img, typeof flags.out === "string" ? flags.out : null, `${bundleId}-${Date.now()}.jpg`);
+      console.log(`\n📸 Screenshot: ${out}`);
+    }
+    break;
+  }
+
+  case "tree": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const bundleId = positionals[0];
+    if (!bundleId) {
+      console.error("Usage: tapp tree <bundleId> [--json]");
+      process.exit(2);
+    }
+    const engine = await engineImport();
+    const sim = await engine.ensureBootedSim({ autoBoot: true });
+    if (sim.error) {
+      console.error(`❌ ${sim.error}`);
+      process.exit(1);
+    }
+    const r = await engine.captureUiTree(bundleId);
+    if (r.error) {
+      console.error(`❌ ${r.error}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      console.log(JSON.stringify({ screenTitle: r.screenTitle, elements: r.elements }, null, 2));
+    } else {
+      console.log(engine.formatScreen(r.screenTitle, r.elements));
+      console.log("\n(full element list: tapp tree " + bundleId + " --json)");
+    }
+    break;
+  }
+
+  case "shot":
+  case "screenshot": {
+    const { flags } = parseVerbArgs(rest);
+    const engine = await engineImport();
+    const img = await engine.captureScreenshotImage(flags.width ? Number(flags.width) : 1000);
+    if (img.error) {
+      console.error(`❌ ${img.error}`);
+      process.exit(1);
+    }
+    const out = saveShot(img, typeof flags.out === "string" ? flags.out : null, `shot-${Date.now()}.jpg`);
+    console.log(`📸 ${out} (${Math.round(img.bytes / 1024)}KB)`);
     break;
   }
 
@@ -198,21 +363,28 @@ switch (command) {
   default: {
     console.log(`tapp v${pkg.version} — ship with proof. Autonomous QA with a deterministic ship/no-ship verdict (iOS + web beta).
 
-Usage:
-  tapp mcp        Start the MCP server on stdio (this is what agents run)
+Zero-config verbs (agents and humans can just run these — no server, no setup):
+  tapp qa <bundleId|url>   Autonomous QA → verdict + findings + evidence
+                           (--actions N · --email E --password P · --baseline report.json · --json out.json)
+  tapp open <bundleId>     Launch the app → screen summary + screenshot saved to a file
+  tapp tree <bundleId>     Accessibility tree of the current screen (--json for every element)
+  tapp shot                Screenshot the booted simulator → file path (--out file.jpg)
+  tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
+  tapp ci ...              Merge-blocking release gate — explore + flows + baseline diff (see: tapp ci --help)
+
+Setup:
   tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)
   tapp doctor     Check Xcode / simulators / toolchain
-  tapp report     Open the HTML evidence page for the latest capture (tapp report [captureId])
-  tapp ci ...     Run the CI release gate (see: tapp ci --help)
+  tapp mcp        Start the MCP server on stdio (adds inline screenshots + interactive sessions)
 
-Hook it up to your agent:
+MCP hookup (optional — for inline screenshots and the tap/type/inspect session loop):
   Claude Code:   claude mcp add tapp -- npx -y tapp-mcp mcp
   Cursor/VS Code (mcp.json):
     { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "tapp-mcp", "mcp"] } } }
 
 Then ask your agent things like:
-  "Open com.mycompany.app on the simulator and screenshot the home screen"
-  "Run autonomous QA on my app and tell me if it's ship-ready"
+  "Run tapp qa on com.mycompany.app — is it ship-ready?"
+  "Open the settings screen and show me the screenshot"
   "Drive the login flow and record it as a replayable test"
 
 Docs: ${pkg.homepage}`);

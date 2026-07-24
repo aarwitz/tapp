@@ -1,8 +1,22 @@
 # Tapp agent playbook
 
-You (the agent) have Tapp's `tapp_*` MCP tools: hands, eyes, and judgment on real app
-surfaces — the iOS simulator, plus (beta) web apps in a real browser via `tapp_run_qa`'s
-`url` mode. This is the playbook for using them well.
+You (the agent) have Tapp: hands, eyes, and judgment on real app surfaces — the iOS
+simulator, plus (beta) web apps in a real browser. This is the playbook for using it well.
+
+## No MCP connected? Just run the CLI
+
+Every core capability works as a plain command — no server, no config:
+
+```bash
+npx -y tapp-mcp qa <bundleId|url>   # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
+npx -y tapp-mcp open <bundleId>     # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
+npx -y tapp-mcp tree <bundleId>     # accessibility tree, --json for every element (≈ tapp_ui_tree)
+npx -y tapp-mcp shot                # screenshot the booted sim → file path (≈ tapp_screenshot)
+```
+
+Read the saved screenshot file to see the screen. The interactive session loop and Flow
+record/replay are MCP-only (they need a long-lived process) — the rest of this playbook
+assumes the `tapp_*` MCP tools are connected.
 
 ## Pick the right tool for the job
 

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -216,7 +216,7 @@ async function listSimulators() {
 // booted", and the harness's raw failure text is unactionable. Long-running tools
 // (run_qa) auto-boot the first available iPhone; fast tools return an instructive error
 // the agent can act on instead of a shrug.
-async function ensureBootedSim({ autoBoot = false } = {}) {
+export async function ensureBootedSim({ autoBoot = false } = {}) {
   const sims = await listSimulators();
   if (sims.booted && sims.booted.length) return { booted: sims.booted[0] };
   const candidate = (sims.simulators || []).find((s) => s.name.startsWith("iPhone")) || (sims.simulators || [])[0];
@@ -230,6 +230,23 @@ async function ensureBootedSim({ autoBoot = false } = {}) {
   const st = await runCommand("xcrun", ["simctl", "bootstatus", candidate.udid, "-b"], { timeoutMs: 3 * 60 * 1000 });
   if (st.code !== 0) return { error: `Auto-boot of ${candidate.name} failed — boot one manually with tapp_boot_simulator.` };
   return { booted: candidate, autoBooted: true };
+}
+
+// The #1 real first-run failure: the bundle id isn't installed on the sim (typo, or the app was
+// never installed). Without this pre-flight the harness reports a misleading "crashed at launch"
+// and sessions die with an unactionable error — check cheaply up front instead.
+async function appInstalledOnBootedSim(bundleId) {
+  const r = await runCommand("xcrun", ["simctl", "get_app_container", "booted", bundleId, "app"], { timeoutMs: 15_000 });
+  return r.code === 0;
+}
+
+function notInstalledError(bundleId, booted) {
+  const name = booted && booted.name ? booted.name : "the booted simulator";
+  return (
+    `\`${bundleId}\` is not installed on ${name}. Install a simulator build first — ` +
+    `tapp_install_app with the .app path (CLI: xcrun simctl install booted path/to/App.app) — ` +
+    `or double-check the bundle id (xcrun simctl listapps booted).`
+  );
 }
 
 // ---- Persistent interactive session (Playwright-style tap/type/inspect loop) ----
@@ -276,6 +293,7 @@ async function startSession(bundleId, extraEnv = {}) {
   }
   const sim = await ensureBootedSim();
   if (sim.error) return { error: sim.error };
+  if (!(await appInstalledOnBootedSim(bundleId))) return { error: notInstalledError(bundleId, sim.booted) };
   const token = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const cmdPath = `/tmp/ocqa-session-${token}-cmd.json`;
   const resultPath = `/tmp/ocqa-session-${token}-res.json`;
@@ -299,7 +317,12 @@ async function startSession(bundleId, extraEnv = {}) {
 
   const deadline = Date.now() + 240_000; // build + launch can take a few minutes on first run
   while (!activeSession.ready && Date.now() < deadline && !activeSession.ended) await sleep(300);
-  if (activeSession.ended) { activeSession = null; return { error: "Session process exited before it became ready (build/launch failed?)." }; }
+  if (activeSession.ended) {
+    // Surface the real failure from the harness output instead of a shrug.
+    const errLine = ((activeSession.buffer || "").match(/error:\s*([^\n]+)/) || [])[1];
+    activeSession = null;
+    return { error: `Session process exited before it became ready${errLine ? ` — ${errLine.trim()}` : " (build/launch failed?)."}` };
+  }
   if (!activeSession.ready) { return { error: "Session did not become ready within the time limit." }; }
 
   const td = Date.now() + 10_000;
@@ -394,7 +417,7 @@ async function endSession() {
 // Fast "just show me a screen": launch the app fresh (optionally bypassing login), grab a screenshot
 // while it's on screen, return the tree too, then close it. No exploration. Uses the session
 // machinery only to keep the app alive long enough to photograph it.
-async function openApp(bundleId, extraEnv, maxWidth) {
+export async function openApp(bundleId, extraEnv, maxWidth) {
   const start = await startSession(bundleId, extraEnv);
   if (start.error) return { error: start.error };
   const img = await captureScreenshotImage(maxWidth);
@@ -458,7 +481,7 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
 // Grab the booted simulator's current screen and return it downscaled + JPEG-compressed so the
 // payload stays small enough for an MCP client to render inline. Works standalone or mid-session
 // (it just photographs whatever is on the booted sim).
-async function captureScreenshotImage(maxWidth) {
+export async function captureScreenshotImage(maxWidth) {
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const png = `/tmp/tapp-shot-${stamp}.png`;
   const jpg = `/tmp/tapp-shot-${stamp}.jpg`;
@@ -610,7 +633,7 @@ function ungroundedScreens(steps, grounding) {
 // Build the harness environment shared by run_qa and session_start: test credentials, app launch
 // arguments / environment (e.g. UI_TEST_BACKEND, --uitesting / login bypass), and deterministic
 // field overrides. quick-capture.sh folds the *_JSON vars into the run config.
-function explorationEnvFromArgs(args) {
+export function explorationEnvFromArgs(args) {
   const env = {};
   if (isNonEmptyString(args.testEmail)) env.OCQA_TEST_EMAIL = args.testEmail;
   if (isNonEmptyString(args.testPassword)) env.OCQA_TEST_PASSWORD = args.testPassword;
@@ -779,7 +802,7 @@ function elementBreakdown(elements) {
 }
 
 /** Scannable "Read screen X — N elements (...)" readout, plus the tappable/typeable controls. */
-function formatScreen(screenTitle, elements) {
+export function formatScreen(screenTitle, elements) {
   const els = elements || [];
   const interactable = els.filter((e) => e.isEnabled !== false && (String(e.type).includes("Button") || String(e.type).includes("rawValue: 9") || String(e.type).includes("TextField") || String(e.type).includes("rawValue: 49") || String(e.type).includes("rawValue: 50") || String(e.type).includes("Cell") || String(e.type).includes("rawValue: 75")));
   const labels = interactable
@@ -789,6 +812,136 @@ function formatScreen(screenTitle, elements) {
   const L = [`🌳 Read screen **${screenTitle || "Unknown"}** — ${els.length} elements (${elementBreakdown(els)})`];
   if (labels.length) L.push("", "**Controls:** " + labels.map((l) => `\`${l}\``).join(" · "));
   return L.join("\n");
+}
+
+// ---- Shared QA engine (one implementation, two consumers: the MCP tools below and the
+// `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
+// the surfaces can't drift.)
+
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, onProgress = () => {} }) {
+  const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
+  const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
+  const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
+  const outDir = path.join(capturesDir, id);
+  let webResult;
+  try {
+    const { exploreWeb } = await import("./web-explorer.js");
+    webResult = await exploreWeb({
+      url: url.trim(),
+      maxActions: actions,
+      timeoutSec,
+      outDir,
+      testEmail: isNonEmptyString(testEmail) ? testEmail.trim() : "",
+      testPassword: isNonEmptyString(testPassword) ? testPassword.trim() : "",
+      onProgress,
+    });
+  } catch (err) {
+    return { error: String(err.message || err) };
+  }
+  const report = buildQaReport(webResult.markersPath);
+  if (!report) return { error: "Web exploration produced no markers", details: { capture: { id, path: outDir } } };
+  const backend = resolveModelBackend();
+  if (backend && report.findings.length) {
+    const { enrichFindings } = await import("./enrich.js");
+    await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: url.trim() });
+  }
+  const regression = computeRegression(report.findings, baselineFindings);
+  let reportHtml = null;
+  try {
+    const { writeHtmlReport } = await import("./html-report.js");
+    reportHtml = writeHtmlReport(outDir, { report, label: url.trim() });
+  } catch { /* evidence page is best-effort */ }
+  const structured = { ...report, regression, platform: "web", reportHtml, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
+  const text = formatQaReport(report, { regression, bundleId: url.trim(), aiConfigured: !!backend, reportHtml });
+  return { structured, text };
+}
+
+export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onProgress = () => {} }) {
+  const captureScript = path.join(scriptsDir, "quick-capture.sh");
+  if (!fs.existsSync(captureScript)) return { error: "Capture script not found", details: { captureScript } };
+
+  // run_qa runs for minutes anyway — auto-boot rather than bounce the user.
+  const sim = await ensureBootedSim({ autoBoot: true });
+  if (sim.error) return { error: sim.error };
+  if (!(await appInstalledOnBootedSim(bundleId))) return { error: notInstalledError(bundleId, sim.booted) };
+
+  const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
+  const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
+  const env = explorationEnvFromArgs(args);
+
+  const { created, timedOut } = await runExploreStreaming(bundleId, actions, timeoutSec, env, onProgress);
+  if (!created) return { error: "Exploration produced no capture run", details: { timedOut } };
+
+  const report = buildQaReport(path.join(created.path, "ocqa-markers.txt"));
+  if (!report) {
+    return {
+      error: "No markers parsed from exploration (the app may not have launched)",
+      details: { capture: { id: created.id, relativePath: created.relativePath } },
+    };
+  }
+  // If the app showed input fields and the caller didn't supply values, tell the agent to ask the
+  // user — Tapp fills with safe defaults autonomously and does NOT pause to prompt (that's the
+  // standalone app's behavior; here the agent does the asking).
+  const gaveValues = isNonEmptyString(args.testEmail) || isNonEmptyString(args.testPassword) || (args.inputOverrides && Object.keys(args.inputOverrides).length > 0);
+  let inputHint;
+  if (report.inputFieldsEncountered.length > 0 && !gaveValues) {
+    const screensList = report.inputFieldsEncountered.map((s) => s.screen).slice(0, 5).join(", ");
+    inputHint =
+      `This app showed input fields${report.loginEncountered ? " including a login" : ""} on: ${screensList}. ` +
+      `I explored autonomously and filled them with safe placeholder values — I did NOT pause to ask. ` +
+      `If you want me to test with real values, tell me what to enter for these fields (or say "use defaults" / "skip"), ` +
+      `and I'll re-run with testEmail/testPassword or inputOverrides — or I can drive it step-by-step in an interactive session so you can supply values as we go.`;
+  }
+  // Post-run AI enrichment (additive, never changes the verdict) when a key is present.
+  const backend = resolveModelBackend();
+  if (backend && report.findings.length) {
+    const { enrichFindings } = await import("./enrich.js");
+    await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: bundleId });
+  }
+  // Cross-run regression vs. a caller-supplied baseline (the CI gate).
+  const regression = computeRegression(report.findings, args.baselineFindings);
+  let reportHtml = null;
+  try {
+    const { writeHtmlReport } = await import("./html-report.js");
+    reportHtml = writeHtmlReport(created.path, { report, label: bundleId });
+  } catch { /* evidence page is best-effort */ }
+  const structured = {
+    ...report,
+    regression,
+    inputHint,
+    reportHtml,
+    capture: { id: created.id, path: created.path, relativePath: created.relativePath },
+    timedOut,
+    autoBooted: sim.autoBooted || false,
+  };
+  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml });
+  return { structured, text };
+}
+
+export async function captureUiTree(bundleId) {
+  const captureScript = path.join(scriptsDir, "quick-capture.sh");
+  const before = new Set(listCaptureRuns(50).map((r) => r.id));
+  const result = await runCommand("bash", [captureScript, "tree", bundleId], {
+    cwd: repoRoot,
+    timeoutMs: 5 * 60 * 1000,
+  });
+  const created = listCaptureRuns(50).find((r) => !before.has(r.id));
+  if (!created) return { error: "UI tree produced no capture", details: { stderr: result.stderr } };
+
+  const treePath = path.join(created.path, "uitree.json");
+  if (!fs.existsSync(treePath) || fs.statSync(treePath).size === 0) {
+    return {
+      error: "No accessibility tree was produced (is the app installed + foregrounded?)",
+      details: { capture: { id: created.id, relativePath: created.relativePath }, stderr: result.stderr },
+    };
+  }
+  let tree;
+  try {
+    tree = JSON.parse(fs.readFileSync(treePath, "utf8"));
+  } catch {
+    return { error: "uitree.json was not valid JSON", details: { treePath } };
+  }
+  return { screenTitle: tree.screenTitle ?? null, elements: tree.elements || [], capture: { id: created.id, relativePath: created.relativePath } };
 }
 
 const pkgVersion = (() => {
@@ -1487,127 +1640,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return errorResult("Provide exactly one of appBundleId (iOS) or url (web beta)");
     }
 
-    // Web (beta): same judgment layer, different driver — the Playwright crawler emits
-    // OCQA markers into a normal capture dir, and everything downstream is shared.
-    if (wantsWeb) {
-      const actions = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
-      const timeout = Math.max(30, Math.min(3600, asInteger(args.timeout, 600)));
-      const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
-      const outDir = path.join(capturesDir, id);
-      const progressToken = request.params && request.params._meta ? request.params._meta.progressToken : undefined;
-      let webResult;
-      try {
-        const { exploreWeb } = await import("./web-explorer.js");
-        webResult = await exploreWeb({
-          url: args.url.trim(),
-          maxActions: actions,
-          timeoutSec: timeout,
-          outDir,
-          testEmail: isNonEmptyString(args.testEmail) ? args.testEmail.trim() : "",
-          testPassword: isNonEmptyString(args.testPassword) ? args.testPassword.trim() : "",
-          onProgress: (p) => {
-            if (progressToken === undefined) return;
-            server.notification({
-              method: "notifications/progress",
-              params: { progressToken, progress: p.action || 0, total: p.max || actions, message: `🔍 Exploring… ${p.action}/${p.max || actions} actions · ${p.states} pages reached` },
-            }).catch(() => {});
-          },
-        });
-      } catch (err) {
-        return errorResult(String(err.message || err));
-      }
-      const report = buildQaReport(webResult.markersPath);
-      if (!report) return errorResult("Web exploration produced no markers", { capture: { id, path: outDir } });
-      const backend = resolveModelBackend();
-      if (backend && report.findings.length) {
-        const { enrichFindings } = await import("./enrich.js");
-        await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: args.url.trim() });
-      }
-      const regression = computeRegression(report.findings, args.baselineFindings);
-      let reportHtml = null;
-      try {
-        const { writeHtmlReport } = await import("./html-report.js");
-        reportHtml = writeHtmlReport(outDir, { report, label: args.url.trim() });
-      } catch { /* evidence page is best-effort */ }
-      const structured = { ...report, regression, platform: "web", reportHtml, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
-      return richResult(formatQaReport(report, { regression, bundleId: args.url.trim(), aiConfigured: !!backend, reportHtml }), structured);
-    }
-
-    const captureScript = path.join(scriptsDir, "quick-capture.sh");
-    if (!fs.existsSync(captureScript)) return errorResult("Capture script not found", { captureScript });
-
-    // run_qa runs for minutes anyway — auto-boot rather than bounce the user.
-    const sim = await ensureBootedSim({ autoBoot: true });
-    if (sim.error) return errorResult(sim.error);
-
-    const actions = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
-    const timeout = Math.max(30, Math.min(3600, asInteger(args.timeout, 600)));
-
-    const env = explorationEnvFromArgs(args);
-
-    // Stream live progress to the client (if it passed a progressToken) as the harness explores.
+    // Both branches call the shared engine (runQaWeb/runQaIos) — the handler only adds
+    // MCP concerns: auth, arg validation, and progress notifications.
     const progressToken = request.params && request.params._meta ? request.params._meta.progressToken : undefined;
-    let lastProgress = null;
-    const onProgress = (p) => {
-      lastProgress = p;
-      const total = p.max || actions;
+    const budget = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
+    const notifyProgress = (unit) => (p) => {
       if (progressToken === undefined) return;
-      server
-        .notification({
-          method: "notifications/progress",
-          params: { progressToken, progress: p.action || 0, total, message: `🔍 Exploring… ${p.action}/${total} actions · ${p.states} screens reached` },
-        })
-        .catch(() => {});
+      const total = p.max || budget;
+      server.notification({
+        method: "notifications/progress",
+        params: { progressToken, progress: p.action || 0, total, message: `🔍 Exploring… ${p.action}/${total} actions · ${p.states} ${unit} reached` },
+      }).catch(() => {});
     };
-
-    const { created, timedOut } = await runExploreStreaming(String(args.appBundleId).trim(), actions, timeout, env, onProgress);
-    if (!created) {
-      return errorResult("Exploration produced no capture run", { timedOut, lastProgress });
-    }
-
-    const report = buildQaReport(path.join(created.path, "ocqa-markers.txt"));
-    if (!report) {
-      return errorResult("No markers parsed from exploration (the app may not have launched)", {
-        capture: { id: created.id, relativePath: created.relativePath },
+    if (wantsWeb) {
+      const r = await runQaWeb({
+        url: args.url,
+        maxActions: args.maxActions,
+        timeout: args.timeout,
+        testEmail: args.testEmail,
+        testPassword: args.testPassword,
+        baselineFindings: args.baselineFindings,
+        onProgress: notifyProgress("pages"),
       });
+      if (r.error) return errorResult(r.error, r.details || {});
+      return richResult(r.text, r.structured);
     }
-    // If the app showed input fields and the caller didn't supply values, tell the agent to ask the
-    // user — Tapp fills with safe defaults autonomously and does NOT pause to prompt (that's the
-    // standalone app's behavior; here the agent does the asking).
-    const gaveValues = isNonEmptyString(args.testEmail) || isNonEmptyString(args.testPassword) || (args.inputOverrides && Object.keys(args.inputOverrides).length > 0);
-    let inputHint;
-    if (report.inputFieldsEncountered.length > 0 && !gaveValues) {
-      const screensList = report.inputFieldsEncountered.map((s) => s.screen).slice(0, 5).join(", ");
-      inputHint =
-        `This app showed input fields${report.loginEncountered ? " including a login" : ""} on: ${screensList}. ` +
-        `I explored autonomously and filled them with safe placeholder values — I did NOT pause to ask. ` +
-        `If you want me to test with real values, tell me what to enter for these fields (or say "use defaults" / "skip"), ` +
-        `and I'll re-run with testEmail/testPassword or inputOverrides — or I can drive it step-by-step in an interactive session so you can supply values as we go.`;
-    }
-    // Post-run AI enrichment (additive, never changes the verdict) when a key is present.
-    const backend = resolveModelBackend();
-    if (backend && report.findings.length) {
-      const { enrichFindings } = await import("./enrich.js");
-      await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: String(args.appBundleId).trim() });
-    }
-    // Cross-run regression vs. a caller-supplied baseline (the CI gate).
-    const regression = computeRegression(report.findings, args.baselineFindings);
-    const bundleId = String(args.appBundleId).trim();
-    let reportHtml = null;
-    try {
-      const { writeHtmlReport } = await import("./html-report.js");
-      reportHtml = writeHtmlReport(created.path, { report, label: bundleId });
-    } catch { /* evidence page is best-effort */ }
-    const structured = {
-      ...report,
-      regression,
-      inputHint,
-      reportHtml,
-      capture: { id: created.id, path: created.path, relativePath: created.relativePath },
-      timedOut,
-      autoBooted: sim.autoBooted || false,
-    };
-    return richResult(formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml }), structured);
+
+    let lastProgress = null;
+    const iosProgress = notifyProgress("screens");
+    const r = await runQaIos({
+      bundleId: String(args.appBundleId).trim(),
+      maxActions: args.maxActions,
+      timeout: args.timeout,
+      args,
+      onProgress: (p) => {
+        lastProgress = p;
+        iosProgress(p);
+      },
+    });
+    if (r.error) return errorResult(r.error, { ...(r.details || {}), lastProgress });
+    return richResult(r.text, r.structured);
   }
 
   if (name === "tapp_flow_run") {
@@ -1720,34 +1792,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     if (!isNonEmptyString(args.appBundleId)) return errorResult("appBundleId is required");
 
-    const captureScript = path.join(scriptsDir, "quick-capture.sh");
-    const before = new Set(listCaptureRuns(50).map((r) => r.id));
-    const result = await runCommand("bash", [captureScript, "tree", String(args.appBundleId).trim()], {
-      cwd: repoRoot,
-      timeoutMs: 5 * 60 * 1000,
-    });
-    const created = listCaptureRuns(50).find((r) => !before.has(r.id));
-    if (!created) return errorResult("UI tree produced no capture", { stderr: result.stderr });
-
-    const treePath = path.join(created.path, "uitree.json");
-    if (!fs.existsSync(treePath) || fs.statSync(treePath).size === 0) {
-      return errorResult("No accessibility tree was produced (is the app installed + foregrounded?)", {
-        capture: { id: created.id, relativePath: created.relativePath },
-        stderr: result.stderr,
-      });
-    }
-    let tree;
-    try {
-      tree = JSON.parse(fs.readFileSync(treePath, "utf8"));
-    } catch {
-      return errorResult("uitree.json was not valid JSON", { treePath });
-    }
-    const elements = tree.elements || [];
-    return richResult(formatScreen(tree.screenTitle, elements), {
-      screenTitle: tree.screenTitle ?? null,
-      elementCount: elements.length,
-      elements,
-      capture: { id: created.id, relativePath: created.relativePath },
+    const r = await captureUiTree(String(args.appBundleId).trim());
+    if (r.error) return errorResult(r.error, r.details || {});
+    return richResult(formatScreen(r.screenTitle, r.elements), {
+      screenTitle: r.screenTitle,
+      elementCount: r.elements.length,
+      elements: r.elements,
+      capture: r.capture,
     });
   }
 
@@ -1943,5 +1994,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   return errorResult(`Unknown tool: ${name}`);
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+export async function startMcpServer() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+// Self-start only when executed directly (`node src/index.js`, `npm run start`/`dev`).
+// bin/tapp.js imports this module — for `tapp mcp` it calls startMcpServer() explicitly,
+// while the CLI verbs (qa/open/tree/shot) use the exported engine without starting a server.
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  await startMcpServer();
+}
