@@ -791,10 +791,18 @@ function formatScreen(screenTitle, elements) {
   return L.join("\n");
 }
 
+const pkgVersion = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")).version || "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
 const server = new Server(
   {
     name: "tapp-mcp",
-    version: "0.7.0",
+    version: pkgVersion,
   },
   {
     capabilities: {
