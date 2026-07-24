@@ -580,7 +580,7 @@ async function sessionAct(cmd) {
   let detail = null;
   // login runs a full fill+submit+verify sequence in the harness; wait can block up to its
   // own timeout — both need more ack headroom than a single tap.
-  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : cmd.action === "login" ? 90_000 : 30_000;
+  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : cmd.action === "login" ? 180_000 : 30_000;
   const deadline = Date.now() + ackBudget;
   while (Date.now() < deadline && !activeSession.ended) {
     await sleep(150);
