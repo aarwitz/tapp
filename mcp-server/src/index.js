@@ -577,13 +577,14 @@ async function sessionAct(cmd) {
 
   // A `wait` can block in the harness up to its own timeout — give the ack poll enough headroom.
   let status = "timeout";
+  let typedInto = null;
   const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : 30_000;
   const deadline = Date.now() + ackBudget;
   while (Date.now() < deadline && !activeSession.ended) {
     await sleep(150);
     try {
       const res = JSON.parse(fs.readFileSync(activeSession.resultPath, "utf8"));
-      if (res.seq === seq) { status = res.status; break; }
+      if (res.seq === seq) { status = res.status; typedInto = res.typedInto || null; break; }
     } catch {}
   }
   // Give the post-action tree a moment to arrive.
@@ -591,7 +592,7 @@ async function sessionAct(cmd) {
   while (activeSession.treeVersion === beforeVer && Date.now() < td && !activeSession.ended) await sleep(150);
   const snap = treeSnapshot();
   if (status === "ok") recordStep(cmd, snap); // record only successful acts
-  return { status, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0 };
+  return { status, typedInto, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0 };
 }
 
 async function endSession() {
@@ -2148,8 +2149,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Action-word recap: what was done → where we are now.
     const tgt = cmd.id || cmd.label || cmd.text || cmd.direction || "";
     const verb = { tap: "👆 Tapped", type: "⌨️ Typed", swipe: "↔️ Swiped", back: "◀️ Went back", wait: "⏳ Waited for", tree: "🌳 Inspected", screenshot: "📸 Captured" }[action] || action;
-    const did = tgt ? `${verb} ${action === "type" ? `"${tgt}"` : `\`${tgt}\``}` : verb;
     const ok = r.status === "ok";
+    // For `type`, say WHERE the text landed and never echo the text itself (it may be a password).
+    const did = action === "type"
+      ? ok ? `⌨️ Typed into \`${r.typedInto || cmd.id || "focused field"}\`` : `⌨️ Type \`${cmd.id || "?"}\``
+      : tgt ? `${verb} \`${tgt}\`` : verb;
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
     return richResult(head + "\n\n" + formatScreen(r.screenTitle, r.elements) + rec, r);

@@ -64,18 +64,27 @@ ensure_harness_built() {
   local sim_name="${1:-iPhone 16 Pro}"
   local udid="${UDID:-}"
   local marker="$HARNESS_DERIVED/.last-sim-udid"
-  local last_udid=""
-  [[ -f "$marker" ]] && last_udid=$(cat "$marker" 2>/dev/null || true)
+  local last_udid="" last_fp=""
+  if [[ -f "$marker" ]]; then
+    last_udid=$(sed -n 1p "$marker" 2>/dev/null || true)
+    last_fp=$(sed -n 2p "$marker" 2>/dev/null || true)
+  fi
+  # Fingerprint the harness source so a package update actually reaches users — without this,
+  # a warm cache serves the OLD harness forever (npm normalizes mtimes, so hash the content).
+  local src_file="$(dirname "$HARNESS_PROJECT")/OCQAHarnessUITests/ExplorerTests.swift"
+  local src_fp=$(shasum "$src_file" 2>/dev/null | cut -c1-12)
   local xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
 
-  # Reuse the cached harness ONLY if it was built for the currently-booted simulator. A harness
-  # built for a different sim can fail to launch the interactive session ("Session process exited
-  # before it became ready"), so rebuild whenever the booted UDID changes.
-  if [[ -n "$xctestrun" && ( -z "$udid" || "$udid" == "$last_udid" ) ]]; then
+  # Reuse the cached harness ONLY if it was built for the currently-booted simulator AND from
+  # the same harness sources. A harness built for a different sim can fail to launch the
+  # interactive session; a stale-source harness silently lacks shipped fixes.
+  if [[ -n "$xctestrun" && ( -z "$udid" || "$udid" == "$last_udid" ) && "$src_fp" == "$last_fp" ]]; then
     echo "Harness already built for this sim: $xctestrun" >&2
     return 0
   fi
-  if [[ -n "$xctestrun" ]]; then
+  if [[ -n "$xctestrun" && "$src_fp" != "$last_fp" ]]; then
+    echo "Harness sources changed — rebuilding for $sim_name..." >&2
+  elif [[ -n "$xctestrun" ]]; then
     echo "Booted simulator changed ($last_udid -> $udid) — rebuilding harness for $sim_name..." >&2
   else
     echo "Building harness for $sim_name..." >&2
@@ -86,8 +95,9 @@ ensure_harness_built() {
     -destination "platform=iOS Simulator,id=$UDID" \
     -derivedDataPath "$HARNESS_DERIVED" \
     2>&1 | tail -5 >&2
-  # Record which sim this harness was built for so the next run can detect a switch.
-  [[ -n "$udid" ]] && echo "$udid" > "$marker"
+  # Record which sim + harness sources this build came from so the next run detects both
+  # a simulator switch and a package update.
+  printf '%s\n%s\n' "$udid" "$src_fp" > "$marker"
 }
 
 run_harness_test() {

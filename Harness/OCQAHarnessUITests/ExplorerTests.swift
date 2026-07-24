@@ -357,7 +357,9 @@ class ExplorerTests: XCTestCase {
 
             waitForAnimationsToSettle()
             emitSessionTree()
-            try? "{\"seq\":\(seq),\"status\":\"\(status)\",\"action\":\"\(escapeJSON(action))\"}"
+            let typedIntoJson = (action == "type" && !lastTypedInto.isEmpty)
+                ? ",\"typedInto\":\"\(escapeJSON(lastTypedInto))\"" : ""
+            try? "{\"seq\":\(seq),\"status\":\"\(status)\",\"action\":\"\(escapeJSON(action))\"\(typedIntoJson)}"
                 .write(toFile: resultPath, atomically: true, encoding: .utf8)
         }
         print("OCQA_SESSION:timeout")
@@ -382,13 +384,55 @@ class ExplorerTests: XCTestCase {
             existedButNotHittable = true
             return false
         }
-        let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields]
+        let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.secureTextFields]
         for query in queries where tryTap(query[identifier]) { return "ok" }
         // Exact label, then a forgiving case-insensitive "contains" match so callers can tap by the
         // visible text they see in the tree without an exact accessibility id.
         if tryTap(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).firstMatch) { return "ok" }
         if tryTap(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", identifier)).firstMatch) { return "ok" }
+        // Fields are the one control class whose visible name is usually a *placeholder* (not a
+        // label) — "Password" must reach the secureTextField or a later `type` lands in whatever
+        // field still has keyboard focus.
+        if let field = resolveFieldByHint(identifier), tryTap(field) { return "ok" }
         return existedButNotHittable ? "not_hittable" : "not_found"
+    }
+
+    /// Resolve a text/secure field by accessibility id, label, or placeholder (exact first, then
+    /// case-insensitive contains), then by semantic keyword ("password" → first secure field;
+    /// "email"/"username" → first plain text field). Subscript queries miss placeholder-named
+    /// fields entirely — this is how login forms actually name their fields.
+    private func resolveFieldByHint(_ hint: String) -> XCUIElement? {
+        let h = hint.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !h.isEmpty else { return nil }
+        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex
+        let existing = fields.filter { $0.exists }
+        if let exact = existing.first(where: {
+            $0.identifier.lowercased() == h || $0.label.lowercased() == h || ($0.placeholderValue ?? "").lowercased() == h
+        }) { return exact }
+        if let contains = existing.first(where: {
+            ($0.identifier + " " + $0.label + " " + ($0.placeholderValue ?? "")).lowercased().contains(h)
+        }) { return contains }
+        if h.contains("password") {
+            let secure = app.secureTextFields.firstMatch
+            if secure.exists { return secure }
+        }
+        if h.contains("email") || h.contains("username") {
+            let plain = app.textFields.firstMatch
+            if plain.exists { return plain }
+        }
+        return nil
+    }
+
+    private func fieldDesc(_ f: XCUIElement) -> String {
+        let name = !f.identifier.isEmpty ? f.identifier : (!f.label.isEmpty ? f.label : (f.placeholderValue ?? ""))
+        let secure = f.elementType == .secureTextField
+        if name.isEmpty { return secure ? "secure field" : "text field" }
+        return secure ? "\(name) (secure)" : name
+    }
+
+    private func focusedField() -> XCUIElement? {
+        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex
+        return fields.first(where: { $0.exists && (($0.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) })
     }
 
     private func dismissKeyboardIfPresent() {
@@ -410,25 +454,36 @@ class ExplorerTests: XCTestCase {
         return false
     }
 
+    /// Which field the last successful sessionType landed in — reported back to the client so
+    /// mis-targeting is visible immediately instead of discovered screenshots later.
+    private var lastTypedInto = ""
+
     @discardableResult
     private func sessionType(_ text: String, id: String?) -> Bool {
-        // Explicit target by accessibility id/label across text AND secure fields.
+        lastTypedInto = ""
+        // Explicit target: accessibility id/label subscripts, then placeholder/semantic resolution.
+        // An explicit target that matches NOTHING must fail loudly — silently typing into the
+        // still-focused field is exactly how passwords end up appended to the email box.
         if let id = id, !id.isEmpty {
             for field in [app.textFields[id], app.secureTextFields[id]] where field.exists {
-                field.tap(); field.typeText(text); return true
+                field.tap(); field.typeText(text); lastTypedInto = fieldDesc(field); return true
             }
+            if let field = resolveFieldByHint(id) {
+                field.tap(); field.typeText(text); lastTypedInto = fieldDesc(field); return true
+            }
+            return false
         }
-        // Otherwise type into whatever field currently has keyboard focus — this respects a prior
-        // tap (e.g. tap the password field by coordinate, then type). Critical for login forms whose
-        // fields have NO accessibility id/label: without this, every value falls to the first text
-        // field (the email), so the password ends up in the email box.
+        // No target: type into whatever field currently has keyboard focus — this respects a prior
+        // tap (e.g. tap the password field by coordinate, then type) — and report which field that is.
         if app.keyboards.firstMatch.exists {
+            if let focused = focusedField() { lastTypedInto = fieldDesc(focused) }
             app.typeText(text)
+            if lastTypedInto.isEmpty { lastTypedInto = "focused field" }
             return true
         }
         // Nothing focused and no usable id — last resort: the first text field.
         let first = app.textFields.firstMatch
-        if first.exists { first.tap(); first.typeText(text); return true }
+        if first.exists { first.tap(); first.typeText(text); lastTypedInto = fieldDesc(first); return true }
         return false
     }
 
@@ -4122,10 +4177,15 @@ class ExplorerTests: XCTestCase {
 
     private func emitUITree(_ state: (title: String?, elements: [SimpleElement])) {
         var json = "{\"screenTitle\":\"\(escapeJSON(state.title ?? "Unknown"))\",\"elements\":["
-        let arr = state.elements.prefix(100).map { el in
+        let arr = state.elements.prefix(100).map { el -> String in
             // Every string field must be escaped — apps with multi-line labels ("Active\nClients")
             // otherwise inject raw newlines/quotes and make the whole tree invalid JSON → 0 elements.
-            "{\"type\":\"\(el.type)\",\"role\":\"\(elementRole(el.type))\",\"id\":\"\(escapeJSON(el.identifier))\",\"label\":\"\(escapeJSON(el.label))\",\"enabled\":\(el.isEnabled),\"hittable\":\(el.isHittable),\"x\":\(Int(el.frame.midX)),\"y\":\(Int(el.frame.midY)),\"w\":\(Int(el.frame.width)),\"h\":\(Int(el.frame.height))}"
+            let role = elementRole(el.type)
+            // Values + placeholders let the client SEE what a field contains (a mis-typed value is
+            // visible immediately) and name placeholder-only fields. Secure values stay masked.
+            let ph = String((el.xcElement?.placeholderValue ?? "").prefix(40))
+            let val = role == "secureField" ? (el.value.isEmpty ? "" : "•••") : String(el.value.prefix(60))
+            return "{\"type\":\"\(el.type)\",\"role\":\"\(role)\",\"id\":\"\(escapeJSON(el.identifier))\",\"label\":\"\(escapeJSON(el.label))\",\"value\":\"\(escapeJSON(val))\",\"placeholder\":\"\(escapeJSON(ph))\",\"enabled\":\(el.isEnabled),\"hittable\":\(el.isHittable),\"x\":\(Int(el.frame.midX)),\"y\":\(Int(el.frame.midY)),\"w\":\(Int(el.frame.width)),\"h\":\(Int(el.frame.height))}"
         }
         json += arr.joined(separator: ",")
         json += "]}"
