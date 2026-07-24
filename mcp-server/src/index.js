@@ -249,6 +249,190 @@ function notInstalledError(bundleId, booted) {
   );
 }
 
+// ---- App target resolution: users have a repo, a built .app, or nothing — not a bundle id.
+// The ladder turns whatever they have into an installed bundle id. Shared by the CLI verbs
+// and the tapp_build MCP tool.
+
+export async function listInstalledUserApps() {
+  const r = await runCommand("xcrun", ["simctl", "listapps", "booted"], { timeoutMs: 30_000 });
+  if (r.code !== 0) return { error: "Could not list installed apps", details: { stderr: r.stderr } };
+  // simctl emits an old-style plist; plutil converts it.
+  const tmp = path.join(os.tmpdir(), `tapp-apps-${Date.now().toString(36)}.plist`);
+  fs.writeFileSync(tmp, r.stdout);
+  const conv = await runCommand("plutil", ["-convert", "json", "-o", "-", tmp], { timeoutMs: 30_000 });
+  try { fs.rmSync(tmp, { force: true }); } catch {}
+  let data;
+  try {
+    data = JSON.parse(conv.stdout);
+  } catch {
+    return { error: "Could not parse the installed-app list", details: { stderr: conv.stderr } };
+  }
+  const apps = Object.entries(data)
+    .filter(([bundleId, a]) => a && a.ApplicationType === "User" && !bundleId.endsWith(".xctrunner"))
+    .map(([bundleId, a]) => ({ bundleId, name: a.CFBundleDisplayName || a.CFBundleName || bundleId }));
+  return { apps };
+}
+
+// Prefer a real .xcworkspace (CocoaPods layout) over a bare .xcodeproj; ignore the
+// project.xcworkspace every .xcodeproj contains. Shallow search, dependency dirs skipped.
+export function findXcodeContainer(startDir) {
+  const skip = new Set(["node_modules", "Pods", "DerivedData", "build", "Carthage", ".build", ".git"]);
+  const workspaces = [];
+  const projects = [];
+  const walk = (dir, depth) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      if (e.name.endsWith(".xcworkspace")) {
+        if (!dir.endsWith(".xcodeproj")) workspaces.push(p);
+        continue;
+      }
+      if (e.name.endsWith(".xcodeproj")) {
+        projects.push(p);
+        continue;
+      }
+      if (skip.has(e.name) || e.name.startsWith(".")) continue;
+      if (depth < 3) walk(p, depth + 1);
+    }
+  };
+  walk(startDir, 0);
+  const shallowest = (arr) => arr.sort((a, b) => a.split(path.sep).length - b.split(path.sep).length)[0];
+  return workspaces.length ? shallowest(workspaces) : projects.length ? shallowest(projects) : null;
+}
+
+export async function buildAppForSim({ dir, container, scheme, configuration = "Debug" } = {}) {
+  const target = container || findXcodeContainer(dir || process.cwd());
+  if (!target) return { error: `No Xcode project or workspace found under ${dir || process.cwd()}` };
+  const isWorkspace = target.endsWith(".xcworkspace");
+  let schemeName = isNonEmptyString(scheme) ? scheme.trim() : "";
+  if (!schemeName) {
+    const list = await runCommand("xcodebuild", ["-list", "-json", isWorkspace ? "-workspace" : "-project", target], { timeoutMs: 120_000 });
+    try {
+      const j = JSON.parse(list.stdout);
+      const schemes = (isWorkspace ? j.workspace && j.workspace.schemes : j.project && j.project.schemes) || [];
+      const base = path.basename(target).replace(/\.(xcworkspace|xcodeproj)$/, "");
+      schemeName = schemes.find((s) => s === base) || schemes.find((s) => !/tests?$/i.test(s)) || schemes[0];
+    } catch { /* fall through to the error below */ }
+    if (!schemeName) {
+      return {
+        error:
+          `Could not detect a scheme in ${path.basename(target)}. Pass one explicitly, and make sure it is ` +
+          `shared (Xcode: Product → Scheme → Manage Schemes → check Shared).`,
+      };
+    }
+  }
+  const derived = path.join(autotapHome || os.tmpdir(), "app-builds", schemeName.replace(/[^a-zA-Z0-9]/g, "_"));
+  const build = await runCommand(
+    "xcodebuild",
+    [
+      "build",
+      isWorkspace ? "-workspace" : "-project", target,
+      "-scheme", schemeName,
+      "-configuration", configuration,
+      "-destination", "generic/platform=iOS Simulator",
+      "-derivedDataPath", derived,
+      "CODE_SIGNING_ALLOWED=NO",
+    ],
+    { cwd: path.dirname(target), timeoutMs: 25 * 60 * 1000 }
+  );
+  if (build.code !== 0) {
+    const errors = (build.stdout + "\n" + build.stderr).split("\n").filter((l) => /error:/i.test(l)).slice(0, 8);
+    return {
+      error: `Build failed (scheme ${schemeName})${build.timedOut ? " — timed out" : ""}`,
+      details: { errors, tail: (build.stderr || build.stdout || "").slice(-1500) },
+    };
+  }
+  const productsDir = path.join(derived, "Build/Products", `${configuration}-iphonesimulator`);
+  let apps = [];
+  try {
+    // Exclude UI-test Runner bundles — the classic wrong pick when a repo has test targets.
+    apps = fs.readdirSync(productsDir).filter((f) => f.endsWith(".app") && !f.endsWith("-Runner.app"));
+  } catch { /* handled below */ }
+  const appName = apps.find((f) => f.replace(/\.app$/, "") === schemeName) || apps[0];
+  if (!appName) return { error: "Built .app not found after the build", details: { productsDir } };
+  return { appPath: path.join(productsDir, appName), scheme: schemeName, container: target, configuration };
+}
+
+export async function installAppOnBootedSim(appPath, { cleanInstall = true } = {}) {
+  const bid = await runCommand("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleIdentifier", path.join(appPath, "Info.plist")], { timeoutMs: 30_000 });
+  const bundleId = (bid.stdout || "").trim();
+  if (!bundleId) return { error: `Could not read CFBundleIdentifier from ${appPath}/Info.plist — is this a simulator .app build?` };
+  if (cleanInstall) {
+    // Clean install: stale keychain items from a previous install leave apps half-signed-in
+    // (Firebase Auth's "error accessing the keychain") — uninstall first for a fresh state.
+    await runCommand("xcrun", ["simctl", "terminate", "booted", bundleId], { timeoutMs: 30_000 });
+    await runCommand("xcrun", ["simctl", "uninstall", "booted", bundleId], { timeoutMs: 60_000 });
+  }
+  const inst = await runCommand("xcrun", ["simctl", "install", "booted", appPath], { timeoutMs: 3 * 60 * 1000 });
+  if (inst.code !== 0) return { error: `Install failed: ${(inst.stderr || "").trim().slice(0, 300)}` };
+  return { bundleId };
+}
+
+export async function resolveAppTarget(input, { cwd = process.cwd(), onStatus = () => {} } = {}) {
+  const t = (input || "").trim();
+
+  // A built .app bundle → install it, read the bundle id from Info.plist.
+  if (t.endsWith(".app")) {
+    const appPath = path.resolve(cwd, t);
+    if (!fs.existsSync(appPath)) return { error: `.app not found: ${appPath}` };
+    const sim = await ensureBootedSim({ autoBoot: true });
+    if (sim.error) return { error: sim.error };
+    onStatus(`Installing ${path.basename(appPath)}…`);
+    const inst = await installAppOnBootedSim(appPath);
+    if (inst.error) return inst;
+    return { bundleId: inst.bundleId, via: `installed ${path.basename(appPath)}` };
+  }
+
+  // Looks like a bundle id (dots, not a path, not a local file) → use as-is; the
+  // is-it-installed pre-flight downstream catches typos with an actionable message.
+  if (t && !t.includes("/") && t.includes(".") && !fs.existsSync(path.resolve(cwd, t))) {
+    return { bundleId: t };
+  }
+
+  // A directory (or no argument at all) → find the Xcode project, build, install.
+  const dir = t ? path.resolve(cwd, t) : cwd;
+  if (t && !fs.existsSync(dir)) return { error: `Not a bundle id, .app path, or directory: ${t}` };
+  const container = findXcodeContainer(dir);
+  if (container) {
+    const sim = await ensureBootedSim({ autoBoot: true });
+    if (sim.error) return { error: sim.error };
+    onStatus(`Found ${path.basename(container)} — building for the simulator (a first build can take a few minutes)…`);
+    const built = await buildAppForSim({ container });
+    if (built.error) return built;
+    onStatus(`Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installing…`);
+    const inst = await installAppOnBootedSim(built.appPath);
+    if (inst.error) return inst;
+    return { bundleId: inst.bundleId, via: `built ${path.basename(container)} → installed ${path.basename(built.appPath)}` };
+  }
+
+  // Nothing to build → fall back to what's already on the simulator.
+  const sim = await ensureBootedSim({ autoBoot: true });
+  if (sim.error) return { error: sim.error };
+  const la = await listInstalledUserApps();
+  if (la.error) return la;
+  if (la.apps.length === 1) {
+    return { bundleId: la.apps[0].bundleId, via: `the only app installed on the simulator (${la.apps[0].name})` };
+  }
+  if (la.apps.length > 1) {
+    return {
+      error:
+        `No Xcode project found under ${dir}, and ${la.apps.length} apps are installed on the simulator — say which one:\n` +
+        la.apps.map((a) => `  ${a.bundleId}  (${a.name})`).join("\n"),
+    };
+  }
+  return {
+    error:
+      `Nothing to test: no Xcode project/workspace under ${dir} and no app installed on the simulator. ` +
+      `Run from your app repo, or pass a bundle id or a path to a simulator .app build.`,
+  };
+}
+
 // ---- Persistent interactive session (Playwright-style tap/type/inspect loop) ----
 // The harness `testInteractiveSession` launches the app ONCE and services commands from a file,
 // emitting the fresh UI tree after each. The MCP server is a long-lived process, so it can hold the
@@ -977,8 +1161,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "tapp_build",
-      title: "Build Tapp",
-      description: "Build Tapp app locally (optionally clean and include harness)",
+      title: "Build the iOS app",
+      description:
+        "Build the user's iOS app for the simulator from an Xcode project/workspace (auto-detects the " +
+        "container and scheme under projectDir, default cwd), install it on the booted simulator, and " +
+        "return the bundle id. Use before tapp_run_qa / tapp_open_app when the app isn't installed yet — " +
+        "no bundle id needed up front.",
       inputSchema: {
         type: "object",
         properties: {
@@ -986,8 +1174,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             description: "Required when AUTOTAP_MCP_TOKEN is set",
           },
-          clean: { type: "boolean", default: false },
-          harness: { type: "boolean", default: false },
+          projectDir: { type: "string", description: "Repo/dir to search for the .xcworkspace/.xcodeproj (default: cwd)" },
+          scheme: { type: "string", description: "Scheme to build (default: auto-detected)" },
+          configuration: { type: "string", default: "Debug" },
+          install: { type: "boolean", default: true, description: "Install on the booted simulator after building" },
         },
       },
     },
@@ -1444,30 +1634,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const unauthorized = ensureAuthorized(args);
     if (unauthorized) return unauthorized;
 
-    const buildScript = path.join(scriptsDir, "deploy-and-build.sh");
-    if (!fs.existsSync(buildScript)) {
-      return errorResult("Build script not found", { buildScript });
-    }
-
-    const cmdArgs = [];
-    if (asBoolean(args.clean, false)) cmdArgs.push("--clean");
-    if (asBoolean(args.harness, false)) cmdArgs.push("--harness");
-
+    const dir = isNonEmptyString(args.projectDir) ? path.resolve(args.projectDir.trim()) : process.cwd();
     const startedAt = Date.now();
-    const result = await runCommand("bash", [buildScript, ...cmdArgs], {
-      cwd: repoRoot,
-      timeoutMs: 30 * 60 * 1000,
-    });
-    const ok = result.code === 0;
-    const what = ["Tapp app", asBoolean(args.harness, false) ? "+ harness" : null].filter(Boolean).join(" ");
-    let text;
-    if (ok) {
-      text = `🔨 Built ${what} in ${fmtDuration(Date.now() - startedAt)}${asBoolean(args.clean, false) ? " (clean)" : ""} ✅`;
-    } else {
-      const errs = (result.stdout + "\n" + result.stderr).split("\n").filter((l) => /error:/i.test(l)).slice(0, 6);
-      text = `❌ Build failed${result.timedOut ? " (timed out)" : ""}\n\n` + (errs.length ? errs.map((e) => "- " + e.trim()).join("\n") : "```\n" + (result.stderr || result.stdout).slice(-1200) + "\n```");
+    const built = await buildAppForSim({ dir, scheme: args.scheme, configuration: isNonEmptyString(args.configuration) ? args.configuration.trim() : "Debug" });
+    if (built.error) return errorResult(built.error, built.details || {});
+    let bundleId;
+    if (args.install !== false) {
+      const sim = await ensureBootedSim({ autoBoot: true });
+      if (sim.error) return errorResult(sim.error);
+      const inst = await installAppOnBootedSim(built.appPath);
+      if (inst.error) return errorResult(inst.error);
+      bundleId = inst.bundleId;
     }
-    return richResult(text, { code: result.code, ok, timedOut: result.timedOut, stdout: result.stdout, stderr: result.stderr });
+    const text =
+      `🔨 Built **${path.basename(built.appPath)}** (scheme \`${built.scheme}\`) in ${fmtDuration(Date.now() - startedAt)}` +
+      (bundleId ? ` — installed on the simulator as \`${bundleId}\`` : "") +
+      `\n\nNext: \`tapp_run_qa\` with \`appBundleId: "${bundleId || "<install it first>"}"\`.`;
+    return richResult(text, { ok: true, appPath: built.appPath, scheme: built.scheme, container: built.container, bundleId });
   }
 
   if (name === "tapp_capture") {

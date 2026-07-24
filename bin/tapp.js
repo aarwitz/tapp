@@ -127,6 +127,25 @@ function saveShot(img, outFlag, name) {
   return out;
 }
 
+function printEngineError(r) {
+  console.error(`❌ ${r.error}`);
+  if (r.details && Array.isArray(r.details.errors) && r.details.errors.length) {
+    console.error(r.details.errors.map((e) => "  " + e.trim()).join("\n"));
+  }
+}
+
+// Turn whatever the user gave us (nothing / repo dir / .app / bundle id) into an installed
+// bundle id, narrating build/install progress on stderr.
+async function resolveTargetOrExit(engine, input) {
+  const resolved = await engine.resolveAppTarget(input || "", { onStatus: (s) => console.error(`⏳ ${s}`) });
+  if (resolved.error) {
+    printEngineError(resolved);
+    process.exit(1);
+  }
+  if (resolved.via) console.error(`🎯 Target: ${resolved.bundleId} — ${resolved.via}`);
+  return resolved.bundleId;
+}
+
 switch (command) {
   case "mcp": {
     // Agents spawn `tapp mcp`; the engine module is import-safe, so start explicitly.
@@ -140,13 +159,7 @@ switch (command) {
 
   case "qa": {
     const { flags, positionals } = parseVerbArgs(rest);
-    const target = positionals[0];
-    if (!target) {
-      console.error(
-        "Usage: tapp qa <bundleId | http(s)://url> [--actions N] [--timeout S] [--email E] [--password P] [--baseline report.json] [--json out.json]"
-      );
-      process.exit(2);
-    }
+    const target = positionals[0] || "";
     let baselineFindings;
     if (flags.baseline) {
       try {
@@ -159,6 +172,7 @@ switch (command) {
     }
     const engine = await engineImport();
     const isWeb = /^https?:\/\//i.test(target);
+    const bundleId = isWeb ? null : await resolveTargetOrExit(engine, target);
     const unit = isWeb ? "pages" : "screens";
     const onProgress = (p) =>
       process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${unit} reached   `);
@@ -173,7 +187,7 @@ switch (command) {
           onProgress,
         })
       : await engine.runQaIos({
-          bundleId: target,
+          bundleId,
           maxActions: flags.actions,
           timeout: flags.timeout,
           args: { testEmail: flags.email, testPassword: flags.password, baselineFindings },
@@ -181,7 +195,7 @@ switch (command) {
         });
     process.stderr.write("\n");
     if (r.error) {
-      console.error(`❌ ${r.error}`);
+      printEngineError(r);
       process.exit(1);
     }
     console.log(r.text);
@@ -194,11 +208,6 @@ switch (command) {
 
   case "open": {
     const { flags, positionals } = parseVerbArgs(rest);
-    const bundleId = positionals[0];
-    if (!bundleId) {
-      console.error("Usage: tapp open <bundleId> [--out screenshot.jpg]");
-      process.exit(2);
-    }
     const engine = await engineImport();
     const sim = await engine.ensureBootedSim({ autoBoot: true });
     if (sim.error) {
@@ -206,6 +215,7 @@ switch (command) {
       process.exit(1);
     }
     if (sim.autoBooted) console.error(`📱 Booted ${sim.booted.name}`);
+    const bundleId = await resolveTargetOrExit(engine, positionals[0]);
     const r = await engine.openApp(bundleId, {}, 1000);
     if (r.error) {
       console.error(`❌ ${r.error}`);
@@ -222,17 +232,13 @@ switch (command) {
 
   case "tree": {
     const { flags, positionals } = parseVerbArgs(rest);
-    const bundleId = positionals[0];
-    if (!bundleId) {
-      console.error("Usage: tapp tree <bundleId> [--json]");
-      process.exit(2);
-    }
     const engine = await engineImport();
     const sim = await engine.ensureBootedSim({ autoBoot: true });
     if (sim.error) {
       console.error(`❌ ${sim.error}`);
       process.exit(1);
     }
+    const bundleId = await resolveTargetOrExit(engine, positionals[0]);
     const r = await engine.captureUiTree(bundleId);
     if (r.error) {
       console.error(`❌ ${r.error}`);
@@ -258,6 +264,57 @@ switch (command) {
     }
     const out = saveShot(img, typeof flags.out === "string" ? flags.out : null, `shot-${Date.now()}.jpg`);
     console.log(`📸 ${out} (${Math.round(img.bytes / 1024)}KB)`);
+    break;
+  }
+
+  case "apps": {
+    const engine = await engineImport();
+    const sim = await engine.ensureBootedSim({ autoBoot: true });
+    if (sim.error) {
+      console.error(`❌ ${sim.error}`);
+      process.exit(1);
+    }
+    const la = await engine.listInstalledUserApps();
+    if (la.error) {
+      printEngineError(la);
+      process.exit(1);
+    }
+    if (!la.apps.length) {
+      console.log("No user apps installed on the booted simulator. Install one: tapp build (from your app repo), or xcrun simctl install booted path/to/App.app");
+      break;
+    }
+    console.log("📱 Installed on the booted simulator:\n");
+    for (const a of la.apps) console.log(`  ${a.bundleId}  (${a.name})`);
+    console.log(`\nTest one: tapp qa <bundleId>`);
+    break;
+  }
+
+  case "build": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const engine = await engineImport();
+    const dir = positionals[0] ? path.resolve(positionals[0]) : process.cwd();
+    console.error("⏳ Building for the simulator (a first build can take a few minutes)…");
+    const built = await engine.buildAppForSim({
+      dir,
+      scheme: typeof flags.scheme === "string" ? flags.scheme : undefined,
+      configuration: typeof flags.configuration === "string" ? flags.configuration : "Debug",
+    });
+    if (built.error) {
+      printEngineError(built);
+      process.exit(1);
+    }
+    const sim = await engine.ensureBootedSim({ autoBoot: true });
+    if (sim.error) {
+      console.error(`❌ ${sim.error}`);
+      process.exit(1);
+    }
+    const inst = await engine.installAppOnBootedSim(built.appPath);
+    if (inst.error) {
+      printEngineError(inst);
+      process.exit(1);
+    }
+    console.log(`🔨 Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installed as ${inst.bundleId}`);
+    console.log(`\nNext: tapp qa ${inst.bundleId}`);
     break;
   }
 
@@ -364,13 +421,19 @@ switch (command) {
     console.log(`tapp v${pkg.version} — ship with proof. Autonomous QA with a deterministic ship/no-ship verdict (iOS + web beta).
 
 Zero-config verbs (agents and humans can just run these — no server, no setup):
-  tapp qa <bundleId|url>   Autonomous QA → verdict + findings + evidence
+  tapp qa [target]         Autonomous QA → verdict + findings + evidence
                            (--actions N · --email E --password P · --baseline report.json · --json out.json)
-  tapp open <bundleId>     Launch the app → screen summary + screenshot saved to a file
-  tapp tree <bundleId>     Accessibility tree of the current screen (--json for every element)
+  tapp open [target]       Launch the app → screen summary + screenshot saved to a file
+  tapp tree [target]       Accessibility tree of the current screen (--json for every element)
   tapp shot                Screenshot the booted simulator → file path (--out file.jpg)
+  tapp build [dir]         Build the iOS app in a repo for the simulator + install it (--scheme S)
+  tapp apps                List apps installed on the booted simulator (with bundle ids)
   tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
   tapp ci ...              Merge-blocking release gate — explore + flows + baseline diff (see: tapp ci --help)
+
+  [target] is whatever you have — nothing (finds + builds the Xcode project in the current
+  dir, or falls back to the app on the simulator), a repo dir, a path/to/App.app, a bundle
+  id, or an http(s) URL (web beta, qa only). You never need to know a bundle id up front.
 
 Setup:
   tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)

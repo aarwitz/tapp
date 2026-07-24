@@ -34,14 +34,23 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 
 Requirements: **macOS + Xcode** (simulator runtimes installed), **Node ≥ 18**.
 
-**Zero config — get a verdict right now.** No server, no config file, no test code; your agent
-can run these directly (and so can you):
+**Zero config — get a verdict right now.** From your app's repo, one command. No server, no
+config file, no test code — you don't even need to know your bundle id:
 
 ```bash
-npx -y tapp-mcp qa com.mycompany.app     # autonomous QA → ship/no-ship verdict + findings + evidence page
-npx -y tapp-mcp open com.mycompany.app   # launch the app → screen summary + screenshot file
-npx -y tapp-mcp tree com.mycompany.app   # accessibility tree of the current screen
-npx -y tapp-mcp shot                     # screenshot the booted simulator
+cd YourApp
+npx -y tapp-mcp qa    # finds your Xcode project → builds → installs on the simulator → explores → verdict
+```
+
+Every verb takes whatever you have: nothing (auto-detects the repo you're in, or the app
+already on the simulator), a repo directory, a `path/to/App.app`, or a bundle id:
+
+```bash
+npx -y tapp-mcp open [target]   # launch the app → screen summary + screenshot file
+npx -y tapp-mcp tree [target]   # accessibility tree of the current screen
+npx -y tapp-mcp shot            # screenshot the booted simulator
+npx -y tapp-mcp apps            # what's installed on the simulator (names + bundle ids)
+npx -y tapp-mcp build [dir]     # just build + install (scheme auto-detected)
 ```
 
 Web (beta): `npx -y tapp-mcp qa http://localhost:3000` *(one-time setup:
@@ -147,11 +156,12 @@ your agent proves its UI work instead of claiming it:
 ```markdown
 ## Verifying UI changes
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
-(iOS simulator, or a browser for web). After any UI change: build/serve the app, then run
-`npx -y tapp-mcp open <bundleId>` and look at the screenshot it saves as proof.
-Before declaring a feature done, run `npx -y tapp-mcp qa <bundleId>` (or `qa <url>` for web)
-and report the ship/no-ship verdict. A change is not "done" until it has been seen working.
-(If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots.)
+(iOS simulator, or a browser for web). After any UI change, run `npx -y tapp-mcp open` from the
+repo root (it finds and builds the Xcode project itself) and look at the screenshot it saves as
+proof. Before declaring a feature done, run `npx -y tapp-mcp qa` (or `qa <url>` for web) and
+report the ship/no-ship verdict. A change is not "done" until it has been seen working.
+(If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots —
+tapp_build builds + installs the app and returns the bundle id for tapp_run_qa.)
 ```
 
 ## How it works

@@ -5,18 +5,25 @@ simulator, plus (beta) web apps in a real browser. This is the playbook for usin
 
 ## No MCP connected? Just run the CLI
 
-Every core capability works as a plain command — no server, no config:
+Every core capability works as a plain command — no server, no config. `[target]` is
+optional: with nothing, tapp finds + builds the Xcode project in the cwd (or falls back to
+the app already on the simulator); it also accepts a repo dir, a `path/to/App.app`, a
+bundle id, or (qa only) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
-npx -y tapp-mcp qa <bundleId|url>   # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
-npx -y tapp-mcp open <bundleId>     # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
-npx -y tapp-mcp tree <bundleId>     # accessibility tree, --json for every element (≈ tapp_ui_tree)
-npx -y tapp-mcp shot                # screenshot the booted sim → file path (≈ tapp_screenshot)
+npx -y tapp-mcp qa [target]     # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
+npx -y tapp-mcp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
+npx -y tapp-mcp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
+npx -y tapp-mcp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
+npx -y tapp-mcp apps            # what's installed on the simulator, with bundle ids
+npx -y tapp-mcp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
 ```
 
 Read the saved screenshot file to see the screen. The interactive session loop and Flow
 record/replay are MCP-only (they need a long-lived process) — the rest of this playbook
-assumes the `tapp_*` MCP tools are connected.
+assumes the `tapp_*` MCP tools are connected. With MCP, the no-bundle-id path is:
+`tapp_build {projectDir}` (auto-detects + builds + installs, returns the bundle id) →
+`tapp_run_qa {appBundleId}`.
 
 ## Pick the right tool for the job
 
