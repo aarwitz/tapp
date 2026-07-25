@@ -51,6 +51,6 @@
     "mobile"
   ],
   "scripts": {
-    "test": "node --test \"tests/*.test.js\""
+    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/cli.test.js"
   }
 }
