@@ -27,6 +27,14 @@ The harness rebuilds automatically when its source changes (content-fingerprinte
 simulator runtime; the fastest end-to-end check is `node bin/tapp.js qa <bundleId>` against
 any installed app.
 
+## About this repository's history
+
+This public repo is a curated mirror of a private development repo (the private history
+contains client-specific material that can't be published). Public commits carry the
+upstream commit's subject line, and CHANGELOG.md tracks what changed per release. PRs are
+welcome here — a maintainer folds accepted changes upstream and credits you in the synced
+commit.
+
 ## Expectations for changes
 
 - Engine or harness behavior changes need a test (deterministic parts) or a demonstrated

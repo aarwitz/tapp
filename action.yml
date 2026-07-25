@@ -178,7 +178,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: autotap-evidence
+        name: tapp-evidence
         path: |
           ${{ env.AUTOTAP_CAPTURES_DIR }}/
           ${{ runner.temp }}/autotap-report.json

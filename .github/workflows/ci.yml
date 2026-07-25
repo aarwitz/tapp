@@ -7,13 +7,16 @@ on:
 
 jobs:
   unit:
-    name: Unit, protocol & CLI tests
+    name: Unit, protocol & CLI tests (node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
       - run: npm ci
       # Verdict/report/regression unit tests, engine import-safety, target resolution,
       # CLI smoke, and a real MCP initialize + tools/list handshake over stdio.
@@ -27,11 +30,10 @@ jobs:
 
   harness-build:
     name: iOS harness compiles
+    # A broken harness must never hide behind a green badge — this job gates merges.
     runs-on: macos-latest
-    # Informational while the Xcode/runner matrix gets pinned — the unit job is the gate.
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build the XCUITest harness for the simulator
         run: |
           xcodebuild build-for-testing \

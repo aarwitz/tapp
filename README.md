@@ -106,7 +106,7 @@ Then ask your agent:
 | 📸 | `tapp_screenshot` | Whatever's on the sim right now, as an inline image. |
 | 🌳 | `tapp_ui_tree` | The accessibility tree of the current screen (ids, labels, hittability). |
 | 🕹 | `tapp_session_start/act/end` | **Interactive driving** — the Playwright loop. App launches once; each act (tap/type/swipe/back/wait) returns the fresh tree. |
-| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores the app with no test code, returns `{verdict, confidence, findings[]}`. Streams live progress. Takes `appBundleId` (iOS) or `url` (web beta). |
+| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores the app with no test code, returns `{verdict, releaseScore, findings[]}` (`confidence` kept as a deprecated alias). Streams live progress. Takes `appBundleId` (iOS) or `url` (web beta). |
 | 🔁 | `tapp_flow_run` / `flow_save` / `flow_generate` | **Deterministic E2E tests (Flows)** — record a session as a replayable YAML test, generate one from a natural-language goal, replay with assertions. |
 | 📱 | `tapp_list_simulators` / `boot_simulator` / `install_app` | Simulator + app management. |
 | 🩺 | `tapp_health`, `tapp_capture*`, `tapp_parse_markers` | Diagnostics and capture history. |
@@ -185,8 +185,13 @@ transitions) that the judgment layer parses into trees, screenshots, findings, a
 On **iOS**, a generic **XCUITest harness** attaches to any app by bundle id — no SDK, no code
 changes, no re-signing — and acts through the accessibility tree. On **web** (beta), a
 deterministic **Playwright crawler** does the same in a real browser. Same detectors' spirit,
-same dedup, same regression gate, same honest verdict. Everything runs locally on your Mac;
-nothing leaves it.
+same dedup, same regression gate, same honest verdict. Core exploration, evidence collection, and
+verdict calculation run entirely locally — no telemetry, nothing phones home. Optional AI
+features are explicit: finding enrichment requires `TAPP_ENABLE_REMOTE_AI=1` (an ambient
+API key alone never changes data handling), and AI flow generation / `assert_ai` only run
+when you invoke them; these send selected metadata (screen names, finding titles) to your
+configured model provider. Env vars: `TAPP_*` preferred; `AUTOTAP_*` accepted as deprecated
+aliases.
 
 The first tool call builds the harness once (~2 min, cached in `~/.tapp`; rebuilt automatically
 if you switch simulators). All captures land in `~/.tapp/captures/`.

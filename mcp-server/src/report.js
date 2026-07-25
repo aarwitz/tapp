@@ -102,7 +102,7 @@ export function severityRank(s) {
 
 // Turn a capture's OCQA markers into the same ship/no-ship report the AutoTap app produces:
 // deduped findings + a trustworthy verdict with a coverage floor (mirrors OrchestratorService).
-export function buildQaReport(markersFilePath) {
+export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const base = parseOcqaMarkers(markersFilePath);
   if (!base) return null;
 
@@ -121,7 +121,10 @@ export function buildQaReport(markersFilePath) {
         const o = JSON.parse(t.slice("OCQA_ISSUE:".length));
         let sev = String(o.severity || "medium").toLowerCase();
         if (CRITICAL_ISSUE_TYPES.has(o.type)) sev = "critical";
-        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, step: o.step ?? null });
+        // `target` gives a finding its identity beyond type|screen — two dead buttons on the
+        // same screen are two findings, and fixing one while breaking another is a regression.
+        const target = (typeof o.control === "string" && o.control) || (typeof o.target === "string" && o.target) || null;
+        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, target, step: o.step ?? null });
       } catch {
         /* ignore malformed */
       }
@@ -149,11 +152,12 @@ export function buildQaReport(markersFilePath) {
 
   const inputFieldsEncountered = Array.from(inputsByScreen.entries()).map(([screen, fields]) => ({ screen, fields }));
 
-  // Dedup by stable signature (type|screen) so repeated detections count once.
+  // Dedup by stable signature (type|screen|target) so repeated detections count once —
+  // but DIFFERENT controls failing on the same screen each count.
   const seen = new Set();
   const findings = [];
   for (const i of rawIssues) {
-    const key = `${i.type}|${i.screen}`;
+    const key = `${i.type}|${i.screen}|${i.target ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     findings.push({ ...i, category: ISSUE_CATEGORY[i.type] || i.type });
@@ -188,22 +192,41 @@ export function buildQaReport(markersFilePath) {
     ? `Proceed with caution — ${crit + high} issue(s) to review.`
     : `Not ready — ${crit} critical, ${high} high.`;
 
-  // The verdict's own honesty label: exactly which defect classes this run checked, and
-  // which it structurally could NOT check. Anyone reading "ready" must be able to see the
-  // boundary of the claim — an enumerated detector list is not omniscience, and saying so
-  // is the difference between a trustworthy gate and an overclaim.
-  const checkedFor = [
-    "crashes (launch + in-run)", "hangs / stuck loading", "failed sign-ins",
-    "dead controls (incl. navigation)", "error surfaces", "blank screens",
-    "navigation traps/loops", "keyboard-covered actions",
-    "lost field state (persistent-class fields)",
-  ];
-  const notChecked = [
-    "app-specific business logic (cover with Flows: record or generate, then assert)",
-    "visual correctness — layout/images/clipping (vision review; needs an API key)",
-    "push notifications / system integrations",
-    "content & reachability regressions require a baseline" ,
-  ];
+  // The verdict's own honesty label: exactly which defect classes this run checked, which
+  // it structurally could NOT check, and which conditions never came up — so "checked" is
+  // never claimed for a state the run didn't reach. Platform-aware: a web run doesn't
+  // inherit iOS keyboard assertions and vice versa.
+  const conditionsNotReached = [];
+  let checkedFor;
+  let notChecked;
+  if (platform === "web") {
+    checkedFor = [
+      "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404)",
+      "dead buttons", "error text on pages", "load timeouts",
+    ];
+    notChecked = [
+      "app-specific business logic (cover with Flows: record or generate, then assert)",
+      "visual correctness — layout/images/clipping (vision review; needs an API key)",
+      "only the first few visible buttons per page are probed (web beta)",
+      "content & reachability regressions require a baseline",
+    ];
+  } else {
+    checkedFor = [
+      "crashes (launch + in-run)", "hangs / stuck loading",
+      "dead controls (incl. navigation)", "error surfaces", "blank screens",
+      "navigation traps/loops", "keyboard-covered actions",
+      "lost field state (persistent-class fields)",
+    ];
+    notChecked = [
+      "app-specific business logic (cover with Flows: record or generate, then assert)",
+      "visual correctness — layout/images/clipping (vision review; needs an API key)",
+      "push notifications / system integrations",
+      "content & reachability regressions require a baseline" ,
+    ];
+  }
+  // "Failed sign-ins" is only a claim when a sign-in surface was actually encountered.
+  if (anySecure) checkedFor.splice(2, 0, "failed sign-ins");
+  else conditionsNotReached.push("sign-in (no login form encountered this run)");
 
   return {
     verdict,
@@ -216,6 +239,8 @@ export function buildQaReport(markersFilePath) {
     inconclusive,
     checkedFor,
     notChecked,
+    conditionsNotReached,
+    platform,
     screensExplored,
     actionsPerformed,
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },
@@ -287,13 +312,32 @@ export function computeReachabilityLoss(current, baseline) {
 // The `gate` block is the CI signal: a wrapper sets a non-zero exit when gate.failed is true.
 export function computeRegression(current, baseline) {
   if (!Array.isArray(baseline)) return null;
-  const sig = (f) => `${f.type}|${f.screen ?? null}`;
-  const baseSigs = new Set(baseline.map(sig));
-  const currSigs = new Set(current.map(sig));
+  // Identity is type|screen|target when a target (control id) is known — type|screen alone
+  // would classify "Save fixed, Delete Account newly broken on Settings" as one persisting
+  // dead_button and let the new defect through the gate. Coarse matching remains as a
+  // migration fallback ONLY when one side predates target identity (old baselines), so
+  // upgrading never sprays false "new" findings.
+  const fine = (f) => `${f.type}|${f.screen ?? null}|${f.target ?? ""}`;
+  const coarse = (f) => `${f.type}|${f.screen ?? null}`;
+  const baseFine = new Set(baseline.map(fine));
+  const baseCoarseAll = new Set(baseline.map(coarse));
+  const baseCoarseNoTarget = new Set(baseline.filter((f) => f.target == null).map(coarse));
+  const currFine = new Set(current.map(fine));
+  const currCoarseAll = new Set(current.map(coarse));
+  const currCoarseNoTarget = new Set(current.filter((f) => f.target == null).map(coarse));
 
-  const newFindings = current.filter((f) => !baseSigs.has(sig(f)));
-  const persisting = current.filter((f) => baseSigs.has(sig(f)));
-  const resolved = baseline.filter((f) => !currSigs.has(sig(f)));
+  const currentMatches = (f) =>
+    baseFine.has(fine(f)) ||
+    (f.target == null && baseCoarseAll.has(coarse(f))) ||
+    (f.target != null && baseCoarseNoTarget.has(coarse(f)));
+  const baselineMatched = (b) =>
+    currFine.has(fine(b)) ||
+    (b.target == null && currCoarseAll.has(coarse(b))) ||
+    (b.target != null && currCoarseNoTarget.has(coarse(b)));
+
+  const newFindings = current.filter((f) => !currentMatches(f));
+  const persisting = current.filter((f) => currentMatches(f));
+  const resolved = baseline.filter((b) => !baselineMatched(b));
   const newCritical = newFindings.filter((f) => f.severity === "critical").length;
   const newHigh = newFindings.filter((f) => f.severity === "high").length;
 

@@ -1,4 +1,4 @@
-# AutoTap MCP server
+# tapp MCP server
 
 Lets an MCP client — **GitHub Copilot in VS Code**, Claude, Cursor, etc. — drive Tapp's
 autonomous iOS QA the way the Playwright MCP lets it drive a browser. Copilot can boot a

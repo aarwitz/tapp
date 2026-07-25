@@ -68,14 +68,19 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   page.setDefaultTimeout(NAV_TIMEOUT_MS);
 
   const deadline = Date.now() + timeoutSec * 1000;
-  const issues = []; // emitted immediately; kept only for the auth check
-  const issue = (type, severity, title, screen) => {
+  const issues = []; // emitted immediately; kept for counting only
+  const issue = (type, severity, title, screen, target) => {
     issues.push(type);
-    emit("ISSUE", { type, severity, title, screen });
+    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}) });
   };
+
+  // Request counter: cheap "did that click cause network activity" signal for the
+  // dead-button check (a button that fires a request is not dead).
+  let requestCount = 0;
 
   // Async defect listeners: attribute to whatever screen is current when they fire.
   let currentScreen = start.pathname;
+  page.on("request", () => { requestCount += 1; });
   page.on("pageerror", (err) => issue("js_exception", "high", `Uncaught JS exception: ${String(err.message || err).slice(0, 120)}`, currentScreen));
   page.on("response", (res) => {
     try {
@@ -163,11 +168,26 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     await pw.fill(testPassword).catch(() => {});
     emit("ACTION", { type: "type", target: "login form", screen, narrative: "Filled the sign-in form with the provided test credentials" });
     actions += 1;
-    const before = issues.length;
     await page.locator("button[type=submit], input[type=submit], form button").first().click({ timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(CLICK_SETTLE_MS * 2);
+    // Still on the login form after a submit = the sign-in failed — full stop. (A quiet
+    // credential rejection often shows NO other symptom, so this must not be coupled to
+    // whether some other detector happened to fire during the attempt.)
     const stillLogin = await page.locator("input[type=password]").first().isVisible().catch(() => false);
-    if (stillLogin && issues.length > before) issue("auth_failed", "high", "Sign-in attempt did not leave the login form", currentScreen);
+    if (stillLogin) {
+      const errText = await page
+        .locator("[role=alert], .error, [class*=error i]")
+        .first()
+        .textContent({ timeout: 500 })
+        .catch(() => "");
+      issue(
+        "auth_failed",
+        "high",
+        `Sign-in attempt did not leave the login form${errText ? ` — “${errText.trim().slice(0, 80)}”` : ""}`,
+        currentScreen,
+        "login form"
+      );
+    }
   }
 
   const progress = () => {
@@ -221,18 +241,34 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         const label = ((await b.textContent().catch(() => "")) || (await b.getAttribute("value").catch(() => "")) || "button").trim().slice(0, 40) || "button";
         if (/log ?out|sign ?out|delete|remove/i.test(label)) continue; // don't destroy test state
         const beforeUrl = page.url();
-        const beforeDom = await page.evaluate(() => document.body.innerHTML.length).catch(() => 0);
+        // Dead-button detection watches four real effect channels — DOM mutations, dialogs,
+        // network activity, and navigation — instead of the fragile innerHTML-length proxy
+        // (same length ≠ same page; unrelated tickers ≠ this button worked).
+        await page
+          .evaluate(() => {
+            window.__tappMut = 0;
+            if (window.__tappMo) window.__tappMo.disconnect();
+            window.__tappMo = new MutationObserver((muts) => { window.__tappMut += muts.length; });
+            window.__tappMo.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+          })
+          .catch(() => {});
+        const dialogsBefore = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);
+        const reqBefore = requestCount;
         actions += 1;
         emit("ACTION", { type: "tap", target: label, screen: ob.screen, narrative: `Tapped "${label}"` });
         await b.click({ timeout: 3000 }).catch(() => {});
         await page.waitForTimeout(CLICK_SETTLE_MS);
-        const afterDom = await page.evaluate(() => document.body.innerHTML.length).catch(() => 0);
         if (page.url() !== beforeUrl) {
           await observe();
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
           await page.waitForTimeout(SETTLE_MS);
-        } else if (afterDom === beforeDom) {
-          issue("unresponsive_element", "medium", `Button "${label}" does nothing`, ob.screen);
+        } else {
+          const mutations = await page.evaluate(() => window.__tappMut || 0).catch(() => 0);
+          const dialogsAfter = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);
+          const hadEffect = mutations > 0 || dialogsAfter !== dialogsBefore || requestCount > reqBefore;
+          if (!hadEffect) {
+            issue("unresponsive_element", "medium", `Button "${label}" does nothing`, ob.screen, label);
+          }
         }
         progress();
       }

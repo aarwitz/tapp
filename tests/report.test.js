@@ -96,3 +96,41 @@ test("malformed marker lines are ignored, not fatal", () => {
 test("parseOcqaMarkers returns null for a missing file", () => {
   assert.equal(parseOcqaMarkers("/nonexistent/path/markers.txt"), null);
 });
+
+test("two different dead controls on one screen are two findings (identity beyond type|screen)", () => {
+  const r = buildQaReport(
+    markersFile([
+      ...CLEAN_RUN.slice(0, 5),
+      'OCQA_ISSUE:{"type":"unresponsive_element","severity":"low","title":"dead Save","screen":"Settings","control":"Save"}',
+      'OCQA_ISSUE:{"type":"unresponsive_element","severity":"low","title":"dead Delete","screen":"Settings","control":"Delete Account"}',
+      'OCQA_ISSUE:{"type":"unresponsive_element","severity":"low","title":"dead Save again","screen":"Settings","control":"Save"}',
+    ])
+  );
+  assert.equal(r.findingCounts.total, 2, "distinct targets counted separately; repeats deduped");
+  assert.deepEqual(r.findings.map((f) => f.target).sort(), ["Delete Account", "Save"]);
+});
+
+test("checkedFor never claims sign-in checks when no login form was encountered", () => {
+  const r = buildQaReport(markersFile(CLEAN_RUN));
+  assert.ok(!r.checkedFor.some((c) => /sign-in/.test(c)));
+  assert.ok(r.conditionsNotReached.some((c) => /sign-in/.test(c)));
+});
+
+test("checkedFor claims sign-in checks when a secure field was seen", () => {
+  const r = buildQaReport(
+    markersFile([
+      'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',
+      ...CLEAN_RUN,
+    ])
+  );
+  assert.ok(r.checkedFor.some((c) => /sign-in/.test(c)));
+  assert.equal(r.loginEncountered, true);
+});
+
+test("web platform gets web-specific honesty labels", () => {
+  const r = buildQaReport(markersFile(CLEAN_RUN), { platform: "web" });
+  assert.equal(r.platform, "web");
+  assert.ok(r.checkedFor.some((c) => /uncaught exceptions/.test(c)));
+  assert.ok(!r.checkedFor.some((c) => /keyboard/.test(c)), "no iOS keyboard claims on web");
+  assert.ok(r.notChecked.some((c) => /first few visible buttons/.test(c)), "web button cap is disclosed");
+});

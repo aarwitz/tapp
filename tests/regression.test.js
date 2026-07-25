@@ -49,3 +49,21 @@ test("reachability loss fires only with a comparable action budget", () => {
   assert.equal(losses.length, 2);
   assert.ok(losses.every((l) => l.type === "screen_unreachable" && l.severity === "high"));
 });
+
+test("REVIEW SCENARIO: fixing one control while breaking another on the same screen is a NEW regression", () => {
+  const baseline = [{ type: "unresponsive_element", screen: "Settings", target: "Save", severity: "high", title: "dead Save" }];
+  const current = [{ type: "unresponsive_element", screen: "Settings", target: "Delete Account", severity: "high", title: "dead Delete" }];
+  const r = computeRegression(current, baseline);
+  assert.deepEqual(r.counts, { new: 1, persisting: 0, resolved: 1 });
+  assert.equal(r.newFindings[0].target, "Delete Account");
+  assert.equal(r.resolved[0].target, "Save");
+  assert.equal(r.gate.failed, true, "the newly broken control blocks the gate");
+});
+
+test("regression identity migration: legacy target-less baselines match coarsely (no false gate failures on upgrade)", () => {
+  const legacyBaseline = [{ type: "unresponsive_element", screen: "Settings", severity: "high", title: "dead button" }];
+  const current = [{ type: "unresponsive_element", screen: "Settings", target: "Save", severity: "high", title: "dead Save" }];
+  const r = computeRegression(current, legacyBaseline);
+  assert.deepEqual(r.counts, { new: 0, persisting: 1, resolved: 0 });
+  assert.equal(r.gate.failed, false);
+});

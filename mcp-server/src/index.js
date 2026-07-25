@@ -710,6 +710,22 @@ export async function captureScreenshotImage(maxWidth) {
 // ---- Model backend (subscription proxy / BYO key) — mirrors Tapp/Services/ModelBackend.swift.
 // Used by AI-generate (tapp_flow_generate). Resolution: Tapp subscription token → proxy;
 // else ANTHROPIC_API_KEY → api.anthropic.com; else null (feature disabled).
+// Remote-AI opt-in for IMPLICIT model calls (post-run finding enrichment). A bare
+// ANTHROPIC_API_KEY is often ambient in dev shells — its mere presence must never silently
+// change data-handling behavior. A subscription token is an explicit tapp choice, and
+// explicitly-invoked AI tools (tapp_flow_generate, assert_ai) carry their own consent.
+export function remoteAiOptedIn(env = process.env) {
+  if ((env.AUTOTAP_SUBSCRIPTION_TOKEN || env.TAPP_SUBSCRIPTION_TOKEN || "").trim()) return true;
+  return ["1", "true", "yes"].includes(String(env.TAPP_ENABLE_REMOTE_AI || "").trim().toLowerCase());
+}
+
+// Robust "is p inside root" — a plain startsWith(root) accepts sibling dirs that share a
+// prefix (/repos/tapp vs /repos/tapp-malicious).
+export function isInsideDir(root, p) {
+  const rel = path.relative(root, p);
+  return rel === "" || (!rel.startsWith(".." + path.sep) && rel !== ".." && !path.isAbsolute(rel));
+}
+
 function resolveModelBackend() {
   const token = (process.env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim();
   if (token) {
@@ -963,7 +979,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     // (a key genuinely unlocks root causes + fixes), and never on a clean run.
     if (!aiConfigured) {
       L.push("");
-      L.push("> 💡 Want a root cause + suggested fix for each finding? Set `ANTHROPIC_API_KEY` and re-run — analysis appears inline.");
+      L.push("> 💡 Want a root cause + suggested fix for each finding? Set `ANTHROPIC_API_KEY` + `TAPP_ENABLE_REMOTE_AI=1` and re-run — analysis appears inline (sends finding metadata to the model provider; see SECURITY.md).");
     }
   }
   if (regression && regression.counts) {
@@ -983,6 +999,9 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     L.push(`> ✅ Checked: ${report.checkedFor.join(" · ")}`);
     if (Array.isArray(report.notChecked) && report.notChecked.length) {
       L.push(`> ⬜ Not checked this run: ${report.notChecked.join(" · ")}`);
+      if (Array.isArray(report.conditionsNotReached) && report.conditionsNotReached.length) {
+        L.push(`> ◻️ Conditions never reached: ${report.conditionsNotReached.join(" · ")}`);
+      }
     }
   }
   const next = [];
@@ -1056,9 +1075,9 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
   } catch (err) {
     return { error: String(err.message || err) };
   }
-  const report = buildQaReport(webResult.markersPath);
+  const report = buildQaReport(webResult.markersPath, { platform: "web" });
   if (!report) return { error: "Web exploration produced no markers", details: { capture: { id, path: outDir } } };
-  const backend = resolveModelBackend();
+  const backend = remoteAiOptedIn() ? resolveModelBackend() : null;
   if (backend && report.findings.length) {
     const { enrichFindings } = await import("./enrich.js");
     await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: url.trim() });
@@ -1110,8 +1129,9 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onPro
       `If you want me to test with real values, tell me what to enter for these fields (or say "use defaults" / "skip"), ` +
       `and I'll re-run with testEmail/testPassword or inputOverrides — or I can drive it step-by-step in an interactive session so you can supply values as we go.`;
   }
-  // Post-run AI enrichment (additive, never changes the verdict) when a key is present.
-  const backend = resolveModelBackend();
+  // Post-run AI enrichment (additive, never changes the verdict) — requires explicit
+  // remote-AI opt-in; an ambient API key alone is not consent.
+  const backend = remoteAiOptedIn() ? resolveModelBackend() : null;
   if (backend && report.findings.length) {
     const { enrichFindings } = await import("./enrich.js");
     await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: bundleId });
@@ -1920,7 +1940,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       fs.writeFileSync(flowFile, JSON.stringify(args.flow));
     } else if (isNonEmptyString(args.flowPath)) {
       const p = path.resolve(repoRoot, args.flowPath.trim());
-      if (!p.startsWith(repoRoot)) return errorResult("flowPath must be inside the repo");
+      if (!isInsideDir(repoRoot, p)) return errorResult("flowPath must be inside the repo");
       if (!fs.existsSync(p)) return errorResult("Flow file not found", { flowPath: args.flowPath });
       flowFile = p;
     } else {

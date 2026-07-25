@@ -67,3 +67,18 @@ test("interactive channel is NOT enabled without a response path", () => {
   const env = engine.explorationEnvFromArgs({ interactive: true });
   assert.equal(env.OCQA_INTERACTIVE_INPUT, undefined);
 });
+
+test("remote AI requires explicit opt-in — an ambient API key is not consent", () => {
+  assert.equal(engine.remoteAiOptedIn({ ANTHROPIC_API_KEY: "sk-ant-ambient" }), false);
+  assert.equal(engine.remoteAiOptedIn({ ANTHROPIC_API_KEY: "sk", TAPP_ENABLE_REMOTE_AI: "1" }), true);
+  assert.equal(engine.remoteAiOptedIn({ TAPP_ENABLE_REMOTE_AI: "true" }), true);
+  assert.equal(engine.remoteAiOptedIn({ AUTOTAP_SUBSCRIPTION_TOKEN: "tok" }), true, "subscription token is explicit");
+  assert.equal(engine.remoteAiOptedIn({}), false);
+});
+
+test("isInsideDir rejects sibling directories sharing a path prefix", () => {
+  assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp/flows/x.yml"), true);
+  assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp"), true);
+  assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp-malicious/x.yml"), false);
+  assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp/../evil"), false);
+});
