@@ -120,6 +120,12 @@ function parseVerbArgs(argv) {
 
 const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "index.js"));
 
+function requireMacFor(what) {
+  if (process.platform === "darwin") return;
+  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: tapp qa https://localhost:3000`);
+  process.exit(1);
+}
+
 function saveShot(img, outFlag, name) {
   const out = outFlag || path.join(process.env.AUTOTAP_HOME, "shots", name);
   fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -172,6 +178,7 @@ switch (command) {
     }
     const engine = await engineImport();
     const isWeb = /^https?:\/\//i.test(target);
+    if (!isWeb) requireMacFor("iOS testing");
     const bundleId = isWeb ? null : await resolveTargetOrExit(engine, target);
     const unit = isWeb ? "pages" : "screens";
     const onProgress = (p) =>
@@ -207,6 +214,7 @@ switch (command) {
   }
 
   case "open": {
+    requireMacFor("tapp open");
     const { flags, positionals } = parseVerbArgs(rest);
     const engine = await engineImport();
     const sim = await engine.ensureBootedSim({ autoBoot: true });
@@ -231,6 +239,7 @@ switch (command) {
   }
 
   case "tree": {
+    requireMacFor("tapp tree");
     const { flags, positionals } = parseVerbArgs(rest);
     const engine = await engineImport();
     const sim = await engine.ensureBootedSim({ autoBoot: true });
@@ -255,6 +264,7 @@ switch (command) {
 
   case "shot":
   case "screenshot": {
+    requireMacFor("tapp shot");
     const { flags } = parseVerbArgs(rest);
     const engine = await engineImport();
     const img = await engine.captureScreenshotImage(flags.width ? Number(flags.width) : 1000);
@@ -268,6 +278,7 @@ switch (command) {
   }
 
   case "apps": {
+    requireMacFor("tapp apps");
     const engine = await engineImport();
     const sim = await engine.ensureBootedSim({ autoBoot: true });
     if (sim.error) {
@@ -290,6 +301,7 @@ switch (command) {
   }
 
   case "build": {
+    requireMacFor("tapp build");
     const { flags, positionals } = parseVerbArgs(rest);
     const engine = await engineImport();
     const dir = positionals[0] ? path.resolve(positionals[0]) : process.cwd();

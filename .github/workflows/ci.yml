@@ -1,0 +1,42 @@
+# tapp's own gate: a tool that decides whether other software ships must visibly test itself.
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: Unit, protocol & CLI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      # Verdict/report/regression unit tests, engine import-safety, target resolution,
+      # CLI smoke, and a real MCP initialize + tools/list handshake over stdio.
+      - run: npm test
+      - name: Shell syntax
+        run: for f in scripts/*.sh; do bash -n "$f"; done
+      - name: JS syntax
+        run: |
+          node --check bin/tapp.js
+          for f in mcp-server/src/*.js; do node --check "$f"; done
+
+  harness-build:
+    name: iOS harness compiles
+    runs-on: macos-latest
+    # Informational while the Xcode/runner matrix gets pinned — the unit job is the gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the XCUITest harness for the simulator
+        run: |
+          xcodebuild build-for-testing \
+            -project Harness/OCQAHarness.xcodeproj \
+            -scheme OCQAHarnessUITests \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath /tmp/harness-ci \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20

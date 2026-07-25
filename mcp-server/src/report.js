@@ -207,7 +207,11 @@ export function buildQaReport(markersFilePath) {
 
   return {
     verdict,
+    // `releaseScore` is the honest name: a heuristic quality score from fixed deductions,
+    // NOT calibrated statistical confidence. `confidence` is kept as an alias for
+    // compatibility (baselines, desktop app, existing consumers).
     confidence,
+    releaseScore: confidence,
     headline,
     inconclusive,
     checkedFor,

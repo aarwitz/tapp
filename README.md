@@ -32,7 +32,8 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 
 ## Quickstart
 
-Requirements: **macOS + Xcode** (simulator runtimes installed), **Node ≥ 18**.
+Requirements: **Node ≥ 18**; iOS testing needs **macOS + Xcode** (simulator runtimes
+installed). The web beta runs anywhere Node runs.
 
 **Zero config — get a verdict right now.** From your app's repo, one command. No server, no
 config file, no test code — you don't even need to know your bundle id:
@@ -112,6 +113,18 @@ Then ask your agent:
 Full agent playbook: [AGENTS.md](./AGENTS.md) — ships inside the package so agents can read it too.
 
 ## The verdict you can trust
+
+**Adaptive exploration, deterministic judgment.** Exploration is adaptive — two runs may
+traverse different paths through your app. Judgment is deterministic: the same evidence
+trace always produces the same findings, the same score, and the same verdict — no LLM in
+the decision loop, nothing to flake in CI. PR gating keys on the **regression diff**
+(stable finding signatures vs. a baseline), so it reacts to what *changed*, not to
+run-to-run path variance.
+
+**A release score, not "confidence."** The 0–100 number is a heuristic quality score from
+fixed, documented deductions — we don't call it confidence because it isn't calibrated
+probability. Calibrating it against seeded-fault benchmarks is ongoing work; until then it
+ranks runs, it doesn't promise odds.
 
 `tapp_run_qa` explores like a user — the accessibility surface on iOS, a real browser on web —
 and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,

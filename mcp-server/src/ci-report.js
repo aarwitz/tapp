@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// AutoTap CI gate — the report/verdict half of scripts/ci-gate.sh.
+// tapp CI gate — the report/verdict half of scripts/ci-gate.sh.
 //
 // Takes the OCQA markers a CI exploration produced (plus, optionally, a stored baseline and any
 // flow replay logs), and turns them into: a human-readable console report, a GitHub Actions step
@@ -101,11 +101,11 @@ const SEV_ICON = { critical: "🟥", high: "🟧", medium: "🟨", low: "🟩" }
 
 function renderMarkdown(report, regression, flows, gate) {
   const lines = [];
-  lines.push(`## AutoTap release check — ${VERDICT_BADGE[report.verdict] || report.verdict}`);
+  lines.push(`## tapp release check — ${VERDICT_BADGE[report.verdict] || report.verdict}`);
   lines.push("");
   lines.push(report.headline);
   lines.push("");
-  lines.push(`**${report.confidence}% confidence** · ${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
+  lines.push(`**release score ${report.confidence}/100** · ${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
   if (report.findings.length) {
     lines.push("");
     lines.push("| | Severity | Finding | Screen |");
@@ -160,6 +160,7 @@ if (collapsed.length) {
   // Keep the displayed verdict consistent with the merged findings (same scoring as report.js:
   // high costs 10 confidence; any high caps the verdict at caution).
   report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
+  report.releaseScore = report.confidence;
   if (report.verdict === "ready") report.verdict = report.confidence < 50 ? "blocked" : "caution";
   report.headline = `Proceed with caution — ${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }

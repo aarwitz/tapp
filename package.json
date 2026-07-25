@@ -1,6 +1,6 @@
 {
   "name": "tapp-mcp",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Autonomous QA for iOS + web. Your coding agent gets hands, eyes, and judgment: drive the app, explore it with no test code, and get a deterministic ship/no-ship verdict with evidence. iOS simulator native; web beta via Playwright.",
   "license": "MIT",
@@ -24,9 +24,6 @@
   "engines": {
     "node": ">=18"
   },
-  "os": [
-    "darwin"
-  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/aarwitz/tapp.git"
@@ -52,5 +49,8 @@
     "copilot",
     "automation",
     "mobile"
-  ]
+  ],
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
 }

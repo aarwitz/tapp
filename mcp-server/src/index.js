@@ -942,7 +942,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     .filter(Boolean)
     .join(", ");
   const L = [];
-  L.push(`### 🧪 QA complete — ${badge} · confidence ${report.confidence}/100${bundleId ? `\n\`${bundleId}\`` : ""}`);
+  L.push(`### 🧪 QA complete — ${badge} · release score ${report.confidence}/100${bundleId ? `\n\`${bundleId}\`` : ""}`);
   L.push("");
   L.push(report.headline);
   L.push("");
