@@ -366,13 +366,17 @@ class ExplorerTests: XCTestCase {
                 status = "unknown_action"
             }
 
-            waitForAnimationsToSettle()
-            emitSessionTree()
+            // Ack IMMEDIATELY after the action — settle/tree time on busy, animated screens
+            // (chat composers especially) made acks exceed the client's budget and cascade
+            // into phantom "timeouts" while the action had actually succeeded. The host waits
+            // separately for the fresh tree (treeVersion bump) after the ack.
             var extraJson = (action == "type" && !lastTypedInto.isEmpty)
                 ? ",\"typedInto\":\"\(escapeJSON(lastTypedInto))\"" : ""
             if !loginDetail.isEmpty { extraJson += ",\"detail\":\"\(escapeJSON(loginDetail))\"" }
             try? "{\"seq\":\(seq),\"status\":\"\(status)\",\"action\":\"\(escapeJSON(action))\"\(extraJson)}"
                 .write(toFile: resultPath, atomically: true, encoding: .utf8)
+            waitForAnimationsToSettle()
+            emitSessionTree()
         }
         print("OCQA_SESSION:timeout")
     }
@@ -396,7 +400,7 @@ class ExplorerTests: XCTestCase {
             existedButNotHittable = true
             return false
         }
-        let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.secureTextFields]
+        let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.secureTextFields, app.textViews]
         for query in queries where tryTap(query[identifier]) { return "ok" }
         // Exact label, then a forgiving case-insensitive "contains" match so callers can tap by the
         // visible text they see in the tree without an exact accessibility id.
@@ -416,7 +420,9 @@ class ExplorerTests: XCTestCase {
     private func resolveFieldByHint(_ hint: String) -> XCUIElement? {
         let h = hint.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !h.isEmpty else { return nil }
-        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex
+        // textViews included deliberately: chat composers / notes / comment boxes are
+        // TextViews, not TextFields — without them "Write a message…" is untypeable.
+        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex + app.textViews.allElementsBoundByIndex
         let existing = fields.filter { $0.exists }
         if let exact = existing.first(where: {
             $0.identifier.lowercased() == h || $0.label.lowercased() == h || ($0.placeholderValue ?? "").lowercased() == h
@@ -432,6 +438,20 @@ class ExplorerTests: XCTestCase {
             let plain = app.textFields.firstMatch
             if plain.exists { return plain }
         }
+        // SwiftUI "fake placeholder" pattern: the visible hint ("Write a message…") is an
+        // overlay Text and the real field is a NAMELESS TextField underneath (no id, no
+        // label, no placeholderValue). Resolve the overlay text, then return the field
+        // whose frame overlaps it.
+        let overlays = app.staticTexts.allElementsBoundByIndex.filter { $0.exists }
+        if let overlay = overlays.first(where: {
+            let l = $0.label.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            return !l.isEmpty && (l == h || l.contains(h) || h.contains(l))
+        }) {
+            let zone = overlay.frame.insetBy(dx: -24, dy: -24)
+            if let field = existing.first(where: { $0.frame.intersects(zone) }) {
+                return field
+            }
+        }
         return nil
     }
 
@@ -443,7 +463,7 @@ class ExplorerTests: XCTestCase {
     }
 
     private func focusedField() -> XCUIElement? {
-        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex
+        let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex + app.textViews.allElementsBoundByIndex
         return fields.first(where: { $0.exists && (($0.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) })
     }
 
@@ -496,7 +516,7 @@ class ExplorerTests: XCTestCase {
         // submits, and append-on-retry turns "Lemonade" into "LemonadeLemonade" — a malformed
         // credential the server rejects with no visible cause.
         if let id = id, !id.isEmpty {
-            for field in [app.textFields[id], app.secureTextFields[id]] where field.exists {
+            for field in [app.textFields[id], app.secureTextFields[id], app.textViews[id]] where field.exists {
                 replaceText(on: field, with: text); lastTypedInto = fieldDesc(field); return true
             }
             if let field = resolveFieldByHint(id) {
@@ -516,9 +536,10 @@ class ExplorerTests: XCTestCase {
             lastTypedInto = "focused field"
             return true
         }
-        // Nothing focused and no usable id — last resort: the first text field.
-        let first = app.textFields.firstMatch
-        if first.exists { replaceText(on: first, with: text); lastTypedInto = fieldDesc(first); return true }
+        // Nothing focused and no usable id — last resort: the first text field or text view.
+        for first in [app.textFields.firstMatch, app.textViews.firstMatch] where first.exists {
+            replaceText(on: first, with: text); lastTypedInto = fieldDesc(first); return true
+        }
         return false
     }
 
@@ -2773,8 +2794,9 @@ class ExplorerTests: XCTestCase {
     }
 
     private func isTextField(_ type: String) -> Bool {
-        return type.contains("TextField") || type.contains("SecureTextField") ||
-               type.contains("rawValue: 49") || type.contains("rawValue: 50")
+        // 52 = textView — chat composers/notes boxes; typeable exactly like fields.
+        return type.contains("TextField") || type.contains("SecureTextField") || type.contains("TextView") ||
+               type.contains("rawValue: 49") || type.contains("rawValue: 50") || type.contains("rawValue: 52")
     }
 
     /// Secure (password) field. The runtime reports the type as "rawValue: 50", NOT the friendly
@@ -4281,6 +4303,7 @@ class ExplorerTests: XCTestCase {
         if type.contains("rawValue: 9)") { return "button" }
         if type.contains("rawValue: 49)") { return "textField" }
         if type.contains("rawValue: 50)") { return "secureField" }
+        if type.contains("rawValue: 52)") { return "textView" }
         if type.contains("rawValue: 48)") { return "text" }
         if type.contains("rawValue: 75)") { return "cell" }
         if type.contains("rawValue: 12)") { return "image" }

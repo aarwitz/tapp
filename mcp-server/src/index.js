@@ -496,7 +496,7 @@ async function startSession(bundleId, extraEnv = {}) {
   const captureScript = path.join(scriptsDir, "quick-capture.sh");
   const proc = spawn("bash", [captureScript, "session", bundleId], {
     cwd: repoRoot,
-    env: { ...process.env, ...extraEnv, OCQA_SESSION_CMD_PATH: cmdPath, OCQA_SESSION_RESULT_PATH: resultPath, OCQA_SESSION_TIMEOUT: "1800" },
+    env: { ...process.env, ...extraEnv, OCQA_SESSION_CMD_PATH: cmdPath, OCQA_SESSION_RESULT_PATH: resultPath, OCQA_SESSION_TIMEOUT: "7200" },
   });
   activeSession = {
     proc, bundleId, seq: 0, cmdPath, resultPath, latestTree: null, treeVersion: 0, buffer: "", ready: false, ended: false,
@@ -580,7 +580,7 @@ async function sessionAct(cmd) {
   let detail = null;
   // login runs a full fill+submit+verify sequence in the harness; wait can block up to its
   // own timeout — both need more ack headroom than a single tap.
-  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : cmd.action === "login" ? 180_000 : 30_000;
+  const ackBudget = cmd.action === "wait" ? (cmd.timeoutMs || 5000) + 10_000 : cmd.action === "login" ? 180_000 : 60_000;
   const deadline = Date.now() + ackBudget;
   while (Date.now() < deadline && !activeSession.ended) {
     await sleep(150);
