@@ -1,5 +1,6 @@
 # tapp — ship with proof
 
+[![CI](https://github.com/aarwitz/tapp/actions/workflows/ci.yml/badge.svg)](https://github.com/aarwitz/tapp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/tapp-mcp?color=cb3837&label=npm)](https://www.npmjs.com/package/tapp-mcp)
 [![npm downloads](https://img.shields.io/npm/dw/tapp-mcp?label=downloads)](https://www.npmjs.com/package/tapp-mcp)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
