@@ -111,6 +111,14 @@ run_harness_test() {
   # OCQA_INPUT_OVERRIDES_JSON, e.g. '{"id:email_field":"user@example.com"}'.
   # Keys are 'id:<identifier>' / 'label:<label>' or 'screen:<title>|id:<identifier>'.
   local overrides_line=""
+  # Interactive mid-run input: when the host can prompt a human (desktop app, VS Code
+  # extension), the harness pauses at input screens and polls the response path.
+  local interactive_line=""
+  if [[ "${OCQA_INTERACTIVE_INPUT:-}" == "1" && -n "${OCQA_INPUT_RESPONSE_PATH:-}" ]]; then
+    interactive_line=",
+  \"OCQA_INTERACTIVE_INPUT\": \"1\",
+  \"OCQA_INPUT_RESPONSE_PATH\": \"${OCQA_INPUT_RESPONSE_PATH}\""
+  fi
   if [[ -n "${OCQA_INPUT_OVERRIDES_JSON:-}" ]]; then
     overrides_line=",
   \"OCQA_INPUT_OVERRIDES\": ${OCQA_INPUT_OVERRIDES_JSON}"
@@ -143,7 +151,7 @@ run_harness_test() {
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$overrides_line$launch_args_line$launch_env_line$login_steps_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line
 }
 CONF
 

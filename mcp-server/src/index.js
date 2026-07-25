@@ -639,7 +639,11 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
   let captureDir = null;
   let pos = 0;
   let timedOut = false;
-  const hardDeadline = Date.now() + (timeout + 240) * 1000;
+  // Interactive runs pause for a human — time spent waiting is excluded from the harness's own
+  // budget, so give the watchdog matching headroom.
+  const interactiveGrace = env.OCQA_INTERACTIVE_INPUT === "1" ? 900 : 0;
+  const hardDeadline = Date.now() + (timeout + 240 + interactiveGrace) * 1000;
+  const requestSidecar = env.OCQA_INPUT_RESPONSE_PATH ? env.OCQA_INPUT_RESPONSE_PATH + ".request" : null;
 
   while (true) {
     const which = await Promise.race([closed.then(() => "closed"), sleep(1200).then(() => "tick")]);
@@ -660,6 +664,15 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
           for (const line of buf.toString("utf8").split("\n")) {
             if (line.startsWith("OCQA_PROGRESS:")) {
               try { onProgress(JSON.parse(line.slice("OCQA_PROGRESS:".length))); } catch {}
+            }
+            // Surface harness pause requests to the host as a sidecar file next to the response
+            // path — prompting hosts (VS Code extension) poll it, answer the human, and write
+            // the response file the harness itself is polling.
+            if (requestSidecar && line.startsWith("OCQA_AWAIT_INPUT:")) {
+              try { fs.writeFileSync(requestSidecar, line.slice("OCQA_AWAIT_INPUT:".length), { mode: 0o600 }); } catch {}
+            }
+            if (requestSidecar && line.startsWith("OCQA_INPUT_RESOLVED:")) {
+              try { fs.rmSync(requestSidecar, { force: true }); } catch {}
             }
           }
         }
@@ -842,6 +855,12 @@ export function explorationEnvFromArgs(args) {
   if (args.appLaunchEnv && typeof args.appLaunchEnv === "object" && !Array.isArray(args.appLaunchEnv)) {
     const e = Object.fromEntries(Object.entries(args.appLaunchEnv).filter(([k, v]) => typeof k === "string" && typeof v === "string"));
     if (Object.keys(e).length) env.OCQA_APP_LAUNCH_ENV_JSON = JSON.stringify(e);
+  }
+  // Interactive mid-run input: the harness pauses at input screens (OCQA_AWAIT_INPUT) and
+  // polls the response path — only when the host can actually prompt a human.
+  if (args.interactive === true && isNonEmptyString(args.interactiveResponsePath)) {
+    env.OCQA_INTERACTIVE_INPUT = "1";
+    env.OCQA_INPUT_RESPONSE_PATH = args.interactiveResponsePath.trim();
   }
   if (args.inputOverrides && typeof args.inputOverrides === "object" && !Array.isArray(args.inputOverrides)) {
     const entries = Object.entries(args.inputOverrides).filter(
@@ -1334,6 +1353,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
           testEmail: { type: "string", description: "Email for the login preamble, if the app has a sign-in" },
           testPassword: { type: "string", description: "Password for the login preamble" },
+          interactive: { type: "boolean", description: "Host-with-a-human only (e.g. the VS Code extension): pause at input screens and wait for values via interactiveResponsePath. Plain agents: omit." },
+          interactiveResponsePath: { type: "string", description: "File path the prompting host answers on (requests appear at <path>.request)" },
           inputOverrides: {
             type: "object",
             additionalProperties: { type: "string" },
