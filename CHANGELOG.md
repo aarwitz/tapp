@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.1
+- **Release hardening:** production dependencies updated to clear published security
+  advisories; the GitHub Action now passes inputs through environment variables rather
+  than interpolating them into shell source, and nested Actions are pinned to commit SHAs.
+- **Action safety tests:** CI now prevents shell-source input interpolation and moving
+  third-party Action tags from returning.
+- **VS Code launch pairing:** extension 0.2.5 pins this engine release so the Marketplace
+  experience and `npx tapp-mcp` ship against the same tool contract.
+
 ## 0.13.0
 - **Finding identity**: findings now carry a `target` (control identifier) and dedup/regression
   match on `type|screen|target` — fixing one dead button while breaking another on the same

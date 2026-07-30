@@ -19,7 +19,7 @@
     "AGENTS.md"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "engines": {
     "node": ">=18"
@@ -51,6 +51,6 @@
     "mobile"
   ],
   "scripts": {
-    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/cli.test.js"
+    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/cli.test.js tests/action.test.js"
   }
 }

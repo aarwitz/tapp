@@ -91,12 +91,16 @@ runs:
     - name: Build app for simulator
       if: inputs.app-path == ''
       shell: bash
+      env:
+        TAPP_INPUT_SCHEME: ${{ inputs.scheme }}
+        TAPP_INPUT_PROJECT: ${{ inputs.project }}
+        TAPP_INPUT_CONFIGURATION: ${{ inputs.configuration }}
       run: |
         set -euo pipefail
-        [[ -n "${{ inputs.scheme }}" ]] || { echo "::error::Provide either app-path or project+scheme"; exit 2; }
-        FLAG="-project"; [[ "${{ inputs.project }}" == *.xcworkspace ]] && FLAG="-workspace"
-        xcodebuild $FLAG "${{ inputs.project }}" -scheme "${{ inputs.scheme }}" \
-          -configuration "${{ inputs.configuration }}" \
+        [[ -n "$TAPP_INPUT_SCHEME" ]] || { echo "::error::Provide either app-path or project+scheme"; exit 2; }
+        FLAG="-project"; [[ "$TAPP_INPUT_PROJECT" == *.xcworkspace ]] && FLAG="-workspace"
+        xcodebuild "$FLAG" "$TAPP_INPUT_PROJECT" -scheme "$TAPP_INPUT_SCHEME" \
+          -configuration "$TAPP_INPUT_CONFIGURATION" \
           -destination 'generic/platform=iOS Simulator' \
           -derivedDataPath "$RUNNER_TEMP/autotap-app-build" \
           CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build | tail -5
@@ -107,7 +111,9 @@ runs:
     - name: Use prebuilt app
       if: inputs.app-path != ''
       shell: bash
-      run: echo "AUTOTAP_APP_PATH=${{ inputs.app-path }}" >> "$GITHUB_ENV"
+      env:
+        TAPP_INPUT_APP_PATH: ${{ inputs.app-path }}
+      run: echo "AUTOTAP_APP_PATH=$TAPP_INPUT_APP_PATH" >> "$GITHUB_ENV"
 
     - name: Run Tapp gate
       id: gate
@@ -120,6 +126,12 @@ runs:
         OCQA_APP_LAUNCH_ARGS_JSON: ${{ inputs.launch-args }}
         OCQA_APP_LAUNCH_ENV_JSON: ${{ inputs.launch-env }}
         OCQA_LOGIN_STEPS_JSON: ${{ inputs.login-steps }}
+        TAPP_INPUT_BUNDLE_ID: ${{ inputs.bundle-id }}
+        TAPP_INPUT_MAX_ACTIONS: ${{ inputs.max-actions }}
+        TAPP_INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        TAPP_INPUT_DEVICE: ${{ inputs.simulator-device }}
+        TAPP_INPUT_FLOWS: ${{ inputs.flows }}
+        TAPP_INPUT_BASELINE: ${{ inputs.baseline }}
       run: |
         set -uo pipefail
         # PyYAML for flow_lib.py; some runner pythons are PEP-668 externally-managed.
@@ -127,12 +139,12 @@ runs:
           || pip3 install --quiet --break-system-packages pyyaml || true
         REPORT="$RUNNER_TEMP/autotap-report.json"
         MD="$RUNNER_TEMP/autotap-report.md"
-        ARGS=(--app "$AUTOTAP_APP_PATH" --bundle-id "${{ inputs.bundle-id }}"
-              --actions "${{ inputs.max-actions }}" --fail-on "${{ inputs.fail-on }}"
-              --device "${{ inputs.simulator-device }}" --project-dir "$GITHUB_WORKSPACE"
+        ARGS=(--app "$AUTOTAP_APP_PATH" --bundle-id "$TAPP_INPUT_BUNDLE_ID"
+              --actions "$TAPP_INPUT_MAX_ACTIONS" --fail-on "$TAPP_INPUT_FAIL_ON"
+              --device "$TAPP_INPUT_DEVICE" --project-dir "$GITHUB_WORKSPACE"
               --json-out "$REPORT" --md-out "$MD")
-        [[ -n "${{ inputs.flows }}" ]] && ARGS+=(--flows "${{ inputs.flows }}")
-        [[ -n "${{ inputs.baseline }}" ]] && ARGS+=(--baseline "${{ inputs.baseline }}")
+        [[ -n "$TAPP_INPUT_FLOWS" ]] && ARGS+=(--flows "$TAPP_INPUT_FLOWS")
+        [[ -n "$TAPP_INPUT_BASELINE" ]] && ARGS+=(--baseline "$TAPP_INPUT_BASELINE")
         echo "report=$REPORT" >> "$GITHUB_OUTPUT"
         echo "md=$MD" >> "$GITHUB_OUTPUT"
         # Capture the gate's exit code without failing the step, so the PR comment + evidence
@@ -147,7 +159,7 @@ runs:
 
     - name: Comment on PR
       if: always() && github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
-      uses: actions/github-script@v7
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
       with:
         github-token: ${{ inputs.github-token }}
         script: |
@@ -176,7 +188,7 @@ runs:
 
     - name: Upload evidence
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: tapp-evidence
         path: |
@@ -189,10 +201,13 @@ runs:
     - name: Enforce gate
       if: always()
       shell: bash
+      env:
+        TAPP_GATE_FAILED: ${{ steps.gate.outputs.gate_failed }}
+        TAPP_VERDICT: ${{ steps.gate.outputs.verdict }}
       # Runs last so the PR comment + evidence upload happen first, then blocks the merge.
       run: |
-        if [[ "${{ steps.gate.outputs.gate_failed }}" == "true" ]]; then
-          echo "::error::Tapp gate failed (verdict: ${{ steps.gate.outputs.verdict }}). See the PR comment / step summary."
+        if [[ "$TAPP_GATE_FAILED" == "true" ]]; then
+          echo "::error::Tapp gate failed (verdict: $TAPP_VERDICT). See the PR comment / step summary."
           exit 1
         fi
-        echo "Tapp gate passed (verdict: ${{ steps.gate.outputs.verdict }})."
+        echo "Tapp gate passed (verdict: $TAPP_VERDICT)."
