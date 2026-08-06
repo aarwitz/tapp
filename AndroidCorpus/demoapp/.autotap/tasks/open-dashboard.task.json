@@ -1,0 +1,57 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openDashboard",
+  "description": "Navigate from Get Started to the observed Dashboard state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Get Started"
+        },
+        {
+          "wait_for": "continue_button"
+        },
+        {
+          "tap": "continue_button"
+        },
+        {
+          "wait_for": "Dashboard"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_60383486aeb8b6e4",
+      "screen_66cd9688a2ae0682"
+    ],
+    "edges": [
+      "edge_ec9498989826c7a4"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_7a978be219ca61cd"
+    ],
+    "mapPath": "demoapp/.autotap/ui-map.json",
+    "targetId": "target_4fa4825fe4191b9c",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-1023-1785941546578",
+        "detail": "deterministic replay passed",
+        "contract": "settingsReachable",
+        "validatedAt": "2026-08-05T14:52:50.035Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.276Z",
+    "promotedFrom": "demoapp/.autotap/proposals/tasks/open-dashboard.task.json"
+  }
+}

@@ -1,5 +1,81 @@
 # Changelog
 
+## Unreleased
+- **Symbol-precise PR ownership:** GitHub change manifests now retain bounded patch/rename evidence,
+  local `--pr-base` derives equivalent zero-context diff evidence without a shell, and reviewed
+  Task `coverage.sourceSymbols` narrows affected Tasks when every hunk is attributable. Plans expose
+  symbol identities and attribution counts but no source hunks; missing or ambiguous evidence falls
+  back to file ownership. The real commerce label-change regression now affects only
+  `completeCheckout`, not the unrelated order-history Task.
+- **Constrained PR Task maintenance:** a failed diff-selected contract can now produce one
+  Task-only selector patch when its failed action, affected Task, baseline UI Map, and
+  current UI Map all retain the same non-label control identity. The report pins Task/contract
+  digests, exact pointer and before/after values, never auto-applies, and keeps the gate red. Web
+  gates compile the patch from a temporary Task registry and replay the unchanged contract against
+  the still-running real target; passing proof is marked `validated-awaiting-review` with evidence
+  while the source Task and contract remain byte-identical. A real commerce label rename passed this
+  disposable replay and after review, while the behavioral missing-order fault remained
+  unclassified and produced no selector patch.
+- **Grounded durable-order planning:** when reviewed Tasks expose an exact representative checkout
+  output and a separate order-history path, controlled lifecycle and observed UI Map states let
+  `tapp init` propose a critical persistence contract. Single-actor web contracts now execute
+  same-origin reset/cleanup as evidence. CommerceDemo passes 16/16 clean steps; its missing-order
+  fault leaves generic QA at 100/100 but fails the unchanged contract and blocks the gate.
+- **First-class actor onboarding:** `tapp actor set|list` and MCP `tapp_actor_config` maintain a
+  central `.autotap/project.json` of roles, isolated sessions, provisioning, lifecycle, and
+  credential environment-variable names. Init blocks missing/conflicting bindings, generated
+  contracts reuse them, and CI maps every actor binding to a same-named GitHub Secret without
+  persisting values.
+- **Grounded multi-user planning:** when a contract-free web repository has two compatible
+  isolated actors, deterministic reset lifecycle, an authentication Task, and a content-producing
+  Task with an exact captured output, `tapp init` proposes one compositional cross-account
+  propagation contract instead of duplicated one-Task tests. Review, compilation, replay,
+  promotion, and seeded-fault merge blocking are covered on a real shared-state browser fixture;
+  CLI/MCP draft validation can manage the detected web target when no URL is supplied.
+- **Baseline-to-CI onboarding:** `tapp baseline create` runs or imports only a successful conclusive
+  full gate, writes an atomic platform/target-specific baseline, and rejects cross-target
+  comparisons. `tapp ci install` and MCP `tapp_ci_setup` render/write a collision-safe per-target
+  GitHub workflow plus `.autotap/ci.json` without commits or remote mutation.
+- **Managed browser CI:** the Action/portable gate now share init's deterministic web
+  install/build/start/readiness/teardown path when no URL is supplied. Fixed ports declared by
+  repository scripts are honored, ephemeral import URLs are not persisted, and tests cover both
+  regressions.
+- **Target-isolated Action baselines:** automatic cache and durable artifact identities include the
+  stable application-model target key, preventing two same-platform apps from sharing history.
+- **Turnkey import loop:** `tapp init --explore` and MCP `tapp_init:explore` now build/start or
+  connect to a real target, run the ordinary keyless QA engine, merge its evidence-grounded UI Map,
+  persist conclusive run provenance, and construct the application model/release plan. Detected web
+  package scripts and static sites run on an isolated loopback port and are always torn down.
+- **Generated release infrastructure:** approved UI-Map journeys become deduplicated compositional
+  Task drafts plus TypeScript contract drafts; `tapp plan validate` replays them without AI and
+  records per-platform trust, while `tapp plan promote` explicitly moves only fully validated
+  artifacts into canonical reviewed directories and updates map coverage.
+- **Safe evolution:** a real re-exploration invalidates prior draft trust without discarding history;
+  source-only refresh preserves proof; promoted proposal lineage reconciles to the committed
+  contract without duplicates; empty/login-wall maps remain blocking and no lockfile/install command
+  is invented.
+- **UI Map navigation provenance:** maps now preserve per-platform entry states and transition
+  platforms, enabling deterministic path-to-Task generation behind the shared schema.
+- **Android end to end:** native ADB/UIAutomator exploration, screenshots, semantic sessions,
+  committed Flow replay, foreground/crash checks, evidence reports, and the shared CI gate.
+- **Cross-platform Flow runtime:** one repository-native YAML format now replays without AI on
+  XCUITest, Android, and Playwright; the CLI adds `tapp flow run|validate`.
+- **Corpus proof:** three native Android fixtures (onboarding, login, and checkout) include
+  committed Flows and a real-emulator CI sweep.
+- **Three-platform GitHub Action:** iOS, Android, and web inputs, platform-isolated automatic
+  baselines/evidence, APK builds, and web runtime setup.
+- **Productized GitHub gate:** automatic default-branch baselines use a fast Actions cache
+  plus a 90-day artifact fallback; committed and explicit baselines remain authoritative.
+- **Lower-friction setup:** the gate detects the bundle id from a simulator `.app`, exposes
+  the exploration timeout, and documents a complete PR + main-branch workflow.
+- **CI trust hardening:** every run gets an isolated capture directory, malformed config and
+  missing baseline/Flow inputs fail before simulator work, and missing `ffmpeg` no longer
+  discards otherwise-valid evidence.
+- **Human evidence:** CI capture bundles now include the existing browsable `report.html`
+  alongside the recording, screenshots, Markdown, and machine-readable JSON.
+- **Contract tests:** process-level coverage now pins gate exit codes, report artifacts,
+  baseline warnings, Flow failures, and cheap preflight validation.
+
 ## 0.13.1
 - **Release hardening:** production dependencies updated to clear published security
   advisories; the GitHub Action now passes inputs through environment variables rather

@@ -15,10 +15,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 FLOW="${1:?usage: run-flow.sh <flow.yml|flow.json> [bundleId]}"
 [ -f "$FLOW" ] || { echo "❌ Flow not found: $FLOW"; exit 2; }
+FLOW_JSON="$(node "$ROOT/scripts/compile-flow.js" "$FLOW" ios)" || { echo "❌ Could not compile flow/tasks"; exit 2; }
 
 # App bundle id: explicit arg, else the flow's `app:` field.
 APP="${2:-}"
-[ -z "$APP" ] && APP="$(python3 -c "import sys,yaml,json; f=('$FLOW'); d=(json.load(open(f)) if f.endswith('.json') else yaml.safe_load(open(f))); print(d.get('app','') or '')" 2>/dev/null)"
+[ -z "$APP" ] && APP="$(python3 -c "import sys,json; print(json.loads(sys.argv[1]).get('app','') or '')" "$FLOW_JSON" 2>/dev/null)"
 [ -z "$APP" ] && { echo "❌ No bundleId (pass one or set 'app:' in the flow)"; exit 2; }
 
 UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((x["udid"] for v in d["devices"].values() for x in v if x.get("state")=="Booted"), ""))')"
@@ -32,7 +33,6 @@ XCTR=""
 [ -z "$XCTR" ] && XCTR="$(find /tmp/harness-build/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
 [ -z "$XCTR" ] && { echo "❌ Harness not built. Run: scripts/deploy-and-build.sh --harness"; exit 2; }
 
-FLOW_JSON="$(python3 "$ROOT/scripts/flow_lib.py" to-json "$FLOW")" || { echo "❌ Could not parse flow"; exit 2; }
 NAME="$(python3 -c "import sys,json;print(json.loads(sys.argv[1]).get('name','flow'))" "$FLOW_JSON")"
 echo "▶️  Running flow \"$NAME\" against $APP …"
 
@@ -49,11 +49,27 @@ d = {
   "OCQA_TEST_EMAIL": os.environ.get("OCQA_TEST_EMAIL", "test@example.com"),
   "OCQA_TEST_PASSWORD": os.environ.get("OCQA_TEST_PASSWORD", "TestPass123!"),
 }
+launch_args = os.environ.get("OCQA_APP_LAUNCH_ARGS_JSON", "")
+if launch_args:
+    value = json.loads(launch_args)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise SystemExit("OCQA_APP_LAUNCH_ARGS_JSON must be a JSON array of strings")
+    d["OCQA_APP_LAUNCH_ARGS"] = value
+launch_env = os.environ.get("OCQA_APP_LAUNCH_ENV_JSON", "")
+if launch_env:
+    value = json.loads(launch_env)
+    if not isinstance(value, dict) or not all(isinstance(key, str) and isinstance(item, str) for key, item in value.items()):
+        raise SystemExit("OCQA_APP_LAUNCH_ENV_JSON must be a JSON object with string values")
+    d["OCQA_APP_LAUNCH_ENV"] = value
 if os.environ.get("ANTHROPIC_API_KEY"):
     d["OCQA_FLOW_AI_RESPONSE_PATH"] = ai_resp
     d["OCQA_FLOW_AI_IMAGE_DIR"] = ai_dir
 open(cfg, "w").write(json.dumps(d))
 PY
+if [ "$?" -ne 0 ]; then
+  echo "❌ Invalid iOS Flow launch configuration"
+  exit 2
+fi
 
 LOG="${FLOW_LOG:-/tmp/ocqa-flow-$TOKEN.log}"
 # assert_ai judge sidecar (only when a key is present) — same file-channel as vision escalation.

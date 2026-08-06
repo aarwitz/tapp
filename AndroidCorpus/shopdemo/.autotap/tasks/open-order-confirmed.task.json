@@ -1,0 +1,75 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openOrderConfirmed",
+  "description": "Navigate from Checkout to the observed Order Confirmed state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Checkout"
+        },
+        {
+          "wait_for": "name_field"
+        },
+        {
+          "type": {
+            "field": "name_field",
+            "value": "Tapp test"
+          }
+        },
+        {
+          "wait_for": "address_field"
+        },
+        {
+          "type": {
+            "field": "address_field",
+            "value": "Tapp test"
+          }
+        },
+        {
+          "wait_for": "place_order_button"
+        },
+        {
+          "tap": "place_order_button"
+        },
+        {
+          "wait_for": "Order Confirmed"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_c7761e58969f7edd",
+      "screen_d822b1ec5f43f3a3"
+    ],
+    "edges": [
+      "edge_493030be0bc86ae1"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_f03d19f34d1a1dae"
+    ],
+    "mapPath": "shopdemo/.autotap/ui-map.json",
+    "targetId": "target_b0450646e4866df7",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-6212-1785942195522",
+        "detail": "deterministic replay passed",
+        "contract": "orderConfirmedReachable",
+        "validatedAt": "2026-08-05T15:04:12.121Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.278Z",
+    "promotedFrom": "shopdemo/.autotap/proposals/tasks/open-order-confirmed.task.json"
+  }
+}

@@ -1,0 +1,9 @@
+name: Android Login sign in
+platform: android
+app: io.tapp.corpus.login
+reset: clear
+steps:
+  - task: signIn
+    with: { email: $TEST_EMAIL, password: $TEST_PASSWORD }
+  - assert_text: { of: account_summary, contains: $TEST_EMAIL }
+  - assert_exists: Profile

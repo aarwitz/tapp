@@ -1,16 +1,41 @@
 name: "Tapp Release Gate"
-description: "Autonomous QA gate for iOS PRs — explores the app on a simulator, replays Tapp Flows, fails on new high/critical issues."
+description: "PR-aware autonomous QA + deterministic release-contract gate for iOS, Android, and web, with baselines and inspectable evidence."
 author: Tapp
 branding:
   icon: check-circle
   color: blue
 
 inputs:
+  platform:
+    description: "Target platform: ios, android, or web"
+    required: false
+    default: "ios"
+  url:
+    description: "Web: URL of an already-running owned app. Omit to detect/build/start/stop one target from the repository."
+    required: false
+    default: ""
+  web-target:
+    description: "Web: target name, id, or repository-relative path when more than one browser target is detected."
+    required: false
+    default: ""
+  target-key:
+    description: "Stable application-model target id used to isolate baselines for multiple targets on the same platform."
+    required: false
+    default: "default"
+  android-app-id:
+    description: "Android: application id, e.g. com.example.app"
+    required: false
+    default: ""
+  android-serial:
+    description: "Android: optional adb device serial (the caller must start/connect the emulator)"
+    required: false
+    default: ""
   bundle-id:
-    description: "Bundle identifier of the app under test (e.g. com.example.app)"
-    required: true
+    description: "Bundle identifier of the app under test. Auto-detected from the built .app when omitted."
+    required: false
+    default: ""
   app-path:
-    description: "Path to a prebuilt SIMULATOR .app. If omitted, the action builds one from scheme/project."
+    description: "iOS simulator .app or Android .apk. If omitted, the action builds from the platform project inputs."
     required: false
     default: ""
   project:
@@ -25,20 +50,44 @@ inputs:
     description: "Build configuration"
     required: false
     default: "Debug"
+  android-project:
+    description: "Android: Gradle project directory (defaults to the workspace)"
+    required: false
+    default: ""
+  android-task:
+    description: "Android: Gradle APK build task"
+    required: false
+    default: "assembleDebug"
   max-actions:
     description: "Exploration budget (number of autonomous actions)"
     required: false
     default: "40"
+  timeout:
+    description: "Exploration watchdog in seconds"
+    required: false
+    default: "600"
   flows:
     description: "Glob of Flow YAMLs to replay (default: .autotap/flows/*.yml in the workspace, if present)"
     required: false
     default: ""
+  scenarios:
+    description: "Web: glob of multi-actor Scenario YAMLs (default: .autotap/scenarios/*.yml when present)"
+    required: false
+    default: ""
+  contracts:
+    description: "Glob of TypeScript release contracts (default: .autotap/contracts/*.contract.ts when present)"
+    required: false
+    default: ""
+  pr-selection:
+    description: "On pull requests, run critical/always contracts plus contracts selected from the real changed-file set and reviewed UI Map/Task ownership."
+    required: false
+    default: "true"
   baseline:
-    description: "Path to a baseline report JSON to diff against (default: .autotap/baseline.json if present). New high/critical findings vs. this baseline fail the gate."
+    description: "Path to a baseline report JSON. If omitted, .autotap/baseline.json wins; otherwise the latest successful, conclusive default-branch report is restored automatically."
     required: false
     default: ""
   fail-on:
-    description: "Gate policy: gate (regressions + failed flows; default), blocked (verdict-based), any (any finding)"
+    description: "Gate policy: gate (regressions + failed release contracts/flows; default), blocked (verdict-based), any (any finding)"
     required: false
     default: "gate"
   simulator-device:
@@ -84,12 +133,138 @@ outputs:
   gate-failed:
     description: "true when the gate failed (merge should be blocked)"
     value: ${{ steps.gate.outputs.gate_failed }}
+  baseline-source:
+    description: "Baseline source: explicit | committed | automatic | none"
+    value: ${{ steps.baseline.outputs.source }}
+  pr-plan:
+    description: "Path to the PR selection, coverage-gap, replay, and maintenance-candidate plan when PR selection ran"
+    value: ${{ steps.gate.outputs.pr_plan }}
 
 runs:
   using: composite
   steps:
+    - name: Prepare Tapp runtime
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "AUTOTAP_HOME=$RUNNER_TEMP/tapp-home" >> "$GITHUB_ENV"
+
+    - name: Validate target baseline key
+      id: target
+      shell: bash
+      env:
+        TAPP_INPUT_TARGET_KEY: ${{ inputs.target-key }}
+      run: |
+        set -euo pipefail
+        python3 -c 'import os,re,sys; value=os.environ["TAPP_INPUT_TARGET_KEY"]; sys.exit(0 if re.fullmatch(r"[A-Za-z0-9._-]{1,100}", value) else 2)' \
+          || { echo "::error::target-key must contain only letters, numbers, dot, underscore, or hyphen (max 100)"; exit 2; }
+        echo "key=$TAPP_INPUT_TARGET_KEY" >> "$GITHUB_OUTPUT"
+
+    - name: Install Tapp runtime dependencies
+      shell: bash
+      env:
+        TAPP_ACTION_PATH: ${{ github.action_path }}
+        TAPP_INPUT_PLATFORM: ${{ inputs.platform }}
+      run: |
+        set -euo pipefail
+        npm ci --prefix "$TAPP_ACTION_PATH" --omit=dev --ignore-scripts --no-audit --no-fund
+        if [[ "$TAPP_INPUT_PLATFORM" == "web" ]]; then
+          node "$TAPP_ACTION_PATH/node_modules/playwright/cli.js" install chromium
+        fi
+
+    - name: Read pull request changed files
+      if: github.event_name == 'pull_request' && inputs.pr-selection == 'true'
+      id: pr-changes
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      env:
+        TAPP_PR_CHANGED_FILES_PATH: ${{ runner.temp }}/tapp-pr-changed-files.json
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const { owner, repo } = context.repo;
+          const pull_number = context.payload.pull_request?.number;
+          if (!pull_number) throw new Error('pull_request payload is missing its number');
+          const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number, per_page: 100 });
+          const changed = files.map(file => ({
+            filename: file.filename,
+            ...(file.previous_filename ? { previous_filename: file.previous_filename } : {}),
+            ...(typeof file.patch === 'string' ? { patch: file.patch } : {}),
+          })).sort((a, b) => a.filename.localeCompare(b.filename));
+          if (!changed.length) throw new Error('GitHub returned no changed files for this pull request');
+          fs.writeFileSync(process.env.TAPP_PR_CHANGED_FILES_PATH, JSON.stringify(changed, null, 2) + '\n');
+          core.setOutput('path', process.env.TAPP_PR_CHANGED_FILES_PATH);
+          core.setOutput('count', String(changed.length));
+
+    - name: Restore automatic baseline
+      if: inputs.baseline == '' && hashFiles('.autotap/baseline.json') == ''
+      id: baseline-cache
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ runner.temp }}/tapp-baseline
+        key: tapp-baseline-v3-${{ inputs.platform }}-${{ steps.target.outputs.key }}-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
+        restore-keys: |
+          tapp-baseline-v3-${{ inputs.platform }}-${{ steps.target.outputs.key }}-${{ runner.os }}-${{ github.repository }}-
+
+    - name: Find durable automatic baseline
+      if: inputs.baseline == '' && hashFiles('.autotap/baseline.json') == '' && steps.baseline-cache.outputs.cache-matched-key == ''
+      id: baseline-artifact
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      env:
+        TAPP_INPUT_PLATFORM: ${{ inputs.platform }}
+        TAPP_INPUT_TARGET_KEY: ${{ steps.target.outputs.key }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { owner, repo } = context.repo;
+          const defaultBranch = context.payload.repository?.default_branch;
+          const { data } = await github.rest.actions.listArtifactsForRepo({
+            owner, repo, name: `tapp-baseline-${process.env.TAPP_INPUT_PLATFORM}-${process.env.TAPP_INPUT_TARGET_KEY}`, per_page: 100,
+          });
+          const artifact = data.artifacts
+            .filter(a => !a.expired && a.workflow_run?.head_branch === defaultBranch)
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+          core.setOutput('artifact-id', artifact ? String(artifact.id) : '');
+          core.setOutput('run-id', artifact ? String(artifact.workflow_run.id) : '');
+
+    - name: Restore durable automatic baseline
+      if: inputs.baseline == '' && hashFiles('.autotap/baseline.json') == '' && steps.baseline-cache.outputs.cache-matched-key == '' && steps.baseline-artifact.outputs.artifact-id != ''
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        artifact-ids: ${{ steps.baseline-artifact.outputs.artifact-id }}
+        github-token: ${{ inputs.github-token }}
+        repository: ${{ github.repository }}
+        run-id: ${{ steps.baseline-artifact.outputs.run-id }}
+        path: ${{ runner.temp }}/tapp-baseline
+        merge-multiple: true
+
+    - name: Resolve baseline
+      id: baseline
+      shell: bash
+      env:
+        TAPP_INPUT_BASELINE: ${{ inputs.baseline }}
+      run: |
+        set -euo pipefail
+        SOURCE="none"
+        PATH_TO_USE=""
+        if [[ -n "$TAPP_INPUT_BASELINE" ]]; then
+          [[ -f "$TAPP_INPUT_BASELINE" ]] || { echo "::error::Baseline not found: $TAPP_INPUT_BASELINE"; exit 2; }
+          SOURCE="explicit"
+          PATH_TO_USE="$TAPP_INPUT_BASELINE"
+        elif [[ -f "$GITHUB_WORKSPACE/.autotap/baseline.json" ]]; then
+          SOURCE="committed"
+          PATH_TO_USE="$GITHUB_WORKSPACE/.autotap/baseline.json"
+        elif [[ -f "$RUNNER_TEMP/tapp-baseline/baseline.json" ]]; then
+          SOURCE="automatic"
+          PATH_TO_USE="$RUNNER_TEMP/tapp-baseline/baseline.json"
+        fi
+        echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+        echo "path=$PATH_TO_USE" >> "$GITHUB_OUTPUT"
+        echo "TAPP_BASELINE_PATH=$PATH_TO_USE" >> "$GITHUB_ENV"
+        echo "Baseline: $SOURCE${PATH_TO_USE:+ ($PATH_TO_USE)}"
+
     - name: Build app for simulator
-      if: inputs.app-path == ''
+      if: inputs.platform == 'ios' && inputs.app-path == ''
       shell: bash
       env:
         TAPP_INPUT_SCHEME: ${{ inputs.scheme }}
@@ -108,8 +283,45 @@ runs:
         [[ -n "$APP" ]] || { echo "::error::Build produced no simulator .app"; exit 1; }
         echo "AUTOTAP_APP_PATH=$APP" >> "$GITHUB_ENV"
 
+    - name: Build Android APK
+      if: inputs.platform == 'android' && inputs.app-path == ''
+      shell: bash
+      env:
+        TAPP_INPUT_ANDROID_PROJECT: ${{ inputs.android-project }}
+        TAPP_INPUT_ANDROID_TASK: ${{ inputs.android-task }}
+      run: |
+        set -euo pipefail
+        PROJECT_INPUT="${TAPP_INPUT_ANDROID_PROJECT:-$GITHUB_WORKSPACE}"
+        [[ -d "$PROJECT_INPUT" ]] || { echo "::error::Android project not found: $PROJECT_INPUT"; exit 2; }
+        PROJECT_DIR="$(cd "$PROJECT_INPUT" && pwd -P)"
+        case "$PROJECT_DIR/" in "$GITHUB_WORKSPACE/"*) ;; *) echo "::error::Android project must remain inside the checked-out repository"; exit 2;; esac
+        TASK_PATH="${TAPP_INPUT_ANDROID_TASK#:}"
+        IFS=':' read -r -a TASK_PARTS <<< "$TASK_PATH"
+        [[ "${#TASK_PARTS[@]}" -gt 0 ]] || { echo "::error::Android Gradle task is empty"; exit 2; }
+        for PART in "${TASK_PARTS[@]}"; do
+          [[ "$PART" =~ ^[A-Za-z0-9_.-]+$ && "$PART" != "." && "$PART" != ".." ]] || { echo "::error::Android Gradle task contains an unsafe path segment"; exit 2; }
+        done
+        pushd "$PROJECT_DIR" >/dev/null
+        if [[ -x ./gradlew ]]; then ./gradlew "$TAPP_INPUT_ANDROID_TASK" --no-daemon
+        elif [[ -f ./gradlew ]]; then bash ./gradlew "$TAPP_INPUT_ANDROID_TASK" --no-daemon
+        else echo "::error::No Gradle wrapper found; commit gradlew or pass a prebuilt app-path"; exit 2
+        fi
+        popd >/dev/null
+        MODULE_COUNT=$((${#TASK_PARTS[@]} - 1))
+        APK_ROOT="$PROJECT_DIR/build/outputs/apk"
+        if [[ "$MODULE_COUNT" -gt 0 ]]; then
+          MODULE_REL="$(IFS=/; echo "${TASK_PARTS[*]:0:$MODULE_COUNT}")"
+          APK_ROOT="$PROJECT_DIR/$MODULE_REL/build/outputs/apk"
+        fi
+        APKS=()
+        while IFS= read -r -d '' APK_CANDIDATE; do APKS+=("$APK_CANDIDATE"); done < <(find "$APK_ROOT" -type f -name '*.apk' ! -name '*-androidTest.apk' -print0 2>/dev/null)
+        [[ "${#APKS[@]}" -gt 0 ]] || { echo "::error::Android task produced no application APK under $APK_ROOT"; exit 1; }
+        [[ "${#APKS[@]}" -eq 1 ]] || { printf '::error::Android task produced multiple APKs; pass the intended artifact with app-path\n%s\n' "${APKS[@]}"; exit 2; }
+        APK="${APKS[0]}"
+        echo "AUTOTAP_APP_PATH=$APK" >> "$GITHUB_ENV"
+
     - name: Use prebuilt app
-      if: inputs.app-path != ''
+      if: inputs.platform != 'web' && inputs.app-path != ''
       shell: bash
       env:
         TAPP_INPUT_APP_PATH: ${{ inputs.app-path }}
@@ -127,11 +339,21 @@ runs:
         OCQA_APP_LAUNCH_ENV_JSON: ${{ inputs.launch-env }}
         OCQA_LOGIN_STEPS_JSON: ${{ inputs.login-steps }}
         TAPP_INPUT_BUNDLE_ID: ${{ inputs.bundle-id }}
+        TAPP_INPUT_PLATFORM: ${{ inputs.platform }}
+        TAPP_INPUT_URL: ${{ inputs.url }}
+        TAPP_INPUT_WEB_TARGET: ${{ inputs.web-target }}
+        TAPP_INPUT_TARGET_KEY: ${{ steps.target.outputs.key }}
+        TAPP_INPUT_ANDROID_APP_ID: ${{ inputs.android-app-id }}
+        TAPP_INPUT_ANDROID_SERIAL: ${{ inputs.android-serial }}
         TAPP_INPUT_MAX_ACTIONS: ${{ inputs.max-actions }}
+        TAPP_INPUT_TIMEOUT: ${{ inputs.timeout }}
         TAPP_INPUT_FAIL_ON: ${{ inputs.fail-on }}
         TAPP_INPUT_DEVICE: ${{ inputs.simulator-device }}
         TAPP_INPUT_FLOWS: ${{ inputs.flows }}
-        TAPP_INPUT_BASELINE: ${{ inputs.baseline }}
+        TAPP_INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        TAPP_INPUT_CONTRACTS: ${{ inputs.contracts }}
+        TAPP_INPUT_PR_SELECTION: ${{ inputs.pr-selection }}
+        TAPP_PR_CHANGED_FILES_PATH: ${{ steps.pr-changes.outputs.path }}
       run: |
         set -uo pipefail
         # PyYAML for flow_lib.py; some runner pythons are PEP-668 externally-managed.
@@ -139,14 +361,36 @@ runs:
           || pip3 install --quiet --break-system-packages pyyaml || true
         REPORT="$RUNNER_TEMP/autotap-report.json"
         MD="$RUNNER_TEMP/autotap-report.md"
-        ARGS=(--app "$AUTOTAP_APP_PATH" --bundle-id "$TAPP_INPUT_BUNDLE_ID"
-              --actions "$TAPP_INPUT_MAX_ACTIONS" --fail-on "$TAPP_INPUT_FAIL_ON"
-              --device "$TAPP_INPUT_DEVICE" --project-dir "$GITHUB_WORKSPACE"
+        [[ "$TAPP_INPUT_PLATFORM" == "ios" || "$TAPP_INPUT_PLATFORM" == "android" || "$TAPP_INPUT_PLATFORM" == "web" ]] \
+          || { echo "::error::platform must be ios, android, or web"; exit 2; }
+        ARGS=(--platform "$TAPP_INPUT_PLATFORM"
+              --target-key "$TAPP_INPUT_TARGET_KEY"
+              --actions "$TAPP_INPUT_MAX_ACTIONS" --timeout "$TAPP_INPUT_TIMEOUT"
+              --fail-on "$TAPP_INPUT_FAIL_ON"
+              --project-dir "$GITHUB_WORKSPACE"
               --json-out "$REPORT" --md-out "$MD")
+        if [[ "$TAPP_INPUT_PLATFORM" == "ios" ]]; then
+          ARGS+=(--app "$AUTOTAP_APP_PATH" --bundle-id "$TAPP_INPUT_BUNDLE_ID" --device "$TAPP_INPUT_DEVICE")
+        elif [[ "$TAPP_INPUT_PLATFORM" == "android" ]]; then
+          [[ -n "$TAPP_INPUT_ANDROID_APP_ID" ]] || { echo "::error::android-app-id is required"; exit 2; }
+          ARGS+=(--apk "$AUTOTAP_APP_PATH" --app-id "$TAPP_INPUT_ANDROID_APP_ID")
+          [[ -n "$TAPP_INPUT_ANDROID_SERIAL" ]] && ARGS+=(--serial "$TAPP_INPUT_ANDROID_SERIAL")
+        else
+          [[ -n "$TAPP_INPUT_URL" ]] && ARGS+=(--url "$TAPP_INPUT_URL")
+          [[ -n "$TAPP_INPUT_WEB_TARGET" ]] && ARGS+=(--web-target "$TAPP_INPUT_WEB_TARGET")
+        fi
         [[ -n "$TAPP_INPUT_FLOWS" ]] && ARGS+=(--flows "$TAPP_INPUT_FLOWS")
-        [[ -n "$TAPP_INPUT_BASELINE" ]] && ARGS+=(--baseline "$TAPP_INPUT_BASELINE")
+        [[ -n "$TAPP_INPUT_SCENARIOS" ]] && ARGS+=(--scenarios "$TAPP_INPUT_SCENARIOS")
+        [[ -n "$TAPP_INPUT_CONTRACTS" ]] && ARGS+=(--contracts "$TAPP_INPUT_CONTRACTS")
+        [[ -n "$TAPP_BASELINE_PATH" ]] && ARGS+=(--baseline "$TAPP_BASELINE_PATH")
         echo "report=$REPORT" >> "$GITHUB_OUTPUT"
         echo "md=$MD" >> "$GITHUB_OUTPUT"
+        PR_PLAN=""
+        if [[ "$TAPP_INPUT_PR_SELECTION" == "true" && -n "$TAPP_PR_CHANGED_FILES_PATH" ]]; then
+          PR_PLAN="$RUNNER_TEMP/tapp-pr-plan.json"
+          ARGS+=(--changed-files-file "$TAPP_PR_CHANGED_FILES_PATH" --pr-plan-out "$PR_PLAN")
+        fi
+        echo "pr_plan=$PR_PLAN" >> "$GITHUB_OUTPUT"
         # Capture the gate's exit code without failing the step, so the PR comment + evidence
         # upload still run. The job is failed at the end by "Enforce gate".
         set +e
@@ -157,9 +401,45 @@ runs:
         VERDICT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("verdict","unknown"))' "$REPORT" 2>/dev/null || echo unknown)"
         echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
 
+    - name: Stage automatic default-branch baseline
+      id: baseline-stage
+      if: always() && inputs.baseline == '' && steps.baseline.outputs.source != 'committed' && steps.gate.outputs.gate_failed == 'false' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      shell: bash
+      env:
+        TAPP_REPORT_PATH: ${{ steps.gate.outputs.report }}
+      run: |
+        set -euo pipefail
+        echo "save=false" >> "$GITHUB_OUTPUT"
+        [[ -f "$TAPP_REPORT_PATH" ]] || { echo "No report produced; automatic baseline not updated."; exit 0; }
+        python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); sys.exit(1 if r.get("inconclusive") or r.get("verdict") == "blocked" else 0)' "$TAPP_REPORT_PATH" \
+          || { echo "Blocked or inconclusive run; automatic baseline not updated."; exit 0; }
+        mkdir -p "$RUNNER_TEMP/tapp-baseline"
+        cp "$TAPP_REPORT_PATH" "$RUNNER_TEMP/tapp-baseline/baseline.json"
+        echo "save=true" >> "$GITHUB_OUTPUT"
+        echo "Staged this default-branch report as the baseline for future pull requests."
+
+    - name: Upload durable default-branch baseline
+      if: always() && steps.baseline-stage.outputs.save == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: tapp-baseline-${{ inputs.platform }}-${{ steps.target.outputs.key }}
+        path: ${{ runner.temp }}/tapp-baseline/baseline.json
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Cache default-branch baseline
+      if: always() && steps.baseline-stage.outputs.save == 'true'
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ runner.temp }}/tapp-baseline
+        key: tapp-baseline-v3-${{ inputs.platform }}-${{ steps.target.outputs.key }}-${{ runner.os }}-${{ github.repository }}-${{ github.sha }}
+
     - name: Comment on PR
       if: always() && github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
+      continue-on-error: true # fork PR tokens are read-only; the gate + evidence must still complete
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      env:
+        TAPP_TARGET_KEY: ${{ steps.target.outputs.key }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
@@ -167,7 +447,7 @@ runs:
           const mdPath = ${{ toJSON(steps.gate.outputs.md) }};
           let body = '## Tapp release check\n_No report was produced — the exploration did not run._';
           try { if (mdPath && fs.existsSync(mdPath)) body = fs.readFileSync(mdPath, 'utf8'); } catch (e) {}
-          const marker = '<!-- autotap-release-check -->';
+          const marker = `<!-- autotap-release-check:${process.env.TAPP_TARGET_KEY} -->`;
           body = `${marker}\n${body}`;
           const { owner, repo } = context.repo;
           const issue_number = context.issue.number;
@@ -182,19 +462,19 @@ runs:
     - name: Resolve evidence path
       if: always()
       shell: bash
-      # github.action_path contains "/./" when the action is used as `uses: ./`, and
-      # upload-artifact rejects relative segments in patterns — normalize with pwd -P.
-      run: echo "AUTOTAP_CAPTURES_DIR=$(cd "${{ github.action_path }}" && pwd -P)/captures" >> "$GITHUB_ENV"
+      run: echo "AUTOTAP_CAPTURES_DIR=$RUNNER_TEMP/tapp-home/captures" >> "$GITHUB_ENV"
 
     - name: Upload evidence
       if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
-        name: tapp-evidence
+        name: tapp-evidence-${{ inputs.platform }}-${{ steps.target.outputs.key }}
         path: |
           ${{ env.AUTOTAP_CAPTURES_DIR }}/
           ${{ runner.temp }}/autotap-report.json
           ${{ runner.temp }}/autotap-report.md
+          ${{ runner.temp }}/tapp-pr-changed-files.json
+          ${{ runner.temp }}/tapp-pr-plan.json
         if-no-files-found: ignore
         retention-days: 14
 

@@ -1,0 +1,741 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "io.tapp.corpus.demo",
+    "platforms": [
+      "android"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "android": "screen_60383486aeb8b6e4"
+    },
+    "navigationRoots": {
+      "android": "screen_60383486aeb8b6e4"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "android-20260805-142302"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-05T14:23:39.382Z",
+    "lastObservedAt": "2026-08-05T14:23:39.382Z"
+  },
+  "nodes": [
+    {
+      "id": "screen_60383486aeb8b6e4",
+      "semanticKey": "get-started",
+      "name": "Get Started",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_35628779c5ffd22f",
+          "semanticKey": "continue-button",
+          "kind": "button",
+          "label": "continue_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "continue_button"
+            },
+            {
+              "kind": "label",
+              "value": "continue_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openDashboard"
+        ],
+        "contracts": [
+          "settingsReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_66cd9688a2ae0682",
+      "semanticKey": "dashboard",
+      "name": "Dashboard",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_905bc56b28c7fecd",
+          "semanticKey": "settings-tab",
+          "kind": "button",
+          "label": "settings_tab",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "settings_tab"
+            },
+            {
+              "kind": "label",
+              "value": "settings_tab"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b695636b8c28e783",
+          "semanticKey": "summary-button",
+          "kind": "button",
+          "label": "summary_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "summary_button"
+            },
+            {
+              "kind": "label",
+              "value": "summary_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openDashboard",
+          "openSettings"
+        ],
+        "contracts": [
+          "settingsReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 3
+      }
+    },
+    {
+      "id": "screen_a4262e1c9bcbc172",
+      "semanticKey": "about",
+      "name": "About",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_ef9480bdbd438546",
+          "semanticKey": "done-button",
+          "kind": "button",
+          "label": "done_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "done_button"
+            },
+            {
+              "kind": "label",
+              "value": "done_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_cde0fb0dec1400c5",
+      "semanticKey": "settings",
+      "name": "Settings",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_9c65081a5b4c85de",
+          "semanticKey": "about-button",
+          "kind": "button",
+          "label": "about_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "about_button"
+            },
+            {
+              "kind": "label",
+              "value": "about_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ec8044ce7d894b86",
+          "semanticKey": "dashboard-tab",
+          "kind": "button",
+          "label": "dashboard_tab",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "dashboard_tab"
+            },
+            {
+              "kind": "label",
+              "value": "dashboard_tab"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openSettings"
+        ],
+        "contracts": [
+          "settingsReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 2
+      }
+    },
+    {
+      "id": "screen_dc0570d6ffde126c",
+      "semanticKey": "daily-summary",
+      "name": "Daily Summary",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_e4789612a2c79999",
+          "semanticKey": "dashboard-button",
+          "kind": "button",
+          "label": "dashboard_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "dashboard_button"
+            },
+            {
+              "kind": "label",
+              "value": "dashboard_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_026eb642e803c968",
+      "from": "screen_66cd9688a2ae0682",
+      "to": "screen_dc0570d6ffde126c",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "summary_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "summary_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "daily-summary"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_038e34b8d3887fff",
+      "from": "screen_66cd9688a2ae0682",
+      "to": "screen_cde0fb0dec1400c5",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "settings_tab",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "settings_tab"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "settings"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openSettings"
+        ],
+        "contracts": [
+          "settingsReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_10fd6236e6baecae",
+      "from": "screen_cde0fb0dec1400c5",
+      "to": "screen_a4262e1c9bcbc172",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "about_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "about_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "about"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_1f8c4aa6da136ac4",
+      "from": "screen_a4262e1c9bcbc172",
+      "to": "screen_cde0fb0dec1400c5",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "done_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "done_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "settings"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_67f0fa91882bb8f8",
+      "from": "screen_dc0570d6ffde126c",
+      "to": "screen_66cd9688a2ae0682",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "dashboard_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "dashboard_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "dashboard"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_a40bb0e6006117b4",
+      "from": "screen_cde0fb0dec1400c5",
+      "to": "screen_66cd9688a2ae0682",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "dashboard_tab",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "dashboard_tab"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "dashboard"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_ec9498989826c7a4",
+      "from": "screen_60383486aeb8b6e4",
+      "to": "screen_66cd9688a2ae0682",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "continue_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "continue_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "dashboard"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openDashboard"
+        ],
+        "contracts": [
+          "settingsReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142302"
+        ],
+        "firstObservedAt": "2026-08-05T14:23:39.382Z",
+        "lastObservedAt": "2026-08-05T14:23:39.382Z",
+        "count": 1
+      },
+      "confirmed": true
+    }
+  ],
+  "coverage": {
+    "tasks": [
+      "openDashboard",
+      "openSettings"
+    ],
+    "contracts": [
+      "settingsReachable"
+    ],
+    "uncoveredNodeIds": [
+      "screen_a4262e1c9bcbc172",
+      "screen_dc0570d6ffde126c"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_026eb642e803c968",
+      "edge_10fd6236e6baecae",
+      "edge_1f8c4aa6da136ac4",
+      "edge_67f0fa91882bb8f8",
+      "edge_a40bb0e6006117b4"
+    ]
+  }
+}

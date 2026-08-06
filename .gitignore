@@ -44,6 +44,15 @@ __pycache__/
 backend/proxy/usage.jsonl
 node_modules/
 
+# Android / Gradle
+.gradle/
+**/.gradle/
+**/build/
+local.properties
+**/local.properties
+
 # Tapp Cloud — never commit runtime state or App credentials
 cloud/server/*.db*
 cloud/server/app-credentials.json
+cloud/runner/nodes.local.json
+cloud/runner/proofs.local/

@@ -102,7 +102,7 @@ export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
 </style>
 </head>
 <body>
-<h1>${BADGE[r.verdict] || esc(r.verdict)} <span class="dim">· confidence ${r.confidence}/100</span></h1>
+<h1>${BADGE[r.verdict] || esc(r.verdict)} <span class="dim">· release score ${r.releaseScore ?? r.confidence}/100</span></h1>
 <div class="meta">${esc(label)} · ${r.screensExplored} screens · ${r.actionsPerformed} actions · ${r.findingCounts.total} finding(s)</div>
 <div class="headline">${esc(r.headline)}</div>
 <h2>Findings</h2>

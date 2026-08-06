@@ -1,0 +1,19 @@
+name: Android Shop checkout
+platform: android
+app: io.tapp.corpus.shop
+reset: clear
+steps:
+  - assert_screen: Shop
+  - tap: product_trail_backpack
+  - wait_for: Trail Backpack
+  - assert_text: { of: product_price, contains: $79 }
+  - tap: add_to_cart_button
+  - wait_for: Cart
+  - assert_exists: Trail Backpack
+  - tap: checkout_button
+  - wait_for: Checkout
+  - type: { field: name_field, value: Tapp Tester }
+  - type: { field: address_field, value: 1 Test Way }
+  - tap: place_order_button
+  - assert_screen: Order Confirmed
+  - assert_exists: Order TAPP-1001

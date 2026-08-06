@@ -1,0 +1,57 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openSettings",
+  "description": "Navigate from Dashboard to the observed Settings state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Dashboard"
+        },
+        {
+          "wait_for": "settings_tab"
+        },
+        {
+          "tap": "settings_tab"
+        },
+        {
+          "wait_for": "Settings"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_66cd9688a2ae0682",
+      "screen_cde0fb0dec1400c5"
+    ],
+    "edges": [
+      "edge_038e34b8d3887fff"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_7a978be219ca61cd"
+    ],
+    "mapPath": "demoapp/.autotap/ui-map.json",
+    "targetId": "target_4fa4825fe4191b9c",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-1023-1785941546578",
+        "detail": "deterministic replay passed",
+        "contract": "settingsReachable",
+        "validatedAt": "2026-08-05T14:52:50.037Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.277Z",
+    "promotedFrom": "demoapp/.autotap/proposals/tasks/open-settings.task.json"
+  }
+}

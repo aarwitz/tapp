@@ -1,0 +1,466 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "io.tapp.corpus.login",
+    "platforms": [
+      "android"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "android": "screen_48d7c508cc0ca58a"
+    },
+    "navigationRoots": {
+      "android": "screen_48d7c508cc0ca58a"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "android-20260805-141217"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-05T14:12:48.507Z",
+    "lastObservedAt": "2026-08-05T14:12:48.507Z"
+  },
+  "nodes": [
+    {
+      "id": "screen_1900eab6c028483d",
+      "semanticKey": "profile",
+      "name": "Profile",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_19fe792fc6d7305f",
+          "semanticKey": "home-button",
+          "kind": "button",
+          "label": "home_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "home_button"
+            },
+            {
+              "kind": "label",
+              "value": "home_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openProfile"
+        ],
+        "contracts": [
+          "profileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_48d7c508cc0ca58a",
+      "semanticKey": "sign-in",
+      "name": "Sign In",
+      "aliases": [],
+      "roles": [
+        "login"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_461a8c85f96ea6e8",
+          "semanticKey": "sign-in-button",
+          "kind": "button",
+          "label": "sign_in_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "sign_in_button"
+            },
+            {
+              "kind": "label",
+              "value": "sign_in_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5eac38848d6ac1b5",
+          "semanticKey": "email-field",
+          "kind": "field",
+          "label": "email_field",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "email_field"
+            },
+            {
+              "kind": "label",
+              "value": "email_field"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_887af3dee0592c2f",
+          "semanticKey": "password-field",
+          "kind": "secureField",
+          "label": "password_field",
+          "secure": true,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "password_field"
+            },
+            {
+              "kind": "label",
+              "value": "password_field"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "signIn"
+        ],
+        "contracts": [
+          "existingCustomerCanSignIn",
+          "profileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 3
+      }
+    },
+    {
+      "id": "screen_4ea140588150773c",
+      "semanticKey": "home",
+      "name": "Home",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_13b8765ea7741c50",
+          "semanticKey": "sign-out-button",
+          "kind": "button",
+          "label": "sign_out_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "sign_out_button"
+            },
+            {
+              "kind": "label",
+              "value": "sign_out_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5accca25f514448c",
+          "semanticKey": "profile-button",
+          "kind": "button",
+          "label": "profile_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "profile_button"
+            },
+            {
+              "kind": "label",
+              "value": "profile_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openProfile",
+          "signIn"
+        ],
+        "contracts": [
+          "existingCustomerCanSignIn",
+          "profileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 2
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1812e10e60342047",
+      "from": "screen_48d7c508cc0ca58a",
+      "to": "screen_4ea140588150773c",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "sign_in_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "sign_in_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "home"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "signIn"
+        ],
+        "contracts": [
+          "existingCustomerCanSignIn",
+          "profileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_1f73db5ddf721bc4",
+      "from": "screen_1900eab6c028483d",
+      "to": "screen_4ea140588150773c",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "home_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "home_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "home"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_662df0725c0129e3",
+      "from": "screen_4ea140588150773c",
+      "to": "screen_1900eab6c028483d",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "profile_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "profile_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "profile"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openProfile"
+        ],
+        "contracts": [
+          "profileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-141217"
+        ],
+        "firstObservedAt": "2026-08-05T14:12:48.507Z",
+        "lastObservedAt": "2026-08-05T14:12:48.507Z",
+        "count": 1
+      },
+      "confirmed": true
+    }
+  ],
+  "coverage": {
+    "tasks": [
+      "openProfile",
+      "signIn"
+    ],
+    "contracts": [
+      "existingCustomerCanSignIn",
+      "profileReachable"
+    ],
+    "uncoveredNodeIds": [],
+    "uncoveredEdgeIds": [
+      "edge_1f73db5ddf721bc4"
+    ]
+  }
+}

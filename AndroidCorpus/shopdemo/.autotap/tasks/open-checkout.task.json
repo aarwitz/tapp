@@ -1,0 +1,58 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openCheckout",
+  "description": "Navigate from Cart to the observed Checkout state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Cart"
+        },
+        {
+          "wait_for": "checkout_button"
+        },
+        {
+          "tap": "checkout_button"
+        },
+        {
+          "wait_for": "Checkout"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_1c42ddc0285b9c25",
+      "screen_c7761e58969f7edd"
+    ],
+    "edges": [
+      "edge_48dd9dad6d6dcc88"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_6c350caab7e83f8a",
+      "proposal_f03d19f34d1a1dae"
+    ],
+    "mapPath": "shopdemo/.autotap/ui-map.json",
+    "targetId": "target_b0450646e4866df7",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-6212-1785942195522",
+        "detail": "deterministic replay passed",
+        "contract": "orderConfirmedReachable",
+        "validatedAt": "2026-08-05T15:04:12.121Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.278Z",
+    "promotedFrom": "shopdemo/.autotap/proposals/tasks/open-checkout.task.json"
+  }
+}

@@ -1,0 +1,1018 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-application-model",
+  "application": {
+    "name": "AndroidCorpus",
+    "repositoryRoot": ".",
+    "platforms": [
+      "android"
+    ],
+    "targetIds": [
+      "target_4fa4825fe4191b9c",
+      "target_7488b63ddbfb90b0",
+      "target_b0450646e4866df7"
+    ]
+  },
+  "targets": [
+    {
+      "id": "target_4fa4825fe4191b9c",
+      "platform": "android",
+      "kind": "android-application",
+      "name": "demoapp",
+      "sourcePath": "demoapp",
+      "status": "configured",
+      "build": {
+        "tool": "gradle-wrapper",
+        "projectDir": ".",
+        "task": ":demoapp:assembleDebug"
+      },
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.demo"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "demoapp/build.gradle"
+        ],
+        "detail": "application plugin and application id observed"
+      }
+    },
+    {
+      "id": "target_7488b63ddbfb90b0",
+      "platform": "android",
+      "kind": "android-application",
+      "name": "logindemo",
+      "sourcePath": "logindemo",
+      "status": "configured",
+      "build": {
+        "tool": "gradle-wrapper",
+        "projectDir": ".",
+        "task": ":logindemo:assembleDebug"
+      },
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.login"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "logindemo/build.gradle"
+        ],
+        "detail": "application plugin and application id observed"
+      }
+    },
+    {
+      "id": "target_b0450646e4866df7",
+      "platform": "android",
+      "kind": "android-application",
+      "name": "shopdemo",
+      "sourcePath": "shopdemo",
+      "status": "configured",
+      "build": {
+        "tool": "gradle-wrapper",
+        "projectDir": ".",
+        "task": ":shopdemo:assembleDebug"
+      },
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.shop"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/build.gradle"
+        ],
+        "detail": "application plugin and application id observed"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "name": "customer",
+      "roles": [
+        "customer",
+        "existing customer"
+      ],
+      "contracts": [
+        "checkoutReachable",
+        "existingCustomerCanSignIn",
+        "orderConfirmedReachable",
+        "profileReachable",
+        "settingsReachable"
+      ],
+      "credentialRequirements": [
+        "email",
+        "password"
+      ],
+      "credentialBindings": {
+        "email": "TEST_EMAIL",
+        "password": "TEST_PASSWORD"
+      },
+      "configured": false,
+      "bindingConflicts": [],
+      "session": "default",
+      "provisioning": "unknown",
+      "credentialsConfigured": true,
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+          "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
+          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+        ],
+        "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity_cart",
+      "name": "Cart",
+      "status": "task-derived",
+      "tasks": [
+        "openCart"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        "shopdemo/.autotap/tasks/open-cart.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/tasks/open-cart.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_checkout",
+      "name": "Checkout",
+      "status": "task-derived",
+      "tasks": [
+        "openCheckout"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        "shopdemo/.autotap/tasks/open-checkout.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/tasks/open-checkout.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_dashboard",
+      "name": "Dashboard",
+      "status": "task-derived",
+      "tasks": [
+        "openDashboard"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        "demoapp/.autotap/tasks/open-dashboard.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "demoapp/.autotap/tasks/open-dashboard.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_order-confirmed",
+      "name": "Order Confirmed",
+      "status": "task-derived",
+      "tasks": [
+        "openOrderConfirmed"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_trail-backpack",
+      "name": "Trail Backpack",
+      "status": "task-derived",
+      "tasks": [
+        "openTrailBackpack"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "capability_authentication",
+      "name": "Authentication",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "sourcePaths": [
+        "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_opencart",
+      "name": "Open Cart",
+      "status": "task-derived",
+      "tasks": [
+        "openCart"
+      ],
+      "contracts": [
+        "checkoutReachable",
+        "orderConfirmedReachable"
+      ],
+      "sourcePaths": [
+        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.autotap/tasks/open-cart.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.autotap/tasks/open-cart.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_opencheckout",
+      "name": "Open Checkout",
+      "status": "task-derived",
+      "tasks": [
+        "openCheckout"
+      ],
+      "contracts": [
+        "checkoutReachable",
+        "orderConfirmedReachable"
+      ],
+      "sourcePaths": [
+        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.autotap/tasks/open-checkout.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.autotap/tasks/open-checkout.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_opendashboard",
+      "name": "Open Dashboard",
+      "status": "task-derived",
+      "tasks": [
+        "openDashboard"
+      ],
+      "contracts": [
+        "settingsReachable"
+      ],
+      "sourcePaths": [
+        "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "demoapp/.autotap/tasks/open-dashboard.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+          "demoapp/.autotap/tasks/open-dashboard.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_openorderconfirmed",
+      "name": "Open Order Confirmed",
+      "status": "task-derived",
+      "tasks": [
+        "openOrderConfirmed"
+      ],
+      "contracts": [
+        "orderConfirmedReachable"
+      ],
+      "sourcePaths": [
+        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_openprofile",
+      "name": "Open Profile",
+      "status": "task-derived",
+      "tasks": [
+        "openProfile"
+      ],
+      "contracts": [
+        "profileReachable"
+      ],
+      "sourcePaths": [
+        "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "logindemo/.autotap/tasks/open-profile.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+          "logindemo/.autotap/tasks/open-profile.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_opensettings",
+      "name": "Open Settings",
+      "status": "task-derived",
+      "tasks": [
+        "openSettings"
+      ],
+      "contracts": [
+        "settingsReachable"
+      ],
+      "sourcePaths": [
+        "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "demoapp/.autotap/tasks/open-settings.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+          "demoapp/.autotap/tasks/open-settings.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_opentrailbackpack",
+      "name": "Open Trail Backpack",
+      "status": "task-derived",
+      "tasks": [
+        "openTrailBackpack"
+      ],
+      "contracts": [
+        "checkoutReachable",
+        "orderConfirmedReachable"
+      ],
+      "sourcePaths": [
+        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_profile-access",
+      "name": "Profile access",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "sourcePaths": [
+        "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_signin",
+      "name": "Sign In",
+      "status": "task-derived",
+      "tasks": [
+        "signIn"
+      ],
+      "contracts": [
+        "existingCustomerCanSignIn",
+        "profileReachable"
+      ],
+      "sourcePaths": [
+        "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
+        "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "logindemo/.autotap/tasks/sign-in.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
+          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+          "logindemo/.autotap/tasks/sign-in.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    }
+  ],
+  "criticalJourneys": [
+    {
+      "id": "journey_bd7a7ab3446ec7d2",
+      "name": "Settings remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "settingsReachable",
+      "scope": "demoapp",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Settings product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openDashboard",
+        "openSettings"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "demoapp/.autotap/contracts/settings-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_7e197d5104fbdb22",
+      "name": "An existing Android customer can sign in and reach their profile",
+      "status": "authored-unvalidated",
+      "contract": "existingCustomerCanSignIn",
+      "scope": "logindemo",
+      "criticality": "critical",
+      "businessValue": "Authentication does not prevent existing customers from entering the product.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_c759420596e6953a",
+      "name": "Profile remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "profileReachable",
+      "scope": "logindemo",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Profile product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn",
+        "openProfile"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "logindemo/.autotap/contracts/profile-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_8bbf51674fc9e400",
+      "name": "Checkout remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "checkoutReachable",
+      "scope": "shopdemo",
+      "criticality": "critical",
+      "businessValue": "Protect access to the observed Checkout product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openTrailBackpack",
+        "openCart",
+        "openCheckout"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_42281e35b65c85a9",
+      "name": "Order Confirmed remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "orderConfirmedReachable",
+      "scope": "shopdemo",
+      "criticality": "critical",
+      "businessValue": "Protect access to the observed Order Confirmed product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openTrailBackpack",
+        "openCart",
+        "openCheckout",
+        "openOrderConfirmed"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "revenuePaths": [
+    {
+      "journeyId": "journey_8bbf51674fc9e400",
+      "contract": "checkoutReachable",
+      "status": "authored-unvalidated",
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "journeyId": "journey_42281e35b65c85a9",
+      "contract": "orderConfirmedReachable",
+      "status": "authored-unvalidated",
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "systemInvariants": [],
+  "configuration": {
+    "path": ".autotap/project.json",
+    "status": "missing",
+    "actorCount": 0,
+    "lifecycle": {
+      "setupSteps": 0,
+      "teardownSteps": 0
+    },
+    "evidence": {
+      "basis": "source-observed",
+      "paths": [],
+      "detail": "optional project configuration has not been created"
+    }
+  },
+  "environments": [
+    {
+      "targetId": "target_4fa4825fe4191b9c",
+      "platform": "android",
+      "status": "configured",
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.demo"
+      }
+    },
+    {
+      "targetId": "target_7488b63ddbfb90b0",
+      "platform": "android",
+      "status": "configured",
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.login"
+      }
+    },
+    {
+      "targetId": "target_b0450646e4866df7",
+      "platform": "android",
+      "status": "configured",
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.shop"
+      }
+    }
+  ],
+  "stateBoundaries": [],
+  "uiMap": {
+    "path": ".autotap/ui-map.json",
+    "paths": [
+      "demoapp/.autotap/ui-map.json",
+      "logindemo/.autotap/ui-map.json",
+      "shopdemo/.autotap/ui-map.json"
+    ],
+    "status": "observed",
+    "nodeCount": 14,
+    "edgeCount": 17,
+    "controlCount": 24,
+    "uncoveredNodeIds": [
+      "target_4fa4825fe4191b9c:screen_a4262e1c9bcbc172",
+      "target_4fa4825fe4191b9c:screen_dc0570d6ffde126c",
+      "target_b0450646e4866df7:screen_6500249c60a84039"
+    ],
+    "uncoveredEdgeIds": [
+      "target_4fa4825fe4191b9c:edge_026eb642e803c968",
+      "target_4fa4825fe4191b9c:edge_10fd6236e6baecae",
+      "target_4fa4825fe4191b9c:edge_1f8c4aa6da136ac4",
+      "target_4fa4825fe4191b9c:edge_67f0fa91882bb8f8",
+      "target_4fa4825fe4191b9c:edge_a40bb0e6006117b4",
+      "target_7488b63ddbfb90b0:edge_1f73db5ddf721bc4",
+      "target_b0450646e4866df7:edge_2c97e0c6900713b3",
+      "target_b0450646e4866df7:edge_37698aea238723a1",
+      "target_b0450646e4866df7:edge_71e154bc00dfce44"
+    ],
+    "platforms": [
+      "android"
+    ],
+    "observedTargetIds": [
+      "target_4fa4825fe4191b9c",
+      "target_7488b63ddbfb90b0",
+      "target_b0450646e4866df7"
+    ],
+    "missingTargetIds": [],
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        "demoapp/.autotap/ui-map.json",
+        "logindemo/.autotap/ui-map.json",
+        "shopdemo/.autotap/ui-map.json"
+      ],
+      "detail": "every detected target has a grounded UI Map"
+    }
+  },
+  "uiMaps": [
+    {
+      "path": "demoapp/.autotap/ui-map.json",
+      "status": "observed",
+      "nodeCount": 5,
+      "edgeCount": 7,
+      "controlCount": 7,
+      "uncoveredNodeIds": [
+        "screen_a4262e1c9bcbc172",
+        "screen_dc0570d6ffde126c"
+      ],
+      "uncoveredEdgeIds": [
+        "edge_026eb642e803c968",
+        "edge_10fd6236e6baecae",
+        "edge_1f8c4aa6da136ac4",
+        "edge_67f0fa91882bb8f8",
+        "edge_a40bb0e6006117b4"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "demoapp/.autotap/ui-map.json"
+        ],
+        "detail": "grounded in prior runtime observations"
+      },
+      "targetId": "target_4fa4825fe4191b9c",
+      "targetName": "demoapp",
+      "platform": "android",
+      "expectedPath": "demoapp/.autotap/ui-map.json"
+    },
+    {
+      "path": "logindemo/.autotap/ui-map.json",
+      "status": "observed",
+      "nodeCount": 3,
+      "edgeCount": 3,
+      "controlCount": 6,
+      "uncoveredNodeIds": [],
+      "uncoveredEdgeIds": [
+        "edge_1f73db5ddf721bc4"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "logindemo/.autotap/ui-map.json"
+        ],
+        "detail": "grounded in prior runtime observations"
+      },
+      "targetId": "target_7488b63ddbfb90b0",
+      "targetName": "logindemo",
+      "platform": "android",
+      "expectedPath": "logindemo/.autotap/ui-map.json"
+    },
+    {
+      "path": "shopdemo/.autotap/ui-map.json",
+      "status": "observed",
+      "nodeCount": 6,
+      "edgeCount": 7,
+      "controlCount": 11,
+      "uncoveredNodeIds": [
+        "screen_6500249c60a84039"
+      ],
+      "uncoveredEdgeIds": [
+        "edge_2c97e0c6900713b3",
+        "edge_37698aea238723a1",
+        "edge_71e154bc00dfce44"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          "shopdemo/.autotap/ui-map.json"
+        ],
+        "detail": "grounded in prior runtime observations"
+      },
+      "targetId": "target_b0450646e4866df7",
+      "targetName": "shopdemo",
+      "platform": "android",
+      "expectedPath": "shopdemo/.autotap/ui-map.json"
+    }
+  ],
+  "artifacts": {
+    "tasks": [
+      {
+        "id": "task_6153404aabb143c0",
+        "name": "openDashboard",
+        "scope": "demoapp",
+        "path": "demoapp/.autotap/tasks/open-dashboard.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_35d1ebc56eb7f8f3",
+        "name": "openSettings",
+        "scope": "demoapp",
+        "path": "demoapp/.autotap/tasks/open-settings.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_b3fee6e633d6a29b",
+        "name": "openProfile",
+        "scope": "logindemo",
+        "path": "logindemo/.autotap/tasks/open-profile.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_ad15c0edc36bacf7",
+        "name": "signIn",
+        "scope": "logindemo",
+        "path": "logindemo/.autotap/tasks/sign-in.yml",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        }
+      },
+      {
+        "id": "task_2d543f4c5228860b",
+        "name": "openCart",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/tasks/open-cart.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_ecee5c41e2036d55",
+        "name": "openCheckout",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/tasks/open-checkout.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_526ede0e88744eb9",
+        "name": "openOrderConfirmed",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_aba1b9799634aadd",
+        "name": "openTrailBackpack",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/tasks/open-trail-backpack.task.json",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {}
+      }
+    ],
+    "contracts": [
+      {
+        "id": "contract_9f0f8ad3b2b17aae",
+        "name": "settingsReachable",
+        "scope": "demoapp",
+        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "criticality": "medium",
+        "platforms": [
+          "android"
+        ],
+        "actors": [
+          {
+            "name": "customer",
+            "session": "default",
+            "credentialRequirements": [],
+            "credentialBindings": {}
+          }
+        ]
+      },
+      {
+        "id": "contract_db3d559fde6f08af",
+        "name": "existingCustomerCanSignIn",
+        "scope": "logindemo",
+        "path": "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
+        "criticality": "critical",
+        "platforms": [
+          "android"
+        ],
+        "actors": [
+          {
+            "name": "customer",
+            "session": "isolated",
+            "credentialRequirements": [
+              "email",
+              "password"
+            ],
+            "credentialBindings": {
+              "email": "TEST_EMAIL",
+              "password": "TEST_PASSWORD"
+            }
+          }
+        ]
+      },
+      {
+        "id": "contract_ab2d7268f1e5f818",
+        "name": "profileReachable",
+        "scope": "logindemo",
+        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "criticality": "medium",
+        "platforms": [
+          "android"
+        ],
+        "actors": [
+          {
+            "name": "customer",
+            "session": "default",
+            "credentialRequirements": [
+              "email",
+              "password"
+            ],
+            "credentialBindings": {
+              "email": "TEST_EMAIL",
+              "password": "TEST_PASSWORD"
+            }
+          }
+        ]
+      },
+      {
+        "id": "contract_0f41dc2e8289a746",
+        "name": "checkoutReachable",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "criticality": "critical",
+        "platforms": [
+          "android"
+        ],
+        "actors": [
+          {
+            "name": "customer",
+            "session": "default",
+            "credentialRequirements": [],
+            "credentialBindings": {}
+          }
+        ]
+      },
+      {
+        "id": "contract_71f62add4ea7ca92",
+        "name": "orderConfirmedReachable",
+        "scope": "shopdemo",
+        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "criticality": "critical",
+        "platforms": [
+          "android"
+        ],
+        "actors": [
+          {
+            "name": "customer",
+            "session": "default",
+            "credentialRequirements": [],
+            "credentialBindings": {}
+          }
+        ]
+      }
+    ]
+  },
+  "requirements": [],
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T15:10:52.237Z",
+    "remoteAiUsed": false,
+    "distinctions": [
+      "runtime-observed",
+      "source-observed",
+      "reviewed-artifact",
+      "source-derived-proposal",
+      "human-decision"
+    ]
+  }
+}

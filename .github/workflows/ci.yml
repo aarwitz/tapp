@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
 jobs:
   unit:
     name: Unit, protocol & CLI tests (node ${{ matrix.node }})
@@ -18,9 +23,15 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       # Verdict/report/regression unit tests, engine import-safety, target resolution,
       # CLI smoke, and a real MCP initialize + tools/list handshake over stdio.
       - run: npm test
+        env:
+          # Browser binaries are installed and the real import path is exercised
+          # in action-web below; keep the three-version protocol matrix lean.
+          TAPP_SKIP_REAL_BROWSER_TESTS: "1"
       - name: Shell syntax
         run: for f in scripts/*.sh; do bash -n "$f"; done
       - name: JS syntax
@@ -28,17 +39,107 @@ jobs:
           node --check bin/tapp.js
           for f in mcp-server/src/*.js; do node --check "$f"; done
 
-  harness-build:
-    name: iOS harness compiles
-    # A broken harness must never hide behind a green badge — this job gates merges.
-    runs-on: macos-latest
+  action-ios:
+    name: Composite Action — iOS simulator
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Build the XCUITest harness for the simulator
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Generate DemoApp project
+        run: ruby generate-demoapp-xcodeproj.rb
+      - name: Exercise the published iOS Action path
+        uses: ./
+        with:
+          platform: ios
+          target-key: target_demoapp_ios
+          project: DemoApp/DemoApp.xcodeproj
+          scheme: DemoApp
+          max-actions: "16"
+          timeout: "300"
+          flows: ".autotap/flows/demoapp-smoke.yml DemoApp/.autotap/flows/menu-to-daily-summary.yml"
+          contracts: "DemoApp/.autotap/contracts/*.contract.ts"
+          comment-on-pr: "false"
+
+  action-web:
+    name: Composite Action — web + multi-actor contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Exercise the published web Action path
+        uses: ./
+        env:
+          SOCIAL_DEMO_PROPAGATION_MS: "100"
+          ALICE_EMAIL: alice@example.test
+          ALICE_PASSWORD: demo
+          BOB_EMAIL: bob@example.test
+          BOB_PASSWORD: demo
+        with:
+          platform: web
+          target-key: target_socialdemo_web
+          web-target: SocialDemo
+          max-actions: "15"
+          timeout: "300"
+          test-email: alice@example.test
+          test-password: demo
+          scenarios: "SocialDemo/.autotap/scenarios/*.yml"
+          contracts: "SocialDemo/.autotap/contracts/*.contract.ts"
+          comment-on-pr: "false"
+      - name: Cold-start a fresh repository through tapp init --explore
+        run: node --test --test-name-pattern='tapp init --explore (grounds|starts and stops)' tests/cli.test.js
+
+  android-corpus:
+    name: Android driver + committed Flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - run: npm ci
+      - name: Start Android API 35 emulator
+        shell: bash
         run: |
-          xcodebuild build-for-testing \
-            -project Harness/OCQAHarness.xcodeproj \
-            -scheme OCQAHarnessUITests \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath /tmp/harness-ci \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
+          echo no | avdmanager create avd --force --name tapp-ci --package "system-images;android-35;google_apis;x86_64"
+          sudo chmod 666 /dev/kvm
+          nohup "$ANDROID_HOME/emulator/emulator" -avd tapp-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >"$RUNNER_TEMP/tapp-emulator.log" 2>&1 &
+          adb wait-for-device
+          for attempt in $(seq 1 120); do
+            [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && exit 0
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/tapp-emulator.log"
+          exit 1
+      - name: Build and gate all Android fixtures
+        run: scripts/android-corpus-e2e.sh emulator-5554
+      - name: Exercise the published Android Action path
+        uses: ./
+        with:
+          platform: android
+          target-key: target_android_login
+          android-project: AndroidCorpus
+          android-task: ":logindemo:assembleDebug"
+          android-app-id: io.tapp.corpus.login
+          android-serial: emulator-5554
+          max-actions: "12"
+          timeout: "180"
+          test-email: customer@example.test
+          test-password: demo
+          flows: "AndroidCorpus/logindemo/.autotap/flows/*.yml"
+          contracts: "AndroidCorpus/logindemo/.autotap/contracts/*.contract.ts"
+          comment-on-pr: "false"

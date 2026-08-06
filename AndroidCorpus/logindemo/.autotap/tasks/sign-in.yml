@@ -1,0 +1,34 @@
+kind: task
+version: 1
+name: signIn
+description: Authenticate an existing Android customer and reach Home.
+inputs:
+  email: { required: true, secret: true }
+  password: { required: true, secret: true }
+outputs:
+  authenticatedEmail: { fromInput: email }
+preconditions:
+  - screen: Sign In
+postconditions:
+  - screen: Home
+implementations:
+  android:
+    steps:
+      - type: { field: email_field, value: "{{email}}" }
+      - type: { field: password_field, value: "{{password}}" }
+      - tap: sign_in_button
+      - wait_for: Home
+coverage:
+  nodes:
+    - sign-in
+    - home
+  edges:
+    - edge_1812e10e60342047
+  sourcePaths:
+    - build.gradle
+validation:
+  status: validated
+  platform: android
+  evidenceRun: tapp-capture:flow-android-76464-1785939102807
+  mapEvidenceRun: tapp-capture:android-20260805-141217
+  note: Replayed as part of existingCustomerCanSignIn on the real API 35 emulator; the full deterministic contract passed 8/8 without AI.

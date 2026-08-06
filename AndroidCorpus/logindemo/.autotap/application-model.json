@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-application-model",
+  "application": {
+    "name": "logindemo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "android"
+    ],
+    "targetIds": [
+      "target_f9ef018700dffe80"
+    ]
+  },
+  "targets": [
+    {
+      "id": "target_f9ef018700dffe80",
+      "platform": "android",
+      "kind": "android-application",
+      "name": "logindemo",
+      "sourcePath": ".",
+      "status": "configured",
+      "build": {
+        "tool": "gradle",
+        "projectDir": ".",
+        "task": ":assembleDebug"
+      },
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.login"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "build.gradle"
+        ],
+        "detail": "application plugin and application id observed"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "name": "customer",
+      "roles": [
+        "existing customer"
+      ],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "credentialRequirements": [
+        "email",
+        "password"
+      ],
+      "credentialBindings": {
+        "email": "TEST_EMAIL",
+        "password": "TEST_PASSWORD"
+      },
+      "configured": false,
+      "bindingConflicts": [],
+      "session": "isolated",
+      "provisioning": "unknown",
+      "credentialsConfigured": true,
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/customer-sign-in.contract.ts"
+        ],
+        "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
+      }
+    }
+  ],
+  "entities": [],
+  "capabilities": [
+    {
+      "id": "capability_authentication",
+      "name": "Authentication",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/customer-sign-in.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/customer-sign-in.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_profile-access",
+      "name": "Profile access",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/customer-sign-in.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/customer-sign-in.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_signin",
+      "name": "Sign In",
+      "status": "task-derived",
+      "tasks": [
+        "signIn"
+      ],
+      "contracts": [
+        "existingCustomerCanSignIn"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/customer-sign-in.contract.ts",
+        ".autotap/tasks/sign-in.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/customer-sign-in.contract.ts",
+          ".autotap/tasks/sign-in.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    }
+  ],
+  "criticalJourneys": [
+    {
+      "id": "journey_c0fcb543d73a969c",
+      "name": "An existing Android customer can sign in and reach their profile",
+      "status": "authored-unvalidated",
+      "contract": "existingCustomerCanSignIn",
+      "scope": ".",
+      "criticality": "critical",
+      "businessValue": "Authentication does not prevent existing customers from entering the product.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/customer-sign-in.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "revenuePaths": [],
+  "systemInvariants": [],
+  "configuration": {
+    "path": ".autotap/project.json",
+    "status": "missing",
+    "actorCount": 0,
+    "lifecycle": {
+      "setupSteps": 0,
+      "teardownSteps": 0
+    },
+    "evidence": {
+      "basis": "source-observed",
+      "paths": [],
+      "detail": "optional project configuration has not been created"
+    }
+  },
+  "environments": [
+    {
+      "targetId": "target_f9ef018700dffe80",
+      "platform": "android",
+      "status": "configured",
+      "runtime": {
+        "surface": "Android emulator/device",
+        "applicationId": "io.tapp.corpus.login"
+      }
+    }
+  ],
+  "stateBoundaries": [],
+  "uiMap": {
+    "path": ".autotap/ui-map.json",
+    "status": "observed",
+    "nodeCount": 3,
+    "edgeCount": 3,
+    "controlCount": 6,
+    "uncoveredNodeIds": [
+      "screen_1900eab6c028483d"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_1f73db5ddf721bc4",
+      "edge_662df0725c0129e3"
+    ],
+    "platforms": [
+      "android"
+    ],
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        ".autotap/ui-map.json"
+      ],
+      "detail": "grounded in prior runtime observations"
+    }
+  },
+  "artifacts": {
+    "tasks": [
+      {
+        "id": "task_d061e2ee669c38c3",
+        "name": "signIn",
+        "scope": ".",
+        "path": ".autotap/tasks/sign-in.yml",
+        "version": 1,
+        "platforms": [
+          "android"
+        ],
+        "inputs": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        }
+      }
+    ],
+    "contracts": [
+      {
+        "id": "contract_b1d191b9f05a7815",
+        "name": "existingCustomerCanSignIn",
+        "scope": ".",
+        "path": ".autotap/contracts/customer-sign-in.contract.ts",
+        "criticality": "critical",
+        "platforms": [
+          "android"
+        ]
+      }
+    ]
+  },
+  "requirements": [],
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T14:16:05.607Z",
+    "remoteAiUsed": false,
+    "distinctions": [
+      "runtime-observed",
+      "source-observed",
+      "reviewed-artifact",
+      "source-derived-proposal",
+      "human-decision"
+    ]
+  }
+}

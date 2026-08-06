@@ -1,0 +1,57 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openProfile",
+  "description": "Navigate from Home to the observed Profile state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Home"
+        },
+        {
+          "wait_for": "profile_button"
+        },
+        {
+          "tap": "profile_button"
+        },
+        {
+          "wait_for": "Profile"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_1900eab6c028483d",
+      "screen_4ea140588150773c"
+    ],
+    "edges": [
+      "edge_662df0725c0129e3"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_0d561e9f3f0c0204"
+    ],
+    "mapPath": "logindemo/.autotap/ui-map.json",
+    "targetId": "target_7488b63ddbfb90b0",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-1344-1785941584252",
+        "detail": "deterministic replay passed",
+        "contract": "profileReachable",
+        "validatedAt": "2026-08-05T14:53:36.650Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.277Z",
+    "promotedFrom": "logindemo/.autotap/proposals/tasks/open-profile.task.json"
+  }
+}

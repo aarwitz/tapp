@@ -1,0 +1,483 @@
+{
+  "verdict": "ready",
+  "confidence": 100,
+  "releaseScore": 100,
+  "headline": "Ship-ready — no release-blocking issues found.",
+  "inconclusive": false,
+  "checkedFor": [
+    "crashes / process exits",
+    "dead controls",
+    "error surfaces",
+    "blank screens",
+    "navigation reachability",
+    "form interaction"
+  ],
+  "notChecked": [
+    "app-specific business logic (cover with committed Flows)",
+    "visual correctness — layout/images/clipping",
+    "push notifications / system integrations",
+    "content & reachability regressions require a baseline"
+  ],
+  "conditionsNotReached": [
+    "sign-in (no login form encountered this run)"
+  ],
+  "platform": "android",
+  "screensExplored": 5,
+  "actionsPerformed": 10,
+  "findingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "total": 0
+  },
+  "findings": [],
+  "screens": [
+    "Shop",
+    "Trail Backpack",
+    "Cart",
+    "Checkout",
+    "Order Confirmed"
+  ],
+  "screenElementCounts": {
+    "Shop": 10,
+    "Trail Backpack": 10,
+    "Cart": 10,
+    "Checkout": 10,
+    "Order Confirmed": 8
+  },
+  "inputFieldsEncountered": [
+    {
+      "screen": "Checkout",
+      "fields": [
+        {
+          "label": "name_field",
+          "secure": false
+        },
+        {
+          "label": "address_field",
+          "secure": false
+        }
+      ]
+    }
+  ],
+  "loginEncountered": false,
+  "complete": {
+    "actions": 10,
+    "states": 8,
+    "issues": 0,
+    "screens": "Shop,Trail Backpack,Cart,Checkout,Order Confirmed",
+    "outcome": "complete"
+  },
+  "uiMap": {
+    "schemaVersion": 1,
+    "nodeCount": 6,
+    "edgeCount": 7,
+    "controlCount": 11,
+    "evidence": "tapp-capture:android-20260805-151550/ui-map.json"
+  },
+  "targetKey": "target_b0450646e4866df7",
+  "regression": null,
+  "flows": [
+    {
+      "name": "Android Shop checkout",
+      "kind": "flow",
+      "passed": true,
+      "total": 14,
+      "executed": 14,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Shop",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "product_trail_backpack",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Trail Backpack",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_text",
+          "target": "product_price",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "add_to_cart_button",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Cart",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Trail Backpack",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "checkout_button",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Checkout",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "name_field",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "address_field",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "place_order_button",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Order Confirmed",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Order TAPP-1001",
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "scenarios": [],
+  "contracts": [
+    {
+      "name": "Checkout remains reachable",
+      "kind": "release-contract",
+      "contract": "checkoutReachable",
+      "criticality": "critical",
+      "passed": true,
+      "total": 12,
+      "executed": 12,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Shop",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "product_trail_backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "product_trail_backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Trail Backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Trail Backpack",
+          "detail": "",
+          "task": "openCart",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "add_to_cart_button",
+          "detail": "",
+          "task": "openCart",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "add_to_cart_button",
+          "detail": "",
+          "task": "openCart",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Cart",
+          "detail": "",
+          "task": "openCart",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Cart",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "checkout_button",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "checkout_button",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "checkoutReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Checkout",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "checkoutReachable"
+        }
+      ]
+    },
+    {
+      "name": "Order Confirmed remains reachable",
+      "kind": "release-contract",
+      "contract": "orderConfirmedReachable",
+      "criticality": "critical",
+      "passed": true,
+      "total": 20,
+      "executed": 20,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Shop",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "product_trail_backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "product_trail_backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Trail Backpack",
+          "detail": "",
+          "task": "openTrailBackpack",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Trail Backpack",
+          "detail": "",
+          "task": "openCart",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "add_to_cart_button",
+          "detail": "",
+          "task": "openCart",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "add_to_cart_button",
+          "detail": "",
+          "task": "openCart",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Cart",
+          "detail": "",
+          "task": "openCart",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Cart",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "checkout_button",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "checkout_button",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Checkout",
+          "detail": "",
+          "task": "openCheckout",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Checkout",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "name_field",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "name_field",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "address_field",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "address_field",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "place_order_button",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "place_order_button",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Order Confirmed",
+          "detail": "",
+          "task": "openOrderConfirmed",
+          "contract": "orderConfirmedReachable"
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "policy": "gate",
+    "failed": false,
+    "reasons": []
+  },
+  "markersEvidence": "tapp-capture:android-20260805-151550/ocqa-markers.txt",
+  "baselineIdentity": {
+    "schemaVersion": 1,
+    "platform": "android",
+    "targetId": "target_b0450646e4866df7",
+    "conclusive": true,
+    "verdict": "ready",
+    "screensExplored": 5,
+    "actionsPerformed": 10,
+    "suite": {
+      "flows": 1,
+      "scenarios": 0,
+      "contracts": 2
+    },
+    "createdAt": "2026-08-05T15:18:49.586Z",
+    "sourceReport": "tapp-android-shop-root-gate.json",
+    "policy": "platform-and-target-specific; replace only from a reviewed successful conclusive gate"
+  }
+}

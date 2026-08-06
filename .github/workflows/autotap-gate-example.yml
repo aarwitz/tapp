@@ -7,20 +7,30 @@
 #     pull_request:
 #       branches: [main]
 #
-# Baseline convention: commit a `.autotap/baseline.json` (the `report` output of a run on main)
-# to the app repo. PRs then fail only on NEW high/critical findings or broken Flows — existing
-# debt doesn't block, regressions do. Refresh the baseline after merges from a main-branch run.
+# A successful, conclusive run on main automatically seeds/refreshes the baseline in the
+# Actions cache and a 90-day artifact fallback.
+# PRs then fail only on NEW high/critical findings or broken Flows — existing debt doesn't
+# block, regressions do. A committed `.autotap/baseline.json` takes precedence when desired.
 name: AutoTap Gate (example)
 
 on:
   workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: tapp-example-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   autotap:
     runs-on: macos-15
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Generate DemoApp project
         run: ruby generate-demoapp-xcodeproj.rb
@@ -28,7 +38,7 @@ jobs:
       - name: AutoTap release gate
         uses: ./ # in an app repo: aarwitz/tapp@main
         with:
-          bundle-id: com.autotap.demoapp
+          target-key: target_demoapp_ios
           project: DemoApp/DemoApp.xcodeproj
           scheme: DemoApp
           max-actions: 40

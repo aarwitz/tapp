@@ -1,0 +1,242 @@
+{
+  "verdict": "ready",
+  "confidence": 100,
+  "releaseScore": 100,
+  "headline": "Ship-ready — no release-blocking issues found.",
+  "inconclusive": false,
+  "checkedFor": [
+    "crashes / process exits",
+    "dead controls",
+    "failed sign-ins",
+    "error surfaces",
+    "blank screens",
+    "navigation reachability",
+    "form interaction"
+  ],
+  "notChecked": [
+    "app-specific business logic (cover with committed Flows)",
+    "visual correctness — layout/images/clipping",
+    "push notifications / system integrations",
+    "content & reachability regressions require a baseline"
+  ],
+  "conditionsNotReached": [],
+  "platform": "android",
+  "screensExplored": 3,
+  "actionsPerformed": 6,
+  "findingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "total": 0
+  },
+  "findings": [],
+  "screens": [
+    "Sign In",
+    "Home",
+    "Profile"
+  ],
+  "screenElementCounts": {
+    "Sign In": 11,
+    "Home": 9,
+    "Profile": 8
+  },
+  "inputFieldsEncountered": [
+    {
+      "screen": "Sign In",
+      "fields": [
+        {
+          "label": "email_field",
+          "secure": false
+        },
+        {
+          "label": "password_field",
+          "secure": true
+        }
+      ]
+    }
+  ],
+  "loginEncountered": true,
+  "complete": {
+    "actions": 6,
+    "states": 5,
+    "issues": 0,
+    "screens": "Sign In,Home,Profile",
+    "outcome": "complete"
+  },
+  "uiMap": {
+    "schemaVersion": 1,
+    "nodeCount": 3,
+    "edgeCount": 3,
+    "controlCount": 6,
+    "evidence": "tapp-capture:android-20260805-141618/ui-map.json"
+  },
+  "targetKey": "target_f9ef018700dffe80",
+  "regression": null,
+  "flows": [
+    {
+      "name": "Android Login sign in",
+      "kind": "flow",
+      "passed": true,
+      "total": 8,
+      "executed": 8,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Sign In",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "email_field",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "password_field",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "sign_in_button",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Home",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Home",
+          "detail": "",
+          "task": "signIn"
+        },
+        {
+          "status": "pass",
+          "action": "assert_text",
+          "target": "account_summary",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Profile",
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "scenarios": [],
+  "contracts": [
+    {
+      "name": "An existing Android customer can sign in and reach their profile",
+      "kind": "release-contract",
+      "contract": "existingCustomerCanSignIn",
+      "criticality": "critical",
+      "passed": true,
+      "total": 8,
+      "executed": 8,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Sign In",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "email_field",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "type",
+          "target": "password_field",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "sign_in_button",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Home",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Home",
+          "detail": "",
+          "task": "signIn",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "assert_text",
+          "target": "",
+          "detail": "",
+          "contract": "existingCustomerCanSignIn"
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Profile",
+          "detail": "",
+          "contract": "existingCustomerCanSignIn"
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "policy": "gate",
+    "failed": false,
+    "reasons": []
+  },
+  "markersEvidence": "tapp-capture:android-20260805-141618/ocqa-markers.txt",
+  "baselineIdentity": {
+    "schemaVersion": 1,
+    "platform": "android",
+    "targetId": "target_f9ef018700dffe80",
+    "conclusive": true,
+    "verdict": "ready",
+    "screensExplored": 3,
+    "actionsPerformed": 6,
+    "suite": {
+      "flows": 1,
+      "scenarios": 0,
+      "contracts": 1
+    },
+    "createdAt": "2026-08-05T14:17:52.542Z",
+    "sourceReport": "tapp-android-login-target-gate.json",
+    "policy": "platform-and-target-specific; replace only from a reviewed successful conclusive gate"
+  }
+}

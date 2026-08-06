@@ -1,0 +1,934 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "io.tapp.corpus.shop",
+    "platforms": [
+      "android"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "android": "screen_8d9001d32c6a703d"
+    },
+    "navigationRoots": {
+      "android": "screen_8d9001d32c6a703d"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "android-20260805-142525"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-05T14:26:12.424Z",
+    "lastObservedAt": "2026-08-05T14:26:12.424Z"
+  },
+  "nodes": [
+    {
+      "id": "screen_1c42ddc0285b9c25",
+      "semanticKey": "cart",
+      "name": "Cart",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_5655be88275a00b6",
+          "semanticKey": "checkout-button",
+          "kind": "button",
+          "label": "checkout_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checkout_button"
+            },
+            {
+              "kind": "label",
+              "value": "checkout_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b3d644b5cfcdef28",
+          "semanticKey": "continue-shopping-button",
+          "kind": "button",
+          "label": "continue_shopping_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "continue_shopping_button"
+            },
+            {
+              "kind": "label",
+              "value": "continue_shopping_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openCart",
+          "openCheckout"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_5aa7616809c53215",
+      "semanticKey": "trail-backpack",
+      "name": "Trail Backpack",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_1c97f6ee93b985f9",
+          "semanticKey": "add-to-cart-button",
+          "kind": "button",
+          "label": "add_to_cart_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "add_to_cart_button"
+            },
+            {
+              "kind": "label",
+              "value": "add_to_cart_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b26d53d0be267b84",
+          "semanticKey": "shop-button",
+          "kind": "button",
+          "label": "shop_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "shop_button"
+            },
+            {
+              "kind": "label",
+              "value": "shop_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openCart",
+          "openTrailBackpack"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_6500249c60a84039",
+      "semanticKey": "cart--state-95b4a89c9d",
+      "name": "Cart",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "baseSemanticKey": "cart",
+      "variant": "state-95b4a89c9d",
+      "stateLabel": "Cart · Continue Shopping Button",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_7f3c75157091ba90",
+          "semanticKey": "continue-shopping-button",
+          "kind": "button",
+          "label": "continue_shopping_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "continue_shopping_button"
+            },
+            {
+              "kind": "label",
+              "value": "continue_shopping_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_8d9001d32c6a703d",
+      "semanticKey": "shop",
+      "name": "Shop",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_2f56269269d43fe9",
+          "semanticKey": "cart-button",
+          "kind": "button",
+          "label": "cart_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "cart_button"
+            },
+            {
+              "kind": "label",
+              "value": "cart_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_585196a4d9213535",
+          "semanticKey": "product-trail-backpack",
+          "kind": "button",
+          "label": "product_trail_backpack",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "product_trail_backpack"
+            },
+            {
+              "kind": "label",
+              "value": "product_trail_backpack"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openTrailBackpack"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 3
+      }
+    },
+    {
+      "id": "screen_c7761e58969f7edd",
+      "semanticKey": "checkout",
+      "name": "Checkout",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_1d42f63afb62562a",
+          "semanticKey": "place-order-button",
+          "kind": "button",
+          "label": "place_order_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "place_order_button"
+            },
+            {
+              "kind": "label",
+              "value": "place_order_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_9f48bb1ead9e397b",
+          "semanticKey": "address-field",
+          "kind": "field",
+          "label": "address_field",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "address_field"
+            },
+            {
+              "kind": "label",
+              "value": "address_field"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_fb6839f622cf1d33",
+          "semanticKey": "name-field",
+          "kind": "field",
+          "label": "name_field",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "name_field"
+            },
+            {
+              "kind": "label",
+              "value": "name_field"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openCheckout",
+          "openOrderConfirmed"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 3
+      }
+    },
+    {
+      "id": "screen_d822b1ec5f43f3a3",
+      "semanticKey": "order-confirmed",
+      "name": "Order Confirmed",
+      "aliases": [],
+      "roles": [
+        "app"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "android.widget.FrameLayout:0,0::0,0|android.widget.LinearLayout:0,0::0,0|android:id/content::0,0|android.widget.ScrollView:0,0::0,0|android.widget.LinearLayout:"
+      ],
+      "controls": [
+        {
+          "id": "control_257a6859c214e6a3",
+          "semanticKey": "return-shop-button",
+          "kind": "button",
+          "label": "return_shop_button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "return_shop_button"
+            },
+            {
+              "kind": "label",
+              "value": "return_shop_button"
+            }
+          ],
+          "platforms": [
+            "android"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openOrderConfirmed"
+        ],
+        "contracts": [
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_2c97e0c6900713b3",
+      "from": "screen_8d9001d32c6a703d",
+      "to": "screen_6500249c60a84039",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "cart_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "cart_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "cart--state-95b4a89c9d"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_37698aea238723a1",
+      "from": "screen_6500249c60a84039",
+      "to": "screen_8d9001d32c6a703d",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "continue_shopping_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "continue_shopping_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "shop"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_48dd9dad6d6dcc88",
+      "from": "screen_1c42ddc0285b9c25",
+      "to": "screen_c7761e58969f7edd",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "checkout_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "checkout_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "checkout"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openCheckout"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_493030be0bc86ae1",
+      "from": "screen_c7761e58969f7edd",
+      "to": "screen_d822b1ec5f43f3a3",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "place_order_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "place_order_button"
+          }
+        ]
+      },
+      "preconditions": [
+        {
+          "type": "field-populated",
+          "target": "name_field"
+        },
+        {
+          "type": "field-populated",
+          "target": "address_field"
+        }
+      ],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "order-confirmed"
+        }
+      ],
+      "preparation": [
+        {
+          "type": "type",
+          "target": "name_field",
+          "valueSource": "generated-text"
+        },
+        {
+          "type": "type",
+          "target": "address_field",
+          "valueSource": "generated-text"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openOrderConfirmed"
+        ],
+        "contracts": [
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_71e154bc00dfce44",
+      "from": "screen_d822b1ec5f43f3a3",
+      "to": "screen_8d9001d32c6a703d",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "return_shop_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "return_shop_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "shop"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_aa43be8f52a023ea",
+      "from": "screen_5aa7616809c53215",
+      "to": "screen_1c42ddc0285b9c25",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "add_to_cart_button",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "add_to_cart_button"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "cart"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openCart"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_b180705630132e71",
+      "from": "screen_8d9001d32c6a703d",
+      "to": "screen_5aa7616809c53215",
+      "status": "observed",
+      "platforms": [
+        "android"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "product_trail_backpack",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "product_trail_backpack"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "trail-backpack"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openTrailBackpack"
+        ],
+        "contracts": [
+          "checkoutReachable",
+          "orderConfirmedReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "android-20260805-142525"
+        ],
+        "firstObservedAt": "2026-08-05T14:26:12.424Z",
+        "lastObservedAt": "2026-08-05T14:26:12.424Z",
+        "count": 1
+      },
+      "confirmed": true
+    }
+  ],
+  "coverage": {
+    "tasks": [
+      "openCart",
+      "openCheckout",
+      "openOrderConfirmed",
+      "openTrailBackpack"
+    ],
+    "contracts": [
+      "checkoutReachable",
+      "orderConfirmedReachable"
+    ],
+    "uncoveredNodeIds": [
+      "screen_6500249c60a84039"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_2c97e0c6900713b3",
+      "edge_37698aea238723a1",
+      "edge_71e154bc00dfce44"
+    ]
+  }
+}

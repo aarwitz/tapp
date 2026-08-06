@@ -2,14 +2,27 @@
   "name": "tapp-mcp",
   "version": "0.13.1",
   "mcpName": "io.github.aarwitz/tapp",
-  "description": "Autonomous QA for iOS + web. Your coding agent gets hands, eyes, and judgment: drive the app, explore it with no test code, and get a deterministic ship/no-ship verdict with evidence. iOS simulator native; web beta via Playwright.",
+  "description": "Release contracts, autonomous QA, and evidence-backed CI gates for iOS, Android, and web.",
   "license": "MIT",
   "type": "module",
   "bin": {
     "tapp": "bin/tapp.js"
   },
+  "exports": {
+    ".": "./mcp-server/src/index.js",
+    "./product-operations": "./mcp-server/src/product-operations.js",
+    "./contracts": {
+      "types": "./mcp-server/src/release-contract.d.ts",
+      "import": "./mcp-server/src/contract-authoring.js"
+    }
+  },
   "files": [
     "bin/",
+    "browser/",
+    "docs/BROWSER-PRODUCT.md",
+    "docs/PRODUCT-ENGINE.md",
+    "docs/application-model.md",
+    "docs/scenarios.md",
     "mcp-server/src/",
     "scripts/",
     "Harness/OCQAHarness/",
@@ -19,7 +32,11 @@
     "AGENTS.md"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "typescript": "^5.9.2"
+  },
+  "optionalDependencies": {
+    "playwright": "1.61.1"
   },
   "engines": {
     "node": ">=18"
@@ -35,6 +52,7 @@
   "keywords": [
     "tapp",
     "ios",
+    "android",
     "simulator",
     "mcp",
     "mcp-server",
@@ -43,6 +61,8 @@
     "testing",
     "qa",
     "playwright",
+    "release-contracts",
+    "release-gate",
     "agent",
     "claude",
     "cursor",
@@ -51,6 +71,8 @@
     "mobile"
   ],
   "scripts": {
-    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/cli.test.js tests/action.test.js"
+    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/action.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js",
+    "test:browser-journey": "node --test tests/browser-journey.test.js",
+    "test:browser-native": "TAPP_RUN_NATIVE_BROWSER=1 node --test tests/browser-native-journey.test.js"
   }
 }

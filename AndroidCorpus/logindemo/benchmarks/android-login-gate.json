@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T14:18:00Z",
+  "fixture": "AndroidCorpus/logindemo",
+  "platform": "android",
+  "targetKey": "target_f9ef018700dffe80",
+  "surface": {
+    "avd": "Tapp_Corpus_API_35",
+    "apiLevel": 35,
+    "mode": "headless emulator",
+    "applicationId": "io.tapp.corpus.login"
+  },
+  "build": {
+    "tool": "Gradle",
+    "task": ":logindemo:assembleDebug",
+    "result": "passed",
+    "artifact": "build/outputs/apk/debug/logindemo-debug.apk"
+  },
+  "autonomousQa": {
+    "captureId": "android-20260805-141217",
+    "verdict": "ready",
+    "releaseScore": 100,
+    "inconclusive": false,
+    "screensExplored": 3,
+    "actionsPerformed": 6,
+    "findingCount": 0,
+    "uiMap": {
+      "states": 3,
+      "transitions": 3,
+      "semanticControls": 6,
+      "statesObserved": [
+        "Sign In",
+        "Home",
+        "Profile"
+      ]
+    }
+  },
+  "reusableTask": {
+    "name": "signIn",
+    "inputs": [
+      "email",
+      "password"
+    ],
+    "secretInputs": [
+      "email",
+      "password"
+    ],
+    "output": "authenticatedEmail",
+    "coveredNodes": [
+      "sign-in",
+      "home"
+    ],
+    "coveredEdge": "edge_1812e10e60342047",
+    "validationStatus": "validated"
+  },
+  "releaseContract": {
+    "name": "existingCustomerCanSignIn",
+    "criticality": "critical",
+    "businessSteps": 3,
+    "compiledDeterministicSteps": 8,
+    "result": "8/8 passed",
+    "evidenceRun": "tapp-capture:flow-android-76464-1785939102807",
+    "assertions": [
+      "Home screen",
+      "account_summary contains the authenticated email",
+      "Profile control exists"
+    ],
+    "apiKeyRequired": false
+  },
+  "applicationModel": {
+    "targets": 1,
+    "targetStatus": "configured",
+    "uiMapStatus": "observed",
+    "blockingRequirements": 0,
+    "planItems": 2,
+    "pendingReview": 1
+  },
+  "baselineCreation": {
+    "sourceCaptureId": "android-20260805-141618",
+    "verdict": "ready",
+    "conclusive": true,
+    "flows": [
+      "8/8"
+    ],
+    "contracts": [
+      "8/8"
+    ],
+    "path": ".autotap/baselines/android/target_f9ef018700dffe80.json"
+  },
+  "baselineActiveGate": {
+    "captureId": "android-20260805-141800",
+    "verdict": "ready",
+    "releaseScore": 100,
+    "inconclusive": false,
+    "screensExplored": 3,
+    "actionsPerformed": 6,
+    "regression": {
+      "hadBaseline": true,
+      "new": 0,
+      "persisting": 0,
+      "resolved": 0,
+      "newCritical": 0,
+      "newHigh": 0,
+      "failed": false
+    },
+    "flow": "8/8 passed",
+    "contract": "8/8 passed",
+    "gateExitCode": 0,
+    "report": "tapp-capture:android-20260805-141800/report.html"
+  },
+  "threeAppCorpus": {
+    "allPassed": true,
+    "fixtures": [
+      {
+        "name": "demoapp",
+        "captureId": "android-20260805-142302",
+        "verdict": "ready",
+        "releaseScore": 100,
+        "findings": 0,
+        "states": 5,
+        "transitions": 7,
+        "semanticControls": 7,
+        "flow": "7/7 passed"
+      },
+      {
+        "name": "logindemo",
+        "captureId": "android-20260805-142401",
+        "verdict": "ready",
+        "releaseScore": 100,
+        "findings": 0,
+        "states": 3,
+        "transitions": 3,
+        "semanticControls": 6,
+        "flow": "8/8 passed",
+        "contract": "8/8 passed"
+      },
+      {
+        "name": "shopdemo",
+        "captureId": "android-20260805-142525",
+        "verdict": "ready",
+        "releaseScore": 100,
+        "findings": 0,
+        "states": 5,
+        "transitions": 7,
+        "semanticControls": 10,
+        "flow": "14/14 passed"
+      }
+    ]
+  },
+  "interpretation": "The current Android driver, Task compiler, TypeScript contract compiler, UI Map builder, target model, baseline writer, and portable gate operate together on a real API 35 emulator without AI.",
+  "limits": [
+    "The three fixtures cover onboarding/navigation, authentication/profile, and checkout/forms, but remain compact purpose-built corpus apps rather than customer products.",
+    "No seeded Android regression was exercised in this measurement.",
+    "The Gradle build was invoked locally before the portable gate; GitHub Action build orchestration was not exercised.",
+    "The run is single-actor. Isolated native multi-actor execution remains unsupported.",
+    "No GitHub-hosted Ubuntu emulator run was performed from this worktree."
+  ]
+}

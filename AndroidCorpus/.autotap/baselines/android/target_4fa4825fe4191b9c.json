@@ -1,0 +1,223 @@
+{
+  "verdict": "ready",
+  "confidence": 100,
+  "releaseScore": 100,
+  "headline": "Ship-ready — no release-blocking issues found.",
+  "inconclusive": false,
+  "checkedFor": [
+    "crashes / process exits",
+    "dead controls",
+    "error surfaces",
+    "blank screens",
+    "navigation reachability",
+    "form interaction"
+  ],
+  "notChecked": [
+    "app-specific business logic (cover with committed Flows)",
+    "visual correctness — layout/images/clipping",
+    "push notifications / system integrations",
+    "content & reachability regressions require a baseline"
+  ],
+  "conditionsNotReached": [
+    "sign-in (no login form encountered this run)"
+  ],
+  "platform": "android",
+  "screensExplored": 5,
+  "actionsPerformed": 8,
+  "findingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "total": 0
+  },
+  "findings": [],
+  "screens": [
+    "Get Started",
+    "Dashboard",
+    "Daily Summary",
+    "Settings",
+    "About"
+  ],
+  "screenElementCounts": {
+    "Get Started": 9,
+    "Dashboard": 10,
+    "Daily Summary": 8,
+    "Settings": 9,
+    "About": 8
+  },
+  "inputFieldsEncountered": [],
+  "loginEncountered": false,
+  "complete": {
+    "actions": 8,
+    "states": 5,
+    "issues": 0,
+    "screens": "Get Started,Dashboard,Daily Summary,Settings,About",
+    "outcome": "complete"
+  },
+  "uiMap": {
+    "schemaVersion": 1,
+    "nodeCount": 5,
+    "edgeCount": 7,
+    "controlCount": 7,
+    "evidence": "tapp-capture:android-20260805-151211/ui-map.json"
+  },
+  "targetKey": "target_4fa4825fe4191b9c",
+  "regression": null,
+  "flows": [
+    {
+      "name": "Android Demo onboarding and settings",
+      "kind": "flow",
+      "passed": true,
+      "total": 7,
+      "executed": 7,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Settings",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Settings",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Settings",
+          "detail": ""
+        },
+        {
+          "status": "pass",
+          "action": "assert_exists",
+          "target": "Notifications enabled",
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "scenarios": [],
+  "contracts": [
+    {
+      "name": "Settings remains reachable",
+      "kind": "release-contract",
+      "contract": "settingsReachable",
+      "criticality": "medium",
+      "passed": true,
+      "total": 8,
+      "executed": 8,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "openDashboard",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "continue_button",
+          "detail": "",
+          "task": "openDashboard",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "continue_button",
+          "detail": "",
+          "task": "openDashboard",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openDashboard",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openSettings",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "settings_tab",
+          "detail": "",
+          "task": "openSettings",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "settings_tab",
+          "detail": "",
+          "task": "openSettings",
+          "contract": "settingsReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Settings",
+          "detail": "",
+          "task": "openSettings",
+          "contract": "settingsReachable"
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "policy": "gate",
+    "failed": false,
+    "reasons": []
+  },
+  "markersEvidence": "tapp-capture:android-20260805-151211/ocqa-markers.txt",
+  "baselineIdentity": {
+    "schemaVersion": 1,
+    "platform": "android",
+    "targetId": "target_4fa4825fe4191b9c",
+    "conclusive": true,
+    "verdict": "ready",
+    "screensExplored": 5,
+    "actionsPerformed": 8,
+    "suite": {
+      "flows": 1,
+      "scenarios": 0,
+      "contracts": 1
+    },
+    "createdAt": "2026-08-05T15:18:49.413Z",
+    "sourceReport": "tapp-android-demo-gate.json",
+    "policy": "platform-and-target-specific; replace only from a reviewed successful conclusive gate"
+  }
+}

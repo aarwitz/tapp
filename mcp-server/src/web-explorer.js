@@ -30,7 +30,7 @@ const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error oc
 // for repo-dev checkouts. Probe, in order: our own node_modules; the user's project
 // (process.cwd()); the global npm root. ESM ignores NODE_PATH, so cwd/global need explicit
 // resolution + import-by-absolute-path.
-async function loadPlaywright() {
+export async function loadPlaywright() {
   try {
     return await import("playwright");
   } catch {}
@@ -50,11 +50,92 @@ async function loadPlaywright() {
   );
 }
 
+export async function submitWebLogin(page) {
+  const candidates = [
+    page.locator("button[type=submit], input[type=submit], form button").first(),
+    page.getByRole("button", { name: /sign ?in|log ?in|continue/i }).first(),
+  ];
+  for (const candidate of candidates) {
+    if (await candidate.isVisible().catch(() => false)) {
+      await candidate.click({ timeout: 3000 });
+      return true;
+    }
+  }
+  return false;
+}
+
+export function webScreenTitle(info, fallback) {
+  return String(info?.heading || info?.title || fallback || "").trim();
+}
+
+export function webActionScreen(activeObservation, fallback = "Unknown") {
+  return activeObservation?.screen || fallback;
+}
+
+export function webNavigationAction(linkLabel, route) {
+  return String(linkLabel || "").trim() || String(route || "transition");
+}
+
+export function webTransitionOrigin(pendingNavigation, currentScreen) {
+  return pendingNavigation?.fromScreen || currentScreen || null;
+}
+
+export function normalizeWebSeedRoutes(url, routes, limit = 5) {
+  const origin = new URL(url);
+  const boundedLimit = Math.max(0, Math.min(10, Number(limit) || 0));
+  if (boundedLimit === 0) return [];
+  const startKey = origin.pathname.replace(/\/+$/, "") + origin.search || "/";
+  const normalized = [];
+  for (const raw of routes || []) {
+    const value = typeof raw === "string" ? raw : raw?.path;
+    if (!value) continue;
+    let route;
+    try { route = new URL(value, origin); } catch { continue; }
+    if (route.origin !== origin.origin || !/^https?:$/.test(route.protocol)) continue;
+    const key = route.pathname.replace(/\/+$/, "") + route.search || "/";
+    if (!normalized.includes(key) && key !== startKey) normalized.push(key);
+    if (normalized.length >= boundedLimit) break;
+  }
+  return normalized;
+}
+
+export function webScreenRole(screen, inputs = []) {
+  const name = String(screen || "").toLowerCase();
+  if (inputs.some((input) => input.secure) || /sign ?in|log ?in/.test(name)) return "login";
+  if (/checkout|payment|purchase/.test(name)) return "checkout";
+  if (/message|chat|conversation/.test(name)) return "messaging";
+  if (/settings|preference/.test(name)) return "settings";
+  if (/feed|list|catalog|search|home/.test(name)) return "list";
+  if (inputs.length) return "form";
+  return "screen";
+}
+
 function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "page";
 }
 
-export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", onProgress }) {
+export function normalizeWebSeedTargets(seedTargets = [], limit = 5) {
+  const maximum = Math.max(0, Math.min(5, Number(limit) || 0));
+  if (!maximum || !Array.isArray(seedTargets)) return [];
+  const result = [];
+  const ids = new Set();
+  for (const target of seedTargets) {
+    if (target?.platform !== "web" || target?.status !== "planned" || target?.navigation?.status !== "replayable" || typeof target.id !== "string" || !target.id || ids.has(target.id)) continue;
+    const navigation = target.navigation;
+    if (navigation.mode === "route") {
+      if (typeof navigation.route !== "string" || !navigation.route.startsWith("/")) continue;
+    } else if (navigation.mode === "ui-map-path") {
+      if (!Array.isArray(navigation.steps) || navigation.steps.length > 8 || navigation.steps.some((step) =>
+        !["tap", "back"].includes(step?.action?.type) || typeof step?.action?.target !== "string" || !step.action.target)) continue;
+    } else continue;
+    ids.add(target.id);
+    result.push(structuredClone(target));
+    if (result.length >= maximum) break;
+  }
+  return result;
+}
+
+export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], onProgress }) {
   const start = new URL(url);
   if (!/^https?:$/.test(start.protocol)) throw new Error("url must be http(s)");
   fs.mkdirSync(outDir, { recursive: true });
@@ -80,6 +161,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   // Async defect listeners: attribute to whatever screen is current when they fire.
   let currentScreen = start.pathname;
+  let lastActionTarget = "";
   page.on("request", () => { requestCount += 1; });
   page.on("pageerror", (err) => issue("js_exception", "high", `Uncaught JS exception: ${String(err.message || err).slice(0, 120)}`, currentScreen));
   page.on("response", (res) => {
@@ -101,11 +183,21 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   });
 
   const visited = new Set(); // screen keys (pathname+search)
-  const frontier = [start.pathname + start.search];
+  const normalizedSeeds = normalizeWebSeedRoutes(url, seedRoutes);
+  const normalizedTargets = normalizeWebSeedTargets(seedTargets);
+  const targetRoutes = new Set(normalizedTargets.filter((target) => target.navigation.mode === "route").map((target) => target.navigation.route));
+  const frontier = [
+    { target: start.pathname + start.search, action: start.pathname + start.search, fromScreen: null },
+    ...normalizedTargets.map((target) => target.navigation.mode === "route"
+      ? { target: target.navigation.route, action: `PR target ${target.navigation.route}`, fromScreen: null, prTarget: true, targetId: target.id }
+      : { target: start.pathname + start.search, visitKey: `pr-path:${target.id}`, action: `PR target ${target.node.name}`, fromScreen: null, prTarget: true, targetId: target.id, pathTarget: target }),
+    ...normalizedSeeds.filter((target) => !targetRoutes.has(target)).map((target) => ({ target, action: `PR target ${target}`, fromScreen: null, prTarget: true })),
+  ];
   const screenshotFor = new Set();
   let actions = 0;
   let screenCount = 0;
   let lastScreen = null;
+  let pendingNavigation = null;
   let loginTried = false;
 
   const screenKey = () => {
@@ -124,26 +216,58 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           secure: el.type === "password",
         }))
         .filter((f) => f.label);
+      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, [role=button], [role=tab], [role=checkbox], [role=switch]")]
+        .filter((el) => el.type !== "hidden" && el.offsetParent !== null)
+        .slice(0, 60)
+        .map((el) => {
+          const tag = el.tagName.toLowerCase();
+          const role = el.getAttribute("role") || (tag === "a" ? "link" : tag === "button" ? "button" : "");
+          const field = ["input", "textarea", "select"].includes(tag);
+          const secure = el.type === "password";
+          const label = (el.labels?.[0]?.textContent || el.getAttribute("aria-label") || el.textContent || el.placeholder || el.name || el.id || "").trim().slice(0, 120);
+          return {
+            kind: field ? (secure ? "secureField" : "field") : role || "control",
+            role,
+            label,
+            id: el.id || "",
+            cssId: el.id || "",
+            testId: el.getAttribute("data-testid") || "",
+            accessibilityId: el.getAttribute("aria-label") || "",
+            secure,
+            enabled: !el.disabled && el.getAttribute("aria-disabled") !== "true",
+            hittable: true,
+          };
+        })
+        .filter((control) => control.label || control.id || control.testId);
       return {
+        heading: document.querySelector("h1")?.textContent?.trim() || "",
         title: document.title.trim(),
-        controls: document.querySelectorAll("a[href], button, [role=button], input, select, textarea").length,
+        controlCount: document.querySelectorAll("a[href], button, [role=button], input, select, textarea").length,
         textLen: (document.body?.innerText || "").trim().length,
         alertText: [...document.querySelectorAll("[role=alert], [class*=error i]")]
           .map((el) => el.textContent.trim()).filter(Boolean).join(" ").slice(0, 120),
         inputs,
+        controls,
       };
     }).catch(() => null);
     if (!info) return null;
 
     const key = screenKey();
-    const screen = info.title || key;
+    const screen = webScreenTitle(info, key);
+    const evidenceKey = `${key}::${screen}`;
     currentScreen = screen;
-    emit("STATE", { screen, url: key, controls: info.controls, inputs: info.inputs, settled: true });
-    if (lastScreen && lastScreen !== screen) emit("TRANSITION", { from: lastScreen, to: screen });
+    emit("STATE", { screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: true });
+    const completedNavigation = pendingNavigation;
+    const transitionFrom = webTransitionOrigin(completedNavigation, lastScreen);
+    const transitionAction = completedNavigation?.action || lastActionTarget;
+    if (transitionFrom && transitionFrom !== screen) emit("TRANSITION", { from: transitionFrom, to: screen, ...(transitionAction ? { action: transitionAction } : {}) });
+    pendingNavigation = null;
+    if (lastScreen !== screen) lastActionTarget = "";
     lastScreen = screen;
+    if (completedNavigation?.prTarget) emit("PR_TARGET", { ...(completedNavigation.targetId ? { targetId: completedNavigation.targetId } : {}), route: completedNavigation.target, status: "observed", screen });
 
-    if (!screenshotFor.has(key)) {
-      screenshotFor.add(key);
+    if (!screenshotFor.has(evidenceKey)) {
+      screenshotFor.add(evidenceKey);
       screenCount = screenshotFor.size;
       await page.screenshot({ path: path.join(outDir, `state_${screenCount}_${slug(screen)}.png`) }).catch(() => {});
       // Deterministic per-page detectors run once per distinct screen.
@@ -159,16 +283,17 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   // Login preamble parity with iOS: if creds were given and a password field is present,
   // fill + submit once, and flag auth_failed if we clearly bounced.
   async function tryLogin(screen) {
-    if (loginTried || !testPassword) return;
+    if (loginTried || !testPassword) return null;
     const pw = page.locator("input[type=password]").first();
-    if (!(await pw.isVisible().catch(() => false))) return;
+    if (!(await pw.isVisible().catch(() => false))) return null;
     loginTried = true;
     const emailSel = "input[type=email], input[name*=mail i], input[name*=user i], input[id*=mail i], input[id*=user i]";
     if (testEmail) await page.locator(emailSel).first().fill(testEmail).catch(() => {});
     await pw.fill(testPassword).catch(() => {});
-    emit("ACTION", { type: "type", target: "login form", screen, narrative: "Filled the sign-in form with the provided test credentials" });
+    lastActionTarget = "Sign in";
+    emit("ACTION", { type: "login", target: "Sign in", screen, narrative: "Filled and submitted the sign-in form with the provided test credentials" });
     actions += 1;
-    await page.locator("button[type=submit], input[type=submit], form button").first().click({ timeout: 3000 }).catch(() => {});
+    await submitWebLogin(page).catch(() => false);
     await page.waitForTimeout(CLICK_SETTLE_MS * 2);
     // Still on the login form after a submit = the sign-in failed — full stop. (A quiet
     // credential rejection often shows NO other symptom, so this must not be coupled to
@@ -187,7 +312,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         currentScreen,
         "login form"
       );
+    } else {
+      // SPAs commonly replace the login view without changing URL. Capture the
+      // authenticated state immediately so coverage does not remain stuck at 1.
+      return await observe();
     }
+    return null;
   }
 
   const progress = () => {
@@ -197,18 +327,24 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   try {
     while (frontier.length && actions < maxActions && Date.now() < deadline) {
-      const target = frontier.shift();
-      if (visited.has(target)) continue;
-      visited.add(target);
+      const entry = frontier.shift();
+      const target = entry.target;
+      const visitKey = entry.visitKey || target;
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
 
       actions += 1;
-      emit("ACTION", { type: "open", target, narrative: `Opened ${target}` });
+      lastActionTarget = webNavigationAction(entry.action, target);
+      pendingNavigation = entry.pathTarget ? { ...entry, prTarget: false } : entry;
+      emit("ACTION", { type: "open", target, via: lastActionTarget, narrative: `Opened ${target}` });
       // Attribute load-time events (pageerror, 404s) to the page being loaded, not the one
       // we just left; observe() refines this to the page title once it settles.
       currentScreen = target;
       const nav = await page.goto(start.origin + target, { waitUntil: "domcontentloaded" }).catch((err) => ({ navError: String(err.message || err) }));
       await page.waitForTimeout(SETTLE_MS);
       if (nav && nav.navError) {
+        if (entry.prTarget) emit("PR_TARGET", { ...(entry.targetId ? { targetId: entry.targetId } : {}), ...(entry.pathTarget ? {} : { route: target }), status: "failed", error: nav.navError.slice(0, 160) });
+        pendingNavigation = null;
         issue(/Timeout/i.test(nav.navError) ? "performance_timeout" : "network_error", "high", `Could not load ${target}: ${nav.navError.slice(0, 80)}`, target);
         progress();
         continue;
@@ -217,18 +353,70 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         issue("broken_link", "medium", `Broken link: ${target} → 404`, target);
       }
 
-      const ob = await observe();
+      let ob = await observe();
       if (!ob) { progress(); continue; }
-      await tryLogin(ob.screen);
+      ob = await tryLogin(ob.screen) || ob;
+
+      if (entry.pathTarget) {
+        let pathError = "";
+        for (const step of entry.pathTarget.navigation.steps) {
+          if (actions >= maxActions || Date.now() >= deadline) { pathError = "Target path exceeded the exploration budget"; break; }
+          const action = step.action;
+          const beforeScreen = ob.screen;
+          actions += 1;
+          lastActionTarget = action.target;
+          emit("ACTION", { type: action.type, target: action.target, screen: beforeScreen, reason: "pr_ui_map_path", narrative: `Following observed UI Map path: ${action.type} ${action.target}` });
+          let acted = false;
+          if (action.type === "back") {
+            await page.goBack({ waitUntil: "domcontentloaded", timeout: step.wait?.timeoutMs || NAV_TIMEOUT_MS }).catch(() => {});
+            acted = true;
+          } else {
+            const selectors = [...(action.selectors || []), { kind: "label", value: action.target }];
+            for (const selector of selectors) {
+              let locator;
+              if (selector.kind === "testId") locator = page.locator(`[data-testid=${JSON.stringify(selector.value)}]`).first();
+              else if (selector.kind === "cssId") locator = page.locator(`[id=${JSON.stringify(selector.value)}]`).first();
+              else if (selector.kind === "accessibilityId") locator = page.locator(`[aria-label=${JSON.stringify(selector.value)}]`).first();
+              else if (selector.kind === "label") locator = page.getByText(selector.value, { exact: true }).first();
+              else continue;
+              if (await locator.isVisible().catch(() => false)) {
+                await locator.click({ timeout: Math.min(step.wait?.timeoutMs || NAV_TIMEOUT_MS, NAV_TIMEOUT_MS) }).catch(() => {});
+                acted = true;
+                break;
+              }
+            }
+          }
+          if (!acted) { pathError = `Observed control was not found: ${action.target}`; break; }
+          pendingNavigation = { action: action.target, fromScreen: beforeScreen };
+          await page.waitForTimeout(CLICK_SETTLE_MS);
+          ob = await observe() || ob;
+          progress();
+        }
+        const expected = String(entry.pathTarget.node.semanticKey || "").toLowerCase();
+        const actual = slug(ob.screen);
+        if (!pathError && expected && actual !== expected) pathError = `Reached ${ob.screen}, expected ${entry.pathTarget.node.name}`;
+        if (pathError) {
+          emit("PR_TARGET", { targetId: entry.targetId, status: "failed", screen: ob.screen, error: pathError.slice(0, 160) });
+          issue("pr_target_unreachable", "high", pathError, ob.screen);
+          progress();
+          continue;
+        }
+        emit("PR_TARGET", { targetId: entry.targetId, status: "observed", screen: ob.screen });
+      }
 
       // Enqueue unvisited same-origin links (BFS keeps exploration order deterministic).
-      const links = await page.$$eval("a[href]", (as) => as.map((a) => a.href)).catch(() => []);
-      for (const href of links) {
+      const links = await page.$$eval("a[href]", (as) => as.map((a) => ({
+        href: a.href,
+        label: (a.getAttribute("aria-label") || a.textContent || "").trim(),
+      }))).catch(() => []);
+      for (const link of links) {
         try {
-          const u = new URL(href);
+          const u = new URL(link.href);
           if (u.origin !== start.origin || !/^https?:$/.test(u.protocol)) continue;
           const key = u.pathname.replace(/\/+$/, "") + u.search || "/";
-          if (!visited.has(key) && !frontier.includes(key)) frontier.push(key);
+          if (!visited.has(key) && !frontier.some((item) => item.target === key)) {
+            frontier.push({ target: key, action: webNavigationAction(link.label, key), fromScreen: ob.screen });
+          }
         } catch {}
       }
 
@@ -255,7 +443,8 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         const dialogsBefore = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);
         const reqBefore = requestCount;
         actions += 1;
-        emit("ACTION", { type: "tap", target: label, screen: ob.screen, narrative: `Tapped "${label}"` });
+        lastActionTarget = label;
+        emit("ACTION", { type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
         await b.click({ timeout: 3000 }).catch(() => {});
         await page.waitForTimeout(CLICK_SETTLE_MS);
         if (page.url() !== beforeUrl) {
@@ -268,6 +457,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           const hadEffect = mutations > 0 || dialogsAfter !== dialogsBefore || requestCount > reqBefore;
           if (!hadEffect) {
             issue("unresponsive_element", "medium", `Button "${label}" does nothing`, ob.screen, label);
+          } else {
+            // Same-URL SPA transitions are real screens too; URL-only observation
+            // under-counted coverage and made healthy applications inconclusive.
+            ob = await observe() || ob;
           }
         }
         progress();
@@ -279,5 +472,5 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     fs.closeSync(markersFd);
     await browser.close().catch(() => {});
   }
-  return { markersPath, outDir, actions, screens: screenCount };
+  return { markersPath, outDir, actions, screens: screenCount, seedRoutes: normalizedSeeds, seedTargets: normalizedTargets };
 }

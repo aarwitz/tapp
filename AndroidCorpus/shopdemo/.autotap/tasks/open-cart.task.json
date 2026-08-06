@@ -1,0 +1,58 @@
+{
+  "kind": "task",
+  "version": 1,
+  "name": "openCart",
+  "description": "Navigate from Trail Backpack to the observed Cart state.",
+  "implementations": {
+    "android": {
+      "steps": [
+        {
+          "action": "assert_screen",
+          "target": "Trail Backpack"
+        },
+        {
+          "wait_for": "add_to_cart_button"
+        },
+        {
+          "tap": "add_to_cart_button"
+        },
+        {
+          "wait_for": "Cart"
+        }
+      ]
+    }
+  },
+  "coverage": {
+    "nodes": [
+      "screen_1c42ddc0285b9c25",
+      "screen_5aa7616809c53215"
+    ],
+    "edges": [
+      "edge_aa43be8f52a023ea"
+    ],
+    "sourcePaths": []
+  },
+  "generation": {
+    "status": "promoted",
+    "trusted": true,
+    "origin": "deterministic-ui-map",
+    "planItemIds": [
+      "proposal_6c350caab7e83f8a",
+      "proposal_f03d19f34d1a1dae"
+    ],
+    "mapPath": "shopdemo/.autotap/ui-map.json",
+    "targetId": "target_b0450646e4866df7",
+    "realValidation": {
+      "android": {
+        "status": "passed",
+        "passed": true,
+        "evidence": "tapp-capture:flow-android-6212-1785942195522",
+        "detail": "deterministic replay passed",
+        "contract": "orderConfirmedReachable",
+        "validatedAt": "2026-08-05T15:04:12.120Z"
+      }
+    },
+    "promotedAt": "2026-08-05T15:06:28.278Z",
+    "promotedFrom": "shopdemo/.autotap/proposals/tasks/open-cart.task.json"
+  }
+}

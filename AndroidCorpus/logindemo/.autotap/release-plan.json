@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-release-plan",
+  "application": {
+    "name": "logindemo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "android"
+    ],
+    "targetIds": [
+      "target_f9ef018700dffe80"
+    ]
+  },
+  "status": "awaiting-review",
+  "policy": {
+    "targetCount": "approximately 5–15 when grounded evidence supports it",
+    "maximum": 15,
+    "compactOverExhaustive": true,
+    "deterministicReplayRequired": true,
+    "aiAssertionsDefault": false
+  },
+  "items": [
+    {
+      "id": "contract_b1d191b9f05a7815",
+      "kind": "release-contract",
+      "name": "existingCustomerCanSignIn",
+      "title": "An existing Android customer can sign in and reach their profile",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "critical",
+      "businessValue": "Authentication does not prevent existing customers from entering the product.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/customer-sign-in.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
+    },
+    {
+      "id": "proposal_d3eb92b1d868833b",
+      "kind": "release-contract",
+      "name": "profileReachable",
+      "title": "Profile remains reachable",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "pending",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Profile product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_1900eab6c028483d",
+          "observationCount": 1
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target."
+    }
+  ],
+  "coverageGaps": {
+    "unknownRequirements": [],
+    "uncoveredUiMapNodes": [
+      "screen_1900eab6c028483d"
+    ],
+    "uncoveredUiMapEdges": [
+      "edge_1f73db5ddf721bc4",
+      "edge_662df0725c0129e3"
+    ]
+  },
+  "review": {
+    "instructions": "Approve, reject, defer, reprioritize, or constrain pending items before generation. Existing committed contracts remain accepted but still require current replay evidence.",
+    "reviewedAt": null
+  },
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T14:16:05.611Z",
+    "remoteAiUsed": false,
+    "groundedOnly": true
+  }
+}

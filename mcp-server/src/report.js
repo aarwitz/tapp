@@ -210,6 +210,17 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
       "only the first few visible buttons per page are probed (web beta)",
       "content & reachability regressions require a baseline",
     ];
+  } else if (platform === "android") {
+    checkedFor = [
+      "crashes / process exits", "dead controls", "error surfaces", "blank screens",
+      "navigation reachability", "form interaction",
+    ];
+    notChecked = [
+      "app-specific business logic (cover with committed Flows)",
+      "visual correctness — layout/images/clipping",
+      "push notifications / system integrations",
+      "content & reachability regressions require a baseline",
+    ];
   } else {
     checkedFor = [
       "crashes (launch + in-run)", "hangs / stuck loading",

@@ -51,9 +51,29 @@ class ExplorerTests: XCTestCase {
         return [:]
     }
     /// Targeted exploration: beeline to this screen (following `route`, a sequence of control
-    /// labels) before exploring. Empty = normal broad exploration.
-    var targetScreen: String { config["OCQA_TARGET_SCREEN"] as? String ?? "" }
-    var route: [String] { config["OCQA_ROUTE"] as? [String] ?? [] }
+    /// labels) before exploring. A PR gate supplies the same data as one structured, bounded
+    /// UI-Map target so customer-derived labels never become shell source.
+    var prExplorationTarget: [String: Any]? { config["OCQA_PR_TARGET"] as? [String: Any] }
+    var targetScreen: String {
+        if let explicit = config["OCQA_TARGET_SCREEN"] as? String, !explicit.isEmpty { return explicit }
+        return (prExplorationTarget?["node"] as? [String: Any])?["name"] as? String ?? ""
+    }
+    var route: [String] {
+        if let explicit = config["OCQA_ROUTE"] as? [String], !explicit.isEmpty { return explicit }
+        let navigation = prExplorationTarget?["navigation"] as? [String: Any]
+        let steps = navigation?["steps"] as? [[String: Any]] ?? []
+        return steps.compactMap { ($0["action"] as? [String: Any])?["target"] as? String }
+    }
+    var routeTimeouts: [TimeInterval] {
+        let navigation = prExplorationTarget?["navigation"] as? [String: Any]
+        let steps = navigation?["steps"] as? [[String: Any]] ?? []
+        return steps.map { step in
+            let wait = step["wait"] as? [String: Any]
+            let milliseconds = (wait?["timeoutMs"] as? NSNumber)?.doubleValue ?? 6000
+            return max(0.25, min(30, milliseconds / 1000))
+        }
+    }
+    var prExplorationTargetId: String { prExplorationTarget?["id"] as? String ?? "" }
 
     /// Resolve a string key: config (as String) -> process environment -> fallback
     private func resolve(_ key: String, fallback: String = "") -> String {
@@ -404,8 +424,24 @@ class ExplorerTests: XCTestCase {
         for query in queries where tryTap(query[identifier]) { return "ok" }
         // Exact label, then a forgiving case-insensitive "contains" match so callers can tap by the
         // visible text they see in the tree without an exact accessibility id.
-        if tryTap(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).firstMatch) { return "ok" }
-        if tryTap(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", identifier)).firstMatch) { return "ok" }
+        let exactMatches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).allElementsBoundByIndex
+        for match in exactMatches where tryTap(match) { return "ok" }
+        let containsMatches = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", identifier)).allElementsBoundByIndex
+        for match in containsMatches where tryTap(match) { return "ok" }
+        // A semantic control can exist below a SwiftUI ScrollView fold. Match Playwright's
+        // scroll-into-view behavior with a small deterministic native bound; never retry the
+        // action after it has fired, and never turn an absent control into a pass.
+        if existedButNotHittable {
+            for _ in 0..<3 {
+                app.swipeUp()
+                Thread.sleep(forTimeInterval: 0.25)
+                for query in queries where tryTap(query[identifier]) { return "ok" }
+                let scrolledExact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).allElementsBoundByIndex
+                for match in scrolledExact where tryTap(match) { return "ok" }
+                let scrolledContains = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", identifier)).allElementsBoundByIndex
+                for match in scrolledContains where tryTap(match) { return "ok" }
+            }
+        }
         // Fields are the one control class whose visible name is usually a *placeholder* (not a
         // label) — "Password" must reach the secureTextField or a later `type` lands in whatever
         // field still has keyboard focus.
@@ -692,6 +728,10 @@ class ExplorerTests: XCTestCase {
         if let extra = (try? JSONSerialization.jsonObject(with: Data(resolve("OCQA_FLOW_VARS").utf8))) as? [String: Any] {
             for (k, v) in extra { vars[k] = "\(v)" }
         }
+        let releaseContract = flow["releaseContract"] as? [String: Any]
+        let contractName = releaseContract?["name"] as? String ?? ""
+        let contractCriticality = releaseContract?["criticality"] as? String ?? ""
+        let evidenceKind = contractName.isEmpty ? (flow["kind"] as? String ?? "flow") : "release-contract"
         func subst(_ s: String) -> String {
             var out = s
             for (k, v) in vars { out = out.replacingOccurrences(of: "$\(k)", with: v) }
@@ -700,12 +740,16 @@ class ExplorerTests: XCTestCase {
 
         if !targetBundleId.isEmpty { app.launch() } else { app.launch() }
         waitForUIStability(timeout: 3.0)
-        print("OCQA_FLOW_RESULT:started total=\(steps.count) name=\(escapeJSON(flow["name"] as? String ?? "flow"))")
+        let contractStart = contractName.isEmpty ? "" : " contract=\(escapeJSON(contractName))"
+        print("OCQA_FLOW_RESULT:started total=\(steps.count) name=\(escapeJSON(flow["name"] as? String ?? "flow")) kind=\(evidenceKind)\(contractStart)")
 
         var failed = 0
+        var executed = 0
         var aiIndex = 0
         for (i, raw) in steps.enumerated() {
             let idx = i + 1
+            executed = idx
+            let taskName = (raw["__tappTask"] as? [String: Any])?["name"] as? String ?? ""
             // A step is either {action: value} sugar or {action:..., target/value/...}. Normalize.
             let (action, step) = normalizeFlowStep(raw)
             let target = subst((step["target"] as? String) ?? "")
@@ -764,7 +808,9 @@ class ExplorerTests: XCTestCase {
             }
 
             let isAssert = action.hasPrefix("assert_")
-            print("OCQA_FLOW_STEP:{\"index\":\(idx),\"action\":\"\(escapeJSON(action))\",\"target\":\"\(escapeJSON(target.isEmpty ? value : target))\",\"assert\":\(isAssert),\"status\":\"\(status)\",\"detail\":\"\(escapeJSON(detail))\"}")
+            let taskEvidence = taskName.isEmpty ? "" : ",\"task\":\"\(escapeJSON(taskName))\""
+            let contractEvidence = contractName.isEmpty ? "" : ",\"contract\":\"\(escapeJSON(contractName))\""
+            print("OCQA_FLOW_STEP:{\"index\":\(idx),\"action\":\"\(escapeJSON(action))\",\"target\":\"\(escapeJSON(target.isEmpty ? value : target))\",\"assert\":\(isAssert),\"status\":\"\(status)\",\"detail\":\"\(escapeJSON(detail))\"\(taskEvidence)\(contractEvidence)}")
             if status == "fail" {
                 failed += 1
                 // A failed step surfaces as a finding, with the same shape QA findings use.
@@ -778,7 +824,8 @@ class ExplorerTests: XCTestCase {
 
         let shot = app.screenshot()
         let att = XCTAttachment(screenshot: shot); att.name = "flow_final"; att.lifetime = .keepAlways; add(att)
-        print("OCQA_FLOW_RESULT:{\"passed\":\(failed == 0),\"total\":\(steps.count),\"failed\":\(failed)}")
+        let contractResult = contractName.isEmpty ? "" : ",\"contract\":\"\(escapeJSON(contractName))\",\"criticality\":\"\(escapeJSON(contractCriticality))\""
+        print("OCQA_FLOW_RESULT:{\"passed\":\(failed == 0),\"name\":\"\(escapeJSON(flow["name"] as? String ?? "flow"))\",\"kind\":\"\(escapeJSON(evidenceKind))\"\(contractResult),\"total\":\(steps.count),\"executed\":\(executed),\"failed\":\(failed)}")
         if failed > 0 { XCTFail("Flow had \(failed) failed step(s)") }
     }
 
@@ -786,7 +833,7 @@ class ExplorerTests: XCTestCase {
     private func normalizeFlowStep(_ raw: [String: Any]) -> (String, [String: Any]) {
         if let action = raw["action"] as? String { return (action.lowercased(), raw) }
         // Sugar: the single key is the action; a string value is target, an object is the params.
-        for (k, v) in raw {
+        for (k, v) in raw where !k.hasPrefix("__") {
             if let s = v as? String { return (k.lowercased(), ["target": s, "value": s]) }
             if let o = v as? [String: Any] {
                 var params = o
@@ -850,6 +897,16 @@ class ExplorerTests: XCTestCase {
     // MARK: - Full Autonomous Exploration
 
     func testAutonomousExploration() {
+        // Autonomous QA is a controlled-state run, not a continuation of whichever screen a
+        // developer or previous Tapp invocation left foregrounded. setUp deliberately activates
+        // for the single-action/session utilities; reset this full run explicitly and forward the
+        // same launch configuration used by deterministic replay.
+        if !targetBundleId.isEmpty { app.terminate() }
+        app.launchArguments = appLaunchArgs
+        app.launchEnvironment = appLaunchEnv
+        app.launch()
+        _ = app.wait(for: .runningForeground, timeout: 10)
+
         let maxActions = self.maxActions
         let timeoutSeconds = Double(self.timeoutSeconds)
         var inputOverrides = (config["OCQA_INPUT_OVERRIDES"] as? [String: String]) ?? [:]
@@ -912,7 +969,7 @@ class ExplorerTests: XCTestCase {
         /// structurally-identical detail screens), so its remaining siblings can be deferred.
         var hubKeysByFingerprint: [String: [String: Set<String>]] = [:]
         /// Set after performing an action; resolved on next iteration to populate knownTransitions
-        var pendingTransitionFrom: (title: String, actionKey: String)? = nil
+        var pendingTransitionFrom: (title: String, actionKey: String, hash: String)? = nil
         /// Tracks which tab bar position (0-4) to try next for rotation
         var nextTabRotation = 0
         /// Count of distinct screen titles discovered so far
@@ -1175,9 +1232,24 @@ class ExplorerTests: XCTestCase {
         let initialRole = classifyScreenRole(title: initialTitle, elements: initialElements, inputs: initialInputs, interactable: initialInteractable)
         let initialSummary = describeScreen(title: initialTitle, role: initialRole, elements: initialElements, inputs: initialInputs, interactable: initialInteractable)
         let initialAtext = visionTextInventory(initialElements).map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
-        print("OCQA_STATE:{\"screen\":\"\(escapeJSON(initialTitle))\",\"hash\":\"\(computeHash(initialElements))\",\"elements\":\(initialElements.count),\"action\":0,\"role\":\"\(escapeJSON(initialRole))\",\"summary\":\"\(escapeJSON(initialSummary))\",\"settled\":\(isScreenSettled() ? "true" : "false"),\"atext\":[\(initialAtext)],\"inputs\":[]}")
+        let initialInputJson = initialInputs.map { descriptor in
+            "{\"key\":\"\(escapeJSON(descriptor.key))\",\"label\":\"\(escapeJSON(descriptor.label))\",\"secure\":\(descriptor.secure ? "true" : "false"),\"placeholder\":\"\(escapeJSON(descriptor.placeholder))\"}"
+        }.joined(separator: ",")
+        let initialControlsJson = mapControlsJSON(initialElements)
+        print("OCQA_STATE:{\"screen\":\"\(escapeJSON(initialTitle))\",\"hash\":\"\(computeHash(initialElements))\",\"elements\":\(initialElements.count),\"action\":0,\"role\":\"\(escapeJSON(initialRole))\",\"summary\":\"\(escapeJSON(initialSummary))\",\"settled\":\(isScreenSettled() ? "true" : "false"),\"atext\":[\(initialAtext)],\"inputs\":[\(initialInputJson)],\"controls\":[\(initialControlsJson)]}")
 
         navigateToRootScreen(actionCount: &actionCount)
+
+        // The first state is the true customer launch surface. Directed replay begins after
+        // deterministic root normalization, so persist that separate navigation anchor in the
+        // shared UI Map instead of pretending onboarding was skipped by a graph edge.
+        let navigationRootElements = readUITree(app)
+        let navigationRootTitle = detectTitle(navigationRootElements) ?? "Unknown"
+        let navigationRootInputs = detectInputDescriptors(in: navigationRootElements)
+        let navigationRootInteractable = navigationRootElements.filter { $0.isEnabled && isInteractable($0.type) }
+        let navigationRootRole = classifyScreenRole(title: navigationRootTitle, elements: navigationRootElements, inputs: navigationRootInputs, interactable: navigationRootInteractable)
+        let navigationRootControls = mapControlsJSON(navigationRootElements)
+        print("OCQA_NAVIGATION_ROOT:{\"screen\":\"\(escapeJSON(navigationRootTitle))\",\"role\":\"\(escapeJSON(navigationRootRole))\",\"controls\":[\(navigationRootControls)]}")
 
         // ---- Directed (targeted) exploration ----
         // Beeline from the root to the requested screen as fast as possible by following the route
@@ -1270,7 +1342,7 @@ class ExplorerTests: XCTestCase {
             if let pending = pendingTransitionFrom {
                 knownTransitions["\(pending.title)|\(pending.actionKey)"] = titleStr
                 pendingTransitionFrom = nil
-                if pending.title != titleStr {
+                if pending.hash != stateHash {
                     // Real navigation: record the destination's affordance fingerprint under the hub
                     // it was reached from, so a hub that reaches >= 2 same-fingerprint screens can be
                     // detected as a repeating template list. Only destinations that have real content
@@ -1285,7 +1357,7 @@ class ExplorerTests: XCTestCase {
                     let escapedFrom = escapeJSON(pending.title)
                     let escapedTo   = escapeJSON(titleStr)
                     let escapedAct  = escapeJSON(pending.actionKey)
-                    print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapedFrom)\",\"to\":\"\(escapedTo)\",\"action\":\"\(escapedAct)\"}")
+                    print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapedFrom)\",\"fromHash\":\"\(pending.hash)\",\"to\":\"\(escapedTo)\",\"toHash\":\"\(stateHash)\",\"action\":\"\(escapedAct)\"}")
                 }
             }
             screenVisitCount[titleStr, default: 0] += 1
@@ -1403,7 +1475,8 @@ class ExplorerTests: XCTestCase {
             let escapedTitle = escapeJSON(titleStr)
             let settled = isScreenSettled()
             let atextJson = visionTextInventory(elements).map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
-            print("OCQA_STATE:{\"screen\":\"\(escapedTitle)\",\"hash\":\"\(stateHash)\",\"elements\":\(elements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(screenRole))\",\"summary\":\"\(escapeJSON(screenSummary))\",\"settled\":\(settled ? "true" : "false"),\"atext\":[\(atextJson)],\"inputs\":[\(inputJsonArray)]}")
+            let controlsJson = mapControlsJSON(elements)
+            print("OCQA_STATE:{\"screen\":\"\(escapedTitle)\",\"hash\":\"\(stateHash)\",\"elements\":\(elements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(screenRole))\",\"summary\":\"\(escapeJSON(screenSummary))\",\"settled\":\(settled ? "true" : "false"),\"atext\":[\(atextJson)],\"inputs\":[\(inputJsonArray)],\"controls\":[\(controlsJson)]}")
 
             // ---- Persistence probe: on a fresh RE-ARRIVAL at a screen, fields we previously
             // typed into (and verified visible in the a11y value) should still hold their value.
@@ -1725,7 +1798,10 @@ class ExplorerTests: XCTestCase {
             // attempts bound keeps a no-tab-bar app from paying the query cost forever.
             // app.state is a cheap local check; XCUI element queries against a dead/crashed app
             // can stall for long timeouts per call — never pay that just to look for tabs.
-            if !tabSweepDone && app.state == .runningForeground {
+            // Directed PR exploration has already spent a reviewed map path reaching one changed
+            // surface. Keep the remaining bounded budget there; an early global tab sweep would
+            // immediately abandon the target and make "observed" mean only that it flashed by.
+            if targetScreen.isEmpty && !tabSweepDone && app.state == .runningForeground {
                 let sweepTabs = app.tabBars.buttons.allElementsBoundByIndex
                     .filter { $0.exists && $0.isHittable }
                     .sorted { $0.frame.midX < $1.frame.midX }
@@ -1742,6 +1818,12 @@ class ExplorerTests: XCTestCase {
                     }) {
                         let key = sweepKey(target, idx)
                         sweptTabLabels.insert(key)
+                        // A tab sweep is a real semantic navigation action. Preserve it in the
+                        // same pending-transition channel as ordinary taps so the UI Map can
+                        // connect the current screen to the tab destination. In particular, this
+                        // may be the run's final allowed action; the terminal observation below
+                        // resolves it instead of leaving a disconnected destination node.
+                        pendingTransitionFrom = (title: titleStr, actionKey: key, hash: stateHash)
                         target.tap()
                         actionCount += 1
                         lastTabSwitchStep = actionCount
@@ -2147,7 +2229,7 @@ class ExplorerTests: XCTestCase {
             if isTextField(target.type) {
                 screenTextEntryCount[titleStr, default: 0] += 1
             }
-            pendingTransitionFrom = (title: titleStr, actionKey: key)
+            pendingTransitionFrom = (title: titleStr, actionKey: key, hash: stateHash)
             actionCount += 1
 
             let targetName = target.identifier.isEmpty ? target.label : target.identifier
@@ -2298,6 +2380,39 @@ class ExplorerTests: XCTestCase {
             emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
         }
 
+        // The action budget is checked at the top of the loop. Previously, when the last allowed
+        // action navigated, the loop ended before reading the resulting state: screenshots could
+        // contain the destination, but OCQA_STATE/TRANSITION evidence (and therefore the shared UI
+        // Map) stopped at the source. Resolve exactly one outstanding terminal transition and emit
+        // the grounded destination without taking another action.
+        if let pending = pendingTransitionFrom, app.state == .runningForeground {
+            Thread.sleep(forTimeInterval: 0.4)
+            let terminalElements = readUITree(app)
+            if !terminalElements.isEmpty {
+                let terminalHash = computeHash(terminalElements)
+                let terminalTitle = detectTitle(terminalElements) ?? "Unknown"
+                knownTransitions["\(pending.title)|\(pending.actionKey)"] = terminalTitle
+                pendingTransitionFrom = nil
+                if pending.hash != terminalHash {
+                    print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapeJSON(pending.title))\",\"fromHash\":\"\(pending.hash)\",\"to\":\"\(escapeJSON(terminalTitle))\",\"toHash\":\"\(terminalHash)\",\"action\":\"\(escapeJSON(pending.actionKey))\"}")
+                }
+                knownScreenTitles.insert(terminalTitle)
+                screenTitles[terminalHash] = terminalTitle
+                visitedStates.insert(terminalHash)
+
+                let terminalInputs = detectInputDescriptors(in: terminalElements)
+                let terminalInputJSON = terminalInputs.map { descriptor in
+                    "{\"key\":\"\(escapeJSON(descriptor.key))\",\"label\":\"\(escapeJSON(descriptor.label))\",\"secure\":\(descriptor.secure ? "true" : "false"),\"placeholder\":\"\(escapeJSON(descriptor.placeholder))\"}"
+                }.joined(separator: ",")
+                let terminalInteractable = terminalElements.filter { $0.isEnabled && isInteractable($0.type) }
+                let terminalRole = classifyScreenRole(title: terminalTitle, elements: terminalElements, inputs: terminalInputs, interactable: terminalInteractable)
+                let terminalSummary = describeScreen(title: terminalTitle, role: terminalRole, elements: terminalElements, inputs: terminalInputs, interactable: terminalInteractable)
+                let terminalTextJSON = visionTextInventory(terminalElements).map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
+                let terminalControlsJSON = mapControlsJSON(terminalElements)
+                print("OCQA_STATE:{\"screen\":\"\(escapeJSON(terminalTitle))\",\"hash\":\"\(terminalHash)\",\"elements\":\(terminalElements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(terminalRole))\",\"summary\":\"\(escapeJSON(terminalSummary))\",\"settled\":\(isScreenSettled() ? "true" : "false"),\"atext\":[\(terminalTextJSON)],\"inputs\":[\(terminalInputJSON)],\"controls\":[\(terminalControlsJSON)]}")
+            }
+        }
+
         let uniqueScreens = screenTitles.values
         let screenList = Array(Set(uniqueScreens)).sorted().joined(separator: ",")
         didEmitComplete = true
@@ -2322,6 +2437,29 @@ class ExplorerTests: XCTestCase {
         let isEnabled: Bool
         let isHittable: Bool
         let xcElement: XCUIElement?
+    }
+
+    /// Compact semantic control inventory for the shared Tapp UI Map. Values are
+    /// deliberately excluded: typed credentials and customer content never enter
+    /// the map marker. Host-side map normalization performs additional PII redaction.
+    private func mapControlsJSON(_ elements: [SimpleElement]) -> String {
+        elements.filter { element in
+            isInteractable(element.type)
+                && (!element.identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || !element.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }.prefix(60).map { element in
+            let lower = element.type.lowercased()
+            let secure = lower.contains("secure")
+            let kind: String
+            if lower.contains("textfield") || lower.contains("textview") || lower.contains("rawvalue: 49") || lower.contains("rawvalue: 50") || lower.contains("rawvalue: 52") {
+                kind = secure ? "secureField" : "field"
+            } else if lower.contains("tab") { kind = "tab" }
+            else if lower.contains("switch") || lower.contains("toggle") { kind = "toggle" }
+            else if lower.contains("link") { kind = "link" }
+            else { kind = "button" }
+            let label = element.label.isEmpty ? element.identifier : element.label
+            return "{\"kind\":\"\(kind)\",\"type\":\"\(escapeJSON(element.type))\",\"identifier\":\"\(escapeJSON(element.identifier))\",\"accessibilityId\":\"\(escapeJSON(element.identifier))\",\"label\":\"\(escapeJSON(label))\",\"secure\":\(secure ? "true" : "false"),\"enabled\":\(element.isEnabled ? "true" : "false"),\"hittable\":\(element.isHittable ? "true" : "false")}"
+        }.joined(separator: ",")
     }
 
     private func readUITree(_ app: XCUIApplication) -> [SimpleElement] {
@@ -2614,8 +2752,10 @@ class ExplorerTests: XCTestCase {
             actionCount += 1
             if let label = tappedLabel {
                 print("OCQA_ACTION:{\"type\":\"tap\",\"target\":\"\(escapeJSON(label))\",\"reason\":\"launch_sheet_dismiss\",\"step\":\(actionCount),\"screen\":\"\(escapeJSON(preTitle ?? "Unknown"))\",\"narrative\":\"\(escapeJSON("Dismissing the launch screen via '\(label)'."))\"}")
+                print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapeJSON(preTitle ?? "Unknown"))\",\"to\":\"\(escapeJSON(postTitle ?? "Unknown"))\",\"action\":\"\(escapeJSON(label))\",\"type\":\"tap\"}")
             } else {
                 print("OCQA_ACTION:{\"type\":\"swipe\",\"direction\":\"down\",\"reason\":\"launch_sheet_dismiss\",\"step\":\(actionCount),\"screen\":\"\(escapeJSON(preTitle ?? "Unknown"))\",\"narrative\":\"\(escapeJSON("Swiping down to dismiss the launch sheet."))\"}")
+                print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapeJSON(preTitle ?? "Unknown"))\",\"to\":\"\(escapeJSON(postTitle ?? "Unknown"))\",\"action\":\"swipe down\",\"type\":\"swipe\"}")
             }
         }
         // Then go back through navigation stack
@@ -2902,9 +3042,10 @@ class ExplorerTests: XCTestCase {
         print("OCQA_STATE:directed_start target=\(escapeJSON(target)) route_len=\(route.count)")
         if currentTitleMatches(target) {
             print("OCQA_STATE:directed_reached target=\(escapeJSON(target)) step=\(actionCount)")
+            emitPrExplorationTarget(status: "observed", screen: target)
             return true
         }
-        for label in route {
+        for (routeIndex, label) in route.enumerated() {
             if actionCount >= maxActions { break }
             let elements = readUITree(app)
             let titleStr = detectTitle(elements) ?? "Unknown"
@@ -2915,7 +3056,8 @@ class ExplorerTests: XCTestCase {
             let summary = describeScreen(title: titleStr, role: role, elements: elements, inputs: inputs, interactable: interactable)
             print("OCQA_STATE:{\"screen\":\"\(escapedTitle)\",\"hash\":\"\(computeHash(elements))\",\"elements\":\(elements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(role))\",\"summary\":\"\(escapeJSON(summary))\",\"inputs\":[]}")
 
-            let tapped = tapControlByLabel(label)
+            let directedTimeout = routeIndex < routeTimeouts.count ? routeTimeouts[routeIndex] : 0
+            let tapped = tapControlByLabel(label, timeoutSeconds: directedTimeout)
             actionCount += 1
             let narrative = "Heading to \(target): tapping \(label)."
             print("OCQA_ACTION:{\"type\":\"tap\",\"target\":\"\(escapeJSON(label))\",\"reason\":\"directed_route\",\"step\":\(actionCount),\"screen\":\"\(escapedTitle)\",\"narrative\":\"\(escapeJSON(narrative))\"}")
@@ -2923,15 +3065,34 @@ class ExplorerTests: XCTestCase {
                 print("OCQA_STATE:directed_step_missed label=\(escapeJSON(label)) step=\(actionCount)")
             }
             waitForAnimationsToSettle()
+            let afterElements = readUITree(app)
+            let afterTitle = detectTitle(afterElements) ?? "Unknown"
+            let afterInputs = detectInputDescriptors(in: afterElements)
+            let afterInteractable = afterElements.filter { $0.isEnabled && isInteractable($0.type) }
+            let afterRole = classifyScreenRole(title: afterTitle, elements: afterElements, inputs: afterInputs, interactable: afterInteractable)
+            let afterSummary = describeScreen(title: afterTitle, role: afterRole, elements: afterElements, inputs: afterInputs, interactable: afterInteractable)
+            let afterControls = mapControlsJSON(afterElements)
+            print("OCQA_STATE:{\"screen\":\"\(escapeJSON(afterTitle))\",\"hash\":\"\(computeHash(afterElements))\",\"elements\":\(afterElements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(afterRole))\",\"summary\":\"\(escapeJSON(afterSummary))\",\"inputs\":[],\"controls\":[\(afterControls)]}")
+            if titleStr.caseInsensitiveCompare(afterTitle) != .orderedSame {
+                print("OCQA_TRANSITION_RESOLVED:{\"from\":\"\(escapedTitle)\",\"to\":\"\(escapeJSON(afterTitle))\",\"action\":\"\(escapeJSON(label))\"}")
+            }
             emitProgress(action: actionCount, maxActions: maxActions, states: 0)
-            if currentTitleMatches(target) {
+            if afterTitle.caseInsensitiveCompare(target) == .orderedSame {
                 print("OCQA_STATE:directed_reached target=\(escapeJSON(target)) step=\(actionCount)")
+                emitPrExplorationTarget(status: "observed", screen: afterTitle)
                 return true
             }
         }
         let reached = currentTitleMatches(target)
         print("OCQA_STATE:directed_\(reached ? "reached" : "not_reached") target=\(escapeJSON(target)) step=\(actionCount)")
+        emitPrExplorationTarget(status: reached ? "observed" : "failed", screen: reached ? target : "", error: reached ? "" : "The observed UI Map path did not reach its target screen")
         return reached
+    }
+
+    private func emitPrExplorationTarget(status: String, screen: String, error: String = "") {
+        guard !prExplorationTargetId.isEmpty else { return }
+        let errorField = error.isEmpty ? "" : ",\"error\":\"\(escapeJSON(error))\""
+        print("OCQA_PR_TARGET:{\"targetId\":\"\(escapeJSON(prExplorationTargetId))\",\"status\":\"\(escapeJSON(status))\",\"screen\":\"\(escapeJSON(screen))\"\(errorField)}")
     }
 
     private func currentTitleMatches(_ target: String) -> Bool {
@@ -2943,26 +3104,32 @@ class ExplorerTests: XCTestCase {
     /// Tap a control identified by its visible label/title. Tries fast element queries first, then a
     /// case-insensitive contains match, then a coordinate tap on the matching snapshot element.
     @discardableResult
-    private func tapControlByLabel(_ label: String) -> Bool {
+    private func tapControlByLabel(_ label: String, timeoutSeconds: TimeInterval = 0) -> Bool {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        for query in [app.buttons, app.cells, app.links, app.staticTexts] {
-            let el = query[trimmed]
-            if el.exists && el.isHittable { el.tap(); return true }
-        }
-        let predicate = NSPredicate(format: "label CONTAINS[c] %@", trimmed)
-        let match = app.descendants(matching: .any).matching(predicate).firstMatch
-        if match.exists && match.isHittable { match.tap(); return true }
-        // Fall back to the flat snapshot (coordinate tap on the closest label match).
-        if let hit = readUITree(app).first(where: {
-            $0.isHittable && isInteractable($0.type)
-                && ($0.label.caseInsensitiveCompare(trimmed) == .orderedSame
-                    || $0.label.localizedCaseInsensitiveContains(trimmed))
-        }) {
-            app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: hit.frame.midX, dy: hit.frame.midY)).tap()
-            return true
-        }
+        let deadline = Date().addingTimeInterval(max(0, timeoutSeconds))
+        repeat {
+            for query in [app.buttons, app.cells, app.links, app.staticTexts] {
+                let el = query[trimmed]
+                if el.exists && el.isHittable { el.tap(); return true }
+            }
+            let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", trimmed)).allElementsBoundByIndex
+            if let match = exact.first(where: { $0.exists && $0.isHittable }) { match.tap(); return true }
+            let contains = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", trimmed)).allElementsBoundByIndex
+            if let match = contains.first(where: { $0.exists && $0.isHittable }) { match.tap(); return true }
+            // Fall back to the flat snapshot (coordinate tap on the closest label match).
+            if let hit = readUITree(app).first(where: {
+                $0.isHittable && isInteractable($0.type)
+                    && ($0.label.caseInsensitiveCompare(trimmed) == .orderedSame
+                        || $0.label.localizedCaseInsensitiveContains(trimmed))
+            }) {
+                app.coordinate(withNormalizedOffset: .zero)
+                    .withOffset(CGVector(dx: hit.frame.midX, dy: hit.frame.midY)).tap()
+                return true
+            }
+            if (exact + contains).contains(where: { $0.exists && !$0.isHittable }) { app.swipeUp() }
+            if Date() < deadline { Thread.sleep(forTimeInterval: 0.2) }
+        } while Date() < deadline
         return false
     }
 

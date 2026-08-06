@@ -1,0 +1,830 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-release-plan",
+  "application": {
+    "name": "AndroidCorpus",
+    "repositoryRoot": ".",
+    "platforms": [
+      "android"
+    ],
+    "targetIds": [
+      "target_4fa4825fe4191b9c",
+      "target_7488b63ddbfb90b0",
+      "target_b0450646e4866df7"
+    ]
+  },
+  "status": "reviewed",
+  "policy": {
+    "targetCount": "approximately 5–15 when grounded evidence supports it",
+    "maximum": 15,
+    "compactOverExhaustive": true,
+    "deterministicReplayRequired": true,
+    "aiAssertionsDefault": false
+  },
+  "items": [
+    {
+      "id": "contract_9f0f8ad3b2b17aae",
+      "kind": "release-contract",
+      "name": "settingsReachable",
+      "title": "Settings remains reachable",
+      "scope": "demoapp",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Settings product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openDashboard",
+        "openSettings"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T14:45:12.367Z",
+      "generation": {
+        "id": "proposal_7a978be219ca61cd",
+        "name": "settingsReachable",
+        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "tasks": [
+          "openDashboard",
+          "openSettings"
+        ],
+        "taskPaths": [
+          "demoapp/.autotap/tasks/open-dashboard.task.json",
+          "demoapp/.autotap/tasks/open-settings.task.json"
+        ],
+        "mapPath": "demoapp/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 8
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1023-1785941546578",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      "taskInputs": {
+        "openDashboard": {},
+        "openSettings": {}
+      }
+    },
+    {
+      "id": "contract_db3d559fde6f08af",
+      "kind": "release-contract",
+      "name": "existingCustomerCanSignIn",
+      "title": "An existing Android customer can sign in and reach their profile",
+      "scope": "logindemo",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "critical",
+      "businessValue": "Authentication does not prevent existing customers from entering the product.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
+    },
+    {
+      "id": "contract_ab2d7268f1e5f818",
+      "kind": "release-contract",
+      "name": "profileReachable",
+      "title": "Profile remains reachable",
+      "scope": "logindemo",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Profile product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn",
+        "openProfile"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T14:45:12.367Z",
+      "generation": {
+        "id": "proposal_0d561e9f3f0c0204",
+        "name": "profileReachable",
+        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "tasks": [
+          "signIn",
+          "openProfile"
+        ],
+        "taskPaths": [
+          "logindemo/.autotap/tasks/open-profile.task.json"
+        ],
+        "mapPath": "logindemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 10
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1344-1785941584252",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      "taskInputs": {
+        "signIn": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        },
+        "openProfile": {}
+      }
+    },
+    {
+      "id": "contract_0f41dc2e8289a746",
+      "kind": "release-contract",
+      "name": "checkoutReachable",
+      "title": "Checkout remains reachable",
+      "scope": "shopdemo",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "critical",
+      "businessValue": "Protect access to the observed Checkout product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openTrailBackpack",
+        "openCart",
+        "openCheckout"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T14:45:12.367Z",
+      "generation": {
+        "id": "proposal_6c350caab7e83f8a",
+        "name": "checkoutReachable",
+        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "tasks": [
+          "openTrailBackpack",
+          "openCart",
+          "openCheckout"
+        ],
+        "taskPaths": [
+          "shopdemo/.autotap/tasks/open-cart.task.json",
+          "shopdemo/.autotap/tasks/open-checkout.task.json",
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 12
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-4150-1785941903721",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      "taskInputs": {
+        "openTrailBackpack": {},
+        "openCart": {},
+        "openCheckout": {}
+      }
+    },
+    {
+      "id": "contract_71f62add4ea7ca92",
+      "kind": "release-contract",
+      "name": "orderConfirmedReachable",
+      "title": "Order Confirmed remains reachable",
+      "scope": "shopdemo",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "critical",
+      "businessValue": "Protect access to the observed Order Confirmed product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openTrailBackpack",
+        "openCart",
+        "openCheckout",
+        "openOrderConfirmed"
+      ],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T14:45:12.367Z",
+      "generation": {
+        "id": "proposal_f03d19f34d1a1dae",
+        "name": "orderConfirmedReachable",
+        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "tasks": [
+          "openTrailBackpack",
+          "openCart",
+          "openCheckout",
+          "openOrderConfirmed"
+        ],
+        "taskPaths": [
+          "shopdemo/.autotap/tasks/open-cart.task.json",
+          "shopdemo/.autotap/tasks/open-checkout.task.json",
+          "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 20
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      "taskInputs": {
+        "openTrailBackpack": {},
+        "openCart": {},
+        "openCheckout": {},
+        "openOrderConfirmed": {}
+      }
+    },
+    {
+      "id": "proposal_6ce5a69be40f92bc",
+      "kind": "release-contract",
+      "name": "cartContinueShoppingButtonReachable",
+      "title": "Cart · Continue Shopping Button remains reachable",
+      "scope": "shopdemo",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "rejected",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Cart · Continue Shopping Button product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_6500249c60a84039",
+          "observationCount": 1,
+          "targetId": "target_b0450646e4866df7",
+          "mapPath": "shopdemo/.autotap/ui-map.json"
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
+      "reviewedAt": "2026-08-05T14:57:50.608Z"
+    },
+    {
+      "id": "proposal_51363d0723a7165d",
+      "kind": "release-contract",
+      "name": "dashboardReachable",
+      "title": "Dashboard remains reachable",
+      "scope": "demoapp",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "rejected",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Dashboard product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_66cd9688a2ae0682",
+          "observationCount": 3,
+          "targetId": "target_4fa4825fe4191b9c",
+          "mapPath": "demoapp/.autotap/ui-map.json"
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
+      "reviewedAt": "2026-08-05T14:45:12.366Z",
+      "stale": true,
+      "status": "not-derived-on-refresh"
+    },
+    {
+      "id": "proposal_8c0246161d1651c9",
+      "kind": "release-contract",
+      "name": "cartReachable",
+      "title": "Cart remains reachable",
+      "scope": "shopdemo",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "rejected",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Cart product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [],
+      "platforms": [
+        "android"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_1c42ddc0285b9c25",
+          "observationCount": 1,
+          "targetId": "target_b0450646e4866df7",
+          "mapPath": "shopdemo/.autotap/ui-map.json"
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
+      "reviewedAt": "2026-08-05T14:45:12.367Z",
+      "stale": true,
+      "status": "not-derived-on-refresh"
+    }
+  ],
+  "coverageGaps": {
+    "unknownRequirements": [],
+    "uncoveredUiMapNodes": [
+      "target_4fa4825fe4191b9c:screen_a4262e1c9bcbc172",
+      "target_4fa4825fe4191b9c:screen_dc0570d6ffde126c",
+      "target_b0450646e4866df7:screen_6500249c60a84039"
+    ],
+    "uncoveredUiMapEdges": [
+      "target_4fa4825fe4191b9c:edge_026eb642e803c968",
+      "target_4fa4825fe4191b9c:edge_10fd6236e6baecae",
+      "target_4fa4825fe4191b9c:edge_1f8c4aa6da136ac4",
+      "target_4fa4825fe4191b9c:edge_67f0fa91882bb8f8",
+      "target_4fa4825fe4191b9c:edge_a40bb0e6006117b4",
+      "target_7488b63ddbfb90b0:edge_1f73db5ddf721bc4",
+      "target_b0450646e4866df7:edge_2c97e0c6900713b3",
+      "target_b0450646e4866df7:edge_37698aea238723a1",
+      "target_b0450646e4866df7:edge_71e154bc00dfce44"
+    ]
+  },
+  "review": {
+    "instructions": "Approve, reject, defer, reprioritize, or constrain pending items before generation. Existing committed contracts remain accepted but still require current replay evidence.",
+    "reviewedAt": "2026-08-05T14:57:50.609Z"
+  },
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T15:10:52.238Z",
+    "remoteAiUsed": false,
+    "groundedOnly": true
+  },
+  "generation": {
+    "generatedAt": "2026-08-05T15:03:08.555Z",
+    "generatedTasks": [
+      {
+        "name": "openCart",
+        "scope": "shopdemo",
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "targetId": "target_b0450646e4866df7",
+        "path": "shopdemo/.autotap/tasks/open-cart.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed",
+            "contract": "orderConfirmedReachable",
+            "validatedAt": "2026-08-05T15:04:12.120Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openCheckout",
+        "scope": "shopdemo",
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "targetId": "target_b0450646e4866df7",
+        "path": "shopdemo/.autotap/tasks/open-checkout.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed",
+            "contract": "orderConfirmedReachable",
+            "validatedAt": "2026-08-05T15:04:12.121Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openDashboard",
+        "scope": "demoapp",
+        "mapPath": "demoapp/.autotap/ui-map.json",
+        "targetId": "target_4fa4825fe4191b9c",
+        "path": "demoapp/.autotap/tasks/open-dashboard.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1023-1785941546578",
+            "detail": "deterministic replay passed",
+            "contract": "settingsReachable",
+            "validatedAt": "2026-08-05T14:52:50.035Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openOrderConfirmed",
+        "scope": "shopdemo",
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "targetId": "target_b0450646e4866df7",
+        "path": "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed",
+            "contract": "orderConfirmedReachable",
+            "validatedAt": "2026-08-05T15:04:12.121Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openProfile",
+        "scope": "logindemo",
+        "mapPath": "logindemo/.autotap/ui-map.json",
+        "targetId": "target_7488b63ddbfb90b0",
+        "path": "logindemo/.autotap/tasks/open-profile.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1344-1785941584252",
+            "detail": "deterministic replay passed",
+            "contract": "profileReachable",
+            "validatedAt": "2026-08-05T14:53:36.650Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openSettings",
+        "scope": "demoapp",
+        "mapPath": "demoapp/.autotap/ui-map.json",
+        "targetId": "target_4fa4825fe4191b9c",
+        "path": "demoapp/.autotap/tasks/open-settings.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1023-1785941546578",
+            "detail": "deterministic replay passed",
+            "contract": "settingsReachable",
+            "validatedAt": "2026-08-05T14:52:50.037Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "name": "openTrailBackpack",
+        "scope": "shopdemo",
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "targetId": "target_b0450646e4866df7",
+        "path": "shopdemo/.autotap/tasks/open-trail-backpack.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "android"
+        ],
+        "grounding": [
+          {
+            "platform": "android",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed",
+            "contract": "orderConfirmedReachable",
+            "validatedAt": "2026-08-05T15:04:12.122Z"
+          }
+        },
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      }
+    ],
+    "generated": [
+      {
+        "id": "proposal_7a978be219ca61cd",
+        "name": "settingsReachable",
+        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "tasks": [
+          "openDashboard",
+          "openSettings"
+        ],
+        "taskPaths": [
+          "demoapp/.autotap/tasks/open-dashboard.task.json",
+          "demoapp/.autotap/tasks/open-settings.task.json"
+        ],
+        "mapPath": "demoapp/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 8
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1023-1785941546578",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "id": "proposal_0d561e9f3f0c0204",
+        "name": "profileReachable",
+        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "tasks": [
+          "signIn",
+          "openProfile"
+        ],
+        "taskPaths": [
+          "logindemo/.autotap/tasks/open-profile.task.json"
+        ],
+        "mapPath": "logindemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 10
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-1344-1785941584252",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "id": "proposal_6c350caab7e83f8a",
+        "name": "checkoutReachable",
+        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "tasks": [
+          "openTrailBackpack",
+          "openCart",
+          "openCheckout"
+        ],
+        "taskPaths": [
+          "shopdemo/.autotap/tasks/open-cart.task.json",
+          "shopdemo/.autotap/tasks/open-checkout.task.json",
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 12
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-4150-1785941903721",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      },
+      {
+        "id": "proposal_f03d19f34d1a1dae",
+        "name": "orderConfirmedReachable",
+        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "tasks": [
+          "openTrailBackpack",
+          "openCart",
+          "openCheckout",
+          "openOrderConfirmed"
+        ],
+        "taskPaths": [
+          "shopdemo/.autotap/tasks/open-cart.task.json",
+          "shopdemo/.autotap/tasks/open-checkout.task.json",
+          "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        ],
+        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "android",
+            "kind": "flow",
+            "deterministicSteps": 20
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "android": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-android-6212-1785942195522",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "validationStale": false,
+        "promotedAt": "2026-08-05T15:06:28.280Z"
+      }
+    ],
+    "blocked": [],
+    "invariant": "Draft Task grounding and contract compilation are not real-surface validation; generated artifacts remain untrusted until deterministic replay passes.",
+    "promotedAt": "2026-08-05T15:06:28.280Z"
+  }
+}

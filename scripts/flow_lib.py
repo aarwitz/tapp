@@ -4,6 +4,7 @@ parse the harness's OCQA_FLOW_STEP / OCQA_FLOW_RESULT markers into a scannable p
 
 Usage:
   flow_lib.py to-json  <flow.yml|flow.json>          # prints {steps:[...], name, vars, ...} JSON
+  flow_lib.py raw-json <flow.yml|flow.json>          # prints the complete repository spec as JSON
   flow_lib.py to-yaml  '<flow-json-string>'          # prints tidy YAML (for saving a recorded flow)
   flow_lib.py report   <harness.log>                 # prints a human-readable pass/fail report
   flow_lib.py report --json <harness.log>            # prints machine JSON {passed,total,failed,steps}
@@ -25,9 +26,10 @@ def to_yaml(json_str):
     """Emit a recorded/inline Flow (JSON string) as tidy YAML for saving to .autotap/flows/*.yml."""
     import yaml
     flow = json.loads(json_str)
-    # Order keys for readability: name, app, vars, steps.
+    # Order keys for readability. `platform` + `url` make the same repository-native
+    # Flow format portable across the XCUITest, Playwright, and Android drivers.
     ordered = {}
-    for k in ("name", "app", "vars"):
+    for k in ("name", "platform", "app", "url", "vars", "reset"):
         if flow.get(k):
             ordered[k] = flow[k]
     ordered["steps"] = flow.get("steps", [])
@@ -40,11 +42,25 @@ def to_json(path):
     # ({action: tap, target: X}) forms, so no rewriting is needed here.
     out = {
         "name": flow.get("name", "flow"),
+        "kind": flow.get("kind", "flow"),
+        "platform": flow.get("platform", ""),
+        "app": flow.get("app", ""),
+        "url": flow.get("url", ""),
         "steps": flow.get("steps", []),
         "vars": flow.get("vars", {}),
+        "reset": flow.get("reset", "launch"),
         "continueOnFailure": bool(flow.get("continueOnFailure", False)),
     }
+    # Multi-actor Scenarios deliberately reuse the Flow step language and marker
+    # protocol, while preserving actor/session and lifecycle orchestration.
+    for key in ("actors", "setup", "teardown", "timeoutMs", "taskPlan", "releaseContract"):
+        if key in flow:
+            out[key] = flow[key]
     print(json.dumps(out))
+
+
+def raw_json(path):
+    print(json.dumps(load_flow(path) or {}))
 
 
 def report(path, as_json=False):
@@ -52,6 +68,7 @@ def report(path, as_json=False):
     steps = []
     result = None
     name = "flow"
+    kind = "flow"
     for line in log.splitlines():
         line = line.strip()
         if line.startswith("OCQA_FLOW_STEP:"):
@@ -62,10 +79,14 @@ def report(path, as_json=False):
         elif line.startswith("OCQA_FLOW_RESULT:started"):
             m = re.search(r"name=(.*)$", line)
             if m:
-                name = m.group(1)
+                name = m.group(1).split(" kind=", 1)[0]
+            km = re.search(r"\bkind=([^ ]+)", line)
+            if km:
+                kind = km.group(1)
         elif line.startswith("OCQA_FLOW_RESULT:{"):
             try:
                 result = json.loads(line[len("OCQA_FLOW_RESULT:"):])
+                kind = result.get("kind", kind)
             except Exception:
                 pass
 
@@ -73,8 +94,11 @@ def report(path, as_json=False):
     failed = (result or {}).get("failed", sum(1 for s in steps if s.get("status") == "fail"))
     passed = (result or {}).get("passed", failed == 0 and bool(steps))
 
+    executed = (result or {}).get("executed", len(steps))
+    passed_steps = sum(1 for s in steps if s.get("status") == "pass")
+
     if as_json:
-        print(json.dumps({"name": name, "passed": passed, "total": total, "failed": failed, "steps": steps}))
+        print(json.dumps({"name": name, "kind": kind, "passed": passed, "total": total, "executed": executed, "failed": failed, "steps": steps}))
         return 0 if passed else 1
 
     icon = {"pass": "✅", "fail": "❌", "skip": "⚪️"}
@@ -82,14 +106,17 @@ def report(path, as_json=False):
             "wait": "⏳ wait", "wait_for": "⏳ wait for", "assert_screen": "🔎 screen is",
             "assert_exists": "🔎 exists", "assert_absent": "🔎 absent", "assert_text": "🔎 text",
             "assert_ai": "🤖 ai"}
-    head = f"### {'🟢 FLOW PASSED' if passed else '🔴 FLOW FAILED'} — {name}  ·  {total - failed}/{total} steps"
+    label = "RELEASE CONTRACT" if kind == "release-contract" else ("SCENARIO" if kind == "scenario" else "FLOW")
+    progress = f"{passed_steps}/{total} steps" if passed else f"{passed_steps} passed · {failed} failed · {executed}/{total} executed"
+    head = f"### {'🟢 ' + label + ' PASSED' if passed else '🔴 ' + label + ' FAILED'} — {name}  ·  {progress}"
     print(head)
     print("")
     for s in steps:
         st = s.get("status", "?")
         label = verb.get(s.get("action", ""), s.get("action", ""))
         tgt = s.get("target", "")
-        line = f"{icon.get(st, '•')} {label}" + (f" `{tgt}`" if tgt else "")
+        actor = s.get("actor", "")
+        line = f"{icon.get(st, '•')}" + (f" **{actor}**" if actor else "") + f" {label}" + (f" `{tgt}`" if tgt else "")
         if st != "pass" and s.get("detail"):
             line += f" — {s['detail']}"
         print(line)
@@ -108,6 +135,9 @@ def main():
     cmd = sys.argv[1]
     if cmd == "to-json":
         to_json(sys.argv[2])
+        return 0
+    if cmd == "raw-json":
+        raw_json(sys.argv[2])
         return 0
     if cmd == "to-yaml":
         to_yaml(sys.argv[2])

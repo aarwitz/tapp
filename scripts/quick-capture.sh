@@ -15,14 +15,20 @@ set -euo pipefail
 # All output goes to ~/repos/AutoTap/captures/<timestamp>/
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# AUTOTAP_HOME redirects all writable output (captures, harness build cache) to a user dir —
+# TAPP_CAPTURE_DIR selects one exact run directory (used by CI so a failed run can never
+# accidentally reuse stale markers). AUTOTAP_HOME redirects all writable output otherwise —
 # set by the `autotap` CLI when running as an installed npm package, where the package dir
 # must stay read-only. Unset (repo dev flow), everything lands in the repo as before.
-if [[ -n "${AUTOTAP_HOME:-}" ]]; then
+if [[ -n "${TAPP_CAPTURE_DIR:-}" ]]; then
+  CAPTURE_DIR="$TAPP_CAPTURE_DIR"
+elif [[ -n "${AUTOTAP_HOME:-}" ]]; then
   CAPTURE_DIR="$AUTOTAP_HOME/captures/$(date +%Y%m%d-%H%M%S)"
-  HARNESS_DERIVED="$AUTOTAP_HOME/harness-derived"
 else
   CAPTURE_DIR="$PROJECT_ROOT/captures/$(date +%Y%m%d-%H%M%S)"
+fi
+if [[ -n "${AUTOTAP_HOME:-}" ]]; then
+  HARNESS_DERIVED="$AUTOTAP_HOME/harness-derived"
+else
   HARNESS_DERIVED="/tmp/autotap-harness-derived"
 fi
 HARNESS_PROJECT="$PROJECT_ROOT/Harness/OCQAHarness.xcodeproj"
@@ -145,13 +151,24 @@ run_harness_test() {
   \"OCQA_LOGIN_STEPS\": ${OCQA_LOGIN_STEPS_JSON}"
   fi
 
+  # One bounded, sanitized PR target compiled from the persistent UI Map. It is
+  # inserted as JSON data (never evaluated as shell source) and consumed by the
+  # native harness before ordinary breadth exploration.
+  local pr_target_line=""
+  if [[ -n "${OCQA_PR_TARGET_JSON:-}" ]]; then
+    TAPP_PR_TARGET_JSON="$OCQA_PR_TARGET_JSON" python3 -c 'import json,os,sys; sys.exit(0 if isinstance(json.loads(os.environ["TAPP_PR_TARGET_JSON"]), dict) else 1)' \
+      || { echo "ERROR: OCQA_PR_TARGET_JSON must be a JSON object" >&2; return 2; }
+    pr_target_line=",
+  \"OCQA_PR_TARGET\": ${OCQA_PR_TARGET_JSON}"
+  fi
+
   cat > /tmp/ocqa-run-config.json << CONF
 {
   "OCQA_BUNDLE_ID": "$bundle_id",
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line
 }
 CONF
 
@@ -312,13 +329,15 @@ case "$MODE" in
     fi
 
     # Convert video
-    if [[ -f "$CAPTURE_DIR/exploration.mov" ]]; then
+    if [[ -f "$CAPTURE_DIR/exploration.mov" && -x "$(command -v ffmpeg 2>/dev/null || true)" ]]; then
       echo "Converting exploration video to WebM..."
       ffmpeg -hide_banner -loglevel error -y \
         -i "$CAPTURE_DIR/exploration.mov" \
         -c:v libvpx-vp9 -crf 36 -b:v 0 -row-mt 1 -an \
         "$CAPTURE_DIR/exploration.webm"
       echo "Video: $CAPTURE_DIR/exploration.webm ($(du -h "$CAPTURE_DIR/exploration.webm" | cut -f1))"
+    elif [[ -f "$CAPTURE_DIR/exploration.mov" ]]; then
+      echo "Video: $CAPTURE_DIR/exploration.mov (ffmpeg unavailable; keeping the original recording)"
     fi
 
     echo ""

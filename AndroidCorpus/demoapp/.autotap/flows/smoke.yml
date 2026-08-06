@@ -1,0 +1,12 @@
+name: Android Demo onboarding and settings
+platform: android
+app: io.tapp.corpus.demo
+reset: clear
+steps:
+  - assert_screen: Get Started
+  - tap: Continue
+  - wait_for: Dashboard
+  - assert_exists: Settings
+  - tap: Settings
+  - assert_screen: Settings
+  - assert_exists: Notifications enabled

@@ -1,7 +1,7 @@
 # Tapp agent playbook
 
-You (the agent) have Tapp: hands, eyes, and judgment on real app surfaces — the iOS
-simulator, plus (beta) web apps in a real browser. This is the playbook for using it well.
+You (the agent) have Tapp: hands, eyes, and judgment on real app surfaces — iOS simulators,
+Android emulators/devices, plus (beta) web apps in a real browser.
 
 ## No MCP connected? Just run the CLI
 
@@ -17,6 +17,8 @@ npx -y tapp-mcp tree [target]   # accessibility tree, --json for every element (
 npx -y tapp-mcp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
 npx -y tapp-mcp apps            # what's installed on the simulator, with bundle ids
 npx -y tapp-mcp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
+npx -y tapp-mcp qa app.apk --platform android --app-id com.acme.app
+npx -y tapp-mcp flow run .autotap/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
 **Seeing the screen, per client:** if you can read image files into your context (Claude
@@ -26,8 +28,8 @@ instead: its tool results carry the screenshot inline. Screen *recordings* are f
 human: `tapp qa` records the full exploration and embeds it in the report.html evidence
 page — tell the user the report path so they can watch it.
 
-The interactive session loop and Flow record/replay are MCP-only (they need a long-lived
-process) — the rest of this playbook assumes the `tapp_*` MCP tools are connected. With
+The interactive session/record loop is MCP-only (it needs a long-lived process). Flow replay is
+also available in the CLI. The rest of this playbook assumes the `tapp_*` MCP tools are connected. With
 MCP, the no-bundle-id path is: `tapp_build {projectDir}` (auto-detects + builds +
 installs, returns the bundle id) → `tapp_run_qa {appBundleId}`.
 
@@ -37,7 +39,7 @@ installs, returns the bundle id) → `tapp_run_qa {appBundleId}`.
 |---|---|---|
 | "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_run_qa` (a full multi-minute QA exploration) |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
-| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` — `appBundleId` for iOS, `url` for a web app the user owns | a manual session (QA exploration is autonomous) |
+| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps | a manual session (QA exploration is autonomous) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
 | "What's on screen right now?" | `tapp_screenshot` / `tapp_ui_tree` | relaunching the app |
 
@@ -52,6 +54,10 @@ tapp_session_act   { action: "wait", text: "Home", timeoutMs: 10000 }  → block
 tapp_screenshot                                          → see it
 tapp_session_end
 ```
+
+Android uses the same loop with `tapp_session_start { androidAppId: "com.acme.app", apkPath:
+"path/to/app.apk" }`. Android selectors prefer resource id, then content description, exact text,
+and text contains. The APK/app id replace the iOS bundle/simulator build inputs.
 
 Rules that prevent 90% of failures:
 
@@ -86,6 +92,9 @@ Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, find
 
 ## Flows (deterministic E2E tests)
 
+Flow YAML is repository-native test code. Commit it under `.autotap/flows/`; CI can replay it
+without a coding agent, model, subscription, or API key. AI generation and `assert_ai` are optional.
+
 - **Record:** every successful `session_act` is recorded. After driving a flow, call
   `tapp_flow_save { name: "checkout" }` → writes `.autotap/flows/checkout.yml` with waits and
   a final screen assertion auto-inserted; typed credentials are templated to `$TEST_EMAIL`/`$TEST_PASSWORD`.
@@ -96,7 +105,8 @@ Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, find
 
 ## Setup facts (tell the user when relevant)
 
-- Everything runs locally on the Mac: needs Xcode + a simulator runtime. `tapp doctor` checks.
+- iOS runs locally on a Mac with Xcode + a simulator. Android needs `adb` and a connected
+  emulator/device. Web needs Playwright + Chromium. `tapp doctor` reports each capability.
 - First tool call builds the test harness once (~2 min, cached in `~/.tapp`). `tapp install`
   prebuilds it. Switching simulators triggers an automatic rebuild.
 - The app under test must be **installed on the booted simulator** (`tapp_install_app` builds
