@@ -208,7 +208,6 @@ function selectedTarget(root, body) {
 
 function runtimeRequest(body = {}) {
   return {
-    ownedUrl: typeof body.url === "string" ? body.url.trim() : "",
     maxActions: Number(body.maxActions || body.actions) || 40,
     timeout: Number(body.timeout) || 600,
     maxContracts: Number(body.maxContracts) || 15,
@@ -290,8 +289,8 @@ function serveLoginPage(response, { failed = false } = {}) {
   <h1>tapp<span>.</span></h1><p class="tag">ship with proof.</p>
   ${failed ? '<p class="err" role="alert">That username or password did not match.</p>' : ""}
   <form method="post" action="/api/auth">
-    <label>Username<input name="username" autocomplete="username" placeholder="demo" required></label>
-    <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="demo" required></label>
+    <label>Username<input name="username" autocomplete="username" placeholder="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="password" required></label>
     <button type="submit">Launch Tapp →</button>
   </form>
   <p><small>Demo access: demo / demo. Uploaded repositories run in a restricted pilot workspace.</small></p>
@@ -373,7 +372,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           const now = Date.now();
           if (now - loginFailures.windowStartedAt > 10 * 60_000) { loginFailures.windowStartedAt = now; loginFailures.count = 0; }
           if (loginFailures.count >= 50) { response.writeHead(429, { "retry-after": "600", "content-type": "text/plain; charset=utf-8" }); response.end("Too many sign-in attempts; try again later."); return; }
-          if (request.headers.origin && !publicOrigins.includes(request.headers.origin)) { response.writeHead(403); response.end("Cross-origin sign-in rejected"); return; }
+          // Browsers serialize Origin as the literal string "null" (not absent) for
+          // navigation-type requests — i.e. a real <form> POST, not fetch/XHR — when the
+          // response carries Referrer-Policy: no-referrer (see baseHeaders above and the
+          // Fetch spec's "append a request Origin header" algorithm). That is expected,
+          // spec-compliant behavior for every browser hitting this login form, not a
+          // cross-origin request, so trust the browser-guaranteed Sec-Fetch-Site header
+          // (unaffected by Referrer-Policy) to distinguish it from a genuine foreign origin.
+          const originHeader = request.headers.origin;
+          const sameOriginNavigation = originHeader === "null" && new Set(["same-origin", "none"]).has(request.headers["sec-fetch-site"]);
+          if (originHeader && originHeader !== "null" && !publicOrigins.includes(originHeader)) { response.writeHead(403); response.end("Cross-origin sign-in rejected"); return; }
+          if (originHeader === "null" && !sameOriginNavigation) { response.writeHead(403); response.end("Cross-origin sign-in rejected"); return; }
           const form = await readFormBody(request);
           const valid = sameSecret(form.get("username"), directLogin.username) && sameSecret(form.get("password"), directLogin.password);
           if (!valid) {
@@ -504,7 +513,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             } else if (selected.platform === "android") {
               result = await engine.startAndroidInteractiveSession(prepared.runtime.appId, { serial:runtime.serial, apkPath:prepared.runtime.apkPath, clearData:true, testEmail:runtime.testEmail || "", testPassword:runtime.testPassword || "" });
             } else {
-              let sessionUrl = runtime.ownedUrl || prepared.runtime.url || "";
+              let sessionUrl = prepared.runtime.url || "";
               if (!sessionUrl) {
                 liveManagedRuntime = await engine.startManagedWebTarget({ root, requestedTarget:selected.id, timeout:runtime.timeout, onStatus:(text) => progress({ phase:"runtime", text }) });
                 if (liveManagedRuntime?.error) throw Object.assign(new Error(liveManagedRuntime.error), { details:liveManagedRuntime.details || {} });
@@ -513,7 +522,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
               result = await engine.startWebInteractiveSession(sessionUrl, { testEmail:runtime.testEmail || "", testPassword:runtime.testPassword || "" });
             }
             if (result?.error) throw new Error(result.error);
-            liveSession = publicInteractiveResult(result, { active:true, platform:selected.platform, targetId:selected.id, targetName:selected.name, url:result?.url || runtime.ownedUrl });
+            liveSession = publicInteractiveResult(result, { active:true, platform:selected.platform, targetId:selected.id, targetName:selected.name, url:result?.url || "" });
             return liveSession;
           } catch (error) {
             if (liveManagedRuntime) await engine.stopManagedWebTarget(liveManagedRuntime).catch(() => {});
@@ -546,10 +555,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             name:body.name,
             addFinalAssertion:body.addFinalAssertion !== false,
             replace:body.replace === true,
-            // Only an explicitly customer-supplied owned URL belongs in source.
-            // Tapp-managed localhost ports are ephemeral and are resolved again
-            // by the target-aware product gate.
-            url:runtime.ownedUrl,
+            // Repository-managed web runtimes are resolved again by the
+            // target-aware product gate; ephemeral localhost ports never enter source.
+            url:"",
           });
           return { path:saved.path, flow:saved.flow, yaml:saved.yaml, replaced:saved.replaced };
         }
@@ -562,9 +570,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         }
         if (operation === "initialize") {
           if (body.explore !== true) {
-            return initializeProductProject({ projectDir: root, mode: body.write === false ? "inspect" : body.refresh === true ? "refresh" : "write", ownedUrl: runtime.ownedUrl, platform: String(body.platform || "").toLowerCase(), maxContracts: runtime.maxContracts });
+            return initializeProductProject({ projectDir: root, mode: body.write === false ? "inspect" : body.refresh === true ? "refresh" : "write", platform: String(body.platform || "").toLowerCase(), maxContracts: runtime.maxContracts });
           }
-          if (!readProductProject({ projectDir: root }).model) await initializeProductProject({ projectDir: root, mode: "write", ownedUrl: runtime.ownedUrl, maxContracts: runtime.maxContracts });
+          if (!readProductProject({ projectDir: root }).model) await initializeProductProject({ projectDir: root, mode: "write", maxContracts: runtime.maxContracts });
           const selected = selectedTarget(root, body);
           const prepared = await prepareProductTarget({
             projectDir:root,
@@ -575,7 +583,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             onProgress:progress,
           });
           return initializeProductProject({
-            projectDir: root, mode: "explore", ownedUrl: runtime.ownedUrl,
+            projectDir: root, mode: "explore",
             platform: selected.platform,
             target: selected.platform === "ios" ? prepared.runtime.appPath : selected.id,
             bundleId: prepared.runtime.bundleId || selected.runtime?.bundleId || "", appId: prepared.runtime.appId || selected.runtime?.applicationId || "",
@@ -595,7 +603,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           const prepared = await prepareProductTarget({ projectDir: root, platform: selected.platform, target: selected.id, buildIos: engine.buildAppForSim, installIos: engine.installAppOnBootedSim, buildAndroid: engine.buildAndroidApp, onProgress: progress });
           return validateProductPlan({
             projectDir: root, items: body.items || [], platform: selected.platform, target: selected.id,
-            url: runtime.ownedUrl || prepared.runtime.url || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
+            url: prepared.runtime.url || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
             timeout: runtime.timeout, testEmail: runtime.testEmail, testPassword: runtime.testPassword,
             startWebTarget: engine.startManagedWebTarget, stopWebTarget: engine.stopManagedWebTarget, onProgress: progress,
           });
@@ -608,7 +616,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           const prepared = await prepareProductTarget({ projectDir: root, platform: selected.platform, target: selected.id, buildIos: engine.buildAppForSim, buildAndroid: engine.buildAndroidApp, onProgress: progress });
           return runProductGate({
             projectDir: root, platform: selected.platform, target: selected.id,
-            url: runtime.ownedUrl || prepared.runtime.url || "", appPath: prepared.runtime.appPath || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
+            url: prepared.runtime.url || "", appPath: prepared.runtime.appPath || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
             actions: runtime.maxActions, timeout: runtime.timeout, baseline: body.baseline || "", testEmail: runtime.testEmail, testPassword: runtime.testPassword, onProgress: progress,
           });
         }

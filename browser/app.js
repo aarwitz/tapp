@@ -72,7 +72,6 @@ function operationPayload(extra = {}) {
   const target = currentTarget();
   return {
     ...(target ? { target:target.id, platform:target.platform } : {}),
-    ...(target?.platform === "web" && $("#owned-url")?.value.trim() ? { url:$("#owned-url").value.trim() } : {}),
     ...(target?.platform === "android" && $("#android-serial")?.value.trim() ? { serial:$("#android-serial").value.trim() } : {}),
     ...($("#test-email")?.value ? { testEmail:$("#test-email").value } : {}),
     ...($("#test-password")?.value ? { testPassword:$("#test-password").value } : {}),
@@ -134,7 +133,6 @@ function renderTargets() {
   $("#sidebar-target").textContent = target ? `${pretty(target.platform)} · ${target.name}` : "Select a target";
   $("#sidebar-runner").textContent = target ? (state.session?.runners?.find((runner) => runner.platform === target.platform)?.label || "Runner resolves at execution") : "Runner not selected";
   $("#runtime-row").classList.toggle("hidden", !targets.length);
-  $("#url-field").classList.toggle("hidden", target?.platform !== "web");
   $("#serial-field").classList.toggle("hidden", target?.platform !== "android");
   $("#explore").disabled = !target;
   $("#explore").textContent = target && targets.length > 1 ? `Build & explore ${target.name}` : "Build, launch & explore";
@@ -142,7 +140,7 @@ function renderTargets() {
   $("#explore-help").textContent = !target ? (targets.length > 1 ? `Choose one of the ${targets.length} detected targets. Tapp will not select one for you.` : "Inspect to discover a runnable target.")
     : target.platform === "ios" ? "Builds the selected scheme for an iOS simulator, installs it, then explores."
     : target.platform === "android" ? "Builds the selected Gradle application, installs its APK, then explores."
-    : "Starts the selected owned or Tapp-managed browser application, then explores in Chromium.";
+    : "Builds and starts the selected repository web application, then explores it in Chromium.";
 }
 
 function refreshLiveFrame() {
@@ -539,7 +537,9 @@ async function openGithubDialog() {
   try {
     const result = await api("/api/repositories/github");
     state.githubRepositories = result.repositories || [];
-    renderGithubRepositories();
+    if (result.unavailable) {
+      $("#github-repositories").innerHTML = `<div class="remediation"><strong>GitHub connection is not configured yet</strong><p>${esc(result.unavailable)}</p></div>`;
+    } else renderGithubRepositories();
   } catch (error) {
     $("#github-repositories").innerHTML = `<div class="remediation"><strong>GitHub needs attention</strong><p>${esc(error.message)}</p></div>`;
   }

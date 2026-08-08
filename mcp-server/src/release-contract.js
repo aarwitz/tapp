@@ -11,6 +11,8 @@ import { semanticUiKey } from "./ui-map.js";
 
 const PLATFORMS = new Set(["ios", "android", "web"]);
 const CRITICALITIES = new Set(["low", "medium", "high", "critical"]);
+const CONTRACT_AUTHORING_SPECIFIERS = new Set(["runtapp/contracts", "tapp-mcp/contracts"]);
+const CONTRACT_AUTHORING_IMPORT = /(["'])(?:runtapp|tapp-mcp)\/contracts\1/g;
 const authoringUrl = pathToFileURL(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "contract-authoring.js")).href;
 
 function expectationAction(expectation) {
@@ -83,8 +85,8 @@ function rewriteAuthoringImport(source, contractPath) {
     throw new Error("Release contracts cannot use dynamic import or require");
   }
   const imports = [...source.matchAll(/(?:from\s*|import\s*)["']([^"']+)["']/g)].map((match) => match[1]);
-  const unsupported = imports.filter((specifier) => specifier !== "tapp-mcp/contracts");
-  if (unsupported.length) throw new Error(`Release contract imports are limited to tapp-mcp/contracts (found ${unsupported.join(", ")})`);
+  const unsupported = imports.filter((specifier) => !CONTRACT_AUTHORING_SPECIFIERS.has(specifier));
+  if (unsupported.length) throw new Error(`Release contract imports are limited to runtapp/contracts (legacy tapp-mcp/contracts is also accepted; found ${unsupported.join(", ")})`);
   const output = ts.transpileModule(source, {
     fileName: contractPath,
     compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: true },
@@ -92,7 +94,7 @@ function rewriteAuthoringImport(source, contractPath) {
   });
   const diagnostics = (output.diagnostics || []).filter((item) => item.category === ts.DiagnosticCategory.Error);
   if (diagnostics.length) throw new Error(diagnostics.map((item) => ts.flattenDiagnosticMessageText(item.messageText, " ")).join("; "));
-  return output.outputText.replace(/(["'])tapp-mcp\/contracts\1/g, JSON.stringify(authoringUrl));
+  return output.outputText.replace(CONTRACT_AUTHORING_IMPORT, JSON.stringify(authoringUrl));
 }
 
 export async function loadReleaseContractFile(contractPath) {
@@ -105,7 +107,7 @@ export async function loadReleaseContractFile(contractPath) {
   } else if ([".ts", ".mts", ".js", ".mjs"].includes(extension)) {
     const source = fs.readFileSync(absolute, "utf8");
     const code = extension === ".ts" || extension === ".mts" ? rewriteAuthoringImport(source, absolute)
-      : source.replace(/(["'])tapp-mcp\/contracts\1/g, JSON.stringify(authoringUrl));
+      : source.replace(CONTRACT_AUTHORING_IMPORT, JSON.stringify(authoringUrl));
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-contract-"));
     const modulePath = path.join(tempDir, "contract.mjs");
     try {

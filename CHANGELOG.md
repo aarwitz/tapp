@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+
+## 0.14.0
+- **Canonical npm package renamed to `runtapp`:** the product remains Tapp, the installed binary
+  remains `tapp`, and MCP tools remain `tapp_*`. Existing `tapp-mcp` commands continue through a
+  deprecated compatibility release.
+- **Release-contract compatibility:** new contracts import `runtapp/contracts`; existing
+  `tapp-mcp/contracts` imports continue to compile.
+- **Distribution surfaces updated together:** CLI guidance, MCP/Claude manifests, landing page,
+  agent playbook, and VS Code engine pin now resolve `runtapp`.
+
 - **Symbol-precise PR ownership:** GitHub change manifests now retain bounded patch/rename evidence,
   local `--pr-base` derives equivalent zero-context diff evidence without a shell, and reviewed
   Task `coverage.sourceSymbols` narrows affected Tasks when every hunk is attributable. Plans expose

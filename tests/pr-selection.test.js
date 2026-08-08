@@ -12,7 +12,7 @@ function write(file, value) {
 }
 
 function contract(name, criticality, task, sourcePath = "") {
-  return `import { defineContract } from "tapp-mcp/contracts";
+  return `import { defineContract } from "runtapp/contracts";
 export default defineContract({name:${JSON.stringify(name)},title:${JSON.stringify(name)},businessValue:"value",criticality:${JSON.stringify(criticality)},platforms:["web"],actors:{customer:{}},steps:[{actor:"customer",task:${JSON.stringify(task)}}],coverage:{sourcePaths:${JSON.stringify(sourcePath ? [sourcePath] : [])}}});`;
 }
 
@@ -267,7 +267,7 @@ test("reviewed symbol ownership narrows affected Tasks while preserving the comp
     kind: "task", version: 1, name: "openOrders", steps: [{ tap: "Orders" }],
     coverage: { sourcePaths: ["app.js"], sourceSymbols: [{ path: "app.js", symbols: ["showOrders"] }] },
   });
-  write(path.join(root, ".autotap/contracts/order.contract.ts"), `import { defineContract } from "tapp-mcp/contracts";
+  write(path.join(root, ".autotap/contracts/order.contract.ts"), `import { defineContract } from "runtapp/contracts";
 export default defineContract({name:"orderPersists",title:"orderPersists",businessValue:"value",criticality:"critical",platforms:["web"],actors:{customer:{}},steps:[{actor:"customer",task:"completeCheckout"},{actor:"customer",task:"openOrders"}]});`);
   const changedFiles = [{ filename: "app.js", patch: "@@ -20,1 +20,1 @@ function showCheckout() {\n-  oldLabel();\n+  newLabel();" }];
   const plan = await buildPrContractPlan({ projectDir: root, platform: "web", changedFiles });

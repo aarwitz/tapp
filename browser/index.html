@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topbar">
-    <button class="brand" id="brand-home" aria-label="Tapp overview"><span class="brand-mark">t</span><span>tapp</span><small>release confidence</small></button>
+    <button class="brand" id="brand-home" aria-label="Tapp overview"><span class="brand-mark">&#9757;&#65038;</span><span>tapp</span><small>release confidence</small></button>
     <div class="top-actions">
       <span class="mode-pill" id="mode-pill">Local engine</span>
       <select id="repository-switcher" class="repository-switcher hidden" aria-label="Current repository"></select>
@@ -101,7 +101,6 @@
           <div class="target-choice-callout hidden" id="target-choice-callout"><span>1</span><div><strong>Choose what Tapp should test</strong><small>Nothing will build until you select a target. Tapp never guesses when a repository contains multiple applications.</small></div></div>
           <div id="targets" class="target-grid"><div class="empty">Inspect the repository to detect iOS, Android, and web targets.</div></div>
           <div class="runtime-row hidden" id="runtime-row">
-            <label class="field web-runtime" id="url-field"><span>Owned URL <i>optional for web</i></span><input id="owned-url" type="url" placeholder="http://127.0.0.1:3000"><small>Leave blank to let Tapp safely build and start the selected web target.</small></label>
             <label class="field android-runtime hidden" id="serial-field"><span>Android device serial <i>optional</i></span><input id="android-serial" placeholder="emulator-5554"><small>Leave blank to use the first connected and authorized device.</small></label>
             <div class="run-cta"><div class="button-row"><button class="primary" id="explore">Build, launch & explore</button><button class="secondary" id="start-session">Open live app</button></div><small id="explore-help">Select one target to continue.</small></div>
           </div>

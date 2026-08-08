@@ -189,8 +189,8 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     : verdict === "ready"
     ? "Ship-ready — no release-blocking issues found."
     : verdict === "caution"
-    ? `Proceed with caution — ${crit + high} issue(s) to review.`
-    : `Not ready — ${crit} critical, ${high} high.`;
+    ? `Proceed with caution — ${findings.length} issue(s) to review.`
+    : `Not ready — ${findings.length} issue(s): ${crit} critical, ${high} high, ${med} medium, ${low} low.`;
 
   // The verdict's own honesty label: exactly which defect classes this run checked, which
   // it structurally could NOT check, and which conditions never came up — so "checked" is

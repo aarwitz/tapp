@@ -11,10 +11,16 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tappBin = path.join(root, "bin", "tapp.js");
 const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
+const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+
+test("npm package is runtapp while the installed command remains tapp", () => {
+  assert.equal(rootPackage.name, "runtapp");
+  assert.deepEqual(rootPackage.bin, { tapp: "bin/tapp.js" });
+});
 
 test("tapp version prints the package version", () => {
   const out = execFileSync("node", [tappBin, "version"], { encoding: "utf8" }).trim();
-  assert.match(out, /^\d+\.\d+\.\d+$/);
+  assert.equal(out, rootPackage.version);
 });
 
 test("tapp help leads with the zero-config verbs", () => {
@@ -540,7 +546,7 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
       params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "tapp-ci", version: "0" } },
     });
     const init = await waitFor(1);
-    assert.equal(init.result.serverInfo.name, "tapp-mcp");
+    assert.equal(init.result.serverInfo.name, "tapp");
     assert.match(init.result.serverInfo.version, /^\d+\.\d+\.\d+$/, "handshake reports a real version");
     send({ jsonrpc: "2.0", method: "notifications/initialized" });
     send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });

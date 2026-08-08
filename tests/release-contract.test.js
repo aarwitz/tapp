@@ -32,7 +32,7 @@ test("TypeScript release contracts compile Tasks and exact expectations to a det
     steps: [{ type: { field: "Email", value: "{{email}}" } }, { type: { field: "Password", value: "{{password}}" } }, { tap: "Sign in" }],
   }));
   const contractPath = write(path.join(root, ".autotap", "contracts", "social.contract.ts"), `
-    import { defineContract, type ReleaseContract } from "tapp-mcp/contracts";
+    import { defineContract, type ReleaseContract } from "runtapp/contracts";
     const contract = defineContract({
       name: "socialSystem",
       title: "Alice publishes and Bob observes",
@@ -65,6 +65,27 @@ test("TypeScript release contracts compile Tasks and exact expectations to a det
   assert.equal(compiled.steps.at(-1).do.timeoutMs, 9000);
   assert.equal(compiled.actors.bob.vars.EMAIL, "$BOB_EMAIL");
   assert.equal(compiled.actors.bob.credentials, undefined);
+});
+
+test("legacy tapp-mcp contract imports remain loadable after the runtapp rename", async () => {
+  const root = repo();
+  write(path.join(root, ".autotap", "tasks", "open-home.json"), JSON.stringify({
+    kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }],
+  }));
+  const contractPath = write(path.join(root, ".autotap", "contracts", "legacy.contract.ts"), `
+    import { defineContract } from "tapp-mcp/contracts";
+    export default defineContract({
+      name: "legacyImportWorks",
+      title: "Legacy import works",
+      businessValue: "Existing repositories keep compiling after the package rename.",
+      criticality: "high",
+      platforms: ["web"],
+      actors: { customer: {} },
+      steps: [{ actor: "customer", task: "openHome" }],
+    });
+  `);
+  const contract = await loadReleaseContractFile(contractPath);
+  assert.equal(contract.name, "legacyImportWorks");
 });
 
 test("release contracts reject raw driver actions and ambiguous expectations", () => {

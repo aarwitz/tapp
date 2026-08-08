@@ -92,7 +92,7 @@ test("CI gate turns a changed-file manifest into the actual selected contract se
   fs.mkdirSync(tasks, { recursive: true });
   fs.mkdirSync(contracts, { recursive: true });
   fs.writeFileSync(path.join(tasks, "launch.json"), JSON.stringify({ kind: "task", version: 1, name: "launchApp", steps: [{ tap: "Continue" }] }));
-  const source = (name, criticality, task) => `import { defineContract } from "tapp-mcp/contracts";\nexport default defineContract({name:${JSON.stringify(name)},title:${JSON.stringify(name)},businessValue:"value",criticality:${JSON.stringify(criticality)},platforms:["ios"],actors:{customer:{}},steps:[{actor:"customer",task:${JSON.stringify(task)}}]});`;
+  const source = (name, criticality, task) => `import { defineContract } from "runtapp/contracts";\nexport default defineContract({name:${JSON.stringify(name)},title:${JSON.stringify(name)},businessValue:"value",criticality:${JSON.stringify(criticality)},platforms:["ios"],actors:{customer:{}},steps:[{actor:"customer",task:${JSON.stringify(task)}}]});`;
   fs.writeFileSync(path.join(contracts, "critical.contract.ts"), source("mustRun", "critical", "launchApp"));
   // This is valid authoring input but cannot compile because the Task is absent. It
   // proves a skipped contract never reaches compilation/execution.

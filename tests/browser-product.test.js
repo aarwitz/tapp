@@ -154,6 +154,25 @@ test("hosted direct login serves its own sign-in page and mints a first-party se
     });
     assert.equal(crossOrigin.status, 403);
 
+    // Real browsers serialize Origin as the literal string "null" (not absent) for a
+    // navigation-type POST — an actual <form> submit, not fetch/XHR — when the response
+    // carries Referrer-Policy: no-referrer, which this app sets globally. That is expected,
+    // spec-compliant behavior for every browser hitting the login form, so it must still
+    // succeed provided the browser-guaranteed Sec-Fetch-Site header confirms same-origin.
+    const nullOriginSameSite = await fetch(`${product.origin}/api/auth`, {
+      method: "POST", redirect: "manual",
+      headers: { origin: "null", "sec-fetch-site": "same-origin", "content-type": "application/x-www-form-urlencoded" },
+      body: "username=demo&password=demo",
+    });
+    assert.equal(nullOriginSameSite.status, 303, "a no-referrer navigation POST's Origin: null must not be treated as cross-origin");
+
+    const nullOriginNoSignal = await fetch(`${product.origin}/api/auth`, {
+      method: "POST", redirect: "manual",
+      headers: { origin: "null", "content-type": "application/x-www-form-urlencoded" },
+      body: "username=demo&password=demo",
+    });
+    assert.equal(nullOriginNoSignal.status, 403, "an opaque origin without a same-origin Sec-Fetch-Site signal must still be rejected");
+
     const login = await fetch(`${product.origin}/api/auth`, {
       method: "POST", redirect: "manual",
       headers: { origin: appOrigin, "content-type": "application/x-www-form-urlencoded" },

@@ -11,7 +11,7 @@
 // same-origin requests, broken links, dead buttons, visible error surfaces, blank pages,
 // load timeouts). No LLM anywhere in the loop.
 //
-// Playwright is deliberately NOT a dependency of tapp-mcp (it would bloat every npx
+// Playwright is deliberately NOT a dependency of runtapp (it would bloat every npx
 // install with a browser download). It's resolved dynamically; exploreWeb() throws a
 // clear install hint when it's missing.
 
@@ -26,7 +26,7 @@ const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 
-// npx installs tapp-mcp into its own cache, so a plain import("playwright") only resolves
+// npx installs runtapp into its own cache, so a plain import("playwright") only resolves
 // for repo-dev checkouts. Probe, in order: our own node_modules; the user's project
 // (process.cwd()); the global npm root. ESM ignores NODE_PATH, so cwd/global need explicit
 // resolution + import-by-absolute-path.
@@ -44,7 +44,7 @@ export async function loadPlaywright() {
     } catch {}
   }
   throw new Error(
-    "Web exploration needs Playwright (not bundled, to keep tapp-mcp installs small). " +
+    "Web exploration needs Playwright (not bundled, to keep runtapp installs small). " +
       "One-time setup, either works: `npm i playwright` in your project, or `npm i -g playwright` — " +
       "then `npx playwright install chromium`."
   );
@@ -78,6 +78,23 @@ export function webNavigationAction(linkLabel, route) {
 
 export function webTransitionOrigin(pendingNavigation, currentScreen) {
   return pendingNavigation?.fromScreen || currentScreen || null;
+}
+
+export function webBrowserLaunchOptions(environment = process.env) {
+  const browserProxy = String(environment.TAPP_BROWSER_PROXY_SERVER || "").trim();
+  if (environment.TAPP_ENFORCE_PUBLIC_EGRESS === "1" && !/^http:\/\/127\.0\.0\.1:\d+$/.test(browserProxy)) {
+    throw new Error("public egress policy proxy is required");
+  }
+  return {
+    headless: true,
+    ...(browserProxy ? { proxy: { server: browserProxy, bypass: "<-loopback>" } } : {}),
+    args: browserProxy ? [
+      "--disable-quic",
+      "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+      "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+      "--proxy-bypass-list=<-loopback>",
+    ] : [],
+  };
 }
 
 export function normalizeWebSeedRoutes(url, routes, limit = 5) {
@@ -144,7 +161,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   const emit = (kind, payload) => fs.writeSync(markersFd, `OCQA_${kind}:${JSON.stringify(payload)}\n`);
 
   const { chromium } = await loadPlaywright();
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(webBrowserLaunchOptions());
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   page.setDefaultTimeout(NAV_TIMEOUT_MS);
 

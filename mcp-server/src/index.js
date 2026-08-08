@@ -1904,7 +1904,7 @@ const pkgVersion = (() => {
 
 const server = new Server(
   {
-    name: "tapp-mcp",
+    name: "tapp",
     version: pkgVersion,
   },
   {

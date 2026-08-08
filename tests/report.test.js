@@ -66,6 +66,22 @@ test("findings dedup by type|screen — repeated detections count once", () => {
   assert.equal(r.verdict, "caution", "a high finding caps the verdict at caution");
 });
 
+test("caution and blocked headlines count every reported finding", () => {
+  const mediumIssues = Array.from({ length: 8 }, (_, index) =>
+    `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Settings","target":"button-${index}"}`
+  );
+  const caution = buildQaReport(markersFile([...CLEAN_RUN, ...mediumIssues]));
+  assert.equal(caution.verdict, "caution");
+  assert.match(caution.headline, /8 issue\(s\) to review/);
+
+  const blockedIssues = Array.from({ length: 18 }, (_, index) =>
+    `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Settings","target":"button-${index}"}`
+  );
+  const blocked = buildQaReport(markersFile([...CLEAN_RUN, ...blockedIssues]));
+  assert.equal(blocked.verdict, "blocked");
+  assert.match(blocked.headline, /18 issue\(s\).*18 medium/);
+});
+
 test("coverage floor: a shallow run is never ready", () => {
   const r = buildQaReport(
     markersFile([

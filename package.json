@@ -1,6 +1,6 @@
 {
-  "name": "tapp-mcp",
-  "version": "0.13.1",
+  "name": "runtapp",
+  "version": "0.14.0",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Release contracts, autonomous QA, and evidence-backed CI gates for iOS, Android, and web.",
   "license": "MIT",
@@ -51,6 +51,7 @@
   },
   "keywords": [
     "tapp",
+    "cli",
     "ios",
     "android",
     "simulator",

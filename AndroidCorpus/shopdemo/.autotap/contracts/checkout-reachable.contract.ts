@@ -1,4 +1,4 @@
-import { defineContract } from "tapp-mcp/contracts";
+import { defineContract } from "runtapp/contracts";
 
 export default defineContract({
   "name": "checkoutReachable",

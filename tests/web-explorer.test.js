@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeWebSeedRoutes, normalizeWebSeedTargets, submitWebLogin, webActionScreen, webNavigationAction, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+import { normalizeWebSeedRoutes, normalizeWebSeedTargets, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webNavigationAction, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
 
 test("web login submits a semantic SPA button even when it is outside a form", async () => {
   let clicked = false;
@@ -49,6 +49,20 @@ test("web map roles are derived from observed semantics", () => {
   assert.equal(webScreenRole("Sign in", [{ label: "Password", secure: true }]), "login");
   assert.equal(webScreenRole("Messages"), "messaging");
   assert.equal(webScreenRole("Profile", [{ label: "Name", secure: false }]), "form");
+});
+
+test("hosted web exploration fails closed without its public-egress proxy", () => {
+  assert.throws(
+    () => webBrowserLaunchOptions({ TAPP_ENFORCE_PUBLIC_EGRESS: "1" }),
+    /public egress policy proxy is required/,
+  );
+  const options = webBrowserLaunchOptions({
+    TAPP_ENFORCE_PUBLIC_EGRESS: "1",
+    TAPP_BROWSER_PROXY_SERVER: "http://127.0.0.1:43210",
+  });
+  assert.equal(options.proxy.server, "http://127.0.0.1:43210");
+  assert.ok(options.args.includes("--disable-quic"));
+  assert.ok(options.args.some((argument) => argument.includes("disable_non_proxied_udp")));
 });
 
 test("PR seed routes are same-origin, bounded, deduplicated, and exclude the start page", () => {

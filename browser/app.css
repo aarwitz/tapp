@@ -174,3 +174,54 @@ dialog { width:min(720px,calc(100vw - 40px)); max-height:min(760px,calc(100vh - 
   .workspace { padding:22px 14px 60px; }.view-heading,.view-heading.simple { display:flex; flex-direction:column; align-items:stretch; }.view-heading .decision-card { min-height:auto; }.journey { grid-template-columns:1fr 1fr; }
   .section { padding:21px 18px; }.section-heading,.runtime-row,.overview-grid,.map-layout,.settings-grid,.live-layout,.flow-recorder { grid-template-columns:1fr; }.section-heading { flex-direction:column; }.run-cta { min-width:0; }.pipeline,.evidence-grid,.application-grid { grid-template-columns:1fr; }.evidence-card.wide { grid-column:auto; }.plan-item { grid-template-columns:1fr; }.artifact { flex-direction:column; gap:5px; }.transition-list>div { grid-template-columns:1fr; }.top-actions .quiet { display:none; }
 }
+
+/* Desktop-parity dark product skin. The component structure remains shared by
+   local and hosted Tapp; this palette follows the native Command Center. */
+:root {
+  color-scheme:dark;
+  --ink:#edf2f8; --muted:#929ba8; --faint:#687280; --line:#303844; --paper:#171c24; --wash:#20262f;
+  --green:#58a6ff; --green-2:#4f9cf3; --green-3:#7bb8ff; --lime:#102d4d; --amber:#e2a826;
+  --amber-bg:#302817; --red:#ff5c57; --red-bg:#392125; --blue:#58a6ff; --sidebar:#0c1118;
+  --shadow:0 18px 55px rgba(0,0,0,.28); --small-shadow:0 8px 24px rgba(0,0,0,.18);
+}
+body { background:#0d1117; }
+.topbar { background:rgba(13,17,23,.96); border-color:var(--line); }
+.brand-mark { width:auto; background:transparent; color:var(--green); font-family:inherit; font-size:24px; }
+.mode-pill,.status-chip,.repository-switcher,.source-card,.panel,.decision-card,.target-card,.field,
+.live-frame-shell,.live-controls,.coverage-summary,.transition-list,.plan-item,.pipeline article,
+.evidence-card,.search-input,.github-repositories,.github-repositories button,.manual-action input,
+.run-row,.finding-row,.live-control { background:var(--paper); color:var(--ink); border-color:var(--line); }
+.source-onboarding { min-height:calc(100vh - 64px); }
+.source-card:hover,.source-card.dragging { border-color:var(--green-2); box-shadow:0 20px 56px rgba(0,0,0,.36); }
+.source-card.dragging,.target-card.selected,.run-row.selected,.finding-row.selected { background:#132237; }
+.platform-row span,.button-link { background:#131a23; border-color:#385a7c; color:var(--green); }
+button.primary { background:var(--green); color:#07111d; }
+button.primary:hover { background:#79b8ff; }
+button.secondary { color:#d8e9fb; border-color:#3b526a; background:#202731; }
+button.secondary:hover,button.quiet:hover,.journey button:hover,.live-control:hover,.run-row:hover,.finding-row:hover,.github-repositories button:hover { background:#252d37; }
+.sidebar { border-right:1px solid var(--line); }
+.project-avatar { background:linear-gradient(135deg,#3f8ee8,#7657d9); }
+.primary-nav button.active { background:#122743; }
+.primary-nav button.active>span { color:var(--green); }
+.workspace { background:#0d1117; }
+.journey { background:var(--line); }
+.journey button { background:var(--paper); color:var(--ink); }
+.journey button.done span { background:var(--green); border-color:var(--green); color:#07111d; }
+.target-choice-callout { border-color:#315c88; background:linear-gradient(135deg,#13243a,#171c24); }
+.target-choice-callout>span { background:var(--green); color:#07111d; }
+.target-card:hover { border-color:var(--green); background:#1c2633; box-shadow:0 7px 18px rgba(0,0,0,.3); }
+.target-card.selected { border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green),0 8px 20px rgba(0,0,0,.25); }
+.platform-icon,.platform-icon.ios,.platform-icon.android { background:#242c36; color:#c4d3e3; }
+.field input { color:var(--ink); }
+.live-frame { background:#090c11; }
+.live-frame #live-frame-loading { background:#090c11; color:var(--muted); }
+.live-frame-head,.live-controls-heading,.manual-action,.run-cta { background:var(--wash); }
+.detail-panel pre,.code-preview { background:#090c11; color:#dbe9f8; }
+.subnav { background:var(--paper); }
+.subnav button.active { background:var(--green); color:#07111d; }
+.map-canvas { border-color:var(--line); background:linear-gradient(90deg,transparent 31px,#18202a 32px,transparent 33px),linear-gradient(transparent 31px,#18202a 32px,transparent 33px),#0d1218; background-size:32px 32px; }
+.map-node { background:var(--paper); border-color:#34404e; border-left-color:var(--green); }
+.operation-drawer { background:#17202a; border:1px solid #334252; }
+.progress-track { background:#344150; }.progress-track span { background:var(--green); }
+.spinner { border-color:#3a4857; border-top-color:var(--green); }
+.toast { background:#263342; }.toast.error { background:#842f3a; }
