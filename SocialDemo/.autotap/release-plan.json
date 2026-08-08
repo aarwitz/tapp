@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-release-plan",
+  "application": {
+    "name": "tapp-social-demo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "web"
+    ],
+    "targetIds": [
+      "target_f43f6d898145a7cf"
+    ]
+  },
+  "status": "awaiting-review",
+  "policy": {
+    "targetCount": "approximately 5–15 when grounded evidence supports it",
+    "maximum": 15,
+    "compactOverExhaustive": true,
+    "deterministicReplayRequired": true,
+    "aiAssertionsDefault": false
+  },
+  "items": [
+    {
+      "id": "contract_c3fad67bc30d95a2",
+      "kind": "release-contract",
+      "name": "socialSystemWorks",
+      "title": "Alice publishes, Bob reacts, and both exchange messages",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "critical",
+      "businessValue": "Customers can publish, discover, react, and communicate across real account boundaries.",
+      "actors": [
+        "alice",
+        "bob"
+      ],
+      "tasks": [
+        "signIn",
+        "createPost",
+        "likePost",
+        "openConversation",
+        "sendMessage"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/social-system.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
+    },
+    {
+      "id": "proposal_2b990a21ef260c4f",
+      "kind": "release-contract",
+      "name": "signInReachable",
+      "title": "Sign in remains reachable",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "pending",
+      "criticality": "high",
+      "businessValue": "Protect access to the observed Sign in product surface.",
+      "actors": [
+        "alice"
+      ],
+      "tasks": [],
+      "platforms": [
+        "web"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_48d7c508cc0ca58a",
+          "observationCount": 1
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target."
+    },
+    {
+      "id": "proposal_2e516cb0a75e4086",
+      "kind": "release-contract",
+      "name": "feedReachable",
+      "title": "Feed remains reachable",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "pending",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Feed product surface.",
+      "actors": [
+        "alice"
+      ],
+      "tasks": [],
+      "platforms": [
+        "web"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_c8bc2586cdd87cd6",
+          "observationCount": 2
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target."
+    },
+    {
+      "id": "proposal_7701711aa7c2075e",
+      "kind": "release-contract",
+      "name": "messagesReachable",
+      "title": "Messages remains reachable",
+      "origin": "deterministic-ui-map-proposal",
+      "decision": "pending",
+      "criticality": "high",
+      "businessValue": "Protect access to the observed Messages product surface.",
+      "actors": [
+        "alice"
+      ],
+      "tasks": [],
+      "platforms": [
+        "web"
+      ],
+      "risk": "Observed UI behavior is not covered by a reviewed Task or release contract.",
+      "groundedBy": [
+        {
+          "type": "ui-map-node",
+          "id": "screen_f5cccfb737512bed",
+          "observationCount": 2
+        }
+      ],
+      "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target."
+    }
+  ],
+  "coverageGaps": {
+    "unknownRequirements": [],
+    "uncoveredUiMapNodes": [
+      "screen_48d7c508cc0ca58a",
+      "screen_c8bc2586cdd87cd6",
+      "screen_f5cccfb737512bed"
+    ],
+    "uncoveredUiMapEdges": [
+      "edge_5225cd6421389d95",
+      "edge_f5e4a8ee291bd844"
+    ]
+  },
+  "review": {
+    "instructions": "Approve, reject, defer, reprioritize, or constrain pending items before generation. Existing committed contracts remain accepted but still require current replay evidence.",
+    "reviewedAt": null
+  },
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-04T22:09:16.213Z",
+    "remoteAiUsed": false,
+    "groundedOnly": true
+  }
+}

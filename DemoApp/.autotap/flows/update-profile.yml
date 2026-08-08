@@ -1,0 +1,9 @@
+name: Update Profile is reachable
+platform: ios
+app: com.autotap.demoapp
+reset: app
+
+steps:
+  - task: completeOnboarding
+  - task: openUpdateProfile
+  - assert_screen: Update Profile

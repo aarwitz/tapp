@@ -1,0 +1,15 @@
+kind: task
+version: 1
+name: openConversation
+description: Open the isolated actor's conversation with another named actor.
+inputs:
+  recipient: { required: true }
+postconditions:
+  - exists: Message
+implementations:
+  web:
+    steps:
+      - tap: Messages
+      - wait_for: Messages
+      - tap: "Chat with {{recipient}}"
+

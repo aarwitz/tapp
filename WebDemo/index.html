@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>WebDemo — Home</title></head>
+<body>
+<h1>WebDemo</h1>
+<p>The web harness test corpus — an intentionally messy site with seeded defects.</p>
+<nav>
+  <a href="/features.html">Features</a>
+  <a href="/pricing.html">Pricing</a>
+  <a href="/status.html">Status</a>
+  <a href="/login.html">Sign in</a>
+  <a href="/blank.html">Archive</a>
+  <a href="/changelog.html">Changelog</a> <!-- seeded defect: page does not exist (broken link) -->
+</nav>
+<p>
+  <button id="theme">Toggle theme</button> <!-- works: mutates the DOM -->
+  <button id="sync">Sync Now</button>      <!-- seeded defect: dead button (no handler) -->
+</p>
+<script>
+  document.getElementById("theme").addEventListener("click", () => {
+    document.body.style.background = document.body.style.background ? "" : "#222";
+    document.body.insertAdjacentHTML("beforeend", "<p>theme toggled</p>");
+  });
+</script>
+</body>
+</html>

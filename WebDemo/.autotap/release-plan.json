@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-release-plan",
+  "application": {
+    "name": "WebDemo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "web"
+    ],
+    "targetIds": [
+      "target_f43f6d898145a7cf"
+    ]
+  },
+  "status": "awaiting-review",
+  "policy": {
+    "targetCount": "approximately 5–15 when grounded evidence supports it",
+    "maximum": 15,
+    "compactOverExhaustive": true,
+    "deterministicReplayRequired": true,
+    "aiAssertionsDefault": false
+  },
+  "items": [
+    {
+      "id": "contract_8944f3ec2ae3b18f",
+      "kind": "release-contract",
+      "name": "pricingReachable",
+      "title": "Pricing remains reachable",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Pricing product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openPricing"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/pricing-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T11:28:42.165Z",
+      "generation": {
+        "id": "proposal_11eec2a32ab8e47b",
+        "name": "pricingReachable",
+        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "tasks": [
+          "openPricing"
+        ],
+        "taskPaths": [
+          ".autotap/tasks/open-pricing.task.json"
+        ],
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "web",
+            "kind": "flow",
+            "deterministicSteps": 3
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "web": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-web-68080-1785929357416",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "promotedAt": "2026-08-05T11:29:25.730Z"
+      },
+      "taskInputs": {
+        "openPricing": {}
+      }
+    },
+    {
+      "id": "proposal_bf6e0286779a93c4",
+      "kind": "release-contract",
+      "name": "signInWorks",
+      "title": "Sign In remains available",
+      "scope": ".",
+      "origin": "deterministic-source-proposal",
+      "decision": "pending",
+      "criticality": "medium",
+      "businessValue": "Protect the reviewed sign in capability through its reusable Task.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "signIn"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "taskInputs": {
+        "signIn": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        }
+      },
+      "risk": "The Task exists but is not composed by a reviewed release contract.",
+      "groundedBy": [
+        {
+          "type": "task",
+          "path": ".autotap/tasks/sign-in.yml"
+        },
+        {
+          "type": "capability",
+          "id": "capability_signin"
+        }
+      ],
+      "requiredValidation": "Compile and replay against the real target before approval or commit."
+    }
+  ],
+  "coverageGaps": {
+    "unknownRequirements": [],
+    "uncoveredUiMapNodes": [
+      "screen_3dce9f61c869d69a",
+      "screen_5b8a8b56dada6ce7",
+      "screen_7acf64583849d669",
+      "screen_83108867aa360685",
+      "screen_909a9f6dbd7ec2aa"
+    ],
+    "uncoveredUiMapEdges": [
+      "edge_032ab54923050327",
+      "edge_509e147d6378fea1",
+      "edge_997391a2b3100910",
+      "edge_a82e29f087dfe829",
+      "edge_a9ffc4d2907e48e3"
+    ]
+  },
+  "review": {
+    "instructions": "Approve, reject, defer, reprioritize, or constrain pending items before generation. Existing committed contracts remain accepted but still require current replay evidence.",
+    "reviewedAt": "2026-08-05T11:28:42.165Z"
+  },
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T11:37:09.253Z",
+    "remoteAiUsed": false,
+    "groundedOnly": true
+  },
+  "generation": {
+    "generatedAt": "2026-08-05T11:28:42.495Z",
+    "generatedTasks": [
+      {
+        "name": "openPricing",
+        "path": ".autotap/tasks/open-pricing.task.json",
+        "status": "promoted",
+        "trusted": true,
+        "platforms": [
+          "web"
+        ],
+        "grounding": [
+          {
+            "platform": "web",
+            "errors": [],
+            "warnings": []
+          }
+        ],
+        "realValidation": {
+          "web": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-web-68080-1785929357416",
+            "detail": "deterministic replay passed",
+            "contract": "pricingReachable",
+            "validatedAt": "2026-08-05T11:29:18.530Z"
+          }
+        },
+        "promotedAt": "2026-08-05T11:29:25.730Z"
+      }
+    ],
+    "generated": [
+      {
+        "id": "proposal_11eec2a32ab8e47b",
+        "name": "pricingReachable",
+        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "tasks": [
+          "openPricing"
+        ],
+        "taskPaths": [
+          ".autotap/tasks/open-pricing.task.json"
+        ],
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "web",
+            "kind": "flow",
+            "deterministicSteps": 3
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "web": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-web-68080-1785929357416",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "promotedAt": "2026-08-05T11:29:25.730Z"
+      }
+    ],
+    "blocked": [],
+    "invariant": "Draft Task grounding and contract compilation are not real-surface validation; generated artifacts remain untrusted until deterministic replay passes.",
+    "promotedAt": "2026-08-05T11:29:25.730Z"
+  }
+}

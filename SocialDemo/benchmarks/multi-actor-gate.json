@@ -1,0 +1,65 @@
+{
+  "measuredAt": "2026-08-04",
+  "surface": "local Chromium via Playwright",
+  "releaseContract": "../.autotap/contracts/social-system.contract.ts",
+  "compiledScenario": "../.autotap/scenarios/social-system.yml",
+  "clean": {
+    "qaVerdict": "ready",
+    "releaseScore": 100,
+    "screensExplored": 3,
+    "actionsPerformed": 5,
+    "findings": 0,
+    "contractPassed": true,
+    "contractName": "socialSystemWorks",
+    "actors": 2,
+    "businessSteps": 12,
+    "taskInvocations": 8,
+    "executed": 41,
+    "total": 41,
+    "gateExitCode": 0,
+    "prSelection": {
+      "selected": ["socialSystemWorks"],
+      "contractExecution": "passed",
+      "unknownChangedFiles": ["docs/new-design.md"],
+      "gateExitCode": 0
+    }
+  },
+  "seededFault": {
+    "name": "hide-cross-actor-posts",
+    "qaVerdict": "ready",
+    "releaseScore": 100,
+    "screensExplored": 3,
+    "actionsPerformed": 5,
+    "findings": 0,
+    "contractPassed": false,
+    "failedActor": "bob",
+    "failedAction": "assert_exists",
+    "failedTarget": "Tapp contract post 7319",
+    "executed": 19,
+    "total": 41,
+    "teardownPassed": true,
+    "gateReason": "1 release contract(s) failed",
+    "gateExitCode": 1,
+    "prSelection": {
+      "selected": ["socialSystemWorks"],
+      "selectionReasons": ["always", "contract-source", "task-changed"],
+      "contractExecution": "failed",
+      "maintenanceDisposition": "review-required",
+      "maintenanceStatus": "unclassified",
+      "editablePaths": [".autotap/tasks/create-post.yml"],
+      "preservedIntent": ["socialSystemWorks"],
+      "gateExitCode": 1
+    }
+  },
+  "evidence": {
+    "cleanContractRun": "scenario-web-15451-1785872133529",
+    "cleanPortableGate": "web-20260804-193951",
+    "faultContractRun": "scenario-web-15639-1785872155423",
+    "faultPortableGate": "web-20260804-194018",
+    "cleanPrGate": "web-20260804-200350",
+    "faultPrGate": "web-20260804-200526",
+    "lockedActionPathGate": "web-20260804-204141",
+    "lockedPlaywrightVersion": "1.61.1"
+  },
+  "claimBoundary": "This benchmark proves the TypeScript release contract, reusable Tasks, isolated web actors, and portable local gate, including the locally rehearsed composite-Action inputs on the audited locked browser runtime. The same contract evidence protocol passed a 10/10 iOS simulator contract. Android contract compilation is implemented but its latest task-composed replay was blocked here by no connected emulator. Hosted GitHub Actions and iOS/Android multi-actor isolation are not verified."
+}

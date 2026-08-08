@@ -1,0 +1,4468 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "com.autotap.demoapp",
+    "platforms": [
+      "ios"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "ios": "screen_60383486aeb8b6e4"
+    },
+    "navigationRoots": {
+      "ios": "screen_66cd9688a2ae0682"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "20260805-075812",
+      "20260805-082450",
+      "20260805-085658",
+      "20260805-093316",
+      "20260805-093847",
+      "20260805-094740"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-05T11:59:40.409Z",
+    "lastObservedAt": "2026-08-05T13:48:42.900Z",
+    "lastRun": {
+      "id": "20260805-093316",
+      "platform": "ios",
+      "verdict": "ready",
+      "inconclusive": false,
+      "statesExplored": 4,
+      "actionsPerformed": 4,
+      "observedAt": "2026-08-05T13:34:01.008Z"
+    }
+  },
+  "nodes": [
+    {
+      "id": "screen_107a3828ffeae369",
+      "semanticKey": "release-checklist",
+      "name": "Release Checklist",
+      "aliases": [],
+      "roles": [
+        "detail",
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "167ba0813f3cfbe1"
+      ],
+      "controls": [
+        {
+          "id": "control_03aedb154102c04d",
+          "semanticKey": "checkmark-circle",
+          "kind": "button",
+          "label": "Selected",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checkmark.circle"
+            },
+            {
+              "kind": "label",
+              "value": "Selected"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_372f72ef07fdd2d0",
+          "semanticKey": "done",
+          "kind": "button",
+          "label": "Done",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Done"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openReleaseChecklist"
+        ],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-085658",
+          "20260805-093316"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T13:34:01.008Z",
+        "count": 4
+      }
+    },
+    {
+      "id": "screen_2b007d1294e54401",
+      "semanticKey": "update-profile",
+      "name": "Update Profile",
+      "aliases": [],
+      "roles": [
+        "profile",
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "213c18bded1d2d2e",
+        "2e5ffc7d75c134e3",
+        "55bd09a7a87316cc",
+        "6e7b000c232eb176",
+        "8b1fa55684ec882b"
+      ],
+      "controls": [
+        {
+          "id": "control_0cdd345fbda5f35d",
+          "semanticKey": "save-changes",
+          "kind": "button",
+          "label": "Save Changes",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Save Changes"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_330d2ae57c4b86a4",
+          "semanticKey": "backbutton",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "BackButton"
+            },
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "BackButton"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_39ce5acfa39e543a",
+          "semanticKey": "tasks",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_3b1cd4ec10196a9a",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "gearshape.fill",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_59605a280b28ef56",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_7940cb8e9eecad74",
+          "semanticKey": "test",
+          "kind": "field",
+          "label": "test",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "test"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_8ce8eec43ce86458",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c7f9d194a0b51432",
+          "semanticKey": "home",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e831c7f8512fffcc",
+          "semanticKey": "account",
+          "kind": "field",
+          "label": "Account",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Account"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openUpdateProfile"
+        ],
+        "contracts": [
+          "updateProfileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-082450"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T12:25:31.252Z",
+        "count": 11
+      }
+    },
+    {
+      "id": "screen_43fa7d768956657d",
+      "semanticKey": "saved-reports",
+      "name": "Saved Reports",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "c95f126ef27bcaf8"
+      ],
+      "controls": [
+        {
+          "id": "control_0d28ada23d5781a0",
+          "semanticKey": "doc-text-magnifyingglass",
+          "kind": "button",
+          "label": "Search Document",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "doc.text.magnifyingglass"
+            },
+            {
+              "kind": "label",
+              "value": "Search Document"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_2a3c4d0d7f7d1a5f",
+          "semanticKey": "backbutton",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "BackButton"
+            },
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "BackButton"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_8b9996056aa8a8e2",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_90616dc77dd03762",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e72099adbf84e8a9",
+          "semanticKey": "add-report",
+          "kind": "button",
+          "label": "Add Report",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Add Report"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f24f409d1c5a9035",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "gearshape.fill",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 4
+      }
+    },
+    {
+      "id": "screen_60383486aeb8b6e4",
+      "semanticKey": "get-started",
+      "name": "Get Started",
+      "aliases": [],
+      "roles": [
+        "onboarding"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "9dab08d4d9a1e788"
+      ],
+      "controls": [
+        {
+          "id": "control_40f9f554c876edc2",
+          "semanticKey": "continue",
+          "kind": "button",
+          "label": "Continue",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Continue"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_49b10f7480e19069",
+          "semanticKey": "house",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_57c14fcff026ff81",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "checklist",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b23c6e0c928c7805",
+          "semanticKey": "not-now",
+          "kind": "button",
+          "label": "Not Now",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Not Now"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_d742f5724ac63a9a",
+          "semanticKey": "gearshape",
+          "kind": "button",
+          "label": "gearshape",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e26fb4702e6b552a",
+          "semanticKey": "sparkles-rectangle-stack",
+          "kind": "button",
+          "label": "sparkles.rectangle.stack",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "sparkles.rectangle.stack"
+            },
+            {
+              "kind": "label",
+              "value": "sparkles.rectangle.stack"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f468aaa4ae9e4406",
+          "semanticKey": "jump-to-tasks",
+          "kind": "button",
+          "label": "Jump to Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Jump to Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeOnboarding"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-082450",
+          "20260805-085658",
+          "20260805-093316",
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T12:25:31.252Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 5
+      }
+    },
+    {
+      "id": "screen_66cd9688a2ae0682",
+      "semanticKey": "dashboard",
+      "name": "Dashboard",
+      "aliases": [],
+      "roles": [
+        "detail",
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "1ee8f24a29539b5c",
+        "b2c38bd28c18c3e4",
+        "fd0d23e4be763a18"
+      ],
+      "controls": [
+        {
+          "id": "control_0fb342cc05735057",
+          "semanticKey": "sync-now",
+          "kind": "button",
+          "label": "Sync Now",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Sync Now"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_26f5f207d18625d9",
+          "semanticKey": "open-release-checklist",
+          "kind": "button",
+          "label": "Open release checklist",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Open release checklist"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_27c24bd732a8f837",
+          "semanticKey": "help-center-web-content-wkwebview-with-links-a-search-field-and-a-button",
+          "kind": "button",
+          "label": "Help Center, Web content (WKWebView) with links, a search field, and a button",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Help Center, Web content (WKWebView) with links, a search field, and a button"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_2c102a4341cd0091",
+          "semanticKey": "what-s-new-a-swipeable-carousel-progress-happens-by-swiping-sideways",
+          "kind": "button",
+          "label": "What's New, A swipeable carousel — progress happens by swiping sideways",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "What's New, A swipeable carousel — progress happens by swiping sideways"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_3600a47acd9342f8",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_44548d6c6fbdf03c",
+          "semanticKey": "counter-playground-buttons-stepper-and-a-reset-confirmation-dialog",
+          "kind": "button",
+          "label": "Counter Playground, Buttons, stepper, and a reset confirmation dialog",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Counter Playground, Buttons, stepper, and a reset confirmation dialog"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_48bfa79456a0e3ec",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5942df5d32e162f9",
+          "semanticKey": "qa",
+          "kind": "button",
+          "label": "QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5ab9242b6e8f3a16",
+          "semanticKey": "overview",
+          "kind": "button",
+          "label": "Overview",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Overview"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_60eab1d425f7e000",
+          "semanticKey": "home",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_6884a92b075c0517",
+          "semanticKey": "show-summary-modal",
+          "kind": "button",
+          "label": "Show summary modal",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Show summary modal"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_6d8ed513e09ee697",
+          "semanticKey": "settings",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_72525a145e4a6844",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_7cdcc5695d704837",
+          "semanticKey": "release-notes-scrollable-detail-with-disclosure-groups-and-metadata",
+          "kind": "button",
+          "label": "Release Notes, Scrollable detail with disclosure groups and metadata",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Release Notes, Scrollable detail with disclosure groups and metadata"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_88d4f3b4196b9bff",
+          "semanticKey": "releases",
+          "kind": "button",
+          "label": "Releases",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Releases"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_a087f3141eaa1f3a",
+          "semanticKey": "tasks",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b94bda1b830da220",
+          "semanticKey": "more",
+          "kind": "button",
+          "label": "More",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "More"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f7daf7931eefecd5",
+          "semanticKey": "additionaldimmingoverlay",
+          "kind": "button",
+          "label": "AdditionalDimmingOverlay",
+          "secure": false,
+          "enabled": true,
+          "hittable": false,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "AdditionalDimmingOverlay"
+            },
+            {
+              "kind": "label",
+              "value": "AdditionalDimmingOverlay"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeOnboarding",
+          "openReleaseChecklist",
+          "openTodoList",
+          "openUpdateProfile"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask",
+          "updateProfileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-082450",
+          "20260805-085658",
+          "20260805-093316",
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 18
+      }
+    },
+    {
+      "id": "screen_973c26b3204d9717",
+      "semanticKey": "todo-list--task-notes-field",
+      "name": "Todo List",
+      "aliases": [],
+      "roles": [
+        "list"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "baseSemanticKey": "todo-list",
+      "variant": "task-notes-field",
+      "stateLabel": "Todo List · Task Notes Field / Completed / Delete Task",
+      "fingerprints": [
+        "b32380c15dc8e4c",
+        "f8de3c1b41fc1e18"
+      ],
+      "controls": [
+        {
+          "id": "control_293b264a2b0c5f76",
+          "semanticKey": "task-notes-field",
+          "kind": "field",
+          "label": "task_notes_field",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "task_notes_field"
+            },
+            {
+              "kind": "label",
+              "value": "task_notes_field"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4ab7f0b664b36d01",
+          "semanticKey": "category-qa",
+          "kind": "button",
+          "label": "Category, QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Category, QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_62ba218332656bba",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_7482158e55d6f0eb",
+          "semanticKey": "notes",
+          "kind": "field",
+          "label": "Notes",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Notes"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_77a964ae8fc292fb",
+          "semanticKey": "mark-complete",
+          "kind": "button",
+          "label": "Mark Complete",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Mark Complete"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_a0ee7a22feaa2427",
+          "semanticKey": "backbutton",
+          "kind": "button",
+          "label": "Todo List",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "BackButton"
+            },
+            {
+              "kind": "label",
+              "value": "BackButton"
+            },
+            {
+              "kind": "label",
+              "value": "Todo List"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_a1d7dad19d57cda9",
+          "semanticKey": "completed",
+          "kind": "button",
+          "label": "Completed",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Completed"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ae01f263a76e241b",
+          "semanticKey": "reopen-task",
+          "kind": "button",
+          "label": "Reopen Task",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Reopen Task"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b8bbe4c9960cd0d0",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_d8181ec189f690de",
+          "semanticKey": "delete-task",
+          "kind": "button",
+          "label": "Delete Task",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Delete Task"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f240e134f6d9ebef",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 8
+      }
+    },
+    {
+      "id": "screen_9f9f578981bed256",
+      "semanticKey": "todo-list--state-8ea21fe34a",
+      "name": "Todo List",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "baseSemanticKey": "todo-list",
+      "variant": "state-8ea21fe34a",
+      "stateLabel": "Todo List · Delete",
+      "fingerprints": [
+        "279842c3c2166ddf"
+      ],
+      "controls": [
+        {
+          "id": "control_62615fdc9abd2983",
+          "semanticKey": "delete",
+          "kind": "button",
+          "label": "Delete",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Delete"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:40:11.674Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_b172bc158b797cc4",
+      "semanticKey": "new-task",
+      "name": "New Task",
+      "aliases": [],
+      "roles": [
+        "form"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "2d030e9f03f3953b",
+        "4a8dbee5bdee81a2"
+      ],
+      "controls": [
+        {
+          "id": "control_1843579ad815cbe3",
+          "semanticKey": "test",
+          "kind": "field",
+          "label": "test",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "test"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_37a5594cbb94985a",
+          "semanticKey": "save",
+          "kind": "button",
+          "label": "Save",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Save"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5b3fbaa98f2ac617",
+          "semanticKey": "cancel",
+          "kind": "button",
+          "label": "Cancel",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Cancel"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_d593b87f2bab03eb",
+          "semanticKey": "category-qa",
+          "kind": "button",
+          "label": "Category, QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Category, QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_dee767d4e0ac53c5",
+          "semanticKey": "new-task-field",
+          "kind": "field",
+          "label": "new_task_field",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "new_task_field"
+            },
+            {
+              "kind": "label",
+              "value": "new_task_field"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ee8c1244eaa4b77c",
+          "semanticKey": "new-task",
+          "kind": "field",
+          "label": "New Task",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "New Task"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "createTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 4
+      }
+    },
+    {
+      "id": "screen_cde0fb0dec1400c5",
+      "semanticKey": "settings",
+      "name": "Settings",
+      "aliases": [],
+      "roles": [
+        "settings"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "20c2d005a0ee7b09",
+        "242031a6ed57a24a",
+        "46475b690cd68950",
+        "57dcf128eea33ed2",
+        "bddc6e10ab12261a"
+      ],
+      "controls": [
+        {
+          "id": "control_02b0ab3b83051996",
+          "semanticKey": "system-status",
+          "kind": "button",
+          "label": "System Status",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "System Status"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_08c85c5fda2ab4da",
+          "semanticKey": "notify-on-failures",
+          "kind": "button",
+          "label": "Notify on failures",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Notify on failures"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_0c89c022384c28ef",
+          "semanticKey": "live-feed",
+          "kind": "button",
+          "label": "Live Feed",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Live Feed"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_1446004291650807",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_22bbec201f858127",
+          "semanticKey": "pinned-items",
+          "kind": "button",
+          "label": "Pinned Items",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Pinned Items"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_2c11cf80f0a6769b",
+          "semanticKey": "checkmark",
+          "kind": "button",
+          "label": "selected",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checkmark"
+            },
+            {
+              "kind": "label",
+              "value": "selected"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_31b87d59beb16d35",
+          "semanticKey": "channel-stable",
+          "kind": "button",
+          "label": "Channel, Stable",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Channel, Stable"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_32711de55a21f91e",
+          "semanticKey": "settings",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_350b613a76a3775c",
+          "semanticKey": "changelog",
+          "kind": "button",
+          "label": "Changelog",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Changelog"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_36406c95a7e4c95e",
+          "semanticKey": "record-run-video",
+          "kind": "button",
+          "label": "Record run video",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Record run video"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4168bc0688d87fab",
+          "semanticKey": "draft-reports",
+          "kind": "button",
+          "label": "Draft Reports",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Draft Reports"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_44fd287b6759c545",
+          "semanticKey": "tasks",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5296d173215702de",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_568213244fea92bd",
+          "semanticKey": "notification-rules",
+          "kind": "button",
+          "label": "Notification Rules",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Notification Rules"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_597514e4d499e2ce",
+          "semanticKey": "additionaldimmingoverlay",
+          "kind": "button",
+          "label": "AdditionalDimmingOverlay",
+          "secure": false,
+          "enabled": true,
+          "hittable": false,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "AdditionalDimmingOverlay"
+            },
+            {
+              "kind": "label",
+              "value": "AdditionalDimmingOverlay"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_6a0fa0266dde15a3",
+          "semanticKey": "nightly",
+          "kind": "button",
+          "label": "Nightly",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Nightly"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_891284d2adea1199",
+          "semanticKey": "saved-reports",
+          "kind": "button",
+          "label": "Saved Reports",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Saved Reports"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b69671fe5159150a",
+          "semanticKey": "queued-tasks",
+          "kind": "button",
+          "label": "Queued Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Queued Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_bf7941fbe79f8e7e",
+          "semanticKey": "home",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c2380df3b5819fd0",
+          "semanticKey": "update-profile",
+          "kind": "button",
+          "label": "Update Profile",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Update Profile"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c425979736d3d96e",
+          "semanticKey": "stable",
+          "kind": "button",
+          "label": "Stable",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Stable"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_cf1fdffe914609de",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e640102f1fdee3f7",
+          "semanticKey": "beta",
+          "kind": "button",
+          "label": "Beta",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Beta"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e9201ddbd8302b6b",
+          "semanticKey": "chevron-forward",
+          "kind": "button",
+          "label": "chevron.forward",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "chevron.forward"
+            },
+            {
+              "kind": "label",
+              "value": "chevron.forward"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openUpdateProfile"
+        ],
+        "contracts": [
+          "updateProfileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-082450"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T12:25:31.252Z",
+        "count": 12
+      }
+    },
+    {
+      "id": "screen_d9adb30a715d9553",
+      "semanticKey": "todo-list",
+      "name": "Todo List",
+      "aliases": [],
+      "roles": [
+        "list",
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "239e755c143bed0a",
+        "456b9d79c3168db",
+        "513ad22c307285e0",
+        "5dea2861da58ea28",
+        "c4814b2909a4cf6c"
+      ],
+      "controls": [
+        {
+          "id": "control_0784d14ec5a2dc7f",
+          "semanticKey": "open",
+          "kind": "button",
+          "label": "Open",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Open"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_09076aaed01869e8",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_1f3b8c6f8c6945cf",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_28dc1f0498b2e48b",
+          "semanticKey": "stabilize-simulator-retry-path-infra",
+          "kind": "button",
+          "label": "Stabilize simulator retry path, Infra",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Stabilize simulator retry path, Infra"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_29c3119182f1b7b3",
+          "semanticKey": "all",
+          "kind": "button",
+          "label": "All",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "All"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4095df1d95b9c06f",
+          "semanticKey": "magnifyingglass",
+          "kind": "button",
+          "label": "Search",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "magnifyingglass"
+            },
+            {
+              "kind": "label",
+              "value": "Search"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_43114c588bed52b7",
+          "semanticKey": "additionaldimmingoverlay",
+          "kind": "button",
+          "label": "AdditionalDimmingOverlay",
+          "secure": false,
+          "enabled": true,
+          "hittable": false,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "AdditionalDimmingOverlay"
+            },
+            {
+              "kind": "label",
+              "value": "AdditionalDimmingOverlay"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_55e8ed2232bbdcb4",
+          "semanticKey": "tasks",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_799ce14dc33c74a3",
+          "semanticKey": "review-coverage-narrative-product",
+          "kind": "button",
+          "label": "Review coverage narrative, Product",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Review coverage narrative, Product"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_81f6894ecc0a911a",
+          "semanticKey": "add",
+          "kind": "button",
+          "label": "Add",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Add"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_9bf193fc1438f1a6",
+          "semanticKey": "home",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_9efbc9c264a0d031",
+          "semanticKey": "test-qa",
+          "kind": "button",
+          "label": "test, QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "test, QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_a32d1ec0f2574bd8",
+          "semanticKey": "chevron-forward",
+          "kind": "button",
+          "label": "chevron.forward",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "chevron.forward"
+            },
+            {
+              "kind": "label",
+              "value": "chevron.forward"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ae1494d963b49540",
+          "semanticKey": "settings",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_af1c367ab8487d21",
+          "semanticKey": "circle",
+          "kind": "button",
+          "label": "circle",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "circle"
+            },
+            {
+              "kind": "label",
+              "value": "circle"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c72ea014b4302f14",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c7587a4fc76be84e",
+          "semanticKey": "open-counter-playground",
+          "kind": "button",
+          "label": "Open Counter Playground",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Open Counter Playground"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e23c4528c94cc1c1",
+          "semanticKey": "done",
+          "kind": "button",
+          "label": "Done",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Done"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_e498201b4a94bd2e",
+          "semanticKey": "verify-onboarding-modal-qa",
+          "kind": "button",
+          "label": "Verify onboarding modal, QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Verify onboarding modal, QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f501666d44086c38",
+          "semanticKey": "create-new-task",
+          "kind": "button",
+          "label": "Create New Task",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Create New Task"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeTodoItem",
+          "createTodoItem",
+          "openTodoList"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-093316",
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 13
+      }
+    },
+    {
+      "id": "screen_dc0570d6ffde126c",
+      "semanticKey": "daily-summary",
+      "name": "Daily Summary",
+      "aliases": [],
+      "roles": [
+        "detail"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "395dac0192d0fdbc"
+      ],
+      "controls": [
+        {
+          "id": "control_022f86680dd7971d",
+          "semanticKey": "checkmark-circle",
+          "kind": "button",
+          "label": "Selected",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checkmark.circle"
+            },
+            {
+              "kind": "label",
+              "value": "Selected"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_665ba8b1e3388e10",
+          "semanticKey": "done",
+          "kind": "button",
+          "label": "Done",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Done"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      }
+    },
+    {
+      "id": "screen_e392b772e380d3e9",
+      "semanticKey": "pinned-items",
+      "name": "Pinned Items",
+      "aliases": [],
+      "roles": [
+        "list",
+        "screen"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "fingerprints": [
+        "63b65c48aa32b53e"
+      ],
+      "controls": [
+        {
+          "id": "control_3492b60aa55f8795",
+          "semanticKey": "backbutton",
+          "kind": "button",
+          "label": "Settings",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "BackButton"
+            },
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "Settings"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4a3607ddcd8c3b0d",
+          "semanticKey": "pin",
+          "kind": "button",
+          "label": "Pin",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "pin"
+            },
+            {
+              "kind": "label",
+              "value": "Pin"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_573e06ce31477c5b",
+          "semanticKey": "design-review",
+          "kind": "button",
+          "label": "Design Review",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Design Review"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5dadf8cfae7bfa4f",
+          "semanticKey": "gearshape-fill",
+          "kind": "button",
+          "label": "gearshape.fill",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "gearshape.fill"
+            },
+            {
+              "kind": "label",
+              "value": "gearshape.fill"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_61416bbf5b4e686c",
+          "semanticKey": "release-notes",
+          "kind": "button",
+          "label": "Release Notes",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Release Notes"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_90857d0c1b2578db",
+          "semanticKey": "sprint-retrospective",
+          "kind": "button",
+          "label": "Sprint Retrospective",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Sprint Retrospective"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_96f7fececbd39773",
+          "semanticKey": "bug-triage",
+          "kind": "button",
+          "label": "Bug Triage",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Bug Triage"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_a6406f8ae0d5327f",
+          "semanticKey": "house-fill",
+          "kind": "button",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "house.fill"
+            },
+            {
+              "kind": "label",
+              "value": "home"
+            },
+            {
+              "kind": "label",
+              "value": "Home"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ae29797e4b33630c",
+          "semanticKey": "chevron-forward",
+          "kind": "button",
+          "label": "chevron.forward",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "chevron.forward"
+            },
+            {
+              "kind": "label",
+              "value": "chevron.forward"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b558cf698d43a95e",
+          "semanticKey": "qa-sign-off",
+          "kind": "button",
+          "label": "QA Sign-off",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "QA Sign-off"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_d6b81c5c9de71e0d",
+          "semanticKey": "checklist",
+          "kind": "button",
+          "label": "Tasks",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "checklist"
+            },
+            {
+              "kind": "label",
+              "value": "Tasks"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      }
+    },
+    {
+      "id": "screen_f100530dc20fc7ac",
+      "semanticKey": "todo-list--state-2ed7313a7f",
+      "name": "Todo List",
+      "aliases": [],
+      "roles": [
+        "detail"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "status": "observed",
+      "baseSemanticKey": "todo-list",
+      "variant": "state-2ed7313a7f",
+      "stateLabel": "Todo List · Infra / Product / Qa",
+      "fingerprints": [
+        "601ed7be0b9a05fd"
+      ],
+      "controls": [
+        {
+          "id": "control_4f8cc0d01859bcb2",
+          "semanticKey": "qa",
+          "kind": "button",
+          "label": "QA",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "QA"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_6f0a18a6703a9e31",
+          "semanticKey": "checkmark",
+          "kind": "button",
+          "label": "selected",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "accessibilityId",
+              "value": "checkmark"
+            },
+            {
+              "kind": "label",
+              "value": "selected"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_90c001a3ba4486b8",
+          "semanticKey": "product",
+          "kind": "button",
+          "label": "Product",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Product"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_c5db865c56aae619",
+          "semanticKey": "infra",
+          "kind": "button",
+          "label": "Infra",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Infra"
+            }
+          ],
+          "platforms": [
+            "ios"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "routes": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:40:11.674Z",
+        "count": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_09672283d711d821",
+      "from": "screen_2b007d1294e54401",
+      "to": "screen_cde0fb0dec1400c5",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "back",
+        "target": "BackButton",
+        "selectors": [
+          {
+            "kind": "accessibilityId",
+            "value": "BackButton"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "settings"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_149302aba559ba1c",
+      "from": "screen_d9adb30a715d9553",
+      "to": "screen_b172bc158b797cc4",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Add",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Add"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "new-task"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "createTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_2b92881330f7a779",
+      "from": "screen_66cd9688a2ae0682",
+      "to": "screen_d9adb30a715d9553",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Tasks",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Tasks"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "todo-list"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openTodoList"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093316",
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:34:01.008Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 3
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_32dc8ecd97e7d5ec",
+      "from": "screen_60383486aeb8b6e4",
+      "to": "screen_66cd9688a2ae0682",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Continue",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Continue"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "dashboard"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeOnboarding"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-082450",
+          "20260805-085658",
+          "20260805-093316",
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T12:25:31.252Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 5
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_3722a6894b574966",
+      "from": "screen_43fa7d768956657d",
+      "to": "screen_cde0fb0dec1400c5",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "back",
+        "target": "BackButton",
+        "selectors": [
+          {
+            "kind": "accessibilityId",
+            "value": "BackButton"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "settings"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_59309c4c62789804",
+      "from": "screen_cde0fb0dec1400c5",
+      "to": "screen_e392b772e380d3e9",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Pinned Items",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Pinned Items"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "pinned-items"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_6782e0b802e6cc98",
+      "from": "screen_cde0fb0dec1400c5",
+      "to": "screen_2b007d1294e54401",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Update Profile",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Update Profile"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "update-profile"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openUpdateProfile"
+        ],
+        "contracts": [
+          "updateProfileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-082450"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T12:25:31.252Z",
+        "count": 3
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_678d2e0ab58d2f73",
+      "from": "screen_b172bc158b797cc4",
+      "to": "screen_d9adb30a715d9553",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Save",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Save"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "todo-list"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "createTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-093847",
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:40:11.674Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_6bac1cda96f49ff7",
+      "from": "screen_cde0fb0dec1400c5",
+      "to": "screen_43fa7d768956657d",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Saved Reports",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Saved Reports"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "saved-reports"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T11:59:40.409Z",
+        "count": 2
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_7810d32e52c14354",
+      "from": "screen_107a3828ffeae369",
+      "to": "screen_66cd9688a2ae0682",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Done",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Done"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "dashboard"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-085658",
+          "20260805-093316"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T13:34:01.008Z",
+        "count": 4
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_a86a28a62e1a1e8a",
+      "from": "screen_66cd9688a2ae0682",
+      "to": "screen_cde0fb0dec1400c5",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Settings",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Settings"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "settings"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openUpdateProfile"
+        ],
+        "contracts": [
+          "updateProfileReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-082450"
+        ],
+        "firstObservedAt": "2026-08-05T12:25:31.252Z",
+        "lastObservedAt": "2026-08-05T12:25:31.252Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_cd9ba27e60afbe1d",
+      "from": "screen_d9adb30a715d9553",
+      "to": "screen_973c26b3204d9717",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "test, QA",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "test, QA"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "todo-list--task-notes-field"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:48:42.900Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_d6cee146b4c0b8fc",
+      "from": "screen_973c26b3204d9717",
+      "to": "screen_d9adb30a715d9553",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "back",
+        "target": "BackButton",
+        "selectors": [
+          {
+            "kind": "accessibilityId",
+            "value": "BackButton"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "todo-list"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "completeTodoItem"
+        ],
+        "contracts": [
+          "customerCreatesAndCompletesTask"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "20260805-094740"
+        ],
+        "firstObservedAt": "2026-08-05T13:48:42.900Z",
+        "lastObservedAt": "2026-08-05T13:48:42.900Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_e4a77ba4d4f0a213",
+      "from": "screen_66cd9688a2ae0682",
+      "to": "screen_107a3828ffeae369",
+      "status": "observed",
+      "platforms": [
+        "ios"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Open release checklist",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Open release checklist"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "release-checklist"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openReleaseChecklist"
+        ],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "20260805-075812",
+          "20260805-085658",
+          "20260805-093316"
+        ],
+        "firstObservedAt": "2026-08-05T11:59:40.409Z",
+        "lastObservedAt": "2026-08-05T13:34:01.008Z",
+        "count": 4
+      },
+      "confirmed": true
+    }
+  ],
+  "coverage": {
+    "tasks": [
+      "completeOnboarding",
+      "completeTodoItem",
+      "createTodoItem",
+      "openReleaseChecklist",
+      "openTodoList",
+      "openUpdateProfile"
+    ],
+    "contracts": [
+      "customerCreatesAndCompletesTask",
+      "updateProfileReachable"
+    ],
+    "uncoveredNodeIds": [
+      "screen_43fa7d768956657d",
+      "screen_9f9f578981bed256",
+      "screen_dc0570d6ffde126c",
+      "screen_e392b772e380d3e9",
+      "screen_f100530dc20fc7ac"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_09672283d711d821",
+      "edge_3722a6894b574966",
+      "edge_59309c4c62789804",
+      "edge_6bac1cda96f49ff7",
+      "edge_7810d32e52c14354"
+    ]
+  }
+}

@@ -1,0 +1,681 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "http://127.0.0.1:51005",
+    "platforms": [
+      "web"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "web": "screen_48d7c508cc0ca58a"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "web-20260804-220911"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-04T22:09:16.011Z",
+    "lastObservedAt": "2026-08-04T22:09:16.011Z",
+    "lastRun": {
+      "id": "web-20260804-220911",
+      "platform": "web",
+      "verdict": "ready",
+      "inconclusive": false,
+      "statesExplored": 3,
+      "actionsPerformed": 5,
+      "observedAt": "2026-08-04T22:09:16.011Z"
+    }
+  },
+  "nodes": [
+    {
+      "id": "screen_48d7c508cc0ca58a",
+      "semanticKey": "sign-in",
+      "name": "Sign in",
+      "aliases": [],
+      "roles": [
+        "login"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_02601dc2394c87a9",
+          "semanticKey": "signin",
+          "kind": "button",
+          "label": "Sign in",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "signin"
+            },
+            {
+              "kind": "label",
+              "value": "Sign in"
+            },
+            {
+              "kind": "resourceId",
+              "value": "signin"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4da5f7103fcf6cf7",
+          "semanticKey": "email",
+          "kind": "field",
+          "label": "Email",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "email"
+            },
+            {
+              "kind": "label",
+              "value": "Email"
+            },
+            {
+              "kind": "resourceId",
+              "value": "email"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_dcd6c43e63dd96b9",
+          "semanticKey": "password",
+          "kind": "secureField",
+          "label": "Password",
+          "secure": true,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "password"
+            },
+            {
+              "kind": "label",
+              "value": "Password"
+            },
+            {
+              "kind": "resourceId",
+              "value": "password"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-220911"
+        ],
+        "firstObservedAt": "2026-08-04T22:09:16.011Z",
+        "lastObservedAt": "2026-08-04T22:09:16.011Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_c8bc2586cdd87cd6",
+      "semanticKey": "feed",
+      "name": "Feed",
+      "aliases": [],
+      "roles": [
+        "list"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_63b525c4f3626e58",
+          "semanticKey": "post",
+          "kind": "field",
+          "label": "Post text",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "post"
+            },
+            {
+              "kind": "label",
+              "value": "Post text"
+            },
+            {
+              "kind": "resourceId",
+              "value": "post"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_8e3569086ec4c8d8",
+          "semanticKey": "publish",
+          "kind": "button",
+          "label": "Publish",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "publish"
+            },
+            {
+              "kind": "label",
+              "value": "Publish"
+            },
+            {
+              "kind": "resourceId",
+              "value": "publish"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_92e174df2d30ded7",
+          "semanticKey": "feed",
+          "kind": "button",
+          "label": "Feed",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Feed"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b032d702fd6526e3",
+          "semanticKey": "messages",
+          "kind": "button",
+          "label": "Messages",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Messages"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_b515c0e03d35d310",
+          "semanticKey": "logout",
+          "kind": "button",
+          "label": "Log out",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "logout"
+            },
+            {
+              "kind": "label",
+              "value": "Log out"
+            },
+            {
+              "kind": "resourceId",
+              "value": "logout"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-220911"
+        ],
+        "firstObservedAt": "2026-08-04T22:09:16.011Z",
+        "lastObservedAt": "2026-08-04T22:09:16.011Z",
+        "count": 2
+      }
+    },
+    {
+      "id": "screen_f5cccfb737512bed",
+      "semanticKey": "messages",
+      "name": "Messages",
+      "aliases": [],
+      "roles": [
+        "messaging"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_01edc3ba5e17d8c5",
+          "semanticKey": "messages",
+          "kind": "button",
+          "label": "Messages",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Messages"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_04623c08c3d0db61",
+          "semanticKey": "feed",
+          "kind": "button",
+          "label": "Feed",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Feed"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_4f3f8c7e64eb7105",
+          "semanticKey": "send",
+          "kind": "button",
+          "label": "Send",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "send"
+            },
+            {
+              "kind": "label",
+              "value": "Send"
+            },
+            {
+              "kind": "resourceId",
+              "value": "send"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_72aa79340eed7053",
+          "semanticKey": "message",
+          "kind": "field",
+          "label": "Message",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "message"
+            },
+            {
+              "kind": "label",
+              "value": "Message"
+            },
+            {
+              "kind": "resourceId",
+              "value": "message"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_8521d8f825422382",
+          "semanticKey": "chat",
+          "kind": "button",
+          "label": "Chat with Bob",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "chat"
+            },
+            {
+              "kind": "label",
+              "value": "Chat with Bob"
+            },
+            {
+              "kind": "resourceId",
+              "value": "chat"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_af1b4170743c458b",
+          "semanticKey": "logout",
+          "kind": "button",
+          "label": "Log out",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "logout"
+            },
+            {
+              "kind": "label",
+              "value": "Log out"
+            },
+            {
+              "kind": "resourceId",
+              "value": "logout"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-220911"
+        ],
+        "firstObservedAt": "2026-08-04T22:09:16.011Z",
+        "lastObservedAt": "2026-08-04T22:09:16.011Z",
+        "count": 2
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_5225cd6421389d95",
+      "from": "screen_48d7c508cc0ca58a",
+      "to": "screen_c8bc2586cdd87cd6",
+      "status": "observed",
+      "platforms": [
+        "web"
+      ],
+      "action": {
+        "type": "login",
+        "target": "Sign in",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Sign in"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "feed"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-220911"
+        ],
+        "firstObservedAt": "2026-08-04T22:09:16.011Z",
+        "lastObservedAt": "2026-08-04T22:09:16.011Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_f5e4a8ee291bd844",
+      "from": "screen_c8bc2586cdd87cd6",
+      "to": "screen_f5cccfb737512bed",
+      "status": "observed",
+      "platforms": [
+        "web"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Messages",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Messages"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "messages"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-220911"
+        ],
+        "firstObservedAt": "2026-08-04T22:09:16.011Z",
+        "lastObservedAt": "2026-08-04T22:09:16.011Z",
+        "count": 1
+      },
+      "confirmed": true
+    }
+  ],
+  "coverage": {
+    "tasks": [],
+    "contracts": [],
+    "uncoveredNodeIds": [
+      "screen_48d7c508cc0ca58a",
+      "screen_c8bc2586cdd87cd6",
+      "screen_f5cccfb737512bed"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_5225cd6421389d95",
+      "edge_f5e4a8ee291bd844"
+    ]
+  }
+}

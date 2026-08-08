@@ -1,0 +1,53 @@
+kind: task
+version: 1
+name: createTodoItem
+description: Create one deterministic task from the Todo List composer and return its title.
+
+inputs:
+  title:
+    required: true
+outputs:
+  createdTitle:
+    fromInput: title
+
+preconditions:
+  - screen: Todo List
+  - exists: Add
+postconditions:
+  - screen: Todo List
+  - exists: "{{title}}"
+
+implementations:
+  ios:
+    steps:
+      - wait_for: Add
+      - tap: Add
+      - wait_for: New Task
+      - type:
+          field: new_task_field
+          value: "{{title}}"
+      - wait_for: Save
+      - tap: Save
+      - wait_for: "{{title}}"
+
+coverage:
+  nodes:
+    - todo-list
+    - new-task
+  edges:
+    - edge_149302aba559ba1c
+    - edge_678d2e0ab58d2f73
+  sourcePaths:
+    - Sources/TodoView.swift
+  sourceSymbols:
+    - path: Sources/TodoView.swift
+      symbols:
+        - TodoView
+        - TodoItem
+
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: tapp-capture:flow-ios-64821-1785937951905
+  mapEvidenceRun: tapp-capture:20260805-094740
+  note: Replayed with a deterministic title and output capture as part of customerCreatesAndCompletesTask; the full contract passed 35/35 through XCUITest without AI.

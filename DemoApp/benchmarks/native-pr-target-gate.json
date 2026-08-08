@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T08:39:39-04:00",
+  "fixture": "DemoApp",
+  "platform": "ios",
+  "uiMap": {
+    "states": 9,
+    "transitions": 9,
+    "semanticControls": 92,
+    "observedLaunchEntry": "Get Started",
+    "deterministicNavigationRoot": "Dashboard",
+    "mapEvidenceRuns": [
+      "tapp-capture:20260805-075812",
+      "tapp-capture:20260805-082450"
+    ]
+  },
+  "singleEdgeProof": {
+    "change": "Sources/DashboardHomeView.swift",
+    "reviewedTask": "openReleaseChecklist",
+    "target": "Release Checklist",
+    "edgeIds": [
+      "edge_e4a77ba4d4f0a213"
+    ],
+    "targetObserved": true,
+    "controls": {
+      "baseline": 2,
+      "current": 2,
+      "retained": 2
+    },
+    "flowReplay": "10/10",
+    "criticalContractReplay": "10/10",
+    "gateExitCode": 0,
+    "captureId": "ci.0YHHWl"
+  },
+  "multiEdgeProof": {
+    "change": "Sources/SettingsView.swift",
+    "reviewedTask": "openUpdateProfile",
+    "sourceSymbol": "SettingsView",
+    "target": "Update Profile",
+    "planning": {
+      "selectedCriticalContracts": [
+        "newCustomerReachesDailySummary"
+      ],
+      "unknownChangedFiles": 0,
+      "mappedCoverageGaps": 2,
+      "boundedTargets": 1,
+      "omittedByNativeLimit": 1,
+      "selectionEvidence": "reviewed-task-source-ownership",
+      "navigationMode": "ui-map-path",
+      "edgeIds": [
+        "edge_a86a28a62e1a1e8a",
+        "edge_6782e0b802e6cc98"
+      ],
+      "actions": [
+        "Settings",
+        "Update Profile"
+      ]
+    },
+    "changedSurfaceExecution": {
+      "targetId": "explore_bf6d2c97be9c0842",
+      "status": "observed",
+      "screen": "Update Profile",
+      "controlEvidence": {
+        "baseline": 9,
+        "current": 7,
+        "retainedBaseline": 8,
+        "notObserved": [
+          "test"
+        ],
+        "added": []
+      }
+    },
+    "deterministicReplay": {
+      "changedSurfaceFlow": "12/12",
+      "alwaysCriticalContract": "10/10",
+      "aiRequired": false
+    },
+    "autonomousQa": {
+      "verdict": "ready",
+      "releaseScore": 100,
+      "screensExplored": 6,
+      "actionsPerformed": 12,
+      "findings": 0
+    },
+    "gate": {
+      "exitCode": 0,
+      "result": "pass",
+      "baselineActive": false,
+      "inconclusive": false,
+      "captureId": "ci.lCJRka"
+    }
+  },
+  "suiteEvolution": {
+    "proposalAdoptedExplicitly": true,
+    "humanDecision": "approved",
+    "reusedTasks": [
+      "completeOnboarding",
+      "openUpdateProfile"
+    ],
+    "generatedTaskDrafts": 0,
+    "generatedContract": "updateProfileReachable",
+    "generatedDeterministicSteps": 11,
+    "realContractReplay": {
+      "passed": true,
+      "result": "11/11",
+      "evidenceRun": "tapp-capture:flow-ios-11885-1785933548498"
+    },
+    "promoted": true,
+    "contractCoverage": {
+      "nodes": [
+        "Dashboard",
+        "Settings",
+        "Update Profile"
+      ],
+      "edges": [
+        "edge_a86a28a62e1a1e8a",
+        "edge_6782e0b802e6cc98"
+      ],
+      "sourcePaths": [
+        "Sources/SettingsView.swift"
+      ]
+    },
+    "afterPromotion": {
+      "selectedContracts": [
+        "newCustomerReachesDailySummary",
+        "updateProfileReachable"
+      ],
+      "selectionReasons": [
+        "always",
+        "contract-source",
+        "task-source"
+      ],
+      "mappedCoverageGaps": 0,
+      "unknownChangedFiles": 0,
+      "boundedTargets": 0
+    }
+  },
+  "regressionsFoundInTapp": [
+    "Root normalization emitted the onboarding action but not its resolved transition; the harness now records Get Started to Dashboard evidence.",
+    "The CLI rendered map-path targets as replayable: undefined; it now reports the observed edge count.",
+    "Generation repeated one reviewed Task for every edge it covered; adjacent ownership is now composed once.",
+    "Generated native contracts began at the navigation root even though replay begins at launch entry; reviewed entry-to-root Tasks are now prepended."
+  ],
+  "interpretation": "A native source diff can now move from reviewed ownership to bounded multi-edge exploration, deterministic changed-surface replay, explicit proposal adoption, reuse of existing Tasks, fresh-launch contract validation, promotion, and ordinary diff-based contract selection without AI.",
+  "limits": [
+    "This local fixture proves one- and two-edge iOS paths, not arbitrary stateful native navigation.",
+    "No conclusive baseline was supplied, so these runs prove target execution and deterministic suite gating but not baseline regression comparison.",
+    "Android path execution is implemented and unit-tested but was not exercised here because adb was unavailable.",
+    "Hosted GitHub Action execution was not part of this local measurement."
+  ]
+}

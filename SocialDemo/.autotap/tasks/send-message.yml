@@ -1,0 +1,16 @@
+kind: task
+version: 1
+name: sendMessage
+description: Send one deterministic message in the currently open conversation.
+inputs:
+  message: { required: true }
+preconditions:
+  - exists: Message
+postconditions:
+  - exists: "{{message}}"
+implementations:
+  web:
+    steps:
+      - type: { field: Message, value: "{{message}}" }
+      - tap: Send
+

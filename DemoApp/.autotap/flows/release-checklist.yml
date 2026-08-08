@@ -1,0 +1,9 @@
+name: Release checklist is reachable
+platform: ios
+app: com.autotap.demoapp
+reset: app
+
+steps:
+  - task: completeOnboarding
+  - task: openReleaseChecklist
+  - assert_screen: Release Checklist

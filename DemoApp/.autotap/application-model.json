@@ -1,0 +1,750 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-application-model",
+  "application": {
+    "name": "DemoApp",
+    "repositoryRoot": ".",
+    "platforms": [
+      "ios"
+    ],
+    "targetIds": [
+      "target_bf05ddc53dcded7f"
+    ]
+  },
+  "targets": [
+    {
+      "id": "target_bf05ddc53dcded7f",
+      "platform": "ios",
+      "kind": "ios-simulator",
+      "name": "DemoApp",
+      "sourcePath": "DemoApp.xcodeproj",
+      "status": "configured",
+      "build": {
+        "tool": "xcodebuild",
+        "container": "DemoApp.xcodeproj",
+        "schemeCandidates": [
+          "DemoApp"
+        ],
+        "proposedScheme": "DemoApp",
+        "configuration": "Debug"
+      },
+      "runtime": {
+        "surface": "iOS Simulator",
+        "signingRequired": false,
+        "bundleId": "com.autotap.demoapp"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "DemoApp.xcodeproj"
+        ],
+        "detail": "The scheme was source-derived, then confirmed by a successful Tapp build as 'DemoApp'."
+      },
+      "runtimeValidation": {
+        "status": "validated",
+        "basis": "runtime-observed",
+        "operation": "xcode-build-install-explore",
+        "target": "com.autotap.demoapp",
+        "build": {
+          "container": "DemoApp.xcodeproj",
+          "scheme": "DemoApp",
+          "configuration": "Debug"
+        },
+        "evidence": {
+          "capture": "tapp-capture:20260805-093316",
+          "verdict": "ready",
+          "inconclusive": false,
+          "observedAt": "2026-08-05T13:34:01.008Z"
+        },
+        "detail": "Tapp built this repository target with the recorded scheme, installed it, launched it, and produced UI Map evidence."
+      }
+    }
+  ],
+  "actors": [
+    {
+      "name": "customer",
+      "roles": [
+        "customer",
+        "new customer"
+      ],
+      "contracts": [
+        "customerCreatesAndCompletesTask",
+        "newCustomerReachesDailySummary",
+        "updateProfileReachable"
+      ],
+      "credentialRequirements": [],
+      "credentialBindings": {},
+      "configured": false,
+      "bindingConflicts": [],
+      "session": "default",
+      "provisioning": "unknown",
+      "credentialsConfigured": false,
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts",
+          ".autotap/contracts/onboarding-summary.contract.ts",
+          ".autotap/contracts/update-profile-reachable.contract.ts"
+        ],
+        "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity_daily-summary",
+      "name": "Daily Summary",
+      "status": "task-derived",
+      "tasks": [
+        "openDailySummary"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-daily-summary.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-daily-summary.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_release-checklist",
+      "name": "Release Checklist",
+      "status": "task-derived",
+      "tasks": [
+        "openReleaseChecklist"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-release-checklist.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-release-checklist.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_todo-item",
+      "name": "Todo Item",
+      "status": "task-derived",
+      "tasks": [
+        "createTodoItem"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/create-todo-item.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/create-todo-item.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_todo-list",
+      "name": "Todo List",
+      "status": "task-derived",
+      "tasks": [
+        "openTodoList"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-todo-list.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-todo-list.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_update-profile",
+      "name": "Update Profile",
+      "status": "task-derived",
+      "tasks": [
+        "openUpdateProfile"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-update-profile.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-update-profile.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "capability_completeonboarding",
+      "name": "Complete Onboarding",
+      "status": "task-derived",
+      "tasks": [
+        "completeOnboarding"
+      ],
+      "contracts": [
+        "customerCreatesAndCompletesTask",
+        "newCustomerReachesDailySummary",
+        "updateProfileReachable"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts",
+        ".autotap/contracts/onboarding-summary.contract.ts",
+        ".autotap/contracts/update-profile-reachable.contract.ts",
+        ".autotap/tasks/complete-onboarding.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts",
+          ".autotap/contracts/onboarding-summary.contract.ts",
+          ".autotap/contracts/update-profile-reachable.contract.ts",
+          ".autotap/tasks/complete-onboarding.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_completetodoitem",
+      "name": "Complete Todo Item",
+      "status": "task-derived",
+      "tasks": [
+        "completeTodoItem"
+      ],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts",
+        ".autotap/tasks/complete-todo-item.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts",
+          ".autotap/tasks/complete-todo-item.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_createtodoitem",
+      "name": "Create Todo Item",
+      "status": "task-derived",
+      "tasks": [
+        "createTodoItem"
+      ],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts",
+        ".autotap/tasks/create-todo-item.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts",
+          ".autotap/tasks/create-todo-item.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_daily-summary",
+      "name": "Daily summary",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "newCustomerReachesDailySummary"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/onboarding-summary.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/onboarding-summary.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_filtered-persistence",
+      "name": "Filtered persistence",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_onboarding",
+      "name": "Onboarding",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "newCustomerReachesDailySummary"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/onboarding-summary.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/onboarding-summary.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_opendailysummary",
+      "name": "Open Daily Summary",
+      "status": "task-derived",
+      "tasks": [
+        "openDailySummary"
+      ],
+      "contracts": [
+        "newCustomerReachesDailySummary"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/onboarding-summary.contract.ts",
+        ".autotap/tasks/open-daily-summary.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/onboarding-summary.contract.ts",
+          ".autotap/tasks/open-daily-summary.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_openreleasechecklist",
+      "name": "Open Release Checklist",
+      "status": "task-derived",
+      "tasks": [
+        "openReleaseChecklist"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-release-checklist.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-release-checklist.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_opentodolist",
+      "name": "Open Todo List",
+      "status": "task-derived",
+      "tasks": [
+        "openTodoList"
+      ],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts",
+        ".autotap/tasks/open-todo-list.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts",
+          ".autotap/tasks/open-todo-list.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_openupdateprofile",
+      "name": "Open Update Profile",
+      "status": "task-derived",
+      "tasks": [
+        "openUpdateProfile"
+      ],
+      "contracts": [
+        "updateProfileReachable"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/update-profile-reachable.contract.ts",
+        ".autotap/tasks/open-update-profile.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/update-profile-reachable.contract.ts",
+          ".autotap/tasks/open-update-profile.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_state-propagation",
+      "name": "State propagation",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_task-completion",
+      "name": "Task completion",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_task-creation",
+      "name": "Task creation",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "customerCreatesAndCompletesTask"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/create-complete-task.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts"
+        ]
+      }
+    }
+  ],
+  "criticalJourneys": [
+    {
+      "id": "journey_aad21d70ee3a93f8",
+      "name": "A customer creates a task and completes it",
+      "status": "authored-unvalidated",
+      "contract": "customerCreatesAndCompletesTask",
+      "scope": ".",
+      "criticality": "high",
+      "businessValue": "Protect the primary state-changing task workflow, including creation, detail mutation, and filtered list visibility.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openTodoList",
+        "createTodoItem",
+        "completeTodoItem"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/create-complete-task.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_ef199097c132fe92",
+      "name": "A new customer completes onboarding and reaches Daily Summary",
+      "status": "authored-unvalidated",
+      "contract": "newCustomerReachesDailySummary",
+      "scope": ".",
+      "criticality": "high",
+      "businessValue": "First-run activation and the product's primary summary surface remain available.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openDailySummary"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/onboarding-summary.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    },
+    {
+      "id": "journey_f380107c120aea11",
+      "name": "Update Profile remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "updateProfileReachable",
+      "scope": ".",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Update Profile product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openUpdateProfile"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/update-profile-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "revenuePaths": [],
+  "systemInvariants": [],
+  "configuration": {
+    "path": ".autotap/project.json",
+    "status": "missing",
+    "actorCount": 0,
+    "lifecycle": {
+      "setupSteps": 0,
+      "teardownSteps": 0
+    },
+    "evidence": {
+      "basis": "source-observed",
+      "paths": [],
+      "detail": "optional project configuration has not been created"
+    }
+  },
+  "environments": [
+    {
+      "targetId": "target_bf05ddc53dcded7f",
+      "platform": "ios",
+      "status": "configured",
+      "runtime": {
+        "surface": "iOS Simulator",
+        "signingRequired": false,
+        "bundleId": "com.autotap.demoapp"
+      }
+    }
+  ],
+  "stateBoundaries": [],
+  "uiMap": {
+    "path": ".autotap/ui-map.json",
+    "status": "observed",
+    "nodeCount": 13,
+    "edgeCount": 14,
+    "controlCount": 121,
+    "uncoveredNodeIds": [
+      "screen_43fa7d768956657d",
+      "screen_9f9f578981bed256",
+      "screen_dc0570d6ffde126c",
+      "screen_e392b772e380d3e9",
+      "screen_f100530dc20fc7ac"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_09672283d711d821",
+      "edge_3722a6894b574966",
+      "edge_59309c4c62789804",
+      "edge_6bac1cda96f49ff7",
+      "edge_7810d32e52c14354"
+    ],
+    "platforms": [
+      "ios"
+    ],
+    "lastRun": {
+      "id": "20260805-093316",
+      "platform": "ios",
+      "verdict": "ready",
+      "inconclusive": false,
+      "statesExplored": 4,
+      "actionsPerformed": 4,
+      "observedAt": "2026-08-05T13:34:01.008Z"
+    },
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        ".autotap/ui-map.json"
+      ],
+      "detail": "grounded in prior runtime observations"
+    }
+  },
+  "artifacts": {
+    "tasks": [
+      {
+        "id": "task_427cef9e29ec6e6e",
+        "name": "completeOnboarding",
+        "scope": ".",
+        "path": ".autotap/tasks/complete-onboarding.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_346c6032209b701e",
+        "name": "completeTodoItem",
+        "scope": ".",
+        "path": ".autotap/tasks/complete-todo-item.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {
+          "title": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_6e7c2009ffbd2d18",
+        "name": "createTodoItem",
+        "scope": ".",
+        "path": ".autotap/tasks/create-todo-item.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {
+          "title": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_c7d595ff68158bb5",
+        "name": "openDailySummary",
+        "scope": ".",
+        "path": ".autotap/tasks/open-daily-summary.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_39c5f85136e6b0b4",
+        "name": "openReleaseChecklist",
+        "scope": ".",
+        "path": ".autotap/tasks/open-release-checklist.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_227c8b97c63969bc",
+        "name": "openTodoList",
+        "scope": ".",
+        "path": ".autotap/tasks/open-todo-list.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_0f380460731cc5a3",
+        "name": "openUpdateProfile",
+        "scope": ".",
+        "path": ".autotap/tasks/open-update-profile.yml",
+        "version": 1,
+        "platforms": [
+          "ios"
+        ],
+        "inputs": {}
+      }
+    ],
+    "contracts": [
+      {
+        "id": "contract_49ec14893e039d82",
+        "name": "customerCreatesAndCompletesTask",
+        "scope": ".",
+        "path": ".autotap/contracts/create-complete-task.contract.ts",
+        "criticality": "high",
+        "platforms": [
+          "ios"
+        ]
+      },
+      {
+        "id": "contract_fce34754ac2883ee",
+        "name": "newCustomerReachesDailySummary",
+        "scope": ".",
+        "path": ".autotap/contracts/onboarding-summary.contract.ts",
+        "criticality": "high",
+        "platforms": [
+          "ios"
+        ]
+      },
+      {
+        "id": "contract_084a32b5dfc7cf29",
+        "name": "updateProfileReachable",
+        "scope": ".",
+        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "criticality": "medium",
+        "platforms": [
+          "ios"
+        ]
+      }
+    ]
+  },
+  "requirements": [],
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T13:56:47.860Z",
+    "remoteAiUsed": false,
+    "distinctions": [
+      "runtime-observed",
+      "source-observed",
+      "reviewed-artifact",
+      "source-derived-proposal",
+      "human-decision"
+    ]
+  }
+}

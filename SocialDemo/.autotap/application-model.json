@@ -1,0 +1,596 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-application-model",
+  "application": {
+    "name": "tapp-social-demo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "web"
+    ],
+    "targetIds": [
+      "target_f43f6d898145a7cf"
+    ]
+  },
+  "targets": [
+    {
+      "id": "target_f43f6d898145a7cf",
+      "platform": "web",
+      "kind": "browser-application",
+      "name": "tapp-social-demo",
+      "sourcePath": ".",
+      "status": "configured",
+      "build": {
+        "tool": "package-script",
+        "projectDir": ".",
+        "install": null,
+        "dependencyStatus": "not-required",
+        "evidencePaths": [],
+        "start": "npm run start"
+      },
+      "runtime": {
+        "surface": "Chromium",
+        "ownedUrl": null,
+        "management": "tapp-managed"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "index.html",
+          "package.json"
+        ],
+        "detail": "start script 'start' observed; dependencies not-required; runtime Tapp-managed build/start"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "name": "alice",
+      "roles": [
+        "member"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "credentialRequirements": [
+        "email",
+        "password"
+      ],
+      "credentialBindings": {
+        "email": "ALICE_EMAIL",
+        "password": "ALICE_PASSWORD"
+      },
+      "credentialsConfigured": true,
+      "session": "isolated",
+      "provisioning": "seeded",
+      "configured": true,
+      "bindingConflicts": [],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/project.json"
+        ],
+        "detail": "actor, session, provisioning, and environment-variable names are explicit human configuration; credential values are never included"
+      }
+    },
+    {
+      "name": "bob",
+      "roles": [
+        "member"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "credentialRequirements": [
+        "email",
+        "password"
+      ],
+      "credentialBindings": {
+        "email": "BOB_EMAIL",
+        "password": "BOB_PASSWORD"
+      },
+      "credentialsConfigured": true,
+      "session": "isolated",
+      "provisioning": "seeded",
+      "configured": true,
+      "bindingConflicts": [],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/project.json"
+        ],
+        "detail": "actor, session, provisioning, and environment-variable names are explicit human configuration; credential values are never included"
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity_message",
+      "name": "Message",
+      "status": "task-derived",
+      "tasks": [
+        "sendMessage"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/send-message.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/send-message.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    },
+    {
+      "id": "entity_post",
+      "name": "Post",
+      "status": "task-derived",
+      "tasks": [
+        "createPost",
+        "likePost"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/create-post.yml",
+        ".autotap/tasks/like-post.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/create-post.yml",
+          ".autotap/tasks/like-post.yml"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "capability_authentication",
+      "name": "Authentication",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_bidirectional-messaging",
+      "name": "Bidirectional messaging",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_content-publishing",
+      "name": "Content publishing",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_createpost",
+      "name": "Create Post",
+      "status": "task-derived",
+      "tasks": [
+        "createPost"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts",
+        ".autotap/tasks/create-post.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/tasks/create-post.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_cross-account-feed",
+      "name": "Cross account feed",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_likepost",
+      "name": "Like Post",
+      "status": "task-derived",
+      "tasks": [
+        "likePost"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts",
+        ".autotap/tasks/like-post.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/tasks/like-post.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_openconversation",
+      "name": "Open Conversation",
+      "status": "task-derived",
+      "tasks": [
+        "openConversation"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts",
+        ".autotap/tasks/open-conversation.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/tasks/open-conversation.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_reactions",
+      "name": "Reactions",
+      "status": "declared",
+      "tasks": [],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ]
+      }
+    },
+    {
+      "id": "capability_sendmessage",
+      "name": "Send Message",
+      "status": "task-derived",
+      "tasks": [
+        "sendMessage"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts",
+        ".autotap/tasks/send-message.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/tasks/send-message.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_signin",
+      "name": "Sign In",
+      "status": "task-derived",
+      "tasks": [
+        "signIn"
+      ],
+      "contracts": [
+        "socialSystemWorks"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/social-system.contract.ts",
+        ".autotap/tasks/sign-in.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts",
+          ".autotap/tasks/sign-in.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    }
+  ],
+  "criticalJourneys": [
+    {
+      "id": "journey_8ef91ac8688b7450",
+      "name": "Alice publishes, Bob reacts, and both exchange messages",
+      "status": "authored-unvalidated",
+      "contract": "socialSystemWorks",
+      "scope": ".",
+      "criticality": "critical",
+      "businessValue": "Customers can publish, discover, react, and communicate across real account boundaries.",
+      "actors": [
+        "alice",
+        "bob"
+      ],
+      "tasks": [
+        "signIn",
+        "createPost",
+        "likePost",
+        "openConversation",
+        "sendMessage"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "revenuePaths": [],
+  "systemInvariants": [
+    {
+      "id": "invariant_8ef91ac8688b7450",
+      "name": "Alice publishes, Bob reacts, and both exchange messages",
+      "contract": "socialSystemWorks",
+      "scope": ".",
+      "actors": [
+        "alice",
+        "bob"
+      ],
+      "status": "authored-unvalidated",
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/social-system.contract.ts"
+        ],
+        "detail": "cross-actor behavior is authored but requires current replay evidence"
+      }
+    }
+  ],
+  "configuration": {
+    "path": ".autotap/project.json",
+    "status": "configured",
+    "actorCount": 2,
+    "lifecycle": {
+      "setupSteps": 1,
+      "teardownSteps": 1
+    },
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        ".autotap/project.json"
+      ],
+      "detail": "explicit human configuration; only environment-variable names are included in the application model"
+    }
+  },
+  "environments": [
+    {
+      "targetId": "target_f43f6d898145a7cf",
+      "platform": "web",
+      "status": "configured",
+      "runtime": {
+        "surface": "Chromium",
+        "ownedUrl": null,
+        "management": "tapp-managed"
+      }
+    }
+  ],
+  "stateBoundaries": [
+    {
+      "kind": "actor-session",
+      "isolation": "required",
+      "actors": [
+        "alice",
+        "bob"
+      ]
+    }
+  ],
+  "uiMap": {
+    "path": ".autotap/ui-map.json",
+    "status": "observed",
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "controlCount": 14,
+    "uncoveredNodeIds": [
+      "screen_48d7c508cc0ca58a",
+      "screen_c8bc2586cdd87cd6",
+      "screen_f5cccfb737512bed"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_5225cd6421389d95",
+      "edge_f5e4a8ee291bd844"
+    ],
+    "platforms": [
+      "web"
+    ],
+    "lastRun": {
+      "id": "web-20260804-220911",
+      "platform": "web",
+      "verdict": "ready",
+      "inconclusive": false,
+      "statesExplored": 3,
+      "actionsPerformed": 5,
+      "observedAt": "2026-08-04T22:09:16.011Z"
+    },
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        ".autotap/ui-map.json"
+      ],
+      "detail": "grounded in prior runtime observations"
+    }
+  },
+  "artifacts": {
+    "tasks": [
+      {
+        "id": "task_ce376a787119d746",
+        "name": "createPost",
+        "scope": ".",
+        "path": ".autotap/tasks/create-post.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "text": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_b5cca3941c8aa81f",
+        "name": "likePost",
+        "scope": ".",
+        "path": ".autotap/tasks/like-post.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "post": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_7ae856f857170737",
+        "name": "openConversation",
+        "scope": ".",
+        "path": ".autotap/tasks/open-conversation.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "recipient": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_a66164f5d8a5098d",
+        "name": "sendMessage",
+        "scope": ".",
+        "path": ".autotap/tasks/send-message.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "message": {
+            "required": true,
+            "secret": false
+          }
+        }
+      },
+      {
+        "id": "task_d061e2ee669c38c3",
+        "name": "signIn",
+        "scope": ".",
+        "path": ".autotap/tasks/sign-in.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        }
+      }
+    ],
+    "contracts": [
+      {
+        "id": "contract_c3fad67bc30d95a2",
+        "name": "socialSystemWorks",
+        "scope": ".",
+        "path": ".autotap/contracts/social-system.contract.ts",
+        "criticality": "critical",
+        "platforms": [
+          "web"
+        ]
+      }
+    ]
+  },
+  "requirements": [],
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-04T22:09:16.212Z",
+    "remoteAiUsed": false,
+    "distinctions": [
+      "runtime-observed",
+      "source-observed",
+      "reviewed-artifact",
+      "source-derived-proposal",
+      "human-decision"
+    ]
+  }
+}

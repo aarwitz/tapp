@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T10:00:00-04:00",
+  "fixture": "DemoApp",
+  "platform": "ios",
+  "targetKey": "target_bf05ddc53dcded7f",
+  "terminalTransitionProof": {
+    "captureId": "20260805-093316",
+    "actionBudget": 4,
+    "actionsPerformed": 4,
+    "finalState": "Todo List",
+    "observedEdge": "edge_2b92881330f7a779",
+    "transition": "Dashboard -> Todo List",
+    "findingCount": 0,
+    "interpretation": "The final budgeted tab action now emits its destination state and resolved transition instead of disappearing when the exploration loop ends."
+  },
+  "directedStatefulExploration": {
+    "discardedRun": {
+      "captureId": "20260805-093527",
+      "targetStatus": "failed",
+      "cause": "Autonomous QA activated the already-running app and inherited a prior detail/counter state instead of establishing a fresh launch boundary.",
+      "usedAsPositiveEvidence": false
+    },
+    "freshLaunchRun": {
+      "captureId": "20260805-093847",
+      "targetId": "todo-stateful-probe",
+      "targetStatus": "observed",
+      "actionsPerformed": 16,
+      "findingCount": 0,
+      "observedBehavior": [
+        "fresh launch and onboarding normalization",
+        "Dashboard to Todo List navigation",
+        "task creation",
+        "task detail navigation",
+        "completion/reopen state mutation",
+        "delete confirmation dialog"
+      ]
+    },
+    "sameTitleTransitionRun": {
+      "captureId": "20260805-094740",
+      "targetId": "todo-stateful-transition",
+      "targetStatus": "observed",
+      "actionsPerformed": 8,
+      "findingCount": 0,
+      "observedEdges": [
+        "edge_cd9ba27e60afbe1d",
+        "edge_d6cee146b4c0b8fc"
+      ],
+      "interpretation": "Structural hashes prove Todo List root -> Todo List detail -> Todo List root even though every state has the same visible navigation title."
+    }
+  },
+  "canonicalUiMap": {
+    "states": 13,
+    "transitions": 14,
+    "semanticControls": 121,
+    "reviewedTasks": 6,
+    "reviewedContracts": 2,
+    "uncoveredStates": 5,
+    "uncoveredTransitions": 5,
+    "statefulNodes": [
+      {
+        "id": "screen_d9adb30a715d9553",
+        "semanticKey": "todo-list",
+        "stateLabel": "Todo List"
+      },
+      {
+        "id": "screen_b172bc158b797cc4",
+        "semanticKey": "new-task",
+        "stateLabel": "New Task"
+      },
+      {
+        "id": "screen_973c26b3204d9717",
+        "semanticKey": "todo-list--task-notes-field",
+        "stateLabel": "Todo List · Task Notes Field / Completed / Delete Task"
+      }
+    ]
+  },
+  "reusableTasks": [
+    {
+      "name": "openTodoList",
+      "inputs": [],
+      "outputs": [],
+      "mapEdges": [
+        "edge_2b92881330f7a779"
+      ]
+    },
+    {
+      "name": "createTodoItem",
+      "inputs": [
+        "title"
+      ],
+      "outputs": [
+        "createdTitle"
+      ],
+      "mapEdges": [
+        "edge_149302aba559ba1c",
+        "edge_678d2e0ab58d2f73"
+      ]
+    },
+    {
+      "name": "completeTodoItem",
+      "inputs": [
+        "title"
+      ],
+      "outputs": [],
+      "mapEdges": [
+        "edge_cd9ba27e60afbe1d",
+        "edge_d6cee146b4c0b8fc"
+      ]
+    }
+  ],
+  "releaseContract": {
+    "name": "customerCreatesAndCompletesTask",
+    "criticality": "high",
+    "businessSteps": 5,
+    "taskCalls": 4,
+    "compiledDeterministicSteps": 35,
+    "result": "35/35 passed",
+    "evidenceRun": "tapp-capture:flow-ios-64821-1785937951905",
+    "apiKeyRequired": false,
+    "codingAgentRequiredDuringReplay": false,
+    "proof": [
+      "fresh-launch onboarding",
+      "semantic tab navigation",
+      "task creation with a stable accessibility field id",
+      "Task output captured into CREATED_TASK",
+      "entity lookup by the captured title",
+      "completion mutation proven by Reopen Task",
+      "return navigation",
+      "Done-filter visibility",
+      "final exact existence assertion"
+    ]
+  },
+  "portableGate": {
+    "captureId": "ci.Opmybg",
+    "verdict": "ready",
+    "releaseScore": 100,
+    "inconclusive": false,
+    "screensExplored": 7,
+    "actionsPerformed": 12,
+    "runUiMap": {
+      "states": 9,
+      "transitions": 10,
+      "semanticControls": 82
+    },
+    "regression": {
+      "hadBaseline": true,
+      "new": 0,
+      "persisting": 1,
+      "resolved": 0,
+      "newCritical": 0,
+      "newHigh": 0,
+      "failed": false
+    },
+    "flows": [
+      "9/9",
+      "10/10",
+      "12/12"
+    ],
+    "contracts": [
+      "35/35",
+      "10/10",
+      "11/11"
+    ],
+    "gateExitCode": 0,
+    "report": "tapp-capture:ci.Opmybg/report.html"
+  },
+  "desktopCoverage": {
+    "build": "passed",
+    "artifactVerification": "passed",
+    "applicationModel": {
+      "targets": 1,
+      "capabilities": 13,
+      "tasks": 7,
+      "contracts": 3,
+      "requirements": 0
+    },
+    "uiMap": {
+      "states": 13,
+      "transitions": 14,
+      "controls": 121,
+      "structuralStateLabels": 3
+    },
+    "interpretation": "Coverage decodes the same repository UI Map, exposes structural labels for same-title states, and retains the actual title for replay and targeted exploration."
+  },
+  "currentPlan": {
+    "items": 4,
+    "pendingReview": 1,
+    "blockingRequirements": 0,
+    "revalidatedGeneratedContract": {
+      "name": "updateProfileReachable",
+      "result": "11/11 passed",
+      "evidenceRun": "tapp-capture:flow-ios-66291-1785938233238"
+    }
+  },
+  "regressionsFoundInTapp": [
+    "The final exploration action could end without emitting its destination state or transition; terminal transition resolution now reads the real final tree.",
+    "Directed native exploration performed a global tab sweep after reaching its target and could immediately navigate away; target runs now preserve the target budget.",
+    "Autonomous iOS exploration activated an existing app session and inherited stale foreground state; it now terminates and launches with the configured arguments and environment.",
+    "The UI Map keyed states only by visible title and collapsed structurally distinct list/detail/dialog states; stable evidence-grounded state variants now preserve them.",
+    "The native harness suppressed transitions when source and destination titles matched; structural hash changes now emit the transition with from/to hashes.",
+    "Task/contract grounding normalized a variant reference but not the map semantic key; both sides now use the same semantic normalization."
+  ],
+  "interpretation": "Tapp now has a real native state-changing release contract composed from reusable Tasks over an evidence-grounded UI Map. It proves substantially more than reachability and replays deterministically without AI.",
+  "limits": [
+    "The contract and three new Tasks were hand-authored and reviewed from observed evidence; autonomous business-plan generation did not produce them.",
+    "The fixture uses one deterministic representative title rather than a general collision-safe data generator and teardown policy.",
+    "This is single-actor local iOS simulator proof. Isolated native multi-actor sessions remain unsupported.",
+    "Android was not re-audited because adb was unavailable on this host.",
+    "The contract was not executed through a GitHub-hosted macOS Action runner."
+  ]
+}

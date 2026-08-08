@@ -1,0 +1,29 @@
+kind: task
+version: 1
+name: completeCheckout
+description: Complete one representative checkout from the shop through confirmation.
+inputs:
+  product: { required: true, default: Tapp Pro Plan }
+outputs:
+  orderedProduct: { fromInput: product }
+preconditions:
+  - screen: Shop
+postconditions:
+  - screen: Order confirmed
+  - exists: "{{product}}"
+implementations:
+  web:
+    steps:
+      - tap: "Buy {{product}}"
+      - wait_for: Cart
+      - tap: Checkout
+      - wait_for: Checkout
+      - tap: Place order
+      - wait_for: Order confirmed
+coverage:
+  nodes: [shop, cart, checkout, order-confirmed]
+  edges: [edge_12f3f5e050e91249, edge_b7f4d683df5b99ea, edge_ab3b15aad18f1368]
+  sourcePaths: [app.js]
+  sourceSymbols:
+    - path: app.js
+      symbols: [showShop, showCart, showCheckout, showConfirmation]

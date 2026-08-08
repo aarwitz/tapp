@@ -1,0 +1,38 @@
+kind: task
+version: 1
+name: signIn
+description: Authenticate through WebDemo's observed sign-in journey.
+inputs:
+  email:
+    required: true
+    secret: true
+  password:
+    required: true
+    secret: true
+outputs:
+  authenticatedEmail:
+    fromInput: email
+preconditions:
+  - screen: WebDemo
+postconditions:
+  - exists: Signed in (demo)
+implementations:
+  web:
+    steps:
+      - tap: Sign in
+      - wait_for: Sign in
+      - type: { field: Email, value: "{{email}}" }
+      - type: { field: Password, value: "{{password}}" }
+      - tap: Sign in
+coverage:
+  nodes:
+    - webdemo
+    - sign-in
+  edges:
+    - edge_99e867c2791a2052
+validation:
+  status: validated
+  platform: web
+  evidenceRun: web-20260804-191333
+  replayEvidence: flow-web-8483-1785870987221
+  note: Grounded against UI Map v1 and replayed 7/7 without AI on 2026-08-04.

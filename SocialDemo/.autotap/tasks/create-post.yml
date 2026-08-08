@@ -1,0 +1,18 @@
+kind: task
+version: 1
+name: createPost
+description: Publish one deterministic post to the shared feed.
+inputs:
+  text: { required: true }
+outputs:
+  publishedText: { fromInput: text }
+preconditions:
+  - screen: Feed
+postconditions:
+  - exists: "{{text}}"
+implementations:
+  web:
+    steps:
+      - type: { field: Post text, value: "{{text}}" }
+      - tap: Publish
+

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T09:22:30-04:00",
+  "fixture": "DemoApp",
+  "platform": "ios",
+  "targetKey": "target_bf05ddc53dcded7f",
+  "baselineCreation": {
+    "captureId": "ci.0RHroN",
+    "verdict": "ready",
+    "releaseScore": 100,
+    "inconclusive": false,
+    "screensExplored": 7,
+    "actionsPerformed": 12,
+    "findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 1
+    },
+    "uiMap": {
+      "states": 7,
+      "transitions": 6,
+      "semanticControls": 80
+    },
+    "flows": [
+      "9/9",
+      "10/10",
+      "12/12"
+    ],
+    "contracts": [
+      "10/10",
+      "11/11"
+    ],
+    "gateExitCode": 0
+  },
+  "baselineActiveRerun": {
+    "captureId": "ci.Q3aKv3",
+    "verdict": "ready",
+    "releaseScore": 100,
+    "inconclusive": false,
+    "regression": {
+      "hadBaseline": true,
+      "new": 0,
+      "persisting": 1,
+      "resolved": 0,
+      "newCritical": 0,
+      "newHigh": 0,
+      "failed": false
+    },
+    "flows": [
+      "9/9",
+      "10/10",
+      "12/12"
+    ],
+    "contracts": [
+      "10/10",
+      "11/11"
+    ],
+    "gateExitCode": 0
+  },
+  "seededRegression": {
+    "fault": "hide-update-profile",
+    "activation": "TAPP_SEEDED_FAULT launch environment; disabled in ordinary runs",
+    "captureId": "ci.iw7Dcq",
+    "verdict": "caution",
+    "releaseScore": 90,
+    "inconclusive": false,
+    "baselineRegression": {
+      "new": 1,
+      "persisting": 1,
+      "resolved": 0,
+      "newHigh": 1,
+      "finding": "Update Profile was reachable in the baseline but not in the seeded run",
+      "failed": true
+    },
+    "deterministicFlow": {
+      "name": "Update Profile is reachable",
+      "result": "8/12 executed; failed",
+      "failure": "wait_for Update Profile never appeared within 6000ms",
+      "task": "openUpdateProfile"
+    },
+    "releaseContract": {
+      "name": "updateProfileReachable",
+      "result": "8/11 executed; failed",
+      "failure": "wait_for Update Profile never appeared within 6000ms",
+      "task": "openUpdateProfile"
+    },
+    "gate": {
+      "exitCode": 1,
+      "reasons": [
+        "1 flow failed",
+        "1 release contract failed",
+        "1 new high regression"
+      ]
+    },
+    "ordinaryReplayAfterSeed": {
+      "seedActive": false,
+      "result": "12/12 passed",
+      "evidence": "tapp-capture:flow-ios-45759-1785936130184"
+    }
+  },
+  "repositoryBaseline": {
+    "path": ".autotap/baselines/ios/target_bf05ddc53dcded7f.json",
+    "platform": "ios",
+    "targetIdentityRequired": true,
+    "conclusive": true,
+    "portableMarkersEvidence": "tapp-capture:ci.Q3aKv3/ocqa-markers.txt",
+    "portableUiMapEvidence": "tapp-capture:ci.Q3aKv3/ui-map.json",
+    "absoluteOrEscapingLocalPaths": 0
+  },
+  "ciInstallationDryRun": {
+    "jobs": 1,
+    "unresolved": 0,
+    "baselineInput": ".autotap/baselines/ios/target_bf05ddc53dcded7f.json",
+    "hostedExecutionVerified": false
+  },
+  "regressionsFoundInTapp": [
+    "Repository baselines retained absolute capture-local UI Map paths and an escaping markers path; known run artifacts are now normalized to tapp-capture references before persistence.",
+    "Baseline import checked platform but did not require the selected application-model target identity; missing or cross-target evidence is now rejected.",
+    "iOS autonomous QA received configured launch arguments/environment while deterministic Flows and release contracts did not; run-flow now validates and forwards the same bounded launch configuration."
+  ],
+  "interpretation": "The canonical iOS fixture now has a conclusive target-specific baseline, a healthy baseline-active full-gate comparison, portable repository evidence, a generated CI job that wires that exact baseline without unresolved configuration, and a controlled native fault that independently fails autonomous regression comparison, the unchanged Flow, and the unchanged release contract.",
+  "limits": [
+    "The one persisting low finding is an intentionally visible control-responsiveness concern, not hidden by retry or baseline policy.",
+    "The seeded fault is a fixture-only launch switch proving deterministic release gating, not a claim that every missing native capability will always be discovered by bounded autonomous exploration.",
+    "Both runs were local simulator executions, not GitHub-hosted macOS Action runs."
+  ]
+}

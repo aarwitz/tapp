@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T11:30:03-04:00",
+  "fixture": "WebDemo",
+  "platform": "web",
+  "change": {
+    "file": "pricing.html",
+    "mappedNode": "screen_1e2ea6d9b72e685b",
+    "observedRoute": "/pricing.html",
+    "seededFault": "uncaught exception while rendering plans"
+  },
+  "discovery": {
+    "selectedContracts": 0,
+    "unknownChangedFiles": 0,
+    "mappedCoverageGaps": 1,
+    "boundedTargets": 1,
+    "targetsObserved": 1,
+    "targetActionsOrder": ["/", "/pricing.html"],
+    "proposal": "pricingReachable",
+    "autoApplied": false,
+    "captureId": "web-20260805-112820"
+  },
+  "suiteEvolution": {
+    "explicitEvidenceReconciliation": true,
+    "humanDecisionPreserved": "pending",
+    "generatedTasks": ["openPricing"],
+    "generatedContracts": ["pricingReachable"],
+    "generatedDeterministicSteps": 3,
+    "realReplay": { "passed": true, "executed": 3, "total": 3, "captureId": "flow-web-68080-1785929357416" },
+    "promoted": true,
+    "reviewedSourceOwnership": ["pricing.html"]
+  },
+  "afterPromotion": {
+    "selectedContracts": ["pricingReachable"],
+    "selectionReasons": ["contract-source", "task-source"],
+    "mappedCoverageGaps": 0,
+    "unknownChangedFiles": 0,
+    "boundedTargets": 0
+  },
+  "healthyGate": {
+    "exitCode": 0,
+    "newFindings": 0,
+    "flowReplay": "7/7",
+    "contractReplay": "3/3",
+    "captureId": "web-20260805-113003"
+  },
+  "seededRegressionGate": {
+    "exitCode": 1,
+    "newHighFindings": 1,
+    "newFinding": "Uncaught JS exception: Cannot read properties of undefined (reading 'render')",
+    "screen": "/pricing.html",
+    "flowReplay": "7/7",
+    "contractReplay": "3/3",
+    "captureId": "web-20260805-112938"
+  },
+  "interpretation": "The release contract proves only that Pricing remains reachable; autonomous QA independently catches the seeded runtime failure. Passing the contract does not suppress the regression gate.",
+  "limits": [
+    "Exact route-to-file targeting currently applies only to observed replayable static web paths.",
+    "Native changed-surface navigation references are not yet replayable from PR plans.",
+    "Hosted GitHub Action execution was not part of this local measurement."
+  ]
+}

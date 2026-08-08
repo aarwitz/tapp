@@ -1,0 +1,574 @@
+{
+  "verdict": "ready",
+  "confidence": 100,
+  "releaseScore": 100,
+  "headline": "Ship-ready — no release-blocking issues found.",
+  "inconclusive": false,
+  "checkedFor": [
+    "crashes (launch + in-run)",
+    "hangs / stuck loading",
+    "dead controls (incl. navigation)",
+    "error surfaces",
+    "blank screens",
+    "navigation traps/loops",
+    "keyboard-covered actions",
+    "lost field state (persistent-class fields)"
+  ],
+  "notChecked": [
+    "app-specific business logic (cover with Flows: record or generate, then assert)",
+    "visual correctness — layout/images/clipping (vision review; needs an API key)",
+    "push notifications / system integrations",
+    "content & reachability regressions require a baseline"
+  ],
+  "conditionsNotReached": [
+    "sign-in (no login form encountered this run)"
+  ],
+  "platform": "ios",
+  "screensExplored": 7,
+  "actionsPerformed": 12,
+  "findingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 1,
+    "total": 1
+  },
+  "findings": [
+    {
+      "type": "unresponsive_element",
+      "severity": "low",
+      "title": "Control may be unresponsive: 'Add Report'",
+      "screen": "Saved Reports",
+      "target": "Add Report",
+      "step": 7,
+      "category": "unresponsive_element"
+    }
+  ],
+  "screens": [
+    "Get Started",
+    "Dashboard",
+    "Release Checklist",
+    "Todo List",
+    "Settings",
+    "Saved Reports",
+    "Update Profile"
+  ],
+  "screenElementCounts": {
+    "Get Started": 30,
+    "Dashboard": 94,
+    "Release Checklist": 55,
+    "Todo List": 139,
+    "Settings": 196,
+    "Saved Reports": 55,
+    "Update Profile": 88
+  },
+  "inputFieldsEncountered": [
+    {
+      "screen": "Update Profile",
+      "fields": [
+        {
+          "label": "Account",
+          "secure": false
+        },
+        {
+          "label": "Account",
+          "secure": false
+        }
+      ]
+    }
+  ],
+  "loginEncountered": false,
+  "complete": {
+    "actions": 12,
+    "states": 9,
+    "issues": 1,
+    "screens": "Dashboard,Release Checklist,Saved Reports,Settings,Todo List,Update Profile"
+  },
+  "uiMap": {
+    "schemaVersion": 1,
+    "nodeCount": 7,
+    "edgeCount": 6,
+    "controlCount": 80,
+    "evidence": "tapp-capture:ci.Q3aKv3/ui-map.json"
+  },
+  "targetKey": "target_bf05ddc53dcded7f",
+  "regression": {
+    "hadBaseline": true,
+    "counts": {
+      "new": 0,
+      "persisting": 1,
+      "resolved": 0
+    },
+    "newFindings": [],
+    "resolved": [],
+    "gate": {
+      "newCritical": 0,
+      "newHigh": 0,
+      "failed": false
+    }
+  },
+  "flows": [
+    {
+      "name": "Menu to Daily Summary",
+      "kind": "flow",
+      "passed": true,
+      "total": 9,
+      "executed": 9,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "More",
+          "detail": "",
+          "task": "openDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Show summary modal",
+          "detail": "",
+          "task": "openDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Daily Summary",
+          "detail": "",
+          "task": "openDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Daily Summary",
+          "detail": "",
+          "task": "openDailySummary"
+        }
+      ]
+    },
+    {
+      "name": "Release checklist is reachable",
+      "kind": "flow",
+      "passed": true,
+      "total": 10,
+      "executed": 10,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openReleaseChecklist"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Open release checklist",
+          "detail": "",
+          "task": "openReleaseChecklist"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Open release checklist",
+          "detail": "",
+          "task": "openReleaseChecklist"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Release Checklist",
+          "detail": "",
+          "task": "openReleaseChecklist"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Release Checklist",
+          "detail": "",
+          "task": "openReleaseChecklist"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Release Checklist",
+          "detail": ""
+        }
+      ]
+    },
+    {
+      "name": "Update Profile is reachable",
+      "kind": "flow",
+      "passed": true,
+      "total": 12,
+      "executed": 12,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Settings",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Settings",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Update Profile",
+          "detail": ""
+        }
+      ]
+    }
+  ],
+  "scenarios": [],
+  "contracts": [
+    {
+      "name": "A new customer completes onboarding and reaches Daily Summary",
+      "kind": "release-contract",
+      "contract": "newCustomerReachesDailySummary",
+      "criticality": "high",
+      "passed": true,
+      "total": 10,
+      "executed": 10,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openDailySummary",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "More",
+          "detail": "",
+          "task": "openDailySummary",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Show summary modal",
+          "detail": "",
+          "task": "openDailySummary",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Daily Summary",
+          "detail": "",
+          "task": "openDailySummary",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Daily Summary",
+          "detail": "",
+          "task": "openDailySummary",
+          "contract": "newCustomerReachesDailySummary"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Daily Summary",
+          "detail": "",
+          "contract": "newCustomerReachesDailySummary"
+        }
+      ]
+    },
+    {
+      "name": "Update Profile remains reachable",
+      "kind": "release-contract",
+      "contract": "updateProfileReachable",
+      "criticality": "medium",
+      "passed": true,
+      "total": 11,
+      "executed": 11,
+      "failed": 0,
+      "steps": [
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Get Started",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Continue",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "completeOnboarding",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Dashboard",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Settings",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Settings",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "tap",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "wait_for",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        },
+        {
+          "status": "pass",
+          "action": "assert_screen",
+          "target": "Update Profile",
+          "detail": "",
+          "task": "openUpdateProfile",
+          "contract": "updateProfileReachable"
+        }
+      ]
+    }
+  ],
+  "gate": {
+    "policy": "gate",
+    "failed": false,
+    "reasons": []
+  },
+  "markersEvidence": "tapp-capture:ci.Q3aKv3/ocqa-markers.txt",
+  "baselineIdentity": {
+    "schemaVersion": 1,
+    "platform": "ios",
+    "targetId": "target_bf05ddc53dcded7f",
+    "conclusive": true,
+    "verdict": "ready",
+    "screensExplored": 7,
+    "actionsPerformed": 12,
+    "suite": {
+      "flows": 3,
+      "scenarios": 0,
+      "contracts": 2
+    },
+    "createdAt": "2026-08-05T13:11:51.984Z",
+    "sourceReport": "tapp-demoapp-baseline-active-report.json",
+    "policy": "platform-and-target-specific; replace only from a reviewed successful conclusive gate"
+  }
+}

@@ -1,0 +1,7 @@
+name: DemoApp smoke — dismiss launch, open Settings
+app: com.autotap.demoapp
+steps:
+  - tap: Continue                 # dismiss the launch sheet
+  - assert_exists: Settings       # the Settings tab is present
+  - tap: Settings
+  - assert_screen: Settings       # deterministic: poll until the title is Settings

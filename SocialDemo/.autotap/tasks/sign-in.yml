@@ -1,0 +1,21 @@
+kind: task
+version: 1
+name: signIn
+description: Authenticate one provisioned social actor and reach the shared feed.
+inputs:
+  email: { required: true, secret: true }
+  password: { required: true, secret: true }
+outputs:
+  authenticatedEmail: { fromInput: email }
+preconditions:
+  - screen: Sign in
+postconditions:
+  - screen: Feed
+implementations:
+  web:
+    steps:
+      - type: { field: Email, value: "{{email}}" }
+      - type: { field: Password, value: "{{password}}" }
+      - tap: Sign in
+      - wait_for: Feed
+

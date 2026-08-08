@@ -1,0 +1,36 @@
+kind: task
+version: 1
+name: openReleaseChecklist
+description: Open the release checklist from the normalized Dashboard state.
+
+preconditions:
+  - screen: Dashboard
+postconditions:
+  - screen: Release Checklist
+
+implementations:
+  ios:
+    steps:
+      - wait_for: Open release checklist
+      - tap: Open release checklist
+      - wait_for: Release Checklist
+
+coverage:
+  nodes:
+    - dashboard
+    - release-checklist
+  edges:
+    - edge_e4a77ba4d4f0a213
+  sourcePaths:
+    - Sources/DashboardHomeView.swift
+  sourceSymbols:
+    - path: Sources/DashboardHomeView.swift
+      symbols:
+        - DashboardHomeView
+
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: tapp-capture:flow-ios-89999-1785931657920
+  mapEvidenceRun: tapp-capture:20260805-075812
+  note: Replayed 10/10 through XCUITest after the reviewed onboarding Task; no AI was used.

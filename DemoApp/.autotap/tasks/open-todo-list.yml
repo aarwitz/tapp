@@ -1,0 +1,41 @@
+kind: task
+version: 1
+name: openTodoList
+description: Open the Tasks tab from the normalized Dashboard state.
+
+preconditions:
+  - screen: Dashboard
+postconditions:
+  - screen: Todo List
+  - exists: Add
+
+implementations:
+  ios:
+    steps:
+      - wait_for: Tasks
+      - tap: Tasks
+      - wait_for: Todo List
+
+coverage:
+  nodes:
+    - dashboard
+    - todo-list
+  edges:
+    - edge_2b92881330f7a779
+  sourcePaths:
+    - Sources/ContentView.swift
+    - Sources/TodoView.swift
+  sourceSymbols:
+    - path: Sources/ContentView.swift
+      symbols:
+        - ContentView
+    - path: Sources/TodoView.swift
+      symbols:
+        - TodoView
+
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: tapp-capture:flow-ios-64821-1785937951905
+  mapEvidenceRun: tapp-capture:20260805-093316
+  note: Replayed as part of customerCreatesAndCompletesTask; the full deterministic contract passed 35/35 through XCUITest without AI.

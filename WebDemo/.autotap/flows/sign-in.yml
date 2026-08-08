@@ -1,0 +1,10 @@
+name: WebDemo sign in
+platform: web
+url: http://127.0.0.1:4173
+steps:
+  - task: signIn
+    with:
+      email: $TEST_EMAIL
+      password: $TEST_PASSWORD
+    save:
+      authenticatedEmail: SIGNED_IN_EMAIL

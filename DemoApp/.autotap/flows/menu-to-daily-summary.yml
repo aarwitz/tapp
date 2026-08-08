@@ -1,0 +1,5 @@
+name: Menu to Daily Summary
+app: com.autotap.demoapp
+steps:
+  - task: completeOnboarding
+  - task: openDailySummary

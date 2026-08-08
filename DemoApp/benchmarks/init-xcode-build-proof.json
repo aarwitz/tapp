@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-08-05T08:59:30-04:00",
+  "fixture": "DemoApp",
+  "platform": "ios",
+  "operation": "tapp init --explore on a disposable contract-free fixture copy",
+  "build": {
+    "container": "DemoApp.xcodeproj",
+    "scheme": "DemoApp",
+    "configuration": "Debug",
+    "bundleId": "com.autotap.demoapp",
+    "resolution": "xcode-build-installed"
+  },
+  "exploration": {
+    "verdict": "ready",
+    "inconclusive": false,
+    "actionsBudget": 4,
+    "states": 3,
+    "transitions": 3,
+    "semanticControls": 26,
+    "evidence": "tapp-capture:20260805-085207"
+  },
+  "applicationModel": {
+    "targetStatus": "configured",
+    "runtimeEvidenceClass": "runtime-observed",
+    "portableBuildContainer": "DemoApp.xcodeproj",
+    "validatedSchemeCandidates": [
+      "DemoApp"
+    ],
+    "blockingRequirements": 0,
+    "schemeCoverageGaps": 0,
+    "absoluteLocalPathsPersisted": 0
+  },
+  "sourceOnlyRefresh": {
+    "performed": true,
+    "targetStatus": "configured",
+    "runtimeEvidenceRetained": true,
+    "blockingRequirements": 0,
+    "schemeCoverageGaps": 0
+  },
+  "canonicalFixtureRefresh": {
+    "buildEvidence": "tapp-capture:20260805-085658",
+    "verdict": "ready",
+    "statesRetained": 9,
+    "transitionsRetained": 9,
+    "semanticControlsRetained": 94,
+    "blockingRequirements": 0,
+    "promotedContractRevalidation": {
+      "name": "updateProfileReachable",
+      "result": "11/11",
+      "evidence": "tapp-capture:flow-ios-31871-1785934751588",
+      "itemStatus": "promoted",
+      "indexedStatus": "promoted",
+      "trusted": true,
+      "validationStale": false
+    }
+  },
+  "ciInstallationDryRun": {
+    "targetJobs": 1,
+    "unresolved": 0,
+    "runner": "macos-15",
+    "inputs": {
+      "project": "DemoApp.xcodeproj",
+      "scheme": "DemoApp",
+      "configuration": "Debug",
+      "contracts": 2
+    },
+    "filesWritten": 0,
+    "hostedExecutionVerified": false
+  },
+  "regressionsFoundInTapp": [
+    "Canonicalizing an existing target container through a different temporary-directory alias initially prevented exact proof matching; both paths are now realpath-normalized before repository-relative comparison.",
+    "Revalidating a promoted contract updated its item-level generation record but not the top-level generation index; both identities now advance atomically and clear stale status."
+  ],
+  "interpretation": "A successful repository-driven Xcode build/install/exploration now confirms the exact detected target and scheme in the application model, removes the false scheme blocker, and retains that portable evidence on a later source-only refresh.",
+  "limits": [
+    "A supplied bundle id, prebuilt .app, or already-installed app does not prove repository build configuration and therefore cannot clear a scheme blocker.",
+    "This proof covers one local iOS simulator target, not multi-target orchestration or GitHub-hosted macOS execution.",
+    "The four-action exploration budget proves the target handoff and initial map, not broad product coverage."
+  ]
+}

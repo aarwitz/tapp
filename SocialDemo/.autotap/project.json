@@ -1,0 +1,28 @@
+{
+  "kind": "tapp-project-config",
+  "schemaVersion": 1,
+  "actors": {
+    "alice": {
+      "role": "member",
+      "session": "isolated",
+      "provisioning": "seeded",
+      "credentials": {
+        "email": { "env": "ALICE_EMAIL" },
+        "password": { "env": "ALICE_PASSWORD" }
+      }
+    },
+    "bob": {
+      "role": "member",
+      "session": "isolated",
+      "provisioning": "seeded",
+      "credentials": {
+        "email": { "env": "BOB_EMAIL" },
+        "password": { "env": "BOB_PASSWORD" }
+      }
+    }
+  },
+  "lifecycle": {
+    "setup": [{ "request": { "method": "POST", "path": "/__tapp/reset", "status": 200 } }],
+    "teardown": [{ "request": { "method": "POST", "path": "/__tapp/reset", "status": 200 } }]
+  }
+}

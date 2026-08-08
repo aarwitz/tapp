@@ -1,0 +1,50 @@
+kind: task
+version: 1
+name: completeTodoItem
+description: Open a task by its deterministic title, complete it, return to the list, and prove it appears in Done.
+
+inputs:
+  title:
+    required: true
+
+preconditions:
+  - screen: Todo List
+  - exists: "{{title}}"
+postconditions:
+  - screen: Todo List
+  - exists: "{{title}}"
+
+implementations:
+  ios:
+    steps:
+      - wait_for: "{{title}}"
+      - tap: "{{title}}"
+      - wait_for: Mark Complete
+      - tap: Mark Complete
+      - wait_for: Reopen Task
+      - back: true
+      - wait_for: Done
+      - tap: Done
+      - wait_for: "{{title}}"
+
+coverage:
+  nodes:
+    - todo-list
+    - todo-list--task-notes-field
+  edges:
+    - edge_cd9ba27e60afbe1d
+    - edge_d6cee146b4c0b8fc
+  sourcePaths:
+    - Sources/TodoView.swift
+  sourceSymbols:
+    - path: Sources/TodoView.swift
+      symbols:
+        - TodoView
+        - TaskDetailView
+
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: tapp-capture:flow-ios-64821-1785937951905
+  mapEvidenceRun: tapp-capture:20260805-094740
+  note: Replayed with the captured task title, completion mutation, Back navigation, and Done-filter assertion as part of customerCreatesAndCompletesTask; the full contract passed 35/35 through XCUITest without AI.

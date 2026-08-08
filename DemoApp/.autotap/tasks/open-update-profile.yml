@@ -1,0 +1,40 @@
+kind: task
+version: 1
+name: openUpdateProfile
+description: Open Update Profile from the normalized Dashboard state through Settings.
+
+preconditions:
+  - screen: Dashboard
+postconditions:
+  - screen: Update Profile
+
+implementations:
+  ios:
+    steps:
+      - wait_for: Settings
+      - tap: Settings
+      - wait_for: Update Profile
+      - tap: Update Profile
+      - wait_for: Update Profile
+
+coverage:
+  nodes:
+    - dashboard
+    - settings
+    - update-profile
+  edges:
+    - edge_a86a28a62e1a1e8a
+    - edge_6782e0b802e6cc98
+  sourcePaths:
+    - Sources/SettingsView.swift
+  sourceSymbols:
+    - path: Sources/SettingsView.swift
+      symbols:
+        - SettingsView
+
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: tapp-capture:flow-ios-4574-1785932806531
+  mapEvidenceRun: tapp-capture:20260805-082450
+  note: Replayed 12/12 through XCUITest after the reviewed onboarding Task; no AI was used.

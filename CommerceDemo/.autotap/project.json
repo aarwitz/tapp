@@ -1,0 +1,16 @@
+{
+  "kind": "tapp-project-config",
+  "schemaVersion": 1,
+  "actors": {
+    "customer": {
+      "role": "customer",
+      "session": "default",
+      "provisioning": "seeded",
+      "credentials": {}
+    }
+  },
+  "lifecycle": {
+    "setup": [{ "request": { "method": "POST", "path": "/__tapp/reset", "status": 200 } }],
+    "teardown": [{ "request": { "method": "POST", "path": "/__tapp/reset", "status": 200 } }]
+  }
+}

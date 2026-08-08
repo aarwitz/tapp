@@ -1,0 +1,13 @@
+:root { color-scheme: light; font: 16px/1.45 system-ui, sans-serif; color: #172033; background: #f4f7fb; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+#app { max-width: 860px; margin: 0 auto; padding: 28px; }
+nav { display: flex; gap: 10px; align-items: center; margin-bottom: 28px; }
+nav strong { margin-right: auto; }
+.card { background: white; border: 1px solid #dce3ee; border-radius: 14px; padding: 22px; box-shadow: 0 8px 28px #17203312; }
+button, a.primary { display: inline-block; border: 0; border-radius: 9px; padding: 11px 16px; color: white; background: #3457d5; font: inherit; font-weight: 650; cursor: pointer; text-decoration: none; }
+button.secondary { color: #25304a; background: #e9eef8; }
+nav a { color: #3457d5; font-weight: 650; }
+.price { font-size: 1.4rem; font-weight: 700; }
+.muted { color: #64708a; }
+.success { color: #176b45; font-weight: 700; }

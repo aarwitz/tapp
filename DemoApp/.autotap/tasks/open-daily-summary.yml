@@ -1,0 +1,20 @@
+kind: task
+version: 1
+name: openDailySummary
+description: Open the daily summary modal from the Dashboard's More menu.
+preconditions:
+  - screen: Dashboard
+postconditions:
+  - screen: Daily Summary
+implementations:
+  ios:
+    steps:
+      - tap: More
+      - tap: Show summary modal
+      - wait_for: Daily Summary
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: flow-ios-11055-1785871399110
+  note: Replayed on the real DemoApp simulator; this modal was not reached by the autonomous map run, so no UI Map edge is claimed yet.
+

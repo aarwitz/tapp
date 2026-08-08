@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-release-plan",
+  "application": {
+    "name": "DemoApp",
+    "repositoryRoot": ".",
+    "platforms": [
+      "ios"
+    ],
+    "targetIds": [
+      "target_bf05ddc53dcded7f"
+    ]
+  },
+  "status": "awaiting-review",
+  "policy": {
+    "targetCount": "approximately 5–15 when grounded evidence supports it",
+    "maximum": 15,
+    "compactOverExhaustive": true,
+    "deterministicReplayRequired": true,
+    "aiAssertionsDefault": false
+  },
+  "items": [
+    {
+      "id": "contract_49ec14893e039d82",
+      "kind": "release-contract",
+      "name": "customerCreatesAndCompletesTask",
+      "title": "A customer creates a task and completes it",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "high",
+      "businessValue": "Protect the primary state-changing task workflow, including creation, detail mutation, and filtered list visibility.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openTodoList",
+        "createTodoItem",
+        "completeTodoItem"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/create-complete-task.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
+    },
+    {
+      "id": "contract_fce34754ac2883ee",
+      "kind": "release-contract",
+      "name": "newCustomerReachesDailySummary",
+      "title": "A new customer completes onboarding and reaches Daily Summary",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "high",
+      "businessValue": "First-run activation and the product's primary summary surface remain available.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openDailySummary"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/onboarding-summary.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
+    },
+    {
+      "id": "contract_084a32b5dfc7cf29",
+      "kind": "release-contract",
+      "name": "updateProfileReachable",
+      "title": "Update Profile remains reachable",
+      "scope": ".",
+      "origin": "committed",
+      "decision": "accepted",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Update Profile product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "completeOnboarding",
+        "openUpdateProfile"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "risk": "Business guarantee regresses or becomes inconclusive.",
+      "groundedBy": [
+        {
+          "type": "contract",
+          "path": ".autotap/contracts/update-profile-reachable.contract.ts"
+        }
+      ],
+      "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
+      "reviewedAt": "2026-08-05T12:33:21.869Z",
+      "generation": {
+        "id": "proposal_b521734abe46c98b",
+        "name": "updateProfileReachable",
+        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "tasks": [
+          "completeOnboarding",
+          "openUpdateProfile"
+        ],
+        "taskPaths": [],
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "ios",
+            "kind": "flow",
+            "deterministicSteps": 11
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "ios": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-ios-66291-1785938233238",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "promotedAt": "2026-08-05T12:39:39.308Z",
+        "validationStale": false,
+        "previousValidation": {
+          "ios": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-ios-31871-1785934751588",
+            "detail": "deterministic replay passed"
+          }
+        }
+      },
+      "taskInputs": {
+        "completeOnboarding": {},
+        "openUpdateProfile": {}
+      }
+    },
+    {
+      "id": "proposal_b5a2e7680c0d8127",
+      "kind": "release-contract",
+      "name": "openReleaseChecklistWorks",
+      "title": "Open Release Checklist remains available",
+      "scope": ".",
+      "origin": "deterministic-source-proposal",
+      "decision": "pending",
+      "criticality": "medium",
+      "businessValue": "Protect the reviewed open release checklist capability through its reusable Task.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openReleaseChecklist"
+      ],
+      "platforms": [
+        "ios"
+      ],
+      "taskInputs": {
+        "openReleaseChecklist": {}
+      },
+      "risk": "The Task exists but is not composed by a reviewed release contract.",
+      "groundedBy": [
+        {
+          "type": "task",
+          "path": ".autotap/tasks/open-release-checklist.yml"
+        },
+        {
+          "type": "capability",
+          "id": "capability_openreleasechecklist"
+        }
+      ],
+      "requiredValidation": "Compile and replay against the real target before approval or commit."
+    }
+  ],
+  "coverageGaps": {
+    "unknownRequirements": [],
+    "uncoveredUiMapNodes": [
+      "screen_43fa7d768956657d",
+      "screen_9f9f578981bed256",
+      "screen_dc0570d6ffde126c",
+      "screen_e392b772e380d3e9",
+      "screen_f100530dc20fc7ac"
+    ],
+    "uncoveredUiMapEdges": [
+      "edge_09672283d711d821",
+      "edge_3722a6894b574966",
+      "edge_59309c4c62789804",
+      "edge_6bac1cda96f49ff7",
+      "edge_7810d32e52c14354"
+    ]
+  },
+  "review": {
+    "instructions": "Approve, reject, defer, reprioritize, or constrain pending items before generation. Existing committed contracts remain accepted but still require current replay evidence.",
+    "reviewedAt": "2026-08-05T12:33:21.869Z"
+  },
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T13:56:47.861Z",
+    "remoteAiUsed": false,
+    "groundedOnly": true
+  },
+  "generation": {
+    "generatedAt": "2026-08-05T12:38:49.947Z",
+    "generatedTasks": [],
+    "generated": [
+      {
+        "id": "proposal_b521734abe46c98b",
+        "name": "updateProfileReachable",
+        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "tasks": [
+          "completeOnboarding",
+          "openUpdateProfile"
+        ],
+        "taskPaths": [],
+        "status": "promoted",
+        "trusted": true,
+        "staticValidation": [
+          {
+            "platform": "ios",
+            "kind": "flow",
+            "deterministicSteps": 11
+          }
+        ],
+        "replayRequired": false,
+        "realValidation": {
+          "ios": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-ios-66291-1785938233238",
+            "detail": "deterministic replay passed"
+          }
+        },
+        "promotedAt": "2026-08-05T12:39:39.308Z",
+        "validationStale": false,
+        "previousValidation": {
+          "ios": {
+            "status": "passed",
+            "passed": true,
+            "evidence": "tapp-capture:flow-ios-31871-1785934751588",
+            "detail": "deterministic replay passed"
+          }
+        }
+      }
+    ],
+    "blocked": [],
+    "invariant": "A new runtime exploration invalidated prior draft trust; preserved evidence is historical and every affected platform must replay.",
+    "promotedAt": "2026-08-05T12:39:39.308Z",
+    "invalidatedAt": "2026-08-05T13:34:16.132Z"
+  }
+}

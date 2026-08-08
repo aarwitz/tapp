@@ -1,0 +1,1113 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "target": "http://127.0.0.1:4173",
+    "platforms": [
+      "web"
+    ],
+    "sourceRoot": "",
+    "entryNodes": {
+      "web": "screen_47b5df0fe3a1b613"
+    }
+  },
+  "provenance": {
+    "generatedBy": "tapp",
+    "runIds": [
+      "web-20260804-191333",
+      "web-20260805-112027"
+    ],
+    "builds": [],
+    "firstObservedAt": "2026-08-04T19:13:41.771Z",
+    "lastObservedAt": "2026-08-05T11:20:33.387Z",
+    "lastRun": {
+      "id": "web-20260805-112027",
+      "platform": "web",
+      "verdict": "caution",
+      "inconclusive": false,
+      "statesExplored": 7,
+      "actionsPerformed": 10,
+      "observedAt": "2026-08-05T11:20:33.387Z"
+    }
+  },
+  "nodes": [
+    {
+      "id": "screen_1e2ea6d9b72e685b",
+      "semanticKey": "pricing",
+      "name": "Pricing",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_f63518af857cce92",
+          "semanticKey": "home",
+          "kind": "link",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Home"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openPricing"
+        ],
+        "contracts": [
+          "pricingReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/pricing.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    },
+    {
+      "id": "screen_3dce9f61c869d69a",
+      "semanticKey": "error-response",
+      "name": "Error response",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-04T19:13:41.771Z",
+        "count": 1
+      },
+      "routes": []
+    },
+    {
+      "id": "screen_47b5df0fe3a1b613",
+      "semanticKey": "webdemo",
+      "name": "WebDemo",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_22752a62b30db861",
+          "semanticKey": "theme",
+          "kind": "button",
+          "label": "Toggle theme",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "theme"
+            },
+            {
+              "kind": "label",
+              "value": "Toggle theme"
+            },
+            {
+              "kind": "resourceId",
+              "value": "theme"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_30da76b89c52cd95",
+          "semanticKey": "sign-in",
+          "kind": "link",
+          "label": "Sign in",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Sign in"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5051d0fdb85368dc",
+          "semanticKey": "archive",
+          "kind": "link",
+          "label": "Archive",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Archive"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_50bc4b90c7790c5a",
+          "semanticKey": "pricing",
+          "kind": "link",
+          "label": "Pricing",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Pricing"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_5f0f0aafdc1d63b0",
+          "semanticKey": "status",
+          "kind": "link",
+          "label": "Status",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Status"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_65ef58996e70b2b5",
+          "semanticKey": "sync",
+          "kind": "button",
+          "label": "Sync Now",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "cssId",
+              "value": "sync"
+            },
+            {
+              "kind": "label",
+              "value": "Sync Now"
+            },
+            {
+              "kind": "resourceId",
+              "value": "sync"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_6aadc5657b4bd841",
+          "semanticKey": "changelog",
+          "kind": "link",
+          "label": "Changelog",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Changelog"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_ef2de8e440ebaa10",
+          "semanticKey": "features",
+          "kind": "link",
+          "label": "Features",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Features"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openPricing",
+          "signIn"
+        ],
+        "contracts": [
+          "pricingReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 4
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    },
+    {
+      "id": "screen_48d7c508cc0ca58a",
+      "semanticKey": "sign-in",
+      "name": "Sign in",
+      "aliases": [],
+      "roles": [
+        "login"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_4da5f7103fcf6cf7",
+          "semanticKey": "email",
+          "kind": "field",
+          "label": "Email",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Email"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_739b2ac0571b1265",
+          "semanticKey": "sign-in",
+          "kind": "button",
+          "label": "Sign in",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Sign in"
+            },
+            {
+              "kind": "role",
+              "value": "button"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_dcd6c43e63dd96b9",
+          "semanticKey": "password",
+          "kind": "secureField",
+          "label": "Password",
+          "secure": true,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Password"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        },
+        {
+          "id": "control_f52402daec6bc8f8",
+          "semanticKey": "home",
+          "kind": "link",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Home"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "signIn"
+        ],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 4
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/login.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    },
+    {
+      "id": "screen_5b8a8b56dada6ce7",
+      "semanticKey": "features",
+      "name": "Features",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_fa7dce02339ba48a",
+          "semanticKey": "home",
+          "kind": "link",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Home"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/features.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    },
+    {
+      "id": "screen_7acf64583849d669",
+      "semanticKey": "blank-html",
+      "name": "/blank.html",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/blank.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    },
+    {
+      "id": "screen_83108867aa360685",
+      "semanticKey": "changelog-html",
+      "name": "/changelog.html",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [],
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/changelog.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-05T11:20:33.387Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 1
+      }
+    },
+    {
+      "id": "screen_909a9f6dbd7ec2aa",
+      "semanticKey": "system-status",
+      "name": "System Status",
+      "aliases": [],
+      "roles": [
+        "screen"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "status": "observed",
+      "fingerprints": [],
+      "controls": [
+        {
+          "id": "control_a2721feba6ea210f",
+          "semanticKey": "home",
+          "kind": "link",
+          "label": "Home",
+          "secure": false,
+          "enabled": true,
+          "hittable": true,
+          "selectors": [
+            {
+              "kind": "label",
+              "value": "Home"
+            },
+            {
+              "kind": "role",
+              "value": "link"
+            }
+          ],
+          "platforms": [
+            "web"
+          ],
+          "status": "observed",
+          "sourcePaths": [],
+          "coveredBy": {
+            "tasks": [],
+            "contracts": []
+          }
+        }
+      ],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "routes": [
+        {
+          "platform": "web",
+          "path": "/status.html",
+          "replayable": true,
+          "status": "observed"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_02e491cfcf17fba2",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_1e2ea6d9b72e685b",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Pricing",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Pricing"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "pricing"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "openPricing"
+        ],
+        "contracts": [
+          "pricingReachable"
+        ]
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "confirmed": true,
+      "platforms": [
+        "web"
+      ]
+    },
+    {
+      "id": "edge_032ab54923050327",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_83108867aa360685",
+      "status": "observed",
+      "platforms": [
+        "web"
+      ],
+      "action": {
+        "type": "tap",
+        "target": "Changelog",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Changelog"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "changelog-html"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-05T11:20:33.387Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_509e147d6378fea1",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_5b8a8b56dada6ce7",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Features",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Features"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "features"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "confirmed": true,
+      "platforms": [
+        "web"
+      ]
+    },
+    {
+      "id": "edge_997391a2b3100910",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_909a9f6dbd7ec2aa",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Status",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Status"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "system-status"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "confirmed": true,
+      "platforms": [
+        "web"
+      ]
+    },
+    {
+      "id": "edge_99e867c2791a2052",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_48d7c508cc0ca58a",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Sign in",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Sign in"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "sign-in"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [
+          "signIn"
+        ],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "confirmed": true,
+      "platforms": [
+        "web"
+      ]
+    },
+    {
+      "id": "edge_a82e29f087dfe829",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_3dce9f61c869d69a",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Changelog",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Changelog"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "error-response"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-04T19:13:41.771Z",
+        "count": 1
+      },
+      "confirmed": true
+    },
+    {
+      "id": "edge_a9ffc4d2907e48e3",
+      "from": "screen_47b5df0fe3a1b613",
+      "to": "screen_7acf64583849d669",
+      "status": "observed",
+      "action": {
+        "type": "tap",
+        "target": "Archive",
+        "selectors": [
+          {
+            "kind": "label",
+            "value": "Archive"
+          }
+        ]
+      },
+      "preconditions": [],
+      "outcomes": [
+        {
+          "type": "screen",
+          "value": "blank-html"
+        }
+      ],
+      "wait": {
+        "type": "condition",
+        "timeoutMs": 6000
+      },
+      "actors": [],
+      "sourcePaths": [],
+      "coveredBy": {
+        "tasks": [],
+        "contracts": []
+      },
+      "observation": {
+        "runIds": [
+          "web-20260804-191333",
+          "web-20260805-112027"
+        ],
+        "firstObservedAt": "2026-08-04T19:13:41.771Z",
+        "lastObservedAt": "2026-08-05T11:20:33.387Z",
+        "count": 2
+      },
+      "confirmed": true,
+      "platforms": [
+        "web"
+      ]
+    }
+  ],
+  "coverage": {
+    "tasks": [
+      "openPricing",
+      "signIn"
+    ],
+    "contracts": [
+      "pricingReachable"
+    ],
+    "uncoveredNodeIds": [
+      "screen_3dce9f61c869d69a",
+      "screen_5b8a8b56dada6ce7",
+      "screen_7acf64583849d669",
+      "screen_83108867aa360685",
+      "screen_909a9f6dbd7ec2aa"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_032ab54923050327",
+      "edge_509e147d6378fea1",
+      "edge_997391a2b3100910",
+      "edge_a82e29f087dfe829",
+      "edge_a9ffc4d2907e48e3"
+    ]
+  }
+}

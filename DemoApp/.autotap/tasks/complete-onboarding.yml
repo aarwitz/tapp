@@ -1,0 +1,25 @@
+kind: task
+version: 1
+name: completeOnboarding
+description: Leave the first-run Get Started state and reach Dashboard.
+preconditions:
+  - screen: Get Started
+postconditions:
+  - screen: Dashboard
+implementations:
+  ios:
+    steps:
+      - tap: Continue
+      - wait_for: Dashboard
+coverage:
+  nodes:
+    - get-started
+    - dashboard
+  edges:
+    - edge_32dc8ecd97e7d5ec
+validation:
+  status: validated
+  platform: ios
+  evidenceRun: flow-ios-11055-1785871399110
+  mapEvidenceRun: 1DDB1F22-4CA3-431F-8E3A-D5710E8E638E
+  note: Grounded in the real iOS desktop UI Map and replayed 8/8 through XCUITest without AI.

@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "kind": "tapp-application-model",
+  "application": {
+    "name": "WebDemo",
+    "repositoryRoot": ".",
+    "platforms": [
+      "web"
+    ],
+    "targetIds": [
+      "target_f43f6d898145a7cf"
+    ]
+  },
+  "targets": [
+    {
+      "id": "target_f43f6d898145a7cf",
+      "platform": "web",
+      "kind": "static-browser-application",
+      "name": "WebDemo",
+      "sourcePath": ".",
+      "status": "configured",
+      "build": {
+        "tool": "static-files",
+        "projectDir": ".",
+        "install": null,
+        "start": null
+      },
+      "runtime": {
+        "surface": "Chromium",
+        "ownedUrl": null,
+        "management": "tapp-managed"
+      },
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          "index.html"
+        ],
+        "detail": "static browser entrypoint observed; runtime Tapp-managed static server"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "name": "customer",
+      "roles": [
+        "customer"
+      ],
+      "contracts": [
+        "pricingReachable"
+      ],
+      "credentialRequirements": [],
+      "credentialBindings": {},
+      "configured": false,
+      "bindingConflicts": [],
+      "session": "default",
+      "provisioning": "unknown",
+      "credentialsConfigured": false,
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/pricing-reachable.contract.ts"
+        ],
+        "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
+      }
+    }
+  ],
+  "entities": [
+    {
+      "id": "entity_pricing",
+      "name": "Pricing",
+      "status": "task-derived",
+      "tasks": [
+        "openPricing"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/open-pricing.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/open-pricing.task.json"
+        ],
+        "detail": "noun derived from a reusable Task; requires review"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "capability_openpricing",
+      "name": "Open Pricing",
+      "status": "task-derived",
+      "tasks": [
+        "openPricing"
+      ],
+      "contracts": [
+        "pricingReachable"
+      ],
+      "sourcePaths": [
+        ".autotap/contracts/pricing-reachable.contract.ts",
+        ".autotap/tasks/open-pricing.task.json"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/contracts/pricing-reachable.contract.ts",
+          ".autotap/tasks/open-pricing.task.json"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    },
+    {
+      "id": "capability_signin",
+      "name": "Sign In",
+      "status": "task-derived",
+      "tasks": [
+        "signIn"
+      ],
+      "contracts": [],
+      "sourcePaths": [
+        ".autotap/tasks/sign-in.yml"
+      ],
+      "evidence": {
+        "basis": "source-observed",
+        "paths": [
+          ".autotap/tasks/sign-in.yml"
+        ],
+        "detail": "derived from a reusable Task name; requires review"
+      }
+    }
+  ],
+  "criticalJourneys": [
+    {
+      "id": "journey_da90f33b6c4603cd",
+      "name": "Pricing remains reachable",
+      "status": "authored-unvalidated",
+      "contract": "pricingReachable",
+      "scope": ".",
+      "criticality": "medium",
+      "businessValue": "Protect access to the observed Pricing product surface.",
+      "actors": [
+        "customer"
+      ],
+      "tasks": [
+        "openPricing"
+      ],
+      "platforms": [
+        "web"
+      ],
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/pricing-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "revenuePaths": [
+    {
+      "journeyId": "journey_da90f33b6c4603cd",
+      "contract": "pricingReachable",
+      "status": "authored-unvalidated",
+      "evidence": {
+        "basis": "reviewed-artifact",
+        "paths": [
+          ".autotap/contracts/pricing-reachable.contract.ts"
+        ],
+        "detail": "committed contract exists; current-revision replay evidence is still required"
+      }
+    }
+  ],
+  "systemInvariants": [],
+  "configuration": {
+    "path": ".autotap/project.json",
+    "status": "missing",
+    "actorCount": 0,
+    "lifecycle": {
+      "setupSteps": 0,
+      "teardownSteps": 0
+    },
+    "evidence": {
+      "basis": "source-observed",
+      "paths": [],
+      "detail": "optional project configuration has not been created"
+    }
+  },
+  "environments": [
+    {
+      "targetId": "target_f43f6d898145a7cf",
+      "platform": "web",
+      "status": "configured",
+      "runtime": {
+        "surface": "Chromium",
+        "ownedUrl": null,
+        "management": "tapp-managed"
+      }
+    }
+  ],
+  "stateBoundaries": [],
+  "uiMap": {
+    "path": ".autotap/ui-map.json",
+    "status": "observed",
+    "nodeCount": 8,
+    "edgeCount": 7,
+    "controlCount": 15,
+    "uncoveredNodeIds": [
+      "screen_3dce9f61c869d69a",
+      "screen_5b8a8b56dada6ce7",
+      "screen_7acf64583849d669",
+      "screen_83108867aa360685",
+      "screen_909a9f6dbd7ec2aa"
+    ],
+    "uncoveredEdgeIds": [
+      "edge_032ab54923050327",
+      "edge_509e147d6378fea1",
+      "edge_997391a2b3100910",
+      "edge_a82e29f087dfe829",
+      "edge_a9ffc4d2907e48e3"
+    ],
+    "platforms": [
+      "web"
+    ],
+    "lastRun": {
+      "id": "web-20260805-112027",
+      "platform": "web",
+      "verdict": "caution",
+      "inconclusive": false,
+      "statesExplored": 7,
+      "actionsPerformed": 10,
+      "observedAt": "2026-08-05T11:20:33.387Z"
+    },
+    "evidence": {
+      "basis": "reviewed-artifact",
+      "paths": [
+        ".autotap/ui-map.json"
+      ],
+      "detail": "grounded in prior runtime observations"
+    }
+  },
+  "artifacts": {
+    "tasks": [
+      {
+        "id": "task_16efcab18336a0f7",
+        "name": "openPricing",
+        "scope": ".",
+        "path": ".autotap/tasks/open-pricing.task.json",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {}
+      },
+      {
+        "id": "task_d061e2ee669c38c3",
+        "name": "signIn",
+        "scope": ".",
+        "path": ".autotap/tasks/sign-in.yml",
+        "version": 1,
+        "platforms": [
+          "web"
+        ],
+        "inputs": {
+          "email": {
+            "required": true,
+            "secret": true
+          },
+          "password": {
+            "required": true,
+            "secret": true
+          }
+        }
+      }
+    ],
+    "contracts": [
+      {
+        "id": "contract_8944f3ec2ae3b18f",
+        "name": "pricingReachable",
+        "scope": ".",
+        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "criticality": "medium",
+        "platforms": [
+          "web"
+        ]
+      }
+    ]
+  },
+  "requirements": [],
+  "provenance": {
+    "generatedBy": "tapp-init",
+    "generatedAt": "2026-08-05T11:37:09.250Z",
+    "remoteAiUsed": false,
+    "distinctions": [
+      "runtime-observed",
+      "source-observed",
+      "reviewed-artifact",
+      "source-derived-proposal",
+      "human-decision"
+    ]
+  }
+}

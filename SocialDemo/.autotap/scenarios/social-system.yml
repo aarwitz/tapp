@@ -1,0 +1,70 @@
+name: Alice publishes, Bob reacts, both exchange messages
+kind: scenario
+platform: web
+url: http://127.0.0.1:4180
+timeoutMs: 6000
+vars:
+  POST: Tapp scenario post 7319
+  MESSAGE_TO_ALICE: Bob received the shared post 8421
+  REPLY_TO_BOB: Alice received the message 9532
+actors:
+  alice:
+    vars:
+      EMAIL: $ALICE_EMAIL
+      PASSWORD: $ALICE_PASSWORD
+  bob:
+    vars:
+      EMAIL: $BOB_EMAIL
+      PASSWORD: $BOB_PASSWORD
+setup:
+  - request:
+      method: POST
+      path: /__tapp/reset
+      status: 200
+steps:
+  - actor: alice
+    do:
+      task: signIn
+      with: { email: $EMAIL, password: $PASSWORD }
+  - actor: bob
+    do:
+      task: signIn
+      with: { email: $EMAIL, password: $PASSWORD }
+  - actor: alice
+    do:
+      task: createPost
+      with: { text: $POST }
+      save: { publishedText: PUBLISHED_POST }
+  - actor: bob
+    assert_exists: { target: $PUBLISHED_POST, timeoutMs: 6000 }
+  - actor: bob
+    do:
+      task: likePost
+      with: { post: $PUBLISHED_POST }
+  - actor: alice
+    assert_exists: { target: 1 like, timeoutMs: 6000 }
+  - actor: bob
+    do:
+      task: openConversation
+      with: { recipient: Alice }
+  - actor: bob
+    do:
+      task: sendMessage
+      with: { message: $MESSAGE_TO_ALICE }
+  - actor: alice
+    do:
+      task: openConversation
+      with: { recipient: Bob }
+  - actor: alice
+    assert_exists: { target: $MESSAGE_TO_ALICE, timeoutMs: 6000 }
+  - actor: alice
+    do:
+      task: sendMessage
+      with: { message: $REPLY_TO_BOB }
+  - actor: bob
+    assert_exists: { target: $REPLY_TO_BOB, timeoutMs: 6000 }
+teardown:
+  - request:
+      method: POST
+      path: /__tapp/reset
+      status: 200

@@ -1,0 +1,20 @@
+kind: task
+version: 1
+name: openOrders
+description: Leave checkout confirmation and open the customer's durable order history.
+preconditions:
+  - screen: Order confirmed
+postconditions:
+  - screen: Orders
+implementations:
+  web:
+    steps:
+      - tap: Orders
+      - wait_for: Orders
+coverage:
+  nodes: [order-confirmed, orders]
+  edges: []
+  sourcePaths: [app.js, server.js]
+  sourceSymbols:
+    - path: app.js
+      symbols: [showConfirmation, showOrders]

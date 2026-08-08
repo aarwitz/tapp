@@ -1,0 +1,15 @@
+kind: task
+version: 1
+name: likePost
+description: Like a specific observed post and verify the reaction count locally.
+inputs:
+  post: { required: true }
+preconditions:
+  - exists: "{{post}}"
+postconditions:
+  - exists: 1 like
+implementations:
+  web:
+    steps:
+      - tap: "Like {{post}}"
+
