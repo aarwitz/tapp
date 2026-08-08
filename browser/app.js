@@ -350,7 +350,14 @@ function renderProject() {
 async function refreshSession() {
   state.session = await api("/api/session");
   state.csrf = state.session.csrfToken;
-  $("#mode-pill").textContent = state.session.mode === "local" ? "Local engine · private" : "Managed runners";
+  const local = state.session.mode === "local";
+  $("#mode-pill").textContent = local ? "Local engine · private" : "Personal runner · connected";
+  $("#privacy-note-title").textContent = local ? "Your code stays on this machine in local mode." : "Your repository stays in your private Tapp workspace.";
+  $("#privacy-note-detail").textContent = local ? "Ordinary exploration, replay, and merge decisions are deterministic and require no API key." : "Builds and application runs execute on your connected outbound runner; Render remains the control plane.";
+  if (!local) {
+    $("#github-source-copy").textContent = "Repository upload works now. GitHub App connection will add selected-repository import without changing the product workflow.";
+    $("#github-source-note").textContent = "For this personal preview, use Drag and Drop or Browse Folder.";
+  }
 }
 
 async function refresh() {

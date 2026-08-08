@@ -98,6 +98,10 @@ test("repository CI exercises the public composite Action on every supported pla
   assert.match(ciWorkflow, /name: Exercise the published Android Action path[\s\S]*?uses: \.\/[\s\S]*?platform: android/);
   assert.match(ciWorkflow, /name: Exercise the published Android Action path[\s\S]*?android-project: AndroidCorpus[\s\S]*?android-task: ":logindemo:assembleDebug"/);
   assert.doesNotMatch(ciWorkflow, /name: Exercise the published Android Action path[\s\S]*?app-path: AndroidCorpus\/logindemo/);
+  assert.match(ciWorkflow, /ANDROID_AVD_HOME=\$avd_home/);
+  assert.match(ciWorkflow, /create avd[^\n]*--device pixel_6/);
+  assert.match(ciWorkflow, /emulator" -list-avds \| grep -Fxq tapp-ci/);
+  assert.doesNotMatch(ciWorkflow, /adb wait-for-device/);
   assert.match(ciWorkflow, /SocialDemo\/\.autotap\/contracts\/\*\.contract\.ts/);
   assert.match(ciWorkflow, /DemoApp\/\.autotap\/contracts\/\*\.contract\.ts/);
   assert.match(ciWorkflow, /AndroidCorpus\/logindemo\/\.autotap\/contracts\/\*\.contract\.ts/);

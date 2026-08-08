@@ -43,13 +43,13 @@
         <div class="source-icon github-icon">⌘</div>
         <p class="eyebrow">GITHUB</p>
         <h2>Connect to GitHub</h2>
-        <p>Select one of the repositories authorized by your local GitHub session. Tapp clones an isolated checkout and never pushes silently.</p>
+        <p id="github-source-copy">Select one of the repositories authorized by your local GitHub session. Tapp clones an isolated checkout and never pushes silently.</p>
         <button class="secondary" id="connect-github">Choose repository</button>
-        <small>Local preview uses <code>gh auth</code>. Hosted Tapp will use repository-scoped GitHub App authorization.</small>
+        <small id="github-source-note">Local preview uses <code>gh auth</code>. Hosted Tapp will use repository-scoped GitHub App authorization.</small>
       </article>
     </section>
 
-    <div class="privacy-note"><strong>Your code stays on this machine in local mode.</strong><span>Ordinary exploration, replay, and merge decisions are deterministic and require no API key.</span></div>
+    <div class="privacy-note"><strong id="privacy-note-title">Your code stays on this machine in local mode.</strong><span id="privacy-note-detail">Ordinary exploration, replay, and merge decisions are deterministic and require no API key.</span></div>
   </main>
 
   <div class="product-shell hidden" id="product-shell">

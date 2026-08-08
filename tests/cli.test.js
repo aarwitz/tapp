@@ -201,7 +201,7 @@ test("tapp baseline import and CI install complete the reviewable repository pat
   assert.match(String(collision?.stderr || ""), /never overwrites existing files/);
 });
 
-test("tapp init --explore rejects dry-run and safely refreshes existing artifacts through shared semantics", () => {
+test("tapp init --explore rejects dry-run before browser work", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-explore-preflight-"));
   fs.writeFileSync(path.join(project, "index.html"), "<main>fixture</main>");
   let dryRunFailure;
@@ -209,7 +209,11 @@ test("tapp init --explore rejects dry-run and safely refreshes existing artifact
     execFileSync("node", [tappBin, "init", project, "--explore", "--dry-run", "--platform", "web", "--url", "http://127.0.0.1:9"], { cwd: root, encoding: "utf8", stdio: "pipe" });
   } catch (error) { dryRunFailure = error; }
   assert.match(String(dryRunFailure?.stderr || ""), /cannot be combined with --dry-run/);
+});
 
+test("tapp init --explore safely refreshes existing artifacts through shared semantics", { skip: skipRealBrowser }, () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-explore-refresh-"));
+  fs.writeFileSync(path.join(project, "index.html"), "<main>fixture</main>");
   fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
   fs.writeFileSync(path.join(project, ".autotap", "application-model.json"), "{}\n");
   const refreshed = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--url", "http://127.0.0.1:9"], { cwd: root, encoding: "utf8", stdio: "pipe" });
