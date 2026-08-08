@@ -16,8 +16,9 @@ import { runWebFlow } from "../mcp-server/src/web-flow.js";
 
 let chromium;
 try { ({ chromium } = await import("playwright")); } catch {}
+const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 
-test("shared interactive session drives and captures a real web application", { skip:!chromium, timeout:30_000 }, async () => {
+test("shared interactive session drives and captures a real web application", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {
   const server = http.createServer((_request, response) => {
     response.writeHead(200, { "content-type":"text/html" });
     response.end(`<!doctype html><h1>Home</h1><label>Name <input id="name"></label><button id="next" onclick="document.querySelector('h1').textContent='Second screen'">Continue</button>`);

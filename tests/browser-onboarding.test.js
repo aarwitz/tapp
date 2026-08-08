@@ -8,6 +8,7 @@ import { productJourneyFlags } from "../browser/view-model.js";
 
 let chromium;
 try { ({ chromium } = await import("playwright")); } catch {}
+const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 
 function webRepository(prefix, name) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -36,7 +37,7 @@ test("committed contracts do not mark current-revision keyless validation comple
   assert.deepEqual(flags, [true, true, true, false, false, false]);
 });
 
-test("visible source chooser converges folder and GitHub imports into the same product journey", { skip:!chromium, timeout:60_000 }, async () => {
+test("visible source chooser converges folder and GitHub imports into the same product journey", { skip:skipRealBrowser || !chromium, timeout:60_000 }, async () => {
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-onboarding-workspaces-"));
   const folder = webRepository("tapp-visible-folder-", "folder-product");
   const githubProvider = {
@@ -48,9 +49,10 @@ test("visible source chooser converges folder and GitHub imports into the same p
     },
   };
   const product = await startBrowserProduct({ workspaceRoot, githubProvider, launch:false });
-  const browser = await chromium.launch({ headless:true });
-  const page = await browser.newPage();
+  let browser;
   try {
+    browser = await chromium.launch({ headless:true });
+    const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
     assert.match(await page.locator("#source-onboarding").innerText(), /Drop a project folder/);
     assert.match(await page.locator("#source-onboarding").innerText(), /Connect to GitHub/);
@@ -76,16 +78,17 @@ test("visible source chooser converges folder and GitHub imports into the same p
     assert.equal(options.some((value) => value.includes("local-folder-upload")), true);
     assert.equal(options.some((value) => value.includes("github")), true);
   } finally {
-    await browser.close();
+    await browser?.close();
     await product.close();
   }
 });
 
-test("multiple detected applications require an explicit polished target choice", { skip:!chromium, timeout:30_000 }, async () => {
+test("multiple detected applications require an explicit polished target choice", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {
   const product = await startBrowserProduct({ workspaceRoot:fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-multi-workspaces-")), launch:false });
-  const browser = await chromium.launch({ headless:true });
-  const page = await browser.newPage();
+  let browser;
   try {
+    browser = await chromium.launch({ headless:true });
+    const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
     await page.locator("#folder-input").setInputFiles(multiTargetRepository());
     await page.locator("#targets .target-card").first().waitFor({ state:"visible", timeout:20_000 });
@@ -105,7 +108,7 @@ test("multiple detected applications require an explicit polished target choice"
     assert.match(await page.locator("#explore").innerText(), /Build & explore/);
     assert.match(await page.locator("#map-metric").innerText(), /^0 states/, "selecting a target does not silently start exploration");
   } finally {
-    await browser.close();
+    await browser?.close();
     await product.close();
   }
 });

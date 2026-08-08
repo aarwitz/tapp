@@ -124,7 +124,6 @@ jobs:
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           sudo chmod 666 /dev/kvm
           nohup "$ANDROID_HOME/emulator/emulator" -avd tapp-ci -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect >"$RUNNER_TEMP/tapp-emulator.log" 2>&1 &
-          adb wait-for-device
           for attempt in $(seq 1 120); do
             [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && exit 0
             sleep 2
