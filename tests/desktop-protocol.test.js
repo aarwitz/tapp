@@ -2,14 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-test("desktop exploration accepts the harness's resolved transition evidence", () => {
+const hasDesktopSources = fs.existsSync("AutoTap/Services/ExplorationService.swift");
+
+test("desktop exploration accepts the harness's resolved transition evidence", { skip: !hasDesktopSources }, () => {
   const source = fs.readFileSync("AutoTap/Services/ExplorationService.swift", "utf8");
   const knownPrefixes = source.match(/let knownPrefixes = \[(.*?)\]/s)?.[1] || "";
   assert.match(knownPrefixes, /"OCQA_TRANSITION_RESOLVED:"/);
   assert.match(source, /if line\.hasPrefix\("OCQA_TRANSITION_RESOLVED:\{"\)/);
 });
 
-test("desktop Coverage consumes the shared application model, release plan, and repository UI Map", () => {
+test("desktop Coverage consumes the shared application model, release plan, and repository UI Map", { skip: !hasDesktopSources }, () => {
   const models = fs.readFileSync("AutoTap/Models/AppMap.swift", "utf8");
   const state = fs.readFileSync("AutoTap/ViewModels/AppState.swift", "utf8");
   const view = fs.readFileSync("AutoTap/Views/Coverage/CoverageView.swift", "utf8");
@@ -29,7 +31,7 @@ test("desktop Coverage consumes the shared application model, release plan, and 
   assert.match(view, /Navigation root/);
 });
 
-test("desktop release-plan review preserves unknown engine fields and never edits contracts", () => {
+test("desktop release-plan review preserves unknown engine fields and never edits contracts", { skip: !hasDesktopSources }, () => {
   const state = fs.readFileSync("AutoTap/ViewModels/AppState.swift", "utf8");
   assert.match(state, /JSONSerialization\.jsonObject/);
   assert.match(state, /items\[index\]\["decision"\] = decision/);
@@ -38,7 +40,7 @@ test("desktop release-plan review preserves unknown engine fields and never edit
   assert.doesNotMatch(state, /func reviewReleasePlanItem[\s\S]*?\.autotap\/contracts/);
 });
 
-test("desktop binary retains a repeatable real-schema artifact audit", () => {
+test("desktop binary retains a repeatable real-schema artifact audit", { skip: !hasDesktopSources }, () => {
   const source = fs.readFileSync("AutoTap/App/HeadlessVerify.swift", "utf8");
   assert.match(source, /--verify-artifacts/);
   assert.match(source, /Coverage structural-state labels do not match ui-map\.json/);

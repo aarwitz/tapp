@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createManagedOperationEnvelope, validateManagedOperationEnvelope } from "../mcp-server/src/managed-operation.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const hasManagedRunner = fs.existsSync(path.join(repositoryRoot, "cloud", "runner", "product-job.js"));
 
 test("managed operation envelope pins repository, revision, target intent, and engine contract", () => {
   const envelope = createManagedOperationEnvelope({
@@ -33,7 +34,7 @@ test("managed operation envelope rejects floating revisions and unknown semantic
   assert.throws(() => validateManagedOperationEnvelope({ ...valid, operation:{ name:"cloud-magic", platform:"ios", targetId:"" } }), /Unsupported managed product operation/);
 });
 
-test("managed child verifies the exact checkout and inspects through shared product operations", { timeout:30_000 }, () => {
+test("managed child verifies the exact checkout and inspects through shared product operations", { timeout:30_000, skip:!hasManagedRunner }, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-managed-inspect-"));
   fs.writeFileSync(path.join(root, "index.html"), "<!doctype html><h1>Managed product</h1>");
   for (const args of [["init", "-q"], ["config", "user.email", "test@tapp.local"], ["config", "user.name", "Tapp Test"], ["add", "index.html"], ["commit", "-qm", "fixture"]]) {

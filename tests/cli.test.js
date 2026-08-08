@@ -12,6 +12,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tappBin = path.join(root, "bin", "tapp.js");
 const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+const hasSocialDemo = fs.existsSync(path.join(root, "SocialDemo"));
+const hasCommerceDemo = fs.existsSync(path.join(root, "CommerceDemo"));
+const hasWebDemo = fs.existsSync(path.join(root, "WebDemo"));
 
 test("npm package is runtapp while the installed command remains tapp", () => {
   assert.equal(rootPackage.name, "runtapp");
@@ -92,7 +95,7 @@ test("tapp validates a committed Android Flow without an agent or device", () =>
   assert.match(out, /7 deterministic steps/);
 });
 
-test("tapp validates a committed multi-actor Scenario without a browser or model", () => {
+test("tapp validates a committed multi-actor Scenario without a browser or model", { skip: !hasSocialDemo }, () => {
   const out = execFileSync("node", [tappBin, "scenario", "validate", "SocialDemo/.autotap/scenarios/social-system.yml"], {
     cwd: root, encoding: "utf8",
   });
@@ -100,7 +103,7 @@ test("tapp validates a committed multi-actor Scenario without a browser or model
   assert.match(out, /2 actors, 39 journey steps/);
 });
 
-test("tapp validates and compiles a TypeScript release contract without an agent or target", () => {
+test("tapp validates and compiles a TypeScript release contract without an agent or target", { skip: !hasSocialDemo }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-contract-cli-"));
   const outPath = path.join(dir, "social.json");
   const contractPath = "SocialDemo/.autotap/contracts/social-system.contract.ts";
@@ -114,7 +117,7 @@ test("tapp validates and compiles a TypeScript release contract without an agent
   assert.equal(execution.steps.length, 39);
 });
 
-test("tapp produces a reviewable PR contract plan from explicit changed files", () => {
+test("tapp produces a reviewable PR contract plan from explicit changed files", { skip: !hasSocialDemo }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-cli-"));
   const outPath = path.join(dir, "plan.json");
   const output = execFileSync("node", [tappBin, "pr", "plan", "--project-dir", "SocialDemo", "--platform", "web", "--changed-files", "server.js,unowned.ts", "--json-out", outPath], { cwd: root, encoding: "utf8" });
@@ -150,7 +153,7 @@ test("tapp produces a reviewable PR contract plan from explicit changed files", 
   assert.doesNotMatch(nativeOutput, /undefined/);
 });
 
-test("tapp init produces a grounded dry-run model and explicit plan review preserves customer choice", () => {
+test("tapp init produces a grounded dry-run model and explicit plan review preserves customer choice", { skip: !hasWebDemo }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-cli-"));
   const outPath = path.join(dir, "init.json");
   const output = execFileSync("node", [tappBin, "init", "WebDemo", "--url", "http://127.0.0.1:4173", "--dry-run", "--json-out", outPath], { cwd: root, encoding: "utf8" });
@@ -291,7 +294,7 @@ test("tapp init --explore grounds a fresh repository map before proposing contra
   }
 });
 
-test("tapp init discovers, validates, and fault-checks a grounded cross-actor contract from a contract-free repository", { skip: skipRealBrowser }, async () => {
+test("tapp init discovers, validates, and fault-checks a grounded cross-actor contract from a contract-free repository", { skip: skipRealBrowser || !hasSocialDemo }, async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-cross-actor-discovery-cli-"));
   for (const file of ["package.json", "index.html", "app.js", "styles.css", "server.js"]) fs.copyFileSync(path.join(root, "SocialDemo", file), path.join(project, file));
   fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
@@ -356,7 +359,7 @@ test("tapp init discovers, validates, and fault-checks a grounded cross-actor co
   }
 });
 
-test("tapp init discovers, validates, and fault-checks a durable checkout contract from a contract-free repository", { skip: skipRealBrowser }, () => {
+test("tapp init discovers, validates, and fault-checks a durable checkout contract from a contract-free repository", { skip: skipRealBrowser || !hasCommerceDemo }, () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-durable-checkout-discovery-cli-"));
   for (const file of ["package.json", "index.html", "app.js", "styles.css", "server.js"]) fs.copyFileSync(path.join(root, "CommerceDemo", file), path.join(project, file));
   fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
@@ -578,16 +581,18 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     const prPlanTool = tools.result.tools.find((t) => t.name === "tapp_pr_plan");
     assert.deepEqual(prPlanTool.inputSchema.properties.operation.enum, ["plan", "adopt"]);
     assert.ok(prPlanTool.inputSchema.properties.prPlanPath, "PR evidence adoption is explicit in MCP");
-    send({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "tapp_init", arguments: { operation: "inspect", projectDir: "WebDemo", platform: "web", url: "http://127.0.0.1:4173" } } });
-    const initialized = await waitFor(3);
-    assert.equal(initialized.result.structuredContent.model.kind, "tapp-application-model");
-    assert.equal(initialized.result.structuredContent.model.uiMap.nodeCount, 8);
-    assert.equal(initialized.result.structuredContent.plan.items.some((item) => item.name === "signInWorks"), true);
-    send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "tapp_actor_config", arguments: { operation: "read", projectDir: "SocialDemo" } } });
-    const actors = await waitFor(4);
-    assert.equal(actors.result.structuredContent.actors.alice.credentials.email.env, "ALICE_EMAIL");
-    assert.equal(actors.result.structuredContent.actors.bob.session, "isolated");
-    assert.doesNotMatch(JSON.stringify(actors.result.structuredContent), /alice@example\.test|"demo"/);
+    if (hasWebDemo && hasSocialDemo) {
+      send({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "tapp_init", arguments: { operation: "inspect", projectDir: "WebDemo", platform: "web", url: "http://127.0.0.1:4173" } } });
+      const initialized = await waitFor(3);
+      assert.equal(initialized.result.structuredContent.model.kind, "tapp-application-model");
+      assert.equal(initialized.result.structuredContent.model.uiMap.nodeCount, 8);
+      assert.equal(initialized.result.structuredContent.plan.items.some((item) => item.name === "signInWorks"), true);
+      send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "tapp_actor_config", arguments: { operation: "read", projectDir: "SocialDemo" } } });
+      const actors = await waitFor(4);
+      assert.equal(actors.result.structuredContent.actors.alice.credentials.email.env, "ALICE_EMAIL");
+      assert.equal(actors.result.structuredContent.actors.bob.session, "isolated");
+      assert.doesNotMatch(JSON.stringify(actors.result.structuredContent), /alice@example\.test|"demo"/);
+    }
   } finally {
     proc.kill();
   }

@@ -6,7 +6,9 @@ const source = fs.readFileSync("Harness/OCQAHarnessUITests/ExplorerTests.swift",
 const cliSource = fs.readFileSync("bin/tapp.js", "utf8");
 const engineSource = fs.readFileSync("mcp-server/src/index.js", "utf8");
 const productOperationsSource = fs.readFileSync("mcp-server/src/product-operations.js", "utf8");
-const demoSettingsSource = fs.readFileSync("DemoApp/Sources/SettingsView.swift", "utf8");
+const demoSettingsPath = "DemoApp/Sources/SettingsView.swift";
+const hasDemoSettingsSource = fs.existsSync(demoSettingsPath);
+const demoSettingsSource = hasDemoSettingsSource ? fs.readFileSync(demoSettingsPath, "utf8") : "";
 const runFlowSource = fs.readFileSync("scripts/run-flow.sh", "utf8");
 
 test("iOS Flow normalization ignores compiler metadata instead of executing it", () => {
@@ -62,7 +64,7 @@ test("init carries successful Xcode build evidence into both CLI and MCP applica
   assert.match(engineSource, /initializeProductProject/);
 });
 
-test("the native benchmark fault is explicit and disabled in ordinary DemoApp runs", () => {
+test("the native benchmark fault is explicit and disabled in ordinary DemoApp runs", { skip: !hasDemoSettingsSource }, () => {
   assert.match(demoSettingsSource, /environment\["TAPP_SEEDED_FAULT"\] == "hide-update-profile"/);
   assert.match(demoSettingsSource, /if !hidesUpdateProfileForSeededBenchmark/);
 });
