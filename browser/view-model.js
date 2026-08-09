@@ -10,3 +10,7 @@ export function productJourneyFlags({ status = {}, hasTarget = false, hasEvidenc
     hasEvidence,
   ];
 }
+
+export function operationIsPending(status) {
+  return ["queued", "claimed", "running"].includes(String(status || ""));
+}

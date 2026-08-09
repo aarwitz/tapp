@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.15.0
+- **Tapp is Tapp everywhere:** the canonical npm distribution is now `@aarwitz/tapp`, while the
+  installed command remains `tapp` and MCP tools remain `tapp_*`. The scope distinguishes the npm
+  address without creating a second product name.
+- **Non-breaking package transition:** release contracts now author against
+  `@aarwitz/tapp/contracts`; existing `runtapp/contracts` and `tapp-mcp/contracts` imports continue
+  to compile. The old npm names remain deprecated compatibility paths.
+- **Distribution surfaces updated together:** CLI guidance, MCP and Claude manifests, package
+  badges, examples, landing page, agent playbook, and VS Code engine pin resolve the scoped package.
+
 ## 0.14.0
 - **Canonical npm package renamed to `runtapp`:** the product remains Tapp, the installed binary
   remains `tapp`, and MCP tools remain `tapp_*`. Existing `tapp-mcp` commands continue through a

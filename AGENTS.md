@@ -11,14 +11,14 @@ the app already on the simulator); it also accepts a repo dir, a `path/to/App.ap
 bundle id, or (qa only) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
-npx -y runtapp qa [target]     # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
-npx -y runtapp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
-npx -y runtapp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
-npx -y runtapp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
-npx -y runtapp apps            # what's installed on the simulator, with bundle ids
-npx -y runtapp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
-npx -y runtapp qa app.apk --platform android --app-id com.acme.app
-npx -y runtapp flow run .autotap/flows/smoke.yml  # committed, keyless E2E replay
+npx -y @aarwitz/tapp qa [target]     # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
+npx -y @aarwitz/tapp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
+npx -y @aarwitz/tapp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
+npx -y @aarwitz/tapp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
+npx -y @aarwitz/tapp apps            # what's installed on the simulator, with bundle ids
+npx -y @aarwitz/tapp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
+npx -y @aarwitz/tapp qa app.apk --platform android --app-id com.acme.app
+npx -y @aarwitz/tapp flow run .autotap/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
 **Seeing the screen, per client:** if you can read image files into your context (Claude

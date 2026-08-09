@@ -16,8 +16,8 @@ const hasSocialDemo = fs.existsSync(path.join(root, "SocialDemo"));
 const hasCommerceDemo = fs.existsSync(path.join(root, "CommerceDemo"));
 const hasWebDemo = fs.existsSync(path.join(root, "WebDemo"));
 
-test("npm package is runtapp while the installed command remains tapp", () => {
-  assert.equal(rootPackage.name, "runtapp");
+test("npm package is @aarwitz/tapp while the installed command remains tapp", () => {
+  assert.equal(rootPackage.name, "@aarwitz/tapp");
   assert.deepEqual(rootPackage.bin, { tapp: "bin/tapp.js" });
 });
 

@@ -1,11 +1,11 @@
 # tapp — ship with proof
 
 [![CI](https://github.com/aarwitz/tapp/actions/workflows/ci.yml/badge.svg)](https://github.com/aarwitz/tapp/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/runtapp?color=cb3837&label=npm)](https://www.npmjs.com/package/runtapp)
-[![npm downloads](https://img.shields.io/npm/dw/runtapp?label=downloads)](https://www.npmjs.com/package/runtapp)
+[![npm](https://img.shields.io/npm/v/%40aarwitz%2Ftapp?color=cb3837&label=npm)](https://www.npmjs.com/package/@aarwitz/tapp)
+[![npm downloads](https://img.shields.io/npm/dw/%40aarwitz%2Ftapp?label=downloads)](https://www.npmjs.com/package/@aarwitz/tapp)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInRhcHAtbWNwIiwibWNwIl19)
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22runtapp%22%2C%22mcp%22%5D%7D)
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHAiLCJtY3AiXX0=)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%22%2C%22mcp%22%5D%7D)
 
 **Tapp is the release-contract and evidence layer for teams shipping agent-authored applications.**
 It turns a repository and real product into an observed UI Map, a compact reviewed deterministic
@@ -43,7 +43,7 @@ emulator/device; web needs Playwright + Chromium.
 **Launch experience — browser Release Studio.** Open the source chooser from anywhere:
 
 ```bash
-npx -y runtapp app
+npx -y @aarwitz/tapp app
 ```
 
 Drag and drop a local repository folder or connect through your authenticated GitHub CLI and select
@@ -61,32 +61,33 @@ config file, no test code — you don't even need to know your bundle id:
 
 ```bash
 cd YourApp
-npx -y runtapp qa    # finds your Xcode project → builds → installs on the simulator → explores → verdict
+npx -y @aarwitz/tapp qa    # finds your Xcode project → builds → installs on the simulator → explores → verdict
 ```
 
-The npm package was renamed from `tapp-mcp` to `runtapp` in 0.14.0. Existing
-`npx tapp-mcp ...` configurations remain supported through the compatibility package.
+The product, executable, and package leaf are all Tapp: npm distributes it as
+`@aarwitz/tapp`, while the installed command remains `tapp`. Existing `npx runtapp ...`
+and `npx tapp-mcp ...` configurations remain supported as deprecated compatibility paths.
 
 To bootstrap maintained release infrastructure, preview the repository model and grounded plan
 before Tapp writes anything:
 
 ```bash
-npx -y runtapp init . --dry-run --json-out /tmp/tapp-init.json
+npx -y @aarwitz/tapp init . --dry-run --json-out /tmp/tapp-init.json
 # Build/start the detected web target, ground the first UI Map, then stop it.
-npx -y runtapp init . --explore --platform web
+npx -y @aarwitz/tapp init . --explore --platform web
 # Or build/install the detected Xcode target, ground the map, and persist the validated scheme.
-npx -y runtapp init . --explore --platform ios --target .
+npx -y @aarwitz/tapp init . --explore --platform ios --target .
 # Or connect to an already-running owned URL:
-npx -y runtapp init . --explore --platform web --url http://127.0.0.1:4173
+npx -y @aarwitz/tapp init . --explore --platform web --url http://127.0.0.1:4173
 # If the app has roles/accounts, bind names once; values stay in local/CI secrets.
-npx -y runtapp actor set alice . --role member --session isolated \
+npx -y @aarwitz/tapp actor set alice . --role member --session isolated \
   --credential email=ALICE_EMAIL --credential password=ALICE_PASSWORD
 # Review-only path: tapp init . → tapp plan show → tapp plan review --approve ...
 
 # After approved drafts replay and are promoted, establish the selected target's baseline
 # through the ordinary full gate, then generate the reviewable GitHub workflow.
-npx -y runtapp baseline create . --platform web
-npx -y runtapp ci install .
+npx -y @aarwitz/tapp baseline create . --platform web
+npx -y @aarwitz/tapp ci install .
 ```
 
 The baseline command writes only after autonomous QA and every selected deterministic suite pass
@@ -101,27 +102,27 @@ Every verb takes whatever you have: nothing (auto-detects the repo you're in, or
 already on the simulator), a repo directory, a `path/to/App.app`, or a bundle id:
 
 ```bash
-npx -y runtapp open [target]   # launch the app → screen summary + screenshot file
-npx -y runtapp tree [target]   # accessibility tree of the current screen
-npx -y runtapp shot            # screenshot the booted simulator
-npx -y runtapp apps            # what's installed on the simulator (names + bundle ids)
-npx -y runtapp build [dir]     # just build + install (scheme auto-detected)
+npx -y @aarwitz/tapp open [target]   # launch the app → screen summary + screenshot file
+npx -y @aarwitz/tapp tree [target]   # accessibility tree of the current screen
+npx -y @aarwitz/tapp shot            # screenshot the booted simulator
+npx -y @aarwitz/tapp apps            # what's installed on the simulator (names + bundle ids)
+npx -y @aarwitz/tapp build [dir]     # just build + install (scheme auto-detected)
 ```
 
-Web (beta): `npx -y runtapp qa http://localhost:3000` *(one-time setup:
+Web (beta): `npx -y @aarwitz/tapp qa http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*
 
 Android:
 
 ```bash
-npx -y runtapp qa path/to/app-debug.apk --platform android --app-id com.acme.app
-npx -y runtapp open com.acme.app --platform android
+npx -y @aarwitz/tapp qa path/to/app-debug.apk --platform android --app-id com.acme.app
+npx -y @aarwitz/tapp open com.acme.app --platform android
 ```
 
 Optional but recommended (prebuilds the test harness so the first run is fast):
 ```bash
-npx -y runtapp install    # ~2 min, one time
-npx -y runtapp doctor     # verify Xcode / simulators / toolchain
+npx -y @aarwitz/tapp install    # ~2 min, one time
+npx -y @aarwitz/tapp doctor     # verify Xcode / simulators / toolchain
 ```
 
 ### MCP hookup (optional)
@@ -132,14 +133,14 @@ context** (the model literally sees the screen) and the **interactive session lo
 
 **Claude Code:**
 ```bash
-claude mcp add tapp -- npx -y runtapp mcp
+claude mcp add tapp -- npx -y @aarwitz/tapp mcp
 ```
 
 **Cursor / VS Code (Copilot)** — add to `~/.cursor/mcp.json` (Cursor) or `.vscode/mcp.json` (VS Code):
 ```json
 {
   "servers": {
-    "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "runtapp", "mcp"] }
+    "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp", "mcp"] }
   }
 }
 ```
@@ -148,10 +149,10 @@ claude mcp add tapp -- npx -y runtapp mcp
 ```toml
 [mcp_servers.tapp]
 command = "npx"
-args = ["-y", "runtapp", "mcp"]
+args = ["-y", "@aarwitz/tapp", "mcp"]
 ```
 
-**Any other MCP client:** stdio command `npx -y runtapp mcp`.
+**Any other MCP client:** stdio command `npx -y @aarwitz/tapp mcp`.
 
 Then ask your agent:
 > "Run tapp qa on my app — is it ship-ready?"
@@ -282,7 +283,7 @@ accepts that `.app`, detects its bundle id, writes report artifacts, and exits n
 gate fails:
 
 ```bash
-npx -y runtapp ci --app path/to/MyApp.app \
+npx -y @aarwitz/tapp ci --app path/to/MyApp.app \
   --project-dir . --pr-base origin/main --pr-head HEAD \
   --target-key target_ios_myapp \
   --pr-plan-out tapp-pr-plan.json \
@@ -330,9 +331,9 @@ your agent proves its UI work instead of claiming it:
 ```markdown
 ## Verifying UI changes
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
-(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y runtapp open` from the
+(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp open` from the
 repo root (it finds and builds the Xcode project itself) and look at the screenshot it saves as
-proof. Before declaring a feature done, run `npx -y runtapp qa` (or `qa <url>` for web) and
+proof. Before declaring a feature done, run `npx -y @aarwitz/tapp qa` (or `qa <url>` for web) and
 report the ship/no-ship verdict. A change is not "done" until it has been seen working.
 (If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots —
 tapp_build builds + installs the app and returns the bundle id for tapp_run_qa.)

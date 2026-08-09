@@ -1264,7 +1264,7 @@ function draftContractSource(item, projectConfig = {}) {
       sourcePaths: item.generatedCoverage?.sourcePaths || [],
     },
   };
-  return `import { defineContract } from "runtapp/contracts";\n\nexport default defineContract(${JSON.stringify(contract, null, 2)});\n`;
+  return `import { defineContract } from "@aarwitz/tapp/contracts";\n\nexport default defineContract(${JSON.stringify(contract, null, 2)});\n`;
 }
 
 export async function generateApprovedContractProposals(plan, { projectDir } = {}) {

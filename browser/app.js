@@ -1,5 +1,5 @@
 import { customerProductContract } from "./product-contract.js";
-import { productJourneyFlags } from "./view-model.js";
+import { operationIsPending, productJourneyFlags } from "./view-model.js";
 
 const API_BASE = String(document.querySelector('meta[name="tapp-api-base"]')?.content || "").replace(/\/$/, "");
 const LOGIN_URL = String(document.querySelector('meta[name="tapp-login-url"]')?.content || "");
@@ -351,12 +351,16 @@ async function refreshSession() {
   state.session = await api("/api/session");
   state.csrf = state.session.csrfToken;
   const local = state.session.mode === "local";
-  $("#mode-pill").textContent = local ? "Local engine · private" : "Personal runner · connected";
+  $("#mode-pill").textContent = local ? "Local engine · private" : "Execution · local Mac";
   $("#privacy-note-title").textContent = local ? "Your code stays on this machine in local mode." : "Your repository stays in your private Tapp workspace.";
   $("#privacy-note-detail").textContent = local ? "Ordinary exploration, replay, and merge decisions are deterministic and require no API key." : "Builds and application runs execute on your connected outbound runner; Render remains the control plane.";
   if (!local) {
     $("#github-source-copy").textContent = "Repository upload works now. GitHub App connection will add selected-repository import without changing the product workflow.";
-    $("#github-source-note").textContent = "For this personal preview, use Drag and Drop or Browse Folder.";
+    $("#github-source-note").textContent = "Use This Mac now; GitHub can be added independently later.";
+    const result = await api("/api/repositories/local");
+    $("#local-repositories").innerHTML = result.repositories?.length
+      ? result.repositories.map(repo=>`<button class="primary" data-local-runner="${esc(repo.runnerId)}" data-local-repository="${esc(repo.id)}">Use ${esc(repo.name)} <small>${esc(repo.runnerName)}${repo.branch ? ` · ${esc(repo.branch)}`:""}</small></button>`).join("")
+      : '<small>Start the Tapp runner on this Mac to make local checkouts available.</small>';
   }
 }
 
@@ -382,8 +386,9 @@ async function runOperation(name, body = {}) {
       $("#operation-progress").textContent = progress?.text || "Working…";
       const ratio = progress?.current && progress?.total ? Math.min(92, Math.round(progress.current / progress.total * 100)) : Math.min(88, 8 + job.progress.length * 4);
       $("#operation-progress-bar").style.width = `${ratio}%`;
-      if (job.status === "running") continue;
+      if (operationIsPending(job.status)) continue;
       if (job.status === "failed") throw new Error(job.error?.message || "Operation failed");
+      if (job.status !== "completed") throw new Error(`Operation ended in an unknown '${job.status}' state`);
       $("#operation-progress-bar").style.width = "100%";
       if (name === "ci-preview") { $("#ci-preview").textContent = job.result.workflow; $("#ci-preview").classList.remove("hidden"); }
       if (name === "session-act" && job.result.status !== "ok") toast(job.result.detail || `The action ended with ${job.result.status}`, true);
@@ -666,3 +671,5 @@ try {
   // choice when detection is ambiguous.
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
 } catch (error) { toast(error.message, true); }
+  const localButton = event.target.closest("[data-local-repository]");
+  if(localButton) api("/api/repositories/local",{method:"POST",body:JSON.stringify({runnerId:localButton.dataset.localRunner,repositoryId:localButton.dataset.localRepository})}).then(async()=>{state.selectedTargetId="";await refreshSession();await refresh();}).catch(error=>toast(error.message,true));

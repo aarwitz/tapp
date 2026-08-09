@@ -67,7 +67,7 @@ function fixture() {
   write(path.join(root, "android/app/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.partner' } }\n");
   write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }], coverage: { nodes: ["sign-in"], edges: [] } });
   write(path.join(root, ".autotap/tasks/open-settings.json"), { kind: "task", version: 1, name: "openSettings", steps: [{ tap: "Settings" }] });
-  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "runtapp/contracts";
+  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"authenticationWorks",title:"Customers can sign in",businessValue:"Customers reach the product",criticality:"critical",platforms:["ios","android","web"],actors:{customer:{role:"member",credentials:{email:"private@example.test",password:"do-not-copy"}}},steps:[{actor:"customer",task:"signIn"}],coverage:{capabilities:["authentication"],sourcePaths:["src/auth"]}});`);
   write(path.join(root, ".autotap/ui-map.json"), {
     schemaVersion: 1,
@@ -227,7 +227,7 @@ test("a multi-target workspace uses the repository name instead of the first mod
   write(path.join(root, "alpha/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.alpha' } }\n");
   write(path.join(root, "beta/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.beta' } }\n");
   write(path.join(root, "alpha/.autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
-  write(path.join(root, "alpha/.autotap/contracts/auth.contract.ts"), `import { defineContract } from "runtapp/contracts"; export default defineContract({name:"alphaAuthWorks",title:"Alpha authentication",businessValue:"Alpha users enter",criticality:"high",platforms:["android"],actors:{customer:{}},steps:[{actor:"customer",task:"signIn"}]});`);
+  write(path.join(root, "alpha/.autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"alphaAuthWorks",title:"Alpha authentication",businessValue:"Alpha users enter",criticality:"high",platforms:["android"],actors:{customer:{}},steps:[{actor:"customer",task:"signIn"}]});`);
   const { model } = await buildInitArtifacts({ projectDir: root });
   assert.equal(model.application.name, "MobileSuite");
   assert.deepEqual(model.artifacts.contracts.map((contract) => contract.name), ["alphaAuthWorks"]);
@@ -339,7 +339,7 @@ test("application model merges explicit actors and contract placeholders without
   });
   write(path.join(root, ".autotap/tasks/open-feed.json"), { kind: "task", version: 1, name: "openFeed", steps: [{ tap: "Feed" }] });
   write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", inputs: { email: { required: true, secret: true }, password: { required: true, secret: true } }, steps: [{ type: { field: "Email", value: "{{email}}" } }, { type: { field: "Password", value: "{{password}}" } }, { tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/social.contract.ts"), `import { defineContract } from "runtapp/contracts";
+  write(path.join(root, ".autotap/contracts/social.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"socialWorks",title:"Social state propagates",businessValue:"Members interact",criticality:"critical",platforms:["web"],actors:{alice:{role:"member",session:"isolated",credentials:{email:"$ALICE_EMAIL",password:"$ALICE_PASSWORD"}},bob:{role:"member",session:"isolated",credentials:{email:"$BOB_EMAIL",password:"$BOB_PASSWORD"}}},steps:[{actor:"alice",task:"openFeed"},{actor:"bob",task:"openFeed"}]});`);
   const built = await buildInitArtifacts({ projectDir: root });
   const { model } = built;
@@ -366,7 +366,7 @@ test("application model blocks missing and conflicting actor credential bindings
   write(path.join(root, "index.html"), "<main>app</main>");
   write(path.join(root, ".autotap/project.json"), { kind: "tapp-project-config", schemaVersion: 1, actors: { alice: { credentials: { email: { env: "ALICE_EMAIL" } } } } });
   write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "runtapp/contracts"; export default defineContract({name:"authWorks",title:"Auth works",businessValue:"Members enter",criticality:"critical",platforms:["web"],actors:{alice:{credentials:{email:"$OTHER_EMAIL",password:"literal-forbidden"}}},steps:[{actor:"alice",task:"signIn"}]});`);
+  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"authWorks",title:"Auth works",businessValue:"Members enter",criticality:"critical",platforms:["web"],actors:{alice:{credentials:{email:"$OTHER_EMAIL",password:"literal-forbidden"}}},steps:[{actor:"alice",task:"signIn"}]});`);
   const { model } = await buildInitArtifacts({ projectDir: root });
   assert.equal(model.requirements.find((item) => item.id === "actor:alice:credential-bindings")?.severity, "blocking");
   assert.equal(model.requirements.find((item) => item.id === "actor:alice:credential-conflicts")?.severity, "blocking");

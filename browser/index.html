@@ -30,10 +30,17 @@
     </section>
 
     <section class="source-choices" aria-label="Connect a repository">
+      <article class="source-card local-runner-card">
+        <div class="source-icon">⌘</div>
+        <p class="eyebrow">THIS MAC</p>
+        <h2>Run from your checkout</h2>
+        <p>Your source never uploads. Tapp builds with local Xcode and drives your local simulator, while the web app shows progress and evidence.</p>
+        <div id="local-repositories"><small>Looking for connected Mac repositories…</small></div>
+      </article>
       <article class="source-card drop-zone" id="repository-drop-zone" tabindex="0">
         <div class="source-icon">↥</div>
-        <p class="eyebrow">LOCAL REPOSITORY</p>
-        <h2>Drop a project folder</h2>
+        <p class="eyebrow">CLOUD COPY</p>
+        <h2>Upload a project folder</h2>
         <p>Upload an isolated working copy from this computer. Committed hidden config (like <code>.autotap/</code>) is included; dependency and build output folders are skipped.</p>
         <button class="primary" id="browse-folder">Browse folder</button>
         <input id="folder-input" type="file" webkitdirectory multiple hidden>

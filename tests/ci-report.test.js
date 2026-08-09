@@ -110,7 +110,7 @@ test("automatic maintenance replay refuses a stateful contract without controlle
   fs.mkdirSync(path.dirname(taskPath), { recursive: true });
   fs.mkdirSync(path.dirname(contractPath), { recursive: true });
   fs.writeFileSync(taskPath, "kind: task\nversion: 1\nname: openHome\nsteps:\n  - tap: Home\n");
-  fs.writeFileSync(contractPath, `import { defineContract } from "runtapp/contracts";
+  fs.writeFileSync(contractPath, `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"homeWorks",title:"Home works",businessValue:"navigation",criticality:"high",platforms:["web"],actors:{customer:{}},steps:[{actor:"customer",task:"openHome"}]});\n`);
   const hash = (file) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
   const before = fs.readFileSync(taskPath, "utf8");

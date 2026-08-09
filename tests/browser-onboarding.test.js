@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { startBrowserProduct } from "../mcp-server/src/browser-product.js";
-import { productJourneyFlags } from "../browser/view-model.js";
+import { operationIsPending, productJourneyFlags } from "../browser/view-model.js";
 
 let chromium;
 try { ({ chromium } = await import("playwright")); } catch {}
@@ -37,6 +37,14 @@ test("committed contracts do not mark current-revision keyless validation comple
   assert.deepEqual(flags, [true, true, true, false, false, false]);
 });
 
+test("hosted operations remain pending while queued or leased to a runner", () => {
+  assert.equal(operationIsPending("queued"), true);
+  assert.equal(operationIsPending("claimed"), true);
+  assert.equal(operationIsPending("running"), true);
+  assert.equal(operationIsPending("completed"), false);
+  assert.equal(operationIsPending("failed"), false);
+});
+
 test("visible source chooser converges folder and GitHub imports into the same product journey", { skip:skipRealBrowser || !chromium, timeout:60_000 }, async () => {
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-onboarding-workspaces-"));
   const folder = webRepository("tapp-visible-folder-", "folder-product");
@@ -54,7 +62,7 @@ test("visible source chooser converges folder and GitHub imports into the same p
     browser = await chromium.launch({ headless:true });
     const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
-    assert.match(await page.locator("#source-onboarding").innerText(), /Drop a project folder/);
+    assert.match(await page.locator("#source-onboarding").innerText(), /Upload a project folder/);
     assert.match(await page.locator("#source-onboarding").innerText(), /Connect to GitHub/);
 
     await page.locator("#folder-input").setInputFiles(folder);

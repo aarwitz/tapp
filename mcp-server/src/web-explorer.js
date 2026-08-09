@@ -11,7 +11,7 @@
 // same-origin requests, broken links, dead buttons, visible error surfaces, blank pages,
 // load timeouts). No LLM anywhere in the loop.
 //
-// Playwright is deliberately NOT a dependency of runtapp (it would bloat every npx
+// Playwright is deliberately NOT a required dependency of Tapp (it would bloat every npx
 // install with a browser download). It's resolved dynamically; exploreWeb() throws a
 // clear install hint when it's missing.
 
@@ -26,7 +26,7 @@ const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 
-// npx installs runtapp into its own cache, so a plain import("playwright") only resolves
+// npx installs Tapp into its own cache, so a plain import("playwright") only resolves
 // for repo-dev checkouts. Probe, in order: our own node_modules; the user's project
 // (process.cwd()); the global npm root. ESM ignores NODE_PATH, so cwd/global need explicit
 // resolution + import-by-absolute-path.
@@ -44,7 +44,7 @@ export async function loadPlaywright() {
     } catch {}
   }
   throw new Error(
-    "Web exploration needs Playwright (not bundled, to keep runtapp installs small). " +
+    "Web exploration needs Playwright (not bundled, to keep Tapp installs small). " +
       "One-time setup, either works: `npm i playwright` in your project, or `npm i -g playwright` — " +
       "then `npx playwright install chromium`."
   );

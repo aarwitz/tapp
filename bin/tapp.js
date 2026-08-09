@@ -1008,7 +1008,7 @@ switch (command) {
     }
 
     console.log(`\n  Home: ${process.env.AUTOTAP_HOME}`);
-    console.log(healthy ? "\nReady. Add to your agent:  claude mcp add tapp -- npx -y runtapp mcp" : "\nFix the ❌ items above, then re-run: tapp doctor");
+    console.log(healthy ? "\nReady. Add to your agent:  claude mcp add tapp -- npx -y @aarwitz/tapp mcp" : "\nFix the ❌ items above, then re-run: tapp doctor");
     process.exit(healthy ? 0 : 1);
   }
 
@@ -1367,9 +1367,9 @@ Setup:
   tapp mcp        Start the MCP server on stdio (adds inline screenshots + interactive sessions)
 
 MCP hookup (optional — for inline screenshots and the tap/type/inspect session loop):
-  Claude Code:   claude mcp add tapp -- npx -y runtapp mcp
+  Claude Code:   claude mcp add tapp -- npx -y @aarwitz/tapp mcp
   Cursor/VS Code (mcp.json):
-    { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "runtapp", "mcp"] } } }
+    { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp", "mcp"] } } }
 
 Then ask your agent things like:
   "Run tapp qa on com.mycompany.app — is it ship-ready?"

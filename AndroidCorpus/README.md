@@ -16,7 +16,7 @@ Each module contains committed `.autotap/flows/*.yml` files. Run one with:
 
 ```bash
 adb install -r demoapp/build/outputs/apk/debug/demoapp-debug.apk
-npx -y runtapp flow run demoapp/.autotap/flows/smoke.yml \
+npx -y @aarwitz/tapp flow run demoapp/.autotap/flows/smoke.yml \
   --platform android --app-id io.tapp.corpus.demo \
   --apk demoapp/build/outputs/apk/debug/demoapp-debug.apk
 ```

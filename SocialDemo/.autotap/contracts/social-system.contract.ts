@@ -1,4 +1,4 @@
-import { defineContract } from "runtapp/contracts";
+import { defineContract } from "@aarwitz/tapp/contracts";
 
 export default defineContract({
   name: "socialSystemWorks",

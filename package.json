@@ -1,6 +1,6 @@
 {
-  "name": "runtapp",
-  "version": "0.14.0",
+  "name": "@aarwitz/tapp",
+  "version": "0.15.0",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Release contracts, autonomous QA, and evidence-backed CI gates for iOS, Android, and web.",
   "license": "MIT",
@@ -48,6 +48,9 @@
   "homepage": "https://github.com/aarwitz/tapp#readme",
   "bugs": {
     "url": "https://github.com/aarwitz/tapp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "tapp",
