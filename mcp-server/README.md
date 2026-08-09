@@ -94,12 +94,12 @@ Remote AI is optional and explicit. Finding enrichment requires `TAPP_ENABLE_REM
 addition to a configured model backend; generation and `assert_ai` run only when deliberately
 invoked. Deterministic replay and the normal gate remain keyless.
 
-When `TAPP_MCP_TOKEN` (or deprecated `AUTOTAP_MCP_TOKEN`) is configured, protected MCP operations
+When `TAPP_MCP_TOKEN` is configured, protected MCP operations
 require the matching `authToken`. This is process-level protection for a local server, not hosted
 user authentication or multi-tenancy.
 
 ## Hosted status
 
 The MCP server is a local/runner interface. It is not the account or authorization boundary for
-`app.runtapp.com`, and an MCP token is not a customer login token. The hosted service is under
+the future hosted application, and an MCP token is not a customer login token. The hosted service is under
 development and must not accept private repositories through a legacy preview.

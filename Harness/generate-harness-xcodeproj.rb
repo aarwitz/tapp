@@ -182,7 +182,7 @@ pbxproj = <<~PBX
         CODE_SIGN_STYLE = Automatic;
         DEVELOPMENT_TEAM = "";
         INFOPLIST_FILE = OCQAHarness/Info.plist;
-        PRODUCT_BUNDLE_IDENTIFIER = ai.autotap.harness;
+        PRODUCT_BUNDLE_IDENTIFIER = io.github.aarwitz.tapp.harness;
         PRODUCT_NAME = "$(TARGET_NAME)";
         SWIFT_VERSION = 5.0;
         TARGETED_DEVICE_FAMILY = "1,2";
@@ -202,7 +202,7 @@ pbxproj = <<~PBX
         CODE_SIGN_STYLE = Automatic;
         DEVELOPMENT_TEAM = "";
         INFOPLIST_FILE = OCQAHarnessUITests/Info.plist;
-        PRODUCT_BUNDLE_IDENTIFIER = ai.autotap.harness.uitests;
+        PRODUCT_BUNDLE_IDENTIFIER = io.github.aarwitz.tapp.harness.uitests;
         PRODUCT_NAME = "$(TARGET_NAME)";
         SWIFT_VERSION = 5.0;
         TARGETED_DEVICE_FAMILY = "1,2";
@@ -249,6 +249,6 @@ SCHEME
 File.write("#{scheme_dir}/OCQAHarnessUITests.xcscheme", scheme)
 
 puts "✅ Generated OCQAHarness.xcodeproj"
-puts "   Host app: ai.autotap.harness"
+puts "   Host app: io.github.aarwitz.tapp.harness"
 puts "   Test target: OCQAHarnessUITests"
 puts "   Platform: iOS 16.0+"

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.autotap.demoapp</string>
+    <string>io.github.aarwitz.tapp.demoapp</string>
     <key>CFBundleName</key>
     <string>DemoApp</string>
     <key>CFBundleDisplayName</key>

@@ -63,7 +63,7 @@ function artifactPaths(root, outDir = ".autotap") {
 }
 
 function productRunRoot(root) {
-  const home = process.env.AUTOTAP_HOME || process.env.TAPP_HOME || path.join(os.homedir(), ".tapp");
+  const home = process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp");
   const identity = crypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
   return path.join(home, "product-runs", identity);
 }

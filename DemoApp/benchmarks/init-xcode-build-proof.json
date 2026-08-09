@@ -8,7 +8,7 @@
     "container": "DemoApp.xcodeproj",
     "scheme": "DemoApp",
     "configuration": "Debug",
-    "bundleId": "com.autotap.demoapp",
+    "bundleId": "io.github.aarwitz.tapp.demoapp",
     "resolution": "xcode-build-installed"
   },
   "exploration": {

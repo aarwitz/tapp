@@ -254,7 +254,7 @@ print(named[0] if named else (iphones[0] if iphones else ''))
   if [[ -z "$UDID" ]]; then
     RUNTIME="$(xcrun simctl list runtimes -j | python3 -c 'import sys,json; rts=[r for r in json.load(sys.stdin)["runtimes"] if r.get("isAvailable") and r["platform"]=="iOS"]; print(rts[-1]["identifier"] if rts else "")')"
     [[ -n "$RUNTIME" ]] || { echo "❌ No iOS simulator runtime available" >&2; exit 1; }
-    UDID="$(xcrun simctl create "AutoTap CI" "$DEVICE" "$RUNTIME")" || { echo "❌ Could not create simulator" >&2; exit 1; }
+    UDID="$(xcrun simctl create "Tapp CI" "$DEVICE" "$RUNTIME")" || { echo "❌ Could not create simulator" >&2; exit 1; }
   fi
   echo "Booting $UDID …"
   xcrun simctl boot "$UDID" || true
@@ -269,7 +269,7 @@ xcrun simctl install "$UDID" "$APP_PATH" || { echo "❌ simctl install failed �
 # ── Autonomous exploration (quick-capture builds the harness itself if needed).
 step "Explore ($ACTIONS actions, ${TIMEOUT}s watchdog)"
 set +e
-CAPTURE_ROOT="${AUTOTAP_HOME:-$ROOT}/captures"
+CAPTURE_ROOT="${TAPP_HOME:-${AUTOTAP_HOME:-$ROOT}}/captures"
 mkdir -p "$CAPTURE_ROOT"
 CAPTURE_DIR="$(mktemp -d "$CAPTURE_ROOT/ci.XXXXXX")"
 TAPP_CAPTURE_DIR="$CAPTURE_DIR" OCQA_PR_TARGET_JSON="$IOS_PR_TARGET_JSON" "$ROOT/scripts/quick-capture.sh" explore "$BUNDLE_ID" --actions "$ACTIONS" --timeout "$TIMEOUT"
@@ -282,7 +282,7 @@ echo "Markers: $MARKERS"
 FLOW_LOG_ARGS=()
 if [[ "${#FLOW_FILES[@]}" -gt 0 ]]; then
   step "Flows"
-  FLOW_LOG_DIR="$(mktemp -d /tmp/autotap-ci-flows.XXXXXX)"
+  FLOW_LOG_DIR="$(mktemp -d /tmp/tapp-ci-flows.XXXXXX)"
   for flow in "${FLOW_FILES[@]}"; do
     name="$(basename "$flow" .yml)"
     log="$FLOW_LOG_DIR/$name.log"

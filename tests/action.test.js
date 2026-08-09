@@ -4,7 +4,7 @@ import fs from "node:fs";
 
 const action = fs.readFileSync(new URL("../action.yml", import.meta.url), "utf8");
 const ciWorkflow = fs.readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
-const exampleWorkflow = fs.readFileSync(new URL("../.github/workflows/autotap-gate-example.yml", import.meta.url), "utf8");
+const exampleWorkflow = fs.readFileSync(new URL("../.github/workflows/tapp-gate-example.yml", import.meta.url), "utf8");
 
 function shellBodies(yaml) {
   const lines = yaml.split("\n");
@@ -54,7 +54,10 @@ test("Action owns the automatic baseline lifecycle", () => {
 });
 
 test("Action isolates writable runtime data and exposes CI controls", () => {
-  assert.match(action, /AUTOTAP_HOME=\$RUNNER_TEMP\/tapp-home/);
+  assert.match(action, /TAPP_HOME=\$RUNNER_TEMP\/tapp-home/);
+  assert.doesNotMatch(action, /AUTOTAP_HOME=/);
+  assert.doesNotMatch(action, /autotap-(?:app-build|report)/);
+  assert.match(action, /tapp-report\.json/);
   assert.match(action, /TAPP_INPUT_TIMEOUT: \$\{\{ inputs\.timeout \}\}/);
   assert.match(action, /--timeout "\$TAPP_INPUT_TIMEOUT"/);
   assert.match(action, /bundle-id:[\s\S]*?required: false/);
@@ -67,7 +70,8 @@ test("Action isolates writable runtime data and exposes CI controls", () => {
   assert.match(action, /name: tapp-baseline-\$\{\{ inputs\.platform \}\}-\$\{\{ steps\.target\.outputs\.key \}\}/);
   assert.match(action, /--target-key "\$TAPP_INPUT_TARGET_KEY"/);
   assert.match(action, /name: tapp-evidence-\$\{\{ inputs\.platform \}\}-\$\{\{ steps\.target\.outputs\.key \}\}/);
-  assert.match(action, /autotap-release-check:\$\{process\.env\.TAPP_TARGET_KEY\}/);
+  assert.match(action, /tapp-release-check:\$\{process\.env\.TAPP_TARGET_KEY\}/);
+  assert.match(action, /legacyMarker/);
   assert.match(action, /scenarios:[\s\S]*?TAPP_INPUT_SCENARIOS: \$\{\{ inputs\.scenarios \}\}/);
   assert.match(action, /--scenarios "\$TAPP_INPUT_SCENARIOS"/);
   assert.match(action, /pr-selection:[\s\S]*?default: "true"/);

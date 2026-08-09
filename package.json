@@ -1,6 +1,6 @@
 {
   "name": "@aarwitz/tapp",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Release contracts, autonomous QA, and evidence-backed CI gates for iOS, Android, and web.",
   "license": "MIT",
@@ -24,7 +24,19 @@
     "docs/application-model.md",
     "docs/scenarios.md",
     "mcp-server/src/",
-    "scripts/",
+    "scripts/ci-gate.sh",
+    "scripts/compile-contract.js",
+    "scripts/compile-flow.js",
+    "scripts/flow-platform.js",
+    "scripts/flow_ai_judge.py",
+    "scripts/flow_lib.py",
+    "scripts/platform-gate.js",
+    "scripts/pr-plan.js",
+    "scripts/quick-capture.sh",
+    "scripts/run-android-flow.js",
+    "scripts/run-flow.sh",
+    "scripts/run-web-flow.js",
+    "scripts/run-web-scenario.js",
     "Harness/OCQAHarness/",
     "Harness/OCQAHarnessUITests/",
     "Harness/OCQAHarness.xcodeproj/",
@@ -75,7 +87,7 @@
     "mobile"
   ],
   "scripts": {
-    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/action.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js",
+    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/action.test.js tests/package-surface.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js",
     "test:browser-journey": "node --test tests/browser-journey.test.js",
     "test:browser-native": "TAPP_RUN_NATIVE_BROWSER=1 node --test tests/browser-native-journey.test.js"
   }

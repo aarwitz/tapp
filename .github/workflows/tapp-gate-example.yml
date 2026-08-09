@@ -1,4 +1,4 @@
-# Example: AutoTap release gate in CI, self-tested against DemoApp.
+# Example: Tapp release gate in CI, self-tested against DemoApp.
 #
 # MANUAL TRIGGER ONLY (workflow_dispatch) — macOS runners bill at 10× on private repos, so this
 # does not run on every push. To gate real PRs, copy this into the app repo and swap the trigger:
@@ -11,7 +11,7 @@
 # Actions cache and a 90-day artifact fallback.
 # PRs then fail only on NEW high/critical findings or broken Flows — existing debt doesn't
 # block, regressions do. A committed `.autotap/baseline.json` takes precedence when desired.
-name: AutoTap Gate (example)
+name: Tapp Gate (example)
 
 on:
   workflow_dispatch:
@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  autotap:
+  tapp:
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -35,7 +35,7 @@ jobs:
       - name: Generate DemoApp project
         run: ruby generate-demoapp-xcodeproj.rb
 
-      - name: AutoTap release gate
+      - name: Tapp release gate
         uses: ./ # in an app repo: aarwitz/tapp@main
         with:
           target-key: target_demoapp_ios

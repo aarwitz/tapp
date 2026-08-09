@@ -147,7 +147,7 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "AUTOTAP_HOME=$RUNNER_TEMP/tapp-home" >> "$GITHUB_ENV"
+        echo "TAPP_HOME=$RUNNER_TEMP/tapp-home" >> "$GITHUB_ENV"
 
     - name: Validate target baseline key
       id: target
@@ -277,11 +277,11 @@ runs:
         xcodebuild "$FLAG" "$TAPP_INPUT_PROJECT" -scheme "$TAPP_INPUT_SCHEME" \
           -configuration "$TAPP_INPUT_CONFIGURATION" \
           -destination 'generic/platform=iOS Simulator' \
-          -derivedDataPath "$RUNNER_TEMP/autotap-app-build" \
+          -derivedDataPath "$RUNNER_TEMP/tapp-app-build" \
           CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO build | tail -5
-        APP="$(find "$RUNNER_TEMP/autotap-app-build/Build/Products" -maxdepth 2 -name '*.app' -path '*iphonesimulator*' | head -1)"
+        APP="$(find "$RUNNER_TEMP/tapp-app-build/Build/Products" -maxdepth 2 -name '*.app' -path '*iphonesimulator*' | head -1)"
         [[ -n "$APP" ]] || { echo "::error::Build produced no simulator .app"; exit 1; }
-        echo "AUTOTAP_APP_PATH=$APP" >> "$GITHUB_ENV"
+        echo "TAPP_APP_PATH=$APP" >> "$GITHUB_ENV"
 
     - name: Build Android APK
       if: inputs.platform == 'android' && inputs.app-path == ''
@@ -318,14 +318,14 @@ runs:
         [[ "${#APKS[@]}" -gt 0 ]] || { echo "::error::Android task produced no application APK under $APK_ROOT"; exit 1; }
         [[ "${#APKS[@]}" -eq 1 ]] || { printf '::error::Android task produced multiple APKs; pass the intended artifact with app-path\n%s\n' "${APKS[@]}"; exit 2; }
         APK="${APKS[0]}"
-        echo "AUTOTAP_APP_PATH=$APK" >> "$GITHUB_ENV"
+        echo "TAPP_APP_PATH=$APK" >> "$GITHUB_ENV"
 
     - name: Use prebuilt app
       if: inputs.platform != 'web' && inputs.app-path != ''
       shell: bash
       env:
         TAPP_INPUT_APP_PATH: ${{ inputs.app-path }}
-      run: echo "AUTOTAP_APP_PATH=$TAPP_INPUT_APP_PATH" >> "$GITHUB_ENV"
+      run: echo "TAPP_APP_PATH=$TAPP_INPUT_APP_PATH" >> "$GITHUB_ENV"
 
     - name: Run Tapp gate
       id: gate
@@ -359,8 +359,8 @@ runs:
         # PyYAML for flow_lib.py; some runner pythons are PEP-668 externally-managed.
         python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml 2>/dev/null \
           || pip3 install --quiet --break-system-packages pyyaml || true
-        REPORT="$RUNNER_TEMP/autotap-report.json"
-        MD="$RUNNER_TEMP/autotap-report.md"
+        REPORT="$RUNNER_TEMP/tapp-report.json"
+        MD="$RUNNER_TEMP/tapp-report.md"
         [[ "$TAPP_INPUT_PLATFORM" == "ios" || "$TAPP_INPUT_PLATFORM" == "android" || "$TAPP_INPUT_PLATFORM" == "web" ]] \
           || { echo "::error::platform must be ios, android, or web"; exit 2; }
         ARGS=(--platform "$TAPP_INPUT_PLATFORM"
@@ -370,10 +370,10 @@ runs:
               --project-dir "$GITHUB_WORKSPACE"
               --json-out "$REPORT" --md-out "$MD")
         if [[ "$TAPP_INPUT_PLATFORM" == "ios" ]]; then
-          ARGS+=(--app "$AUTOTAP_APP_PATH" --bundle-id "$TAPP_INPUT_BUNDLE_ID" --device "$TAPP_INPUT_DEVICE")
+          ARGS+=(--app "$TAPP_APP_PATH" --bundle-id "$TAPP_INPUT_BUNDLE_ID" --device "$TAPP_INPUT_DEVICE")
         elif [[ "$TAPP_INPUT_PLATFORM" == "android" ]]; then
           [[ -n "$TAPP_INPUT_ANDROID_APP_ID" ]] || { echo "::error::android-app-id is required"; exit 2; }
-          ARGS+=(--apk "$AUTOTAP_APP_PATH" --app-id "$TAPP_INPUT_ANDROID_APP_ID")
+          ARGS+=(--apk "$TAPP_APP_PATH" --app-id "$TAPP_INPUT_ANDROID_APP_ID")
           [[ -n "$TAPP_INPUT_ANDROID_SERIAL" ]] && ARGS+=(--serial "$TAPP_INPUT_ANDROID_SERIAL")
         else
           [[ -n "$TAPP_INPUT_URL" ]] && ARGS+=(--url "$TAPP_INPUT_URL")
@@ -447,12 +447,13 @@ runs:
           const mdPath = ${{ toJSON(steps.gate.outputs.md) }};
           let body = '## Tapp release check\n_No report was produced — the exploration did not run._';
           try { if (mdPath && fs.existsSync(mdPath)) body = fs.readFileSync(mdPath, 'utf8'); } catch (e) {}
-          const marker = `<!-- autotap-release-check:${process.env.TAPP_TARGET_KEY} -->`;
+          const marker = `<!-- tapp-release-check:${process.env.TAPP_TARGET_KEY} -->`;
+          const legacyMarker = `<!-- autotap-release-check:${process.env.TAPP_TARGET_KEY} -->`;
           body = `${marker}\n${body}`;
           const { owner, repo } = context.repo;
           const issue_number = context.issue.number;
           const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
-          const existing = comments.find(c => c.body && c.body.includes(marker));
+          const existing = comments.find(c => c.body && (c.body.includes(marker) || c.body.includes(legacyMarker)));
           if (existing) {
             await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
           } else {
@@ -462,7 +463,7 @@ runs:
     - name: Resolve evidence path
       if: always()
       shell: bash
-      run: echo "AUTOTAP_CAPTURES_DIR=$RUNNER_TEMP/tapp-home/captures" >> "$GITHUB_ENV"
+      run: echo "TAPP_CAPTURES_DIR=$RUNNER_TEMP/tapp-home/captures" >> "$GITHUB_ENV"
 
     - name: Upload evidence
       if: always()
@@ -470,9 +471,9 @@ runs:
       with:
         name: tapp-evidence-${{ inputs.platform }}-${{ steps.target.outputs.key }}
         path: |
-          ${{ env.AUTOTAP_CAPTURES_DIR }}/
-          ${{ runner.temp }}/autotap-report.json
-          ${{ runner.temp }}/autotap-report.md
+          ${{ env.TAPP_CAPTURES_DIR }}/
+          ${{ runner.temp }}/tapp-report.json
+          ${{ runner.temp }}/tapp-report.md
           ${{ runner.temp }}/tapp-pr-changed-files.json
           ${{ runner.temp }}/tapp-pr-plan.json
         if-no-files-found: ignore

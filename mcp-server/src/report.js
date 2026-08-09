@@ -1,5 +1,5 @@
 // Pure report/gate logic shared by the MCP server (index.js) and the CI gate CLI
-// (ci-report.js). Turns a capture's OCQA markers into the same ship/no-ship report the AutoTap
+// (ci-report.js). Turns a capture's OCQA markers into the same ship/no-ship report the Tapp
 // app produces, and diffs two runs' findings into the CI regression gate. No shell, no server —
 // keep it dependency-free so the CI path stays importable and testable.
 import fs from "fs";
@@ -78,7 +78,7 @@ export function parseOcqaMarkers(markersFilePath) {
   };
 }
 
-// Map harness OCQA_ISSUE `type` -> AutoTap FindingCategory. Crashes are always critical.
+// Map harness OCQA_ISSUE `type` -> Tapp FindingCategory. Crashes are always critical.
 export const ISSUE_CATEGORY = {
   crash: "crash",
   app_hang: "app_hang",
@@ -100,7 +100,7 @@ export function severityRank(s) {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 4;
 }
 
-// Turn a capture's OCQA markers into the same ship/no-ship report the AutoTap app produces:
+// Turn a capture's OCQA markers into the same ship/no-ship report Tapp produces:
 // deduped findings + a trustworthy verdict with a coverage floor (mirrors OrchestratorService).
 export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const base = parseOcqaMarkers(markersFilePath);

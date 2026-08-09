@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A horizontally-paged carousel (swipe between pages). Exists so the AutoTap harness's
+/// A horizontally-paged carousel (swipe between pages). Exists so the Tapp harness's
 /// carousel/lateral-swipe exploration path gets exercised against a known target — a screen
 /// with almost nothing to tap, where progress only happens by swiping sideways.
 struct WhatsNewView: View {
@@ -13,7 +13,7 @@ struct WhatsNewView: View {
 
     private let pages: [Page] = [
         Page(title: "Faster Runs", detail: "Exploration moves through the app more quickly.", symbol: "bolt.fill"),
-        Page(title: "WebView Support", detail: "AutoTap now reads content inside web views.", symbol: "globe"),
+        Page(title: "WebView Support", detail: "Tapp now reads content inside web views.", symbol: "globe"),
         Page(title: "Clearer Narration", detail: "Every screen and tap is described in plain language.", symbol: "text.bubble.fill"),
         Page(title: "You're All Set", detail: "Swipe through to see what changed this release.", symbol: "checkmark.seal.fill"),
     ]

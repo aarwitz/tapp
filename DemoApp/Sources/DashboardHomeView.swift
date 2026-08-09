@@ -59,7 +59,7 @@ struct DashboardHomeView: View {
                             }
 
                             // Intentionally dead button: does nothing when tapped. Always visible so
-                            // AutoTap reliably reaches it; should surface as an unresponsive-control
+                            // Tapp reliably reaches it; should surface as an unresponsive-control
                             // finding on the Dashboard screen.
                             Button("Sync Now") {
                                 // no-op on purpose

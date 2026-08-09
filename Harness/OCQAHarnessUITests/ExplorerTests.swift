@@ -670,7 +670,7 @@ class ExplorerTests: XCTestCase {
 
     /// Replays an explicit, config-driven login flow (OCQA_LOGIN_STEPS) before exploration — for the
     /// custom login UIs the heuristic preamble can't parse, which are the #1 reason a real app stays
-    /// invisible to AutoTap. Steps are a JSON array of {action: type|tap|wait, target: <id-or-label>,
+    /// invisible to Tapp. Steps are a JSON array of {action: type|tap|wait, target: <id-or-label>,
     /// value?: <text; "$TEST_EMAIL"/"$TEST_PASSWORD" substituted from stored creds>, timeoutMs?}.
     /// Returns true if any step ran (so the caller skips the heuristic preamble). Tolerant: a failed
     /// step is logged but doesn't abort — exploration still proceeds, and the coverage eval reveals
@@ -1320,7 +1320,7 @@ class ExplorerTests: XCTestCase {
                     // so it surfaces here at the next tree read rather than at the early crash check.
                     // Report it against the action that led here instead of breaking silently. (Real:
                     // Wikipedia's WMFCaptchaViewController.refreshImage assertionFailure crashes the
-                    // app during login — a genuine production crash AutoTap must surface.)
+                    // app during login — a genuine production crash Tapp must surface.)
                     if app.state != .runningForeground {
                         let where_ = pendingTransitionFrom?.title ?? "the previous screen"
                         let crashKey = "crash-async:\(where_)"

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.15.1
+- **Clean public Tapp surface:** current package metadata, CLI help, MCP manifests, shipped docs,
+  Action labels, and examples use Tapp without exposing superseded package or internal desktop
+  branding.
+- **Tapp-first runtime configuration:** `TAPP_*` names drive package and Action behavior. Legacy
+  aliases remain read-only compatibility inputs rather than the documented interface.
+- **Smaller npm artifact:** only runtime-required scripts ship in the package; desktop development,
+  evaluation, mutation, and corpus utilities remain in the private source repository.
+- **Compatibility preserved:** existing `.autotap` repositories and legacy release-contract import
+  specifiers remain readable. Their eventual migration is separate from this public-surface patch.
+
 ## 0.15.0
 - **Tapp is Tapp everywhere:** the canonical npm distribution is now `@aarwitz/tapp`, while the
   installed command remains `tapp` and MCP tools remain `tapp_*`. The scope distinguishes the npm

@@ -25,7 +25,7 @@ struct ErrorStateView: View {
     }
 }
 
-/// Perpetual loading state that never resolves — exercises AutoTap's stuck-loading/hang detection.
+/// Perpetual loading state that never resolves — exercises Tapp's stuck-loading/hang detection.
 /// (Contrast with the Dashboard, whose spinner resolves after ~1.2s and must NOT be flagged.)
 struct PerpetualLoadingView: View {
     var body: some View {
@@ -103,7 +103,7 @@ struct SavedReportsView: View {
     }
 }
 
-/// A long scrollable screen with an error surface well BELOW the fold — exercises AutoTap's
+/// A long scrollable screen with an error surface well BELOW the fold — exercises Tapp's
 /// scroll-to-discover for ISSUE detection: the error is only readable (and thus only detectable)
 /// after the explorer scrolls down to reveal it.
 struct ChangelogView: View {

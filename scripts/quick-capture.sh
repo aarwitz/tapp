@@ -12,27 +12,28 @@ set -euo pipefail
 #          [--timeout <secs>]                         # Hard timeout for explore command
 #   quick-capture.sh tree <bundleId>                  # Dump accessibility tree
 #
-# All output goes to ~/repos/AutoTap/captures/<timestamp>/
+# All output goes to the configured Tapp home or the repository capture directory.
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # TAPP_CAPTURE_DIR selects one exact run directory (used by CI so a failed run can never
-# accidentally reuse stale markers). AUTOTAP_HOME redirects all writable output otherwise —
-# set by the `autotap` CLI when running as an installed npm package, where the package dir
+# accidentally reuse stale markers). TAPP_HOME redirects all writable output otherwise —
+# set by the `tapp` CLI when running as an installed npm package, where the package dir
 # must stay read-only. Unset (repo dev flow), everything lands in the repo as before.
+TAPP_RUNTIME_HOME="${TAPP_HOME:-${AUTOTAP_HOME:-}}"
 if [[ -n "${TAPP_CAPTURE_DIR:-}" ]]; then
   CAPTURE_DIR="$TAPP_CAPTURE_DIR"
-elif [[ -n "${AUTOTAP_HOME:-}" ]]; then
-  CAPTURE_DIR="$AUTOTAP_HOME/captures/$(date +%Y%m%d-%H%M%S)"
+elif [[ -n "$TAPP_RUNTIME_HOME" ]]; then
+  CAPTURE_DIR="$TAPP_RUNTIME_HOME/captures/$(date +%Y%m%d-%H%M%S)"
 else
   CAPTURE_DIR="$PROJECT_ROOT/captures/$(date +%Y%m%d-%H%M%S)"
 fi
-if [[ -n "${AUTOTAP_HOME:-}" ]]; then
-  HARNESS_DERIVED="$AUTOTAP_HOME/harness-derived"
+if [[ -n "$TAPP_RUNTIME_HOME" ]]; then
+  HARNESS_DERIVED="$TAPP_RUNTIME_HOME/harness-derived"
 else
-  HARNESS_DERIVED="/tmp/autotap-harness-derived"
+  HARNESS_DERIVED="/tmp/tapp-harness-derived"
 fi
 HARNESS_PROJECT="$PROJECT_ROOT/Harness/OCQAHarness.xcodeproj"
-DEFAULT_BUNDLE="com.autotap.demoapp"
+DEFAULT_BUNDLE="io.github.aarwitz.tapp.demoapp"
 
 get_booted_sim() {
   xcrun simctl list devices booted -j 2>/dev/null \
@@ -168,13 +169,13 @@ run_harness_test() {
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line
 }
 CONF
 
   local xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
   if [[ -z "$xctestrun" ]]; then
-    echo "ERROR: No xctestrun found. Run: ./scripts/deploy-and-build.sh --harness" >&2
+    echo "ERROR: No xctestrun found. Run: tapp install" >&2
     return 1
   fi
 
@@ -382,12 +383,12 @@ case "$MODE" in
   "OCQA_SESSION_RESULT_PATH": "$SESS_RES",
   "OCQA_SESSION_TIMEOUT": "$SESS_TIMEOUT",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Autotap123!}"$sess_args_line$sess_env_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$sess_args_line$sess_env_line
 }
 CONF
     xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
     if [[ -z "$xctestrun" ]]; then
-      echo "ERROR: No xctestrun. Run: ./scripts/deploy-and-build.sh --harness" >&2
+      echo "ERROR: No xctestrun. Run: tapp install" >&2
       exit 1
     fi
     export TEST_RUNNER_OCQA_CONFIG_PATH=/tmp/ocqa-run-config.json
@@ -399,7 +400,7 @@ CONF
     ;;
 
   build-harness)
-    # Just (re)build the harness cache for the booted sim — used by `autotap install`
+    # Just (re)build the harness cache for the booted sim — used by `tapp install`
     # for a fast first tool call later. No capture output.
     ensure_harness_built "$SIM_NAME"
     rmdir "$CAPTURE_DIR" 2>/dev/null || true

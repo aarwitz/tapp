@@ -16,7 +16,6 @@
 //
 // All writable output (captures, harness build cache) goes to ~/.tapp (override
 // with TAPP_HOME). The package directory itself is never written to.
-// (Internally exported as AUTOTAP_HOME — the env name the bundled scripts read.)
 
 import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
@@ -29,10 +28,11 @@ const packageRoot = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 
 // Redirect all writable output away from the (possibly read-only) package dir.
-if (!process.env.AUTOTAP_HOME) {
-  process.env.AUTOTAP_HOME = process.env.TAPP_HOME || path.join(os.homedir(), ".tapp");
-}
-fs.mkdirSync(process.env.AUTOTAP_HOME, { recursive: true });
+// The old environment alias remains populated only for older helper integrations.
+const tappHome = (process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp")).trim();
+process.env.TAPP_HOME = tappHome;
+if (!process.env.AUTOTAP_HOME) process.env.AUTOTAP_HOME = tappHome;
+fs.mkdirSync(tappHome, { recursive: true });
 
 const [, , command = "help", ...rest] = process.argv;
 
@@ -88,7 +88,7 @@ function bootBestSimulator(preferredName = "iPhone 16 Pro") {
 }
 
 function harnessXctestrun() {
-  const dir = path.join(process.env.AUTOTAP_HOME, "harness-derived", "Build", "Products");
+  const dir = path.join(tappHome, "harness-derived", "Build", "Products");
   try {
     const found = fs.readdirSync(dir).find((f) => f.endsWith(".xctestrun"));
     return found ? path.join(dir, found) : null;
@@ -171,7 +171,7 @@ function androidTarget(flags, target = "") {
 }
 
 function saveShot(img, outFlag, name) {
-  const out = outFlag || path.join(process.env.AUTOTAP_HOME, "shots", name);
+  const out = outFlag || path.join(tappHome, "shots", name);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, Buffer.from(img.data, "base64"));
   return out;
@@ -472,7 +472,7 @@ switch (command) {
       await driver.forceStop();
       console.log(`🚀 Launched \`${target.appId}\` (Android)\n`);
       console.log(engine.formatScreen(snap.screenTitle, snap.elements));
-      const out = typeof flags.out === "string" ? flags.out : path.join(process.env.AUTOTAP_HOME, "shots", `${target.appId}-${Date.now()}.png`);
+      const out = typeof flags.out === "string" ? flags.out : path.join(tappHome, "shots", `${target.appId}-${Date.now()}.png`);
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, data);
       console.log(`\n📸 Screenshot: ${out}`);
@@ -663,7 +663,7 @@ switch (command) {
       url: typeof flags.url === "string" ? flags.url : task.url || "",
       reset: task.reset || "launch", vars: compiled.vars, steps: compiled.steps, taskPlan: compiled.plan,
     };
-    const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(process.env.AUTOTAP_HOME, "tasks", `${task.name}-${process.pid}-${Date.now()}.json`));
+    const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(tappHome, "tasks", `${task.name}-${process.pid}-${Date.now()}.json`));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify(flow, null, 2) + "\n");
     if (verb === "compile") {
@@ -712,8 +712,8 @@ switch (command) {
       break;
     }
     const token = `${process.pid}-${Date.now()}`;
-    const flowLog = path.join(process.env.AUTOTAP_HOME, "flows", `${token}.log`);
-    const evidenceDir = path.join(process.env.AUTOTAP_HOME, "captures", `flow-${platform}-${token}`);
+    const flowLog = path.join(tappHome, "flows", `${token}.log`);
+    const evidenceDir = path.join(tappHome, "captures", `flow-${platform}-${token}`);
     fs.mkdirSync(path.dirname(flowLog), { recursive: true });
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (typeof flags.email === "string") env.OCQA_TEST_EMAIL = flags.email;
@@ -779,7 +779,7 @@ switch (command) {
     let compiled;
     try { compiled = compileReleaseContract(contract, { platform, sourcePath: contractPath }); }
     catch (error) { console.error(`❌ Could not compile Release Contract: ${error.message}`); process.exit(2); }
-    const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(process.env.AUTOTAP_HOME, "contracts", `${contract.name}-${process.pid}-${Date.now()}.json`));
+    const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(tappHome, "contracts", `${contract.name}-${process.pid}-${Date.now()}.json`));
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, JSON.stringify(compiled, null, 2) + "\n");
     if (verb === "compile") {
@@ -893,8 +893,8 @@ switch (command) {
       break;
     }
     const token = `${process.pid}-${Date.now()}`;
-    const flowLog = path.join(process.env.AUTOTAP_HOME, "scenarios", `${token}.log`);
-    const evidenceDir = path.join(process.env.AUTOTAP_HOME, "captures", `scenario-web-${token}`);
+    const flowLog = path.join(tappHome, "scenarios", `${token}.log`);
+    const evidenceDir = path.join(tappHome, "captures", `scenario-web-${token}`);
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     const url = typeof flags.url === "string" ? flags.url : scenario.url || scenario.app || "";
     const result = spawnSync(process.execPath, [path.join(packageRoot, "scripts", "run-web-scenario.js"), absolute, url], { stdio: "inherit", env });
@@ -1007,7 +1007,7 @@ switch (command) {
       console.log("  ⬜ Web — install Playwright in the app workspace: npm install -D playwright && npx playwright install chromium");
     }
 
-    console.log(`\n  Home: ${process.env.AUTOTAP_HOME}`);
+    console.log(`\n  Home: ${tappHome}`);
     console.log(healthy ? "\nReady. Add to your agent:  claude mcp add tapp -- npx -y @aarwitz/tapp mcp" : "\nFix the ❌ items above, then re-run: tapp doctor");
     process.exit(healthy ? 0 : 1);
   }
@@ -1284,7 +1284,7 @@ switch (command) {
 
   case "report": {
     // Regenerate + open the HTML evidence page for a capture (default: the latest).
-    const capturesDir = path.join(process.env.AUTOTAP_HOME, "captures");
+    const capturesDir = path.join(tappHome, "captures");
     const repoCaptures = path.join(packageRoot, "captures");
     const roots = [capturesDir, repoCaptures].filter((d) => fs.existsSync(d));
     const runs = roots

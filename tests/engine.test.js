@@ -72,7 +72,8 @@ test("remote AI requires explicit opt-in — an ambient API key is not consent",
   assert.equal(engine.remoteAiOptedIn({ ANTHROPIC_API_KEY: "sk-ant-ambient" }), false);
   assert.equal(engine.remoteAiOptedIn({ ANTHROPIC_API_KEY: "sk", TAPP_ENABLE_REMOTE_AI: "1" }), true);
   assert.equal(engine.remoteAiOptedIn({ TAPP_ENABLE_REMOTE_AI: "true" }), true);
-  assert.equal(engine.remoteAiOptedIn({ AUTOTAP_SUBSCRIPTION_TOKEN: "tok" }), true, "subscription token is explicit");
+  assert.equal(engine.remoteAiOptedIn({ TAPP_SUBSCRIPTION_TOKEN: "tok" }), true, "Tapp subscription token is explicit");
+  assert.equal(engine.remoteAiOptedIn({ AUTOTAP_SUBSCRIPTION_TOKEN: "tok" }), true, "legacy subscription token remains compatible");
   assert.equal(engine.remoteAiOptedIn({}), false);
 });
 

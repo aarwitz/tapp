@@ -40,7 +40,7 @@ export async function enrichFindings(findings, { backend, callModel, screens = [
         `Title: ${f.title}`;
       try {
         const res = await Promise.race([
-          callModel(backend, { system, userText, model: process.env.AUTOTAP_FINDING_MODEL || "claude-haiku-4-5-20251001", maxTokens: 300 }),
+          callModel(backend, { system, userText, model: process.env.TAPP_FINDING_MODEL || process.env.AUTOTAP_FINDING_MODEL || "claude-haiku-4-5-20251001", maxTokens: 300 }),
           new Promise((r) => setTimeout(() => r({ error: "timeout" }), TIMEOUT_MS)),
         ]);
         const parsed = res && !res.error ? parseEnrichment(res.text) : null;

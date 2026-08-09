@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run an AutoTap Flow — a deterministic, authored/recorded E2E test (see docs/flows-architecture.md).
+# Run a Tapp Flow — a deterministic, authored/recorded E2E test.
 #
 # Replays the flow's steps against an app on the BOOTED simulator with wait-for-condition timing and
 # poll-with-timeout assertions (no sleeps), then prints a scannable pass/fail report. Deterministic by
@@ -24,14 +24,14 @@ APP="${2:-}"
 
 UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((x["udid"] for v in d["devices"].values() for x in v if x.get("state")=="Booted"), ""))')"
 [ -z "$UDID" ] && { echo "❌ No booted simulator."; exit 2; }
-# When run through the `autotap` CLI (installed npm package), the harness cache lives under
-# AUTOTAP_HOME — check there first, then the repo-dev locations.
+# When run through the installed `tapp` CLI, the harness cache lives under TAPP_HOME.
 XCTR=""
-[ -n "${AUTOTAP_HOME:-}" ] && XCTR="$(find "$AUTOTAP_HOME/harness-derived/Build/Products" -name '*.xctestrun' 2>/dev/null | head -1)"
+TAPP_RUNTIME_HOME="${TAPP_HOME:-${AUTOTAP_HOME:-}}"
+[ -n "$TAPP_RUNTIME_HOME" ] && XCTR="$(find "$TAPP_RUNTIME_HOME/harness-derived/Build/Products" -name '*.xctestrun' 2>/dev/null | head -1)"
 [ -z "$XCTR" ] && XCTR="$(find "$HOME/Library/Developer/Xcode/DerivedData/OCQAHarness-"*/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && XCTR="$(find /tmp/autotap-harness-derived/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
+[ -z "$XCTR" ] && XCTR="$(find /tmp/tapp-harness-derived/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
 [ -z "$XCTR" ] && XCTR="$(find /tmp/harness-build/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && { echo "❌ Harness not built. Run: scripts/deploy-and-build.sh --harness"; exit 2; }
+[ -z "$XCTR" ] && { echo "❌ Harness not built. Run: tapp install"; exit 2; }
 
 NAME="$(python3 -c "import sys,json;print(json.loads(sys.argv[1]).get('name','flow'))" "$FLOW_JSON")"
 echo "▶️  Running flow \"$NAME\" against $APP …"

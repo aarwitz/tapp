@@ -13,7 +13,7 @@ import { compileReleaseContract, loadReleaseContractFile } from "./release-contr
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function executionHome() {
-  return process.env.AUTOTAP_HOME || process.env.TAPP_HOME || path.join(os.homedir(), ".tapp");
+  return process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp");
 }
 
 function atomicJson(destination, value) {

@@ -10,7 +10,7 @@ Please report suspected vulnerabilities privately via GitHub Security Advisories
 - **This policy describes the local and portable product.** Exploration, evidence collection, and
   verdict calculation run on your machine or your selected CI runner—no Tapp telemetry or ambient
   Tapp service calls.
-- **No production hosted service yet.** `app.runtapp.com` is under development. Do not upload
+- **No production hosted service yet.** The hosted application is under development. Do not upload
   private repositories, credentials, or customer data to a legacy preview. The future SaaS will
   publish a separate data-flow, retention, subprocessors, and incident-response policy before
   accepting customer repositories.
@@ -28,5 +28,5 @@ Please report suspected vulnerabilities privately via GitHub Security Advisories
   `ALICE_EMAIL`, never resolved values. Generated GitHub jobs read same-named repository Secrets
   into the Action environment. The VS Code extension stores remembered values in VS Code
   SecretStorage (OS keychain), never plaintext files.
-- **Tokens**: when `AUTOTAP_MCP_TOKEN`/`TAPP_MCP_TOKEN` is set, all mutating MCP tools
+- **Tokens**: when `TAPP_MCP_TOKEN` is set, all mutating MCP tools
   require it.

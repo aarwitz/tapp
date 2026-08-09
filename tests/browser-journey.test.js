@@ -21,8 +21,8 @@ function commerceFixture() {
 
 test("browser journey completes onboarding, map review, contract promotion, baseline, evidence, and CI preview", { skip: !chromium, timeout: 180_000 }, async () => {
   const project = commerceFixture();
-  const priorHome = process.env.AUTOTAP_HOME;
-  process.env.AUTOTAP_HOME = path.join(project, "tapp-home");
+  const priorHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = path.join(project, "tapp-home");
   const product = await startBrowserProduct({ projectDir: project, launch: false });
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -96,11 +96,11 @@ test("browser journey completes onboarding, map review, contract promotion, base
     assert.match(await page.locator("#latest-evidence").innerText(), /0 new vs baseline/);
     await operate("#preview-ci");
     assert.match(await page.locator("#ci-preview").innerText(), /Tapp release gate/);
-    await page.screenshot({ path: path.join(process.env.AUTOTAP_HOME, "release-studio.png"), fullPage: true });
+    await page.screenshot({ path: path.join(process.env.TAPP_HOME, "release-studio.png"), fullPage: true });
   } finally {
     await browser.close();
     await product.close();
-    if (priorHome === undefined) delete process.env.AUTOTAP_HOME;
-    else process.env.AUTOTAP_HOME = priorHome;
+    if (priorHome === undefined) delete process.env.TAPP_HOME;
+    else process.env.TAPP_HOME = priorHome;
   }
 });

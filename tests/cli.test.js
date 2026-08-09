@@ -236,7 +236,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
 `);
   const outPath = path.join(project, "init-result.json");
   const home = path.join(project, "tapp-home");
-  const output = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "6", "--timeout", "60", "--json-out", outPath], { cwd: root, encoding: "utf8", env: { ...process.env, AUTOTAP_HOME: home } });
+  const output = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "6", "--timeout", "60", "--json-out", outPath], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
   assert.match(output, /managed web runtime/i);
   const result = JSON.parse(fs.readFileSync(outPath, "utf8"));
   assert.equal(result.exploration.managedRuntime, true);
@@ -304,7 +304,7 @@ test("tapp init discovers, validates, and fault-checks a grounded cross-actor co
   fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
   fs.cpSync(path.join(root, "SocialDemo", ".autotap", "tasks"), path.join(project, ".autotap", "tasks"), { recursive: true });
   fs.copyFileSync(path.join(root, "SocialDemo", ".autotap", "project.json"), path.join(project, ".autotap", "project.json"));
-  const actorEnv = { ...process.env, ALICE_EMAIL: "alice@example.test", ALICE_PASSWORD: "demo", BOB_EMAIL: "bob@example.test", BOB_PASSWORD: "demo", OCQA_TEST_EMAIL: "alice@example.test", OCQA_TEST_PASSWORD: "demo", AUTOTAP_HOME: path.join(project, "tapp-home") };
+  const actorEnv = { ...process.env, ALICE_EMAIL: "alice@example.test", ALICE_PASSWORD: "demo", BOB_EMAIL: "bob@example.test", BOB_PASSWORD: "demo", OCQA_TEST_EMAIL: "alice@example.test", OCQA_TEST_PASSWORD: "demo", TAPP_HOME: path.join(project, "tapp-home") };
   const initPath = path.join(project, "init.json");
   const initialized = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "15", "--timeout", "120", "--email", "alice@example.test", "--password", "demo", "--json-out", initPath], { cwd: root, encoding: "utf8", env: actorEnv });
   assert.match(initialized, /UI Map: observed · 3 states · 2 transitions/);
@@ -369,7 +369,7 @@ test("tapp init discovers, validates, and fault-checks a durable checkout contra
   fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
   fs.cpSync(path.join(root, "CommerceDemo", ".autotap", "tasks"), path.join(project, ".autotap", "tasks"), { recursive: true });
   fs.copyFileSync(path.join(root, "CommerceDemo", ".autotap", "project.json"), path.join(project, ".autotap", "project.json"));
-  const runtimeEnv = { ...process.env, AUTOTAP_HOME: path.join(project, "tapp-home") };
+  const runtimeEnv = { ...process.env, TAPP_HOME: path.join(project, "tapp-home") };
   const initPath = path.join(project, "init.json");
   const initialized = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "14", "--timeout", "120", "--json-out", initPath], { cwd: root, encoding: "utf8", env: runtimeEnv });
   assert.match(initialized, /UI Map: observed · 5 states · 4 transitions/);

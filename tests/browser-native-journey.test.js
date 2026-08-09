@@ -17,8 +17,8 @@ test("browser opens, drives, captures, and records the real iOS target", {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-native-"));
   const project = path.join(workspace, "DemoApp");
   fs.cpSync(path.join(repository, "DemoApp"), project, { recursive:true });
-  const priorHome = process.env.AUTOTAP_HOME;
-  process.env.AUTOTAP_HOME = path.join(workspace, "tapp-home");
+  const priorHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = path.join(workspace, "tapp-home");
   const product = await startBrowserProduct({ projectDir:project, launch:false });
   const browser = await chromium.launch({ headless:true });
   const page = await browser.newPage({ viewport:{ width:1440, height:1000 } });
@@ -56,7 +56,7 @@ test("browser opens, drives, captures, and records the real iOS target", {
   } finally {
     await browser.close();
     await product.close();
-    if (priorHome === undefined) delete process.env.AUTOTAP_HOME;
-    else process.env.AUTOTAP_HOME = priorHome;
+    if (priorHome === undefined) delete process.env.TAPP_HOME;
+    else process.env.TAPP_HOME = priorHome;
   }
 });

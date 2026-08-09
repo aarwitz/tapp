@@ -65,8 +65,7 @@ npx -y @aarwitz/tapp qa    # finds your Xcode project → builds → installs on
 ```
 
 The product, executable, and package leaf are all Tapp: npm distributes it as
-`@aarwitz/tapp`, while the installed command remains `tapp`. Existing `npx runtapp ...`
-and `npx tapp-mcp ...` configurations remain supported as deprecated compatibility paths.
+`@aarwitz/tapp`, while the installed command remains `tapp`.
 
 To bootstrap maintained release infrastructure, preview the repository model and grounded plan
 before Tapp writes anything:
@@ -292,7 +291,7 @@ npx -y @aarwitz/tapp ci --app path/to/MyApp.app \
 ```
 
 See the self-test at
-[.github/workflows/autotap-gate-example.yml](.github/workflows/autotap-gate-example.yml) for
+[.github/workflows/tapp-gate-example.yml](.github/workflows/tapp-gate-example.yml) for
 Flows, auth inputs, and other controls. GitHub-hosted iOS runs require a macOS runner; the first
 run also builds the XCUITest harness, so budget roughly 5–10 minutes depending on app size.
 
@@ -317,8 +316,8 @@ environment. Add
 [`docs/scenarios.md`](docs/scenarios.md). Automatic
 baselines are isolated by platform and target, so two same-platform apps are never compared.
 
-**The hosted service at `app.runtapp.com` is under development and is not currently offered for
-customer repositories.** Do not upload private code or credentials to an old preview. The retained
+**The hosted service is under development and is not currently offered for customer repositories.**
+Do not upload private code or credentials to an old preview. The retained
 cloud prototype is not the production SaaS boundary. Use the local Release Studio and the portable
 GitHub Action in infrastructure you control until the new account, tenant authorization, private
 evidence, and isolated-worker boundary passes security review.
@@ -352,8 +351,8 @@ verdict calculation run entirely locally — no telemetry, nothing phones home. 
 features are explicit: finding enrichment requires `TAPP_ENABLE_REMOTE_AI=1` (an ambient
 API key alone never changes data handling), and AI flow generation / `assert_ai` only run
 when you invoke them; these send selected metadata (screen names, finding titles) to your
-configured model provider. Env vars: `TAPP_*` preferred; `AUTOTAP_*` accepted as deprecated
-aliases.
+configured model provider. Runtime configuration uses `TAPP_*` environment variables; deprecated
+aliases remain readable for compatibility.
 
 Committed Flow replay, recording a driven session, autonomous exploration, exact assertions,
 regression comparison, and CI gating require **no API key and no coding agent at runtime**. AI is

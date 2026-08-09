@@ -18,10 +18,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../..");
 const scriptsDir = path.join(repoRoot, "scripts");
-// AUTOTAP_HOME (set by the `tapp` CLI when running as an installed npm package) redirects
-// all writable output to a user dir; unset (repo dev flow) captures stay in the repo.
-const autotapHome = (process.env.AUTOTAP_HOME || "").trim();
-const capturesDir = autotapHome ? path.join(autotapHome, "captures") : path.join(repoRoot, "captures");
+// TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
+// The old alias remains a read-only fallback; unset repository development stays local.
+const tappHome = (process.env.TAPP_HOME || process.env.AUTOTAP_HOME || "").trim();
+const capturesDir = tappHome ? path.join(tappHome, "captures") : path.join(repoRoot, "captures");
 const MAX_OUTPUT_CHARS = 60_000;
 const requiredAuthToken = (process.env.TAPP_MCP_TOKEN || process.env.AUTOTAP_MCP_TOKEN || "").trim();
 
@@ -83,7 +83,7 @@ function ensureAuthorized(args = {}) {
   const provided = typeof args.authToken === "string" ? args.authToken.trim() : "";
   if (provided !== requiredAuthToken) {
     return errorResult("Unauthorized", {
-      reason: "Provide valid authToken when AUTOTAP_MCP_TOKEN is set",
+      reason: "Provide valid authToken when TAPP_MCP_TOKEN is set",
     });
   }
 
@@ -339,7 +339,7 @@ export async function buildAppForSim({ dir, container, scheme, configuration = "
       };
     }
   }
-  const derived = path.join(autotapHome || os.tmpdir(), "app-builds", schemeName.replace(/[^a-zA-Z0-9]/g, "_"));
+  const derived = path.join(tappHome || os.tmpdir(), "app-builds", schemeName.replace(/[^a-zA-Z0-9]/g, "_"));
   const build = await runCommand(
     "xcodebuild",
     [
@@ -1065,7 +1065,7 @@ export async function captureScreenshotImage(maxWidth) {
 // change data-handling behavior. A subscription token is an explicit tapp choice, and
 // explicitly-invoked AI tools (tapp_flow_generate, assert_ai) carry their own consent.
 export function remoteAiOptedIn(env = process.env) {
-  if ((env.AUTOTAP_SUBSCRIPTION_TOKEN || env.TAPP_SUBSCRIPTION_TOKEN || "").trim()) return true;
+  if ((env.TAPP_SUBSCRIPTION_TOKEN || env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim()) return true;
   return ["1", "true", "yes"].includes(String(env.TAPP_ENABLE_REMOTE_AI || "").trim().toLowerCase());
 }
 
@@ -1077,9 +1077,9 @@ export function isInsideDir(root, p) {
 }
 
 function resolveModelBackend() {
-  const token = (process.env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim();
+  const token = (process.env.TAPP_SUBSCRIPTION_TOKEN || process.env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim();
   if (token) {
-    const base = (process.env.AUTOTAP_PROXY_URL || "http://localhost:8787").replace(/\/$/, "");
+    const base = (process.env.TAPP_PROXY_URL || process.env.AUTOTAP_PROXY_URL || "http://localhost:8787").replace(/\/$/, "");
     const url = base.endsWith("/v1/messages") ? base : base + "/v1/messages";
     return { url, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } };
   }
@@ -1091,7 +1091,7 @@ function resolveModelBackend() {
 }
 
 async function callModel(backend, { system, userText, model, maxTokens = 1500 }) {
-  const body = JSON.stringify({ model: model || process.env.AUTOTAP_FLOW_MODEL || "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] });
+  const body = JSON.stringify({ model: model || process.env.TAPP_FLOW_MODEL || process.env.AUTOTAP_FLOW_MODEL || "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] });
   const res = await fetch(backend.url, { method: "POST", headers: backend.headers, body });
   if (!res.ok) return { error: `model HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
   const data = await res.json();
@@ -1832,7 +1832,7 @@ export async function startManagedWebTarget({ root, requestedTarget = "", timeou
     command = process.execPath;
     startArgs = [path.join(__dirname, "static-server.js"), startDir, String(port)];
   }
-  const logDir = path.join(autotapHome || os.tmpdir(), "init-runtime");
+  const logDir = path.join(tappHome || os.tmpdir(), "init-runtime");
   fs.mkdirSync(logDir, { recursive: true });
   const logPath = path.join(logDir, `web-${process.pid}-${Date.now()}.log`);
   const child = spawn(command, startArgs, {
@@ -1938,7 +1938,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           authToken: {
             type: "string",
-            description: "Required when AUTOTAP_MCP_TOKEN is set",
+            description: "Required when TAPP_MCP_TOKEN is set",
           },
           projectDir: { type: "string", description: "Repo/dir to search for the .xcworkspace/.xcodeproj (default: cwd)" },
           scheme: { type: "string", description: "Scheme to build (default: auto-detected)" },
@@ -1956,7 +1956,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           authToken: {
             type: "string",
-            description: "Required when AUTOTAP_MCP_TOKEN is set",
+            description: "Required when TAPP_MCP_TOKEN is set",
           },
           mode: {
             type: "string",
@@ -2075,7 +2075,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "iOS: bundle id of the installed app to test, e.g. com.acme.app. Provide exactly one of appBundleId | url." },
           androidAppId: { type: "string", description: "Android: application id installed on a connected emulator/device, e.g. com.acme.app." },
           apkPath: { type: "string", description: "Android: optional APK to install before testing." },
@@ -2137,7 +2137,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["inspect", "write", "refresh", "explore"], default: "inspect" },
           projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional target filter" },
@@ -2164,7 +2164,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "set"], default: "read" },
           projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
           name: { type: "string", description: "Set: stable actor name" },
@@ -2184,7 +2184,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "review", "generate", "validate", "promote"], default: "read" },
           planPath: { type: "string", description: "Repo-relative plan path; default .autotap/release-plan.json" },
           projectDir: { type: "string", description: "Generate: repo-relative project root containing the scoped .autotap Task directories" },
@@ -2211,7 +2211,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["inspect", "install", "baseline"], default: "inspect" },
           projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
           modelPath: { type: "string", description: "Repo-relative application model path; defaults to <projectDir>/.autotap/application-model.json" },
@@ -2237,7 +2237,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "build", "diff"], default: "read" },
           captureId: { type: "string", description: "Read/build from this Tapp capture's ocqa-markers.txt/ui-map.json" },
           mapPath: { type: "string", description: "Repo-relative UI Map path for read, or build output (default .autotap/ui-map.json)" },
@@ -2261,7 +2261,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         required: ["taskPath"],
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "validate", "compile"], default: "validate" },
           taskPath: { type: "string", description: "Repo-relative .autotap/tasks/*.yml|json file" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Implementation to validate/compile" },
@@ -2282,7 +2282,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: "object",
         required: ["contractPath"],
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "validate", "compile", "run"], default: "validate" },
           contractPath: { type: "string", description: "Repo-relative .autotap/contracts/*.contract.ts file" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Target platform; optional when the contract declares exactly one" },
@@ -2305,7 +2305,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["plan", "adopt"], default: "plan" },
           changedFiles: {
             type: "array", minItems: 1,
@@ -2350,7 +2350,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           flow: {
             type: "object",
             description:
@@ -2379,7 +2379,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           scenario: { type: "object", description: "Inline Scenario with {kind:'scenario', platform:'web', actors, steps, setup?, teardown?}" },
           scenarioPath: { type: "string", description: "Repo-relative path to a .yml/.json Scenario" },
           url: { type: "string", description: "Override the Scenario's web URL" },
@@ -2400,7 +2400,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           goal: { type: "string", description: "What the test should do, in plain English (e.g. 'sign in with test creds and reach the dashboard')" },
           appBundleId: { type: "string", description: "Bundle id of the installed app to author against" },
           captureId: { type: "string", description: "Reuse this capture's grounding instead of exploring (from a prior run_qa, faster)" },
@@ -2424,7 +2424,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           name: { type: "string", description: "Human name for the flow, e.g. 'Sign in and reach Home'" },
           addFinalAssertion: { type: "boolean", default: true, description: "Append assert_screen for the final screen as a checkpoint" },
           replace: { type: "boolean", default: false, description: "Explicitly replace a Flow with the same generated filename. Existing Flows are preserved by default." },
@@ -2442,7 +2442,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "iOS bundle id of the installed app" },
           androidAppId: { type: "string", description: "Android application id of the installed app" },
           androidSerial: { type: "string", description: "Android adb device serial" },
@@ -2459,7 +2459,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           maxWidth: { type: "integer", minimum: 200, maximum: 1400, default: 700, description: "Max image width in px (downscaled to keep payload small)" },
         },
       },
@@ -2477,7 +2477,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "iOS bundle id of the installed app" },
           androidAppId: { type: "string", description: "Android application id of the installed app" },
           apkPath: { type: "string", description: "Android APK to install before launch" },
@@ -2502,7 +2502,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           udid: { type: "string", description: "Simulator UDID (from tapp_list_simulators)" },
           name: { type: "string", description: "Simulator name, e.g. 'iPhone 16 Pro' (used if udid omitted)" },
         },
@@ -2518,7 +2518,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           project: { type: "string", description: "Absolute path to .xcodeproj (use this OR workspace)" },
           workspace: { type: "string", description: "Absolute path to .xcworkspace (use this OR project)" },
           scheme: { type: "string", description: "Scheme to build" },
@@ -2542,7 +2542,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "Bundle id of the installed app to drive" },
           androidAppId: { type: "string", description: "Android application id to drive (alternative to appBundleId)" },
           apkPath: { type: "string", description: "Android APK to install before starting" },
@@ -2571,7 +2571,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" },
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           action: { type: "string", enum: ["login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot"] },
           email: { type: "string", description: "login: email/username to sign in with" },
           password: { type: "string", description: "login: password to sign in with" },
@@ -2592,7 +2592,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: "End the active interactive session (quits the app + harness). Always call this when done.",
       inputSchema: {
         type: "object",
-        properties: { authToken: { type: "string", description: "Required when AUTOTAP_MCP_TOKEN is set" } },
+        properties: { authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" } },
       },
     },
   ],
@@ -3450,7 +3450,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (!isNonEmptyString(args.goal)) return errorResult("goal is required");
     if (!isNonEmptyString(args.appBundleId)) return errorResult("appBundleId is required");
     const backend = resolveModelBackend();
-    if (!backend) return errorResult("AI-generate needs a model backend — set an Tapp subscription token (AUTOTAP_SUBSCRIPTION_TOKEN) or ANTHROPIC_API_KEY.");
+    if (!backend) return errorResult("AI-generate needs a model backend — set TAPP_SUBSCRIPTION_TOKEN or ANTHROPIC_API_KEY.");
     const bundleId = args.appBundleId.trim();
 
     // 1) Grounding: reuse a capture's markers, else explore the app to build a screen/control map.

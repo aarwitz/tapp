@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-/// A WKWebView-backed screen. Exists so the AutoTap harness's WebView accessibility extraction
+/// A WKWebView-backed screen. Exists so the Tapp harness's WebView accessibility extraction
 /// (links/buttons/fields inside a web container) gets exercised against a known target.
 /// Loads local HTML so there's no network dependency.
 struct WebContentView: View {
@@ -37,7 +37,7 @@ private struct WebView: UIViewRepresentable {
     </head>
     <body>
       <h1>Help Center</h1>
-      <p>Frequently asked questions about AutoTap.</p>
+      <p>Frequently asked questions about Tapp.</p>
       <a href="#getting-started">Getting Started Guide</a>
       <a href="#troubleshooting">Troubleshooting</a>
       <a href="#contact">Contact Support</a>

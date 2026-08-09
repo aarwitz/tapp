@@ -6,17 +6,17 @@ struct AboutView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Label("AutoTap Demo App", systemImage: "iphone.gen3")
+                Label("Tapp Demo App", systemImage: "iphone.gen3")
                     .font(.title2.bold())
                     .accessibilityAddTraits(.isHeader)
 
-                Text("This is a minimal SwiftUI app used to test the AutoTap autonomous QA harness against a known, simple target.")
+                Text("This is a minimal SwiftUI app used to test the Tapp autonomous QA harness against a known, simple target.")
                     .foregroundStyle(.secondary)
 
                 Divider()
 
                 Group {
-                    infoRow("Bundle ID", value: "com.autotap.demoapp")
+                    infoRow("Bundle ID", value: "io.github.aarwitz.tapp.demoapp")
                     infoRow("Version", value: "1.0.0")
                     infoRow("Screens", value: "Home, Tasks, Settings, Counter, About")
                 }

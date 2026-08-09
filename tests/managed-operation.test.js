@@ -48,7 +48,7 @@ test("managed child verifies the exact checkout and inspects through shared prod
   fs.writeFileSync(requestPath, JSON.stringify({ envelope, projectDir:root }));
   const child = spawnSync(process.execPath, [path.join(repositoryRoot, "cloud", "runner", "product-job.js"), requestPath, resultPath], {
     cwd:repositoryRoot,
-    env:{ ...process.env, AUTOTAP_HOME:path.join(root, "tapp-home") },
+    env:{ ...process.env, TAPP_HOME:path.join(root, "tapp-home") },
     encoding:"utf8",
     timeout:25_000,
   });

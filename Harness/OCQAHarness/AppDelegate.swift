@@ -8,7 +8,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         let vc = UIViewController()
         vc.view.backgroundColor = .black
         let label = UILabel()
-        label.text = "AutoTap Harness"
+        label.text = "Tapp Harness"
         label.textColor = .white
         label.textAlignment = .center
         label.frame = vc.view.bounds
