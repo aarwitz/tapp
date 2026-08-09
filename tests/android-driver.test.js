@@ -4,9 +4,9 @@ import { detectAndroidScreen, findAndroidElement, parseUiAutomatorXml } from "..
 
 const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hierarchy rotation="0">
-  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="com.tapp.demo" content-desc="" clickable="false" enabled="true" bounds="[0,0][1080,1920]">
-    <node index="0" text="Dashboard" resource-id="com.tapp.demo:id/screen_title" class="android.widget.TextView" package="com.tapp.demo" content-desc="" clickable="false" enabled="true" bounds="[32,80][600,180]" />
-    <node index="1" text="Continue" resource-id="com.tapp.demo:id/continue_button" class="android.widget.Button" package="com.tapp.demo" content-desc="continue_primary" clickable="true" enabled="true" bounds="[100,300][900,430]" />
+  <node index="0" text="" resource-id="" class="android.widget.FrameLayout" package="io.github.aarwitz.tapp.demo" content-desc="" clickable="false" enabled="true" bounds="[0,0][1080,1920]">
+    <node index="0" text="Dashboard" resource-id="io.github.aarwitz.tapp.demo:id/screen_title" class="android.widget.TextView" package="io.github.aarwitz.tapp.demo" content-desc="" clickable="false" enabled="true" bounds="[32,80][600,180]" />
+    <node index="1" text="Continue" resource-id="io.github.aarwitz.tapp.demo:id/continue_button" class="android.widget.Button" package="io.github.aarwitz.tapp.demo" content-desc="continue_primary" clickable="true" enabled="true" bounds="[100,300][900,430]" />
   </node>
 </hierarchy>`;
 
@@ -22,7 +22,7 @@ test("UIAutomator XML becomes the shared accessibility element shape", () => {
 
 test("Android selection prefers stable ids then accessibility descriptions and labels", () => {
   const elements = parseUiAutomatorXml(XML);
-  assert.equal(findAndroidElement(elements, "com.tapp.demo:id/continue_button").text, "Continue");
+  assert.equal(findAndroidElement(elements, "io.github.aarwitz.tapp.demo:id/continue_button").text, "Continue");
   assert.equal(findAndroidElement(elements, "continue_primary").text, "Continue");
   assert.equal(findAndroidElement(elements, "continue").text, "Continue");
 });

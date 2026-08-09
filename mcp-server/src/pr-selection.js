@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { loadReleaseContractFile } from "./release-contract.js";
 import { loadTaskRegistry } from "./task-runtime.js";
 import { replayableUiMapNavigation, semanticUiKey } from "./ui-map.js";
+import { existingProjectArtifactPath, isProjectArtifactDirectory } from "./project-paths.js";
 
 function posix(value) {
   return String(value || "").replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\/+/, "");
@@ -28,8 +29,8 @@ export function sourcePathMatches(changedFile, ownershipPath) {
 function repoRootFor(sourcePath) {
   let current = path.dirname(path.resolve(sourcePath));
   while (current !== path.dirname(current)) {
-    if (path.basename(current) === ".autotap") return path.dirname(current);
-    if (fs.existsSync(path.join(current, ".autotap"))) return current;
+    if (isProjectArtifactDirectory(path.basename(current))) return path.dirname(current);
+    if (fs.existsSync(existingProjectArtifactPath(current))) return current;
     current = path.dirname(current);
   }
   return process.cwd();
@@ -403,11 +404,11 @@ function mergeGroundingEvidence(existing, incoming) {
   return merged;
 }
 
-export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releasePlanPath = ".autotap/release-plan.json" } = {}) {
+export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releasePlanPath = ".tapp/release-plan.json" } = {}) {
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
   const source = path.resolve(prPlanPath || "");
   if (!prPlanPath || !fs.existsSync(source)) throw new Error(`PR plan not found: ${source || "(missing path)"}`);
-  const targetPath = path.resolve(root, releasePlanPath);
+  const targetPath = releasePlanPath === ".tapp/release-plan.json" ? existingProjectArtifactPath(root, "release-plan.json") : path.resolve(root, releasePlanPath);
   if (!inside(root, targetPath)) throw new Error("Release plan path must stay inside the project directory");
   if (!fs.existsSync(targetPath)) throw new Error(`Release plan not found: ${targetPath}; run tapp init first`);
   const prPlan = JSON.parse(fs.readFileSync(source, "utf8"));
@@ -423,7 +424,7 @@ export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releaseP
   const proposed = structuredClone(proposal.operation.item);
   if (proposed?.origin !== "deterministic-ui-map-proposal" || proposed?.decision !== "pending") throw new Error("Coverage proposal is not a pending UI-Map-grounded release-plan item");
   const ground = (proposed.groundedBy || []).find((entry) => entry.type === "ui-map-node");
-  const mapPath = path.join(root, ".autotap", "ui-map.json");
+  const mapPath = existingProjectArtifactPath(root, "ui-map.json");
   if (!ground || !fs.existsSync(mapPath)) throw new Error("Coverage proposal requires the repository's persistent UI Map");
   const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
   const node = (map.nodes || []).find((candidate) => candidate.id === ground.id && candidate.status !== "proposed");
@@ -583,7 +584,7 @@ export async function buildPrContractPlan({
     ...(Array.isArray(changedSymbolEvidence) ? changedSymbolEvidence : []),
   ]);
   const evidenceByFile = new Map(diffEvidence.map((item) => [item.file, item]));
-  const contractDir = path.join(root, ".autotap", "contracts");
+  const contractDir = existingProjectArtifactPath(root, "contracts");
   const discovered = discoverContracts && fs.existsSync(contractDir)
     ? fs.readdirSync(contractDir).filter((name) => /\.contract\.(?:ts|mts|mjs|js|json)$/i.test(name)).map((name) => path.join(contractDir, name)) : [];
   const files = [...new Set([...discovered, ...contractPaths.map((item) => path.resolve(root, item))])];
@@ -594,10 +595,10 @@ export async function buildPrContractPlan({
   }
 
   let tasks = new Map();
-  const registrySource = files[0] || path.join(root, ".autotap", "contracts", "contract.ts");
+  const registrySource = files[0] || existingProjectArtifactPath(root, "contracts", "contract.ts");
   try { tasks = loadTaskRegistry({ sourcePath: registrySource, projectDir: root }); } catch {}
   let map = null;
-  const resolvedMapPath = mapPath ? path.resolve(root, mapPath) : path.join(root, ".autotap", "ui-map.json");
+  const resolvedMapPath = mapPath ? path.resolve(root, mapPath) : existingProjectArtifactPath(root, "ui-map.json");
   if (fs.existsSync(resolvedMapPath)) map = JSON.parse(fs.readFileSync(resolvedMapPath, "utf8"));
 
   const impactedNodes = map ? map.nodes.filter((node) => matchedFiles(changes, node.sourcePaths || []).length) : [];

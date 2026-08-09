@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.16.0
+- **Canonical repository namespace:** Tapp now creates and documents `.tapp/`, `.tapp.yml`, and
+  `TAPP_*` variables across the CLI, MCP server, desktop app, Action, demos, and hosted runner.
+- **Safe migration:** existing `.autotap/`, `.autotap.yml`, `AUTOTAP_*`, and desktop Keychain data
+  remain readable as legacy fallbacks; canonical Tapp names always win when both exist.
+- **Owned application identifiers:** desktop and corpus identifiers now use the
+  `io.github.aarwitz.tapp` namespace instead of an unowned reverse-DNS name.
+
 ## 0.15.1
 - **Clean public Tapp surface:** current package metadata, CLI help, MCP manifests, shipped docs,
   Action labels, and examples use Tapp without exposing superseded package or internal desktop
@@ -53,7 +61,7 @@
   same-origin reset/cleanup as evidence. CommerceDemo passes 16/16 clean steps; its missing-order
   fault leaves generic QA at 100/100 but fails the unchanged contract and blocks the gate.
 - **First-class actor onboarding:** `tapp actor set|list` and MCP `tapp_actor_config` maintain a
-  central `.autotap/project.json` of roles, isolated sessions, provisioning, lifecycle, and
+  central `.tapp/project.json` of roles, isolated sessions, provisioning, lifecycle, and
   credential environment-variable names. Init blocks missing/conflicting bindings, generated
   contracts reuse them, and CI maps every actor binding to a same-named GitHub Secret without
   persisting values.
@@ -66,7 +74,7 @@
 - **Baseline-to-CI onboarding:** `tapp baseline create` runs or imports only a successful conclusive
   full gate, writes an atomic platform/target-specific baseline, and rejects cross-target
   comparisons. `tapp ci install` and MCP `tapp_ci_setup` render/write a collision-safe per-target
-  GitHub workflow plus `.autotap/ci.json` without commits or remote mutation.
+  GitHub workflow plus `.tapp/ci.json` without commits or remote mutation.
 - **Managed browser CI:** the Action/portable gate now share init's deterministic web
   install/build/start/readiness/teardown path when no URL is supplied. Fixed ports declared by
   repository scripts are honored, ephemeral import URLs are not persisted, and tests cover both

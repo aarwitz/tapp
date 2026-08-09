@@ -15,9 +15,9 @@
 #                      # bundle id is detected from the .app when omitted
 #                      [--actions N]              # exploration budget (default 40)
 #                      [--timeout S]              # exploration watchdog (default 600)
-#                      [--flows <glob>]           # Flow YAMLs to replay (default: <app repo>/.autotap/flows/*.yml if --project-dir given)
-#                      [--scenarios <glob>]       # Multi-actor Scenario YAMLs (web; default: <app repo>/.autotap/scenarios/*.yml)
-#                      [--contracts <glob>]       # TypeScript release contracts (default: <app repo>/.autotap/contracts/*.contract.ts)
+#                      [--flows <glob>]           # Flow YAMLs to replay (default: <app repo>/.tapp/flows/*.yml if --project-dir given)
+#                      [--scenarios <glob>]       # Multi-actor Scenario YAMLs (web; default: <app repo>/.tapp/scenarios/*.yml)
+#                      [--contracts <glob>]       # TypeScript release contracts (default: <app repo>/.tapp/contracts/*.contract.ts)
 #                      [--project-dir <dir>]      # the app repo checkout (for flows + baseline defaults)
 #                      [--pr-base <git-ref>]      # select critical + diff-relevant contracts from base...head
 #                      [--pr-head <git-ref>]      # default HEAD
@@ -79,10 +79,15 @@ if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR" ]] || { echo "❌ Project directory not found: $PROJECT_DIR" >&2; exit 2; }
   PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 fi
-[[ -z "$FLOWS" && -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.autotap/flows" ]] && FLOWS="$PROJECT_DIR/.autotap/flows/*.yml"
-[[ "$PLATFORM" == "web" && -z "$SCENARIOS" && -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.autotap/scenarios" ]] && SCENARIOS="$PROJECT_DIR/.autotap/scenarios/*.yml"
-[[ -z "$CONTRACTS" && -n "$PROJECT_DIR" && -d "$PROJECT_DIR/.autotap/contracts" ]] && CONTRACTS="$PROJECT_DIR/.autotap/contracts/*.contract.ts"
-[[ -z "$BASELINE" && -n "$PROJECT_DIR" && -f "$PROJECT_DIR/.autotap/baseline.json" ]] && BASELINE="$PROJECT_DIR/.autotap/baseline.json"
+TAPP_PROJECT_ARTIFACTS=""
+if [[ -n "$PROJECT_DIR" ]]; then
+  [[ -d "$PROJECT_DIR/.tapp" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.tapp"
+  [[ -z "$TAPP_PROJECT_ARTIFACTS" && -d "$PROJECT_DIR/.autotap" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.autotap"
+fi
+[[ -z "$FLOWS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/flows" ]] && FLOWS="$TAPP_PROJECT_ARTIFACTS/flows/*.yml"
+[[ "$PLATFORM" == "web" && -z "$SCENARIOS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/scenarios" ]] && SCENARIOS="$TAPP_PROJECT_ARTIFACTS/scenarios/*.yml"
+[[ -z "$CONTRACTS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/contracts" ]] && CONTRACTS="$TAPP_PROJECT_ARTIFACTS/contracts/*.contract.ts"
+[[ -z "$BASELINE" && -n "$TAPP_PROJECT_ARTIFACTS" && -f "$TAPP_PROJECT_ARTIFACTS/baseline.json" ]] && BASELINE="$TAPP_PROJECT_ARTIFACTS/baseline.json"
 [[ -z "$BASELINE" || -f "$BASELINE" ]] || { echo "❌ Baseline not found: $BASELINE" >&2; exit 2; }
 if [[ -n "$BASELINE" ]]; then
   python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$BASELINE" 2>/dev/null \

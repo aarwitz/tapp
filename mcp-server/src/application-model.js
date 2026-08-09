@@ -8,6 +8,7 @@ import { credentialBindingsFromValue, readProjectConfig } from "./project-config
 import { applyReleaseContractCoverage, compileReleaseContract, loadReleaseContractFile, validateReleaseContractAgainstUiMap } from "./release-contract.js";
 import { applyTaskCoverage, loadTaskFile, validateTaskAgainstUiMap } from "./task-runtime.js";
 import { semanticUiKey } from "./ui-map.js";
+import { isProjectArtifactDirectory, projectArtifactDirectory } from "./project-paths.js";
 
 const SKIP = new Set([".git", ".build", ".gradle", ".next", ".swiftpm", "Pods", "Carthage", "DerivedData", "build", "dist", "node_modules", "vendor"]);
 
@@ -25,7 +26,7 @@ function walk(root, maxDepth = 4) {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const entry of entries) {
-      if (SKIP.has(entry.name) || (entry.name.startsWith(".") && entry.name !== ".autotap")) continue;
+      if (SKIP.has(entry.name) || (entry.name.startsWith(".") && !isProjectArtifactDirectory(entry.name))) continue;
       const absolute = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         directories.push(absolute);
@@ -124,7 +125,8 @@ function applyRuntimeTargetValidation(root, targets, validation) {
 }
 
 function persistedTargetValidations(root, outDir) {
-  const artifactDir = path.resolve(root, String(outDir || ".autotap"));
+  const requested = String(outDir || ".tapp");
+  const artifactDir = path.resolve(root, projectArtifactDirectory(root, requested));
   const relativeArtifactDir = path.relative(root, artifactDir);
   if (path.isAbsolute(relativeArtifactDir) || relativeArtifactDir === ".." || relativeArtifactDir.startsWith(`..${path.sep}`)) return [];
   const prior = readJson(path.join(artifactDir, "application-model.json"));
@@ -299,10 +301,11 @@ function uiMapTargetsTarget(map, target, targets) {
 }
 
 function loadTargetUiMaps(root, targets) {
-  const rootMap = loadUiMapAt(root, path.join(".autotap", "ui-map.json"));
+  const rootMap = loadUiMapAt(root, path.join(projectArtifactDirectory(root), "ui-map.json"));
   const records = targets.map((target) => {
     const scope = targetArtifactScope(target);
-    const expectedPath = posix(path.join(scope === "." ? "" : scope, ".autotap", "ui-map.json"));
+    const scopeRoot = path.join(root, scope === "." ? "" : scope);
+    const expectedPath = posix(path.join(scope === "." ? "" : scope, projectArtifactDirectory(scopeRoot), "ui-map.json"));
     let loaded = expectedPath === rootMap.summary.path ? rootMap : loadUiMapAt(root, expectedPath);
     if (!loaded.map && rootMap.map && (targets.length === 1 || uiMapTargetsTarget(rootMap.map, target, targets))) loaded = rootMap;
     return {
@@ -328,7 +331,7 @@ function loadTargetUiMaps(root, targets) {
   const prefixCoverage = unique.length > 1;
   const coverageValues = (field) => unique.flatMap((record) => (record.summary[field] || []).map((id) => prefixCoverage ? `${record.summary.targetId}:${id}` : id));
   const summary = {
-    path: unique.length === 1 ? unique[0].summary.path : ".autotap/ui-map.json",
+    path: unique.length === 1 ? unique[0].summary.path : ".tapp/ui-map.json",
     paths: unique.map((record) => record.summary.path).sort(),
     status: allObserved ? "observed" : someObserved ? "partial" : someInconclusive ? "inconclusive" : "missing",
     nodeCount: unique.reduce((total, record) => total + record.summary.nodeCount, 0),
@@ -348,14 +351,14 @@ function loadTargetUiMaps(root, targets) {
 
 function artifactScope(root, file) {
   const parts = relative(root, file).split("/");
-  const index = parts.indexOf(".autotap");
+  const index = parts.findIndex(isProjectArtifactDirectory);
   return index > 0 ? parts.slice(0, index).join("/") : ".";
 }
 
 function artifactFiles(root, inventory, kind, pattern) {
   return inventory.files.filter((file) => {
     const parts = relative(root, file).split("/");
-    const index = parts.indexOf(".autotap");
+    const index = parts.findIndex(isProjectArtifactDirectory);
     return index >= 0 && parts[index + 1] === kind && pattern.test(path.basename(file));
   }).sort();
 }
@@ -421,7 +424,7 @@ function applicationName(root, targets) {
   return pkg?.name || (targets.length === 1 ? targets[0].name : path.basename(root));
 }
 
-export async function inspectApplicationRepository({ projectDir, ownedUrl = "", platform = "", targetValidation = null, outDir = ".autotap" } = {}) {
+export async function inspectApplicationRepository({ projectDir, ownedUrl = "", platform = "", targetValidation = null, outDir = ".tapp" } = {}) {
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
   const inventory = walk(root);
   let targets = [
@@ -550,7 +553,7 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
     requirements.push({
       id: targets.length <= 1 ? "ui-map" : `${target.id}:ui-map`, severity: "blocking", status: summary.status === "inconclusive" ? "inconclusive" : "missing",
       message: target ? (summary.status === "inconclusive" ? `The UI Map for ${target.name} is inconclusive.` : `No grounded UI Map exists for ${target.name}.`) : "No repository UI Map has been grounded in a real run.",
-      remediation: target ? `Build/launch ${target.name}, explore the real target, and retain its map at ${summary.expectedPath || summary.path}.` : "Build/launch the target and run tapp init --explore so real exploration evidence is merged into .autotap/ui-map.json.",
+      remediation: target ? `Build/launch ${target.name}, explore the real target, and retain its map at ${summary.expectedPath || summary.path}.` : "Build/launch the target and run tapp init --explore so real exploration evidence is merged into .tapp/ui-map.json.",
     });
   }
   if (!contracts.length) requirements.push({ id: "contracts", severity: "warning", status: "missing", message: "No reviewed release contracts exist yet.", remediation: "Review the proposed release plan, then generate and validate a compact set of contracts." });
@@ -925,7 +928,7 @@ function invalidateGeneratedTaskFiles(root, plan) {
   for (const record of plan.generation?.generatedTasks || []) {
     if (!record.path) continue;
     const absolute = path.resolve(root, record.path);
-    const proposalRoot = path.join(root, ".autotap", "proposals", "tasks");
+    const proposalRoot = path.join(root, projectArtifactDirectory(root), "proposals", "tasks");
     if (!isInsideRoot(proposalRoot, absolute) || !fs.existsSync(absolute)) continue;
     const task = readJson(absolute);
     if (!task || task.generation?.origin !== "deterministic-ui-map") continue;
@@ -937,8 +940,8 @@ function invalidateGeneratedTaskFiles(root, plan) {
   }
 }
 
-export function writeInitArtifacts({ root, model, plan, outDir = ".autotap", refresh = false, invalidateValidation = false } = {}) {
-  const directory = path.resolve(root, outDir);
+export function writeInitArtifacts({ root, model, plan, outDir = ".tapp", refresh = false, invalidateValidation = false } = {}) {
+  const directory = path.resolve(root, projectArtifactDirectory(root, outDir));
   const modelPath = path.join(directory, "application-model.json");
   const planPath = path.join(directory, "release-plan.json");
   if (!refresh && (fs.existsSync(modelPath) || fs.existsSync(planPath))) throw new Error(`Init artifacts already exist under ${relative(root, directory)}; inspect them or rerun with --refresh to preserve reviewed decisions while updating evidence`);
@@ -1069,7 +1072,7 @@ function generatedTaskName(node, entryOnly, occupied, identity) {
   return `${base}${crypto.createHash("sha256").update(identity).digest("hex").slice(0, 6)}`;
 }
 
-function prepareMapBackedItem(item, map, existingTasks, taskDrafts, { targetId = "", mapPath = ".autotap/ui-map.json" } = {}) {
+function prepareMapBackedItem(item, map, existingTasks, taskDrafts, { targetId = "", mapPath = ".tapp/ui-map.json" } = {}) {
   const ground = (item.groundedBy || []).find((entry) => entry.type === "ui-map-node");
   if (!ground) throw new Error("Approved UI-only proposal is not grounded by a UI Map node");
   const nodes = new Map((map.nodes || []).map((node) => [node.id, node]));
@@ -1168,7 +1171,7 @@ function writeGeneratedTaskDrafts(root, taskDrafts) {
   for (const draft of [...taskDrafts.values()].sort((a, b) => a.name.localeCompare(b.name))) {
     const scopeRoot = path.resolve(root, draft.scope === "." || !draft.scope ? "" : draft.scope);
     if (!isInsideRoot(root, scopeRoot)) throw new Error(`Generated Task scope escapes repository: ${draft.scope}`);
-    const output = path.join(scopeRoot, ".autotap", "proposals", "tasks", `${kebab(draft.name)}.task.json`);
+    const output = path.join(scopeRoot, projectArtifactDirectory(scopeRoot), "proposals", "tasks", `${kebab(draft.name)}.task.json`);
     const definition = {
       kind: "task", version: 1, name: draft.name, description: draft.description,
       ...(Object.keys(draft.inputs || {}).length ? { inputs: draft.inputs } : {}),
@@ -1189,7 +1192,7 @@ function writeGeneratedTaskDrafts(root, taskDrafts) {
     }
     try {
       const task = loadTaskFile(output);
-      const mapPath = path.resolve(root, draft.mapPath || ".autotap/ui-map.json");
+      const mapPath = path.resolve(root, draft.mapPath || ".tapp/ui-map.json");
       if (!isInsideRoot(root, mapPath)) throw new Error(`Generated Task UI Map escapes repository: ${draft.mapPath}`);
       const map = readJson(mapPath);
       if (!map || map.schemaVersion !== 1) throw new Error(`Generated Task UI Map is missing or invalid: ${draft.mapPath}`);
@@ -1304,7 +1307,7 @@ export async function generateApprovedContractProposals(plan, { projectDir } = {
     let prepared = item;
     if (item.origin === "deterministic-ui-map-proposal") {
       const grounding = (item.groundedBy || []).find((entry) => entry.type === "ui-map-node");
-      const mapPath = grounding?.mapPath || ".autotap/ui-map.json";
+      const mapPath = grounding?.mapPath || ".tapp/ui-map.json";
       const absoluteMapPath = path.resolve(root, mapPath);
       const itemMap = isInsideRoot(root, absoluteMapPath) ? readJson(absoluteMapPath) : null;
       if (!itemMap || itemMap.schemaVersion !== 1) {
@@ -1329,7 +1332,7 @@ export async function generateApprovedContractProposals(plan, { projectDir } = {
     if (!prepared) continue;
     const scopeRoot = path.resolve(root, item.scope === "." || !item.scope ? "" : item.scope);
     if (scopeRoot !== root && !scopeRoot.startsWith(root + path.sep)) throw new Error(`Plan scope escapes repository: ${item.scope}`);
-    const output = path.join(scopeRoot, ".autotap", "proposals", "contracts", `${kebab(item.name)}.contract.ts`);
+    const output = path.join(scopeRoot, projectArtifactDirectory(scopeRoot), "proposals", "contracts", `${kebab(item.name)}.contract.ts`);
     const source = draftContractSource(prepared, projectConfiguration.config || {});
     if (fs.existsSync(output) && fs.readFileSync(output, "utf8") !== source) throw new Error(`Draft contract already exists with different content and was not overwritten: ${relative(root, output)}`);
     const created = !fs.existsSync(output);
@@ -1412,13 +1415,13 @@ export function recordContractProposalValidation(plan, { id = "", name = "", pla
 export function recordGeneratedTaskProposalValidation({ projectDir, item, platform, evidence = "", detail = "" } = {}) {
   if (!["ios", "android", "web"].includes(platform)) throw new Error("platform must be ios|android|web");
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
-  const proposalMarker = `${path.sep}.autotap${path.sep}proposals${path.sep}tasks${path.sep}`;
-  const reviewedMarker = `${path.sep}.autotap${path.sep}tasks${path.sep}`;
+  const proposalMarkers = [".tapp", ".autotap"].map((directory) => `${path.sep}${directory}${path.sep}proposals${path.sep}tasks${path.sep}`);
+  const reviewedMarkers = [".tapp", ".autotap"].map((directory) => `${path.sep}${directory}${path.sep}tasks${path.sep}`);
   const updated = [];
   for (const taskPath of item?.generation?.taskPaths || []) {
     const absolute = path.resolve(root, taskPath);
-    const proposed = isInsideRoot(root, absolute) && absolute.includes(proposalMarker);
-    const reviewed = isInsideRoot(root, absolute) && absolute.includes(reviewedMarker) && !absolute.includes(proposalMarker);
+    const proposed = isInsideRoot(root, absolute) && proposalMarkers.some((marker) => absolute.includes(marker));
+    const reviewed = isInsideRoot(root, absolute) && reviewedMarkers.some((marker) => absolute.includes(marker)) && !proposed;
     if ((!proposed && !reviewed) || !fs.existsSync(absolute)) throw new Error(`Generated Task is missing or outside Tapp Task directories: ${taskPath}`);
     const task = readJson(absolute);
     if (!task || task.kind !== "task" || task.generation?.origin !== "deterministic-ui-map") throw new Error(`Generated Task draft has invalid provenance: ${taskPath}`);
@@ -1458,10 +1461,13 @@ export function mergeGeneratedTaskProposalValidation(plan, updates = []) {
 }
 
 function promotedDestination(root, source, kind) {
-  const marker = `${path.sep}.autotap${path.sep}proposals${path.sep}${kind}${path.sep}`;
+  const marker = [".tapp", ".autotap"]
+    .map((directory) => `${path.sep}${directory}${path.sep}proposals${path.sep}${kind}${path.sep}`)
+    .find((candidate) => source.includes(candidate));
+  if (!marker) throw new Error(`Proposal ${kind.slice(0, -1)} is outside .tapp/proposals/${kind}: ${relative(root, source)}`);
   const index = source.indexOf(marker);
-  if (index < 0) throw new Error(`Proposal ${kind.slice(0, -1)} is outside .autotap/proposals/${kind}: ${relative(root, source)}`);
-  const destination = `${source.slice(0, index)}${path.sep}.autotap${path.sep}${kind}${path.sep}${source.slice(index + marker.length)}`;
+  const directory = marker.split(path.sep).filter(Boolean)[0];
+  const destination = `${source.slice(0, index)}${path.sep}${directory}${path.sep}${kind}${path.sep}${source.slice(index + marker.length)}`;
   if (!isInsideRoot(root, destination)) throw new Error(`Promotion destination escapes repository: ${destination}`);
   return destination;
 }
@@ -1480,7 +1486,7 @@ export async function promoteValidatedProposals(plan, { projectDir, ids = [] } =
 
   const mapCache = new Map();
   const mapForItem = (item) => {
-    const relativeMapPath = item.generation?.mapPath || (item.groundedBy || []).find((entry) => entry.type === "ui-map-node")?.mapPath || ".autotap/ui-map.json";
+    const relativeMapPath = item.generation?.mapPath || (item.groundedBy || []).find((entry) => entry.type === "ui-map-node")?.mapPath || ".tapp/ui-map.json";
     const absolute = path.resolve(root, relativeMapPath);
     if (!isInsideRoot(root, absolute)) throw new Error(`UI Map for '${item.name}' escapes the repository: ${relativeMapPath}`);
     if (!mapCache.has(absolute)) {
@@ -1499,7 +1505,7 @@ export async function promoteValidatedProposals(plan, { projectDir, ids = [] } =
     for (const taskPath of item.generation.taskPaths || []) {
       const source = path.resolve(root, taskPath);
       if (!fs.existsSync(source)) throw new Error(`Generated Task is missing: ${taskPath}`);
-      if (!String(source).includes(`${path.sep}.autotap${path.sep}proposals${path.sep}tasks${path.sep}`)) continue;
+      if (![".tapp", ".autotap"].some((directory) => String(source).includes(`${path.sep}${directory}${path.sep}proposals${path.sep}tasks${path.sep}`))) continue;
       const destination = promotedDestination(root, source, "tasks");
       moves.set(source, destination);
       let task = taskRecords.get(source);

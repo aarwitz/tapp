@@ -57,7 +57,7 @@
     "planItemIds": [
       "proposal_f03d19f34d1a1dae"
     ],
-    "mapPath": "shopdemo/.autotap/ui-map.json",
+    "mapPath": "shopdemo/.tapp/ui-map.json",
     "targetId": "target_b0450646e4866df7",
     "realValidation": {
       "android": {
@@ -70,6 +70,6 @@
       }
     },
     "promotedAt": "2026-08-05T15:06:28.278Z",
-    "promotedFrom": "shopdemo/.autotap/proposals/tasks/open-order-confirmed.task.json"
+    "promotedFrom": "shopdemo/.tapp/proposals/tasks/open-order-confirmed.task.json"
   }
 }

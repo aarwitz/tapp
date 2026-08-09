@@ -471,7 +471,7 @@ async function entriesFromDrop(event) {
 }
 
 // The webkitdirectory input (and some drop implementations) silently exclude hidden
-// entries, which destroys committed .autotap/ config. The File System Access picker
+// entries, which destroys committed .tapp/ config. The File System Access picker
 // enumerates hidden files, so it is preferred wherever it exists.
 async function entriesFromDirectoryHandle(handle, prefix = "") {
   const entries = [];
@@ -526,7 +526,7 @@ async function uploadRepository(name, entries, { hiddenComplete = false } = {}) 
     $("#operation-progress-bar").style.width = "100%";
     const hasHiddenEntries = entries.some((entry) => entry.path.split("/").some((part) => part.startsWith(".")));
     if (!hiddenComplete && !hasHiddenEntries) {
-      toast("Imported, but no hidden files (like .autotap/) came through — this browser's folder picker skips them. Committed Tapp config was not uploaded.", true);
+      toast("Imported, but no hidden files (like .tapp/) came through — this browser's folder picker skips them. Committed Tapp config was not uploaded.", true);
     } else {
       toast("Repository imported into an isolated Tapp workspace");
     }

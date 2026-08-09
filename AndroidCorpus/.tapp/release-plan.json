@@ -46,7 +46,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts"
+          "path": "demoapp/.tapp/contracts/settings-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -54,16 +54,16 @@
       "generation": {
         "id": "proposal_7a978be219ca61cd",
         "name": "settingsReachable",
-        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "path": "demoapp/.tapp/contracts/settings-reachable.contract.ts",
         "tasks": [
           "openDashboard",
           "openSettings"
         ],
         "taskPaths": [
-          "demoapp/.autotap/tasks/open-dashboard.task.json",
-          "demoapp/.autotap/tasks/open-settings.task.json"
+          "demoapp/.tapp/tasks/open-dashboard.task.json",
+          "demoapp/.tapp/tasks/open-settings.task.json"
         ],
-        "mapPath": "demoapp/.autotap/ui-map.json",
+        "mapPath": "demoapp/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -113,7 +113,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+          "path": "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
@@ -142,7 +142,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts"
+          "path": "logindemo/.tapp/contracts/profile-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -150,15 +150,15 @@
       "generation": {
         "id": "proposal_0d561e9f3f0c0204",
         "name": "profileReachable",
-        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "path": "logindemo/.tapp/contracts/profile-reachable.contract.ts",
         "tasks": [
           "signIn",
           "openProfile"
         ],
         "taskPaths": [
-          "logindemo/.autotap/tasks/open-profile.task.json"
+          "logindemo/.tapp/tasks/open-profile.task.json"
         ],
-        "mapPath": "logindemo/.autotap/ui-map.json",
+        "mapPath": "logindemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -219,7 +219,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+          "path": "shopdemo/.tapp/contracts/checkout-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -227,18 +227,18 @@
       "generation": {
         "id": "proposal_6c350caab7e83f8a",
         "name": "checkoutReachable",
-        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
         "tasks": [
           "openTrailBackpack",
           "openCart",
           "openCheckout"
         ],
         "taskPaths": [
-          "shopdemo/.autotap/tasks/open-cart.task.json",
-          "shopdemo/.autotap/tasks/open-checkout.task.json",
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/tasks/open-cart.task.json",
+          "shopdemo/.tapp/tasks/open-checkout.task.json",
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -292,7 +292,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+          "path": "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -300,7 +300,7 @@
       "generation": {
         "id": "proposal_f03d19f34d1a1dae",
         "name": "orderConfirmedReachable",
-        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
         "tasks": [
           "openTrailBackpack",
           "openCart",
@@ -308,12 +308,12 @@
           "openOrderConfirmed"
         ],
         "taskPaths": [
-          "shopdemo/.autotap/tasks/open-cart.task.json",
-          "shopdemo/.autotap/tasks/open-checkout.task.json",
-          "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/tasks/open-cart.task.json",
+          "shopdemo/.tapp/tasks/open-checkout.task.json",
+          "shopdemo/.tapp/tasks/open-order-confirmed.task.json",
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -366,7 +366,7 @@
           "id": "screen_6500249c60a84039",
           "observationCount": 1,
           "targetId": "target_b0450646e4866df7",
-          "mapPath": "shopdemo/.autotap/ui-map.json"
+          "mapPath": "shopdemo/.tapp/ui-map.json"
         }
       ],
       "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
@@ -396,7 +396,7 @@
           "id": "screen_66cd9688a2ae0682",
           "observationCount": 3,
           "targetId": "target_4fa4825fe4191b9c",
-          "mapPath": "demoapp/.autotap/ui-map.json"
+          "mapPath": "demoapp/.tapp/ui-map.json"
         }
       ],
       "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
@@ -428,7 +428,7 @@
           "id": "screen_1c42ddc0285b9c25",
           "observationCount": 1,
           "targetId": "target_b0450646e4866df7",
-          "mapPath": "shopdemo/.autotap/ui-map.json"
+          "mapPath": "shopdemo/.tapp/ui-map.json"
         }
       ],
       "requiredValidation": "Author reusable Tasks for observed transitions, then compile and replay the contract against the real target.",
@@ -472,9 +472,9 @@
       {
         "name": "openCart",
         "scope": "shopdemo",
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "targetId": "target_b0450646e4866df7",
-        "path": "shopdemo/.autotap/tasks/open-cart.task.json",
+        "path": "shopdemo/.tapp/tasks/open-cart.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -502,9 +502,9 @@
       {
         "name": "openCheckout",
         "scope": "shopdemo",
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "targetId": "target_b0450646e4866df7",
-        "path": "shopdemo/.autotap/tasks/open-checkout.task.json",
+        "path": "shopdemo/.tapp/tasks/open-checkout.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -532,9 +532,9 @@
       {
         "name": "openDashboard",
         "scope": "demoapp",
-        "mapPath": "demoapp/.autotap/ui-map.json",
+        "mapPath": "demoapp/.tapp/ui-map.json",
         "targetId": "target_4fa4825fe4191b9c",
-        "path": "demoapp/.autotap/tasks/open-dashboard.task.json",
+        "path": "demoapp/.tapp/tasks/open-dashboard.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -562,9 +562,9 @@
       {
         "name": "openOrderConfirmed",
         "scope": "shopdemo",
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "targetId": "target_b0450646e4866df7",
-        "path": "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+        "path": "shopdemo/.tapp/tasks/open-order-confirmed.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -592,9 +592,9 @@
       {
         "name": "openProfile",
         "scope": "logindemo",
-        "mapPath": "logindemo/.autotap/ui-map.json",
+        "mapPath": "logindemo/.tapp/ui-map.json",
         "targetId": "target_7488b63ddbfb90b0",
-        "path": "logindemo/.autotap/tasks/open-profile.task.json",
+        "path": "logindemo/.tapp/tasks/open-profile.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -622,9 +622,9 @@
       {
         "name": "openSettings",
         "scope": "demoapp",
-        "mapPath": "demoapp/.autotap/ui-map.json",
+        "mapPath": "demoapp/.tapp/ui-map.json",
         "targetId": "target_4fa4825fe4191b9c",
-        "path": "demoapp/.autotap/tasks/open-settings.task.json",
+        "path": "demoapp/.tapp/tasks/open-settings.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -652,9 +652,9 @@
       {
         "name": "openTrailBackpack",
         "scope": "shopdemo",
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "targetId": "target_b0450646e4866df7",
-        "path": "shopdemo/.autotap/tasks/open-trail-backpack.task.json",
+        "path": "shopdemo/.tapp/tasks/open-trail-backpack.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -684,16 +684,16 @@
       {
         "id": "proposal_7a978be219ca61cd",
         "name": "settingsReachable",
-        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "path": "demoapp/.tapp/contracts/settings-reachable.contract.ts",
         "tasks": [
           "openDashboard",
           "openSettings"
         ],
         "taskPaths": [
-          "demoapp/.autotap/tasks/open-dashboard.task.json",
-          "demoapp/.autotap/tasks/open-settings.task.json"
+          "demoapp/.tapp/tasks/open-dashboard.task.json",
+          "demoapp/.tapp/tasks/open-settings.task.json"
         ],
-        "mapPath": "demoapp/.autotap/ui-map.json",
+        "mapPath": "demoapp/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -718,15 +718,15 @@
       {
         "id": "proposal_0d561e9f3f0c0204",
         "name": "profileReachable",
-        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "path": "logindemo/.tapp/contracts/profile-reachable.contract.ts",
         "tasks": [
           "signIn",
           "openProfile"
         ],
         "taskPaths": [
-          "logindemo/.autotap/tasks/open-profile.task.json"
+          "logindemo/.tapp/tasks/open-profile.task.json"
         ],
-        "mapPath": "logindemo/.autotap/ui-map.json",
+        "mapPath": "logindemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -751,18 +751,18 @@
       {
         "id": "proposal_6c350caab7e83f8a",
         "name": "checkoutReachable",
-        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
         "tasks": [
           "openTrailBackpack",
           "openCart",
           "openCheckout"
         ],
         "taskPaths": [
-          "shopdemo/.autotap/tasks/open-cart.task.json",
-          "shopdemo/.autotap/tasks/open-checkout.task.json",
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/tasks/open-cart.task.json",
+          "shopdemo/.tapp/tasks/open-checkout.task.json",
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [
@@ -787,7 +787,7 @@
       {
         "id": "proposal_f03d19f34d1a1dae",
         "name": "orderConfirmedReachable",
-        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
         "tasks": [
           "openTrailBackpack",
           "openCart",
@@ -795,12 +795,12 @@
           "openOrderConfirmed"
         ],
         "taskPaths": [
-          "shopdemo/.autotap/tasks/open-cart.task.json",
-          "shopdemo/.autotap/tasks/open-checkout.task.json",
-          "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/tasks/open-cart.task.json",
+          "shopdemo/.tapp/tasks/open-checkout.task.json",
+          "shopdemo/.tapp/tasks/open-order-confirmed.task.json",
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
-        "mapPath": "shopdemo/.autotap/ui-map.json",
+        "mapPath": "shopdemo/.tapp/ui-map.json",
         "status": "promoted",
         "trusted": true,
         "staticValidation": [

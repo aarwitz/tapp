@@ -72,20 +72,20 @@ function planFor(name = "socialSystemWorks") {
     schemaVersion: 1,
     platform: "web",
     changedFiles: ["src/feed.ts"],
-    selected: [{ name, title: name, criticality: "critical", path: `.autotap/contracts/${name}.contract.ts`, tasks: ["observePost"], taskPaths: [".autotap/tasks/observe-post.yml"], reasons: [{ type: "task-source", task: "observePost", files: ["src/feed.ts"] }] }],
+    selected: [{ name, title: name, criticality: "critical", path: `.tapp/contracts/${name}.contract.ts`, tasks: ["observePost"], taskPaths: [".tapp/tasks/observe-post.yml"], reasons: [{ type: "task-source", task: "observePost", files: ["src/feed.ts"] }] }],
     skipped: [],
     impactedUiMap: { nodes: ["screen_feed"], edges: [] },
     uncoveredUiMap: { nodes: [], edges: [] },
     uncoveredChangedFiles: [],
-    maintenanceCandidates: [{ contract: name, tasks: ["observePost"], taskPaths: [".autotap/tasks/observe-post.yml"], changedFiles: ["src/feed.ts"], reason: "Task implementation or its owned UI surface changed", nextAction: "Replay first" }],
+    maintenanceCandidates: [{ contract: name, tasks: ["observePost"], taskPaths: [".tapp/tasks/observe-post.yml"], changedFiles: ["src/feed.ts"], reason: "Task implementation or its owned UI surface changed", nextAction: "Replay first" }],
     policy: {},
   };
 }
 
 test("disposable maintenance validation rejects stale digests before touching the source checkout", async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-maintenance-digest-"));
-  const taskPath = path.join(project, ".autotap", "tasks", "open-home.yml");
-  const contractPath = path.join(project, ".autotap", "contracts", "home.contract.ts");
+  const taskPath = path.join(project, ".tapp", "tasks", "open-home.yml");
+  const contractPath = path.join(project, ".tapp", "contracts", "home.contract.ts");
   fs.mkdirSync(path.dirname(taskPath), { recursive: true });
   fs.mkdirSync(path.dirname(contractPath), { recursive: true });
   fs.writeFileSync(taskPath, "kind: task\nversion: 1\nname: openHome\nsteps:\n  - tap: Home\n");
@@ -96,8 +96,8 @@ test("disposable maintenance validation rejects stale digests before touching th
     url: "http://127.0.0.1:1",
     proposal: {
       kind: "task-maintenance-patch",
-      contractIntent: { name: "homeWorks", path: ".autotap/contracts/home.contract.ts", sha256: "stale-contract" },
-      operations: [{ op: "replace", taskPath: ".autotap/tasks/open-home.yml", taskSha256: "stale-task", pointer: "/steps/0/tap", before: "Home", after: "home" }],
+      contractIntent: { name: "homeWorks", path: ".tapp/contracts/home.contract.ts", sha256: "stale-contract" },
+      operations: [{ op: "replace", taskPath: ".tapp/tasks/open-home.yml", taskSha256: "stale-task", pointer: "/steps/0/tap", before: "Home", after: "home" }],
     },
   }), /Task digest changed/);
   assert.equal(fs.readFileSync(taskPath, "utf8"), before);
@@ -105,8 +105,8 @@ test("disposable maintenance validation rejects stale digests before touching th
 
 test("automatic maintenance replay refuses a stateful contract without controlled lifecycle", async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-maintenance-lifecycle-"));
-  const taskPath = path.join(project, ".autotap", "tasks", "open-home.yml");
-  const contractPath = path.join(project, ".autotap", "contracts", "home.contract.ts");
+  const taskPath = path.join(project, ".tapp", "tasks", "open-home.yml");
+  const contractPath = path.join(project, ".tapp", "contracts", "home.contract.ts");
   fs.mkdirSync(path.dirname(taskPath), { recursive: true });
   fs.mkdirSync(path.dirname(contractPath), { recursive: true });
   fs.writeFileSync(taskPath, "kind: task\nversion: 1\nname: openHome\nsteps:\n  - tap: Home\n");
@@ -119,8 +119,8 @@ export default defineContract({name:"homeWorks",title:"Home works",businessValue
     url: "http://127.0.0.1:1",
     proposal: {
       kind: "task-maintenance-patch",
-      contractIntent: { name: "homeWorks", path: ".autotap/contracts/home.contract.ts", sha256: hash(contractPath) },
-      operations: [{ op: "replace", taskPath: ".autotap/tasks/open-home.yml", taskSha256: hash(taskPath), pointer: "/steps/0/tap", before: "Home", after: "home" }],
+      contractIntent: { name: "homeWorks", path: ".tapp/contracts/home.contract.ts", sha256: hash(contractPath) },
+      operations: [{ op: "replace", taskPath: ".tapp/tasks/open-home.yml", taskSha256: hash(taskPath), pointer: "/steps/0/tap", before: "Home", after: "home" }],
     },
   }), /requires controlled contract setup and teardown/);
   assert.equal(fs.readFileSync(taskPath, "utf8"), before);
@@ -215,7 +215,7 @@ test("PR selection is joined to replay evidence and emits a constrained maintena
   assert.equal(r.status, 1);
   assert.equal(r.report.prPlan.selected[0].execution.status, "failed");
   assert.equal(r.report.prPlan.maintenanceCandidates[0].disposition, "review-required");
-  assert.deepEqual(r.report.prPlan.maintenanceCandidates[0].proposal.editablePaths, [".autotap/tasks/observe-post.yml"]);
+  assert.deepEqual(r.report.prPlan.maintenanceCandidates[0].proposal.editablePaths, [".tapp/tasks/observe-post.yml"]);
   assert.deepEqual(r.report.prPlan.maintenanceCandidates[0].proposal.preservedIntent, ["socialSystemWorks"]);
   assert.match(r.markdown, /PR release plan/);
   assert.match(r.markdown, /existing contract remains failed and unchanged/);
@@ -235,16 +235,16 @@ test("a failed selector with stable map identity produces one unvalidated Task-o
   ].join("\n");
   const plan = planFor();
   plan.selected[0].tasks = ["createPost"];
-  plan.selected[0].taskPaths = [".autotap/tasks/create-post.yml"];
+  plan.selected[0].taskPaths = [".tapp/tasks/create-post.yml"];
   plan.maintenanceCandidates[0] = {
     contract: "socialSystemWorks",
-    contractPath: ".autotap/contracts/social-system.contract.ts",
+    contractPath: ".tapp/contracts/social-system.contract.ts",
     contractIntentSha256: "contract-digest",
     tasks: ["createPost"],
-    taskPaths: [".autotap/tasks/create-post.yml"],
+    taskPaths: [".tapp/tasks/create-post.yml"],
     changedFiles: ["src/feed.ts"],
     selectorReferences: [{
-      task: "createPost", taskPath: ".autotap/tasks/create-post.yml", taskSha256: "task-digest",
+      task: "createPost", taskPath: ".tapp/tasks/create-post.yml", taskSha256: "task-digest",
       platform: "web", action: "tap", target: "Publish", pointer: "/implementations/web/steps/1/tap",
       baselineControls: [{
         nodeId: "old-feed-id", nodeSemanticKey: "feed", nodeName: "Feed", controlId: "old-publish",
@@ -259,11 +259,11 @@ test("a failed selector with stable map identity produces one unvalidated Task-o
   assert.equal(proposal.kind, "task-maintenance-patch");
   assert.equal(proposal.status, "proposed-unvalidated");
   assert.equal(proposal.autoApply, false);
-  assert.deepEqual(proposal.contractIntent, { name: "socialSystemWorks", path: ".autotap/contracts/social-system.contract.ts", sha256: "contract-digest" });
+  assert.deepEqual(proposal.contractIntent, { name: "socialSystemWorks", path: ".tapp/contracts/social-system.contract.ts", sha256: "contract-digest" });
   assert.deepEqual(proposal.operations[0], {
     op: "replace",
     task: "createPost",
-    taskPath: ".autotap/tasks/create-post.yml",
+    taskPath: ".tapp/tasks/create-post.yml",
     taskSha256: "task-digest",
     pointer: "/implementations/web/steps/1/tap",
     before: "Publish",
@@ -377,8 +377,8 @@ test("native UI Map path evidence is joined by target identity rather than a web
 
 test("observed PR exploration preserves an existing human release-plan decision instead of proposing a duplicate", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-existing-plan-"));
-  fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
-  fs.writeFileSync(path.join(project, ".autotap", "release-plan.json"), JSON.stringify({
+  fs.mkdirSync(path.join(project, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(project, ".tapp", "release-plan.json"), JSON.stringify({
     schemaVersion: 1, kind: "tapp-release-plan", items: [{
       id: "proposal_pricing", name: "pricingReachable", decision: "deferred", origin: "deterministic-ui-map-proposal",
       groundedBy: [{ type: "ui-map-node", id: "screen_pricing" }],
@@ -406,7 +406,7 @@ test("observed PR exploration preserves an existing human release-plan decision 
   assert.equal(target.coverageProposal.status, "matches-existing-release-plan");
   assert.equal(target.coverageProposal.operation.op, "reconcile-item");
   assert.deepEqual(target.existingReleasePlanItem, {
-    path: ".autotap/release-plan.json", id: "proposal_pricing", name: "pricingReachable", decision: "deferred", origin: "deterministic-ui-map-proposal",
+    path: ".tapp/release-plan.json", id: "proposal_pricing", name: "pricingReachable", decision: "deferred", origin: "deterministic-ui-map-proposal",
     detail: "The repository release plan already records this grounded UI Map coverage decision; Tapp preserved it instead of proposing a duplicate.",
   });
   assert.match(r.markdown, /remains deferred; no duplicate or decision change was made/);

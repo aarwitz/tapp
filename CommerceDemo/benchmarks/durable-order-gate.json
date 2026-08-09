@@ -1,7 +1,7 @@
 {
   "measuredAt": "2026-08-05",
   "surface": "local Chromium via Playwright",
-  "releaseContract": "../.autotap/contracts/checkout-creates-durable-order.contract.ts",
+  "releaseContract": "../.tapp/contracts/checkout-creates-durable-order.contract.ts",
   "clean": {
     "qaVerdict": "ready",
     "releaseScore": 100,
@@ -63,7 +63,7 @@
     "proposalStatus": "validated-awaiting-review",
     "autoApplied": false,
     "operation": {
-      "taskPath": ".autotap/tasks/complete-checkout.yml",
+      "taskPath": ".tapp/tasks/complete-checkout.yml",
       "pointer": "/implementations/web/steps/4/tap",
       "before": "Place order",
       "after": "place-order"

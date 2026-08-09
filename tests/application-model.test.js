@@ -26,7 +26,7 @@ test("revalidating a promoted contract keeps item and top-level generation trust
   const generation = {
     id: "proposal_profile",
     name: "profileReachable",
-    path: ".autotap/contracts/profile-reachable.contract.ts",
+    path: ".tapp/contracts/profile-reachable.contract.ts",
     status: "requires-revalidation",
     trusted: false,
     replayRequired: true,
@@ -65,11 +65,11 @@ function fixture() {
   write(path.join(root, "android/gradlew"), "#!/bin/sh\n");
   write(path.join(root, "android/build.gradle"), "plugins { id 'com.android.application' version '9.3.0' apply false }\n");
   write(path.join(root, "android/app/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.partner' } }\n");
-  write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }], coverage: { nodes: ["sign-in"], edges: [] } });
-  write(path.join(root, ".autotap/tasks/open-settings.json"), { kind: "task", version: 1, name: "openSettings", steps: [{ tap: "Settings" }] });
-  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
+  write(path.join(root, ".tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }], coverage: { nodes: ["sign-in"], edges: [] } });
+  write(path.join(root, ".tapp/tasks/open-settings.json"), { kind: "task", version: 1, name: "openSettings", steps: [{ tap: "Settings" }] });
+  write(path.join(root, ".tapp/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"authenticationWorks",title:"Customers can sign in",businessValue:"Customers reach the product",criticality:"critical",platforms:["ios","android","web"],actors:{customer:{role:"member",credentials:{email:"private@example.test",password:"do-not-copy"}}},steps:[{actor:"customer",task:"signIn"}],coverage:{capabilities:["authentication"],sourcePaths:["src/auth"]}});`);
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "partner", platforms: ["web"], sourceRoot: "." },
     coverage: { tasks: ["signIn"], contracts: ["authenticationWorks"], uncoveredNodeIds: ["screen_settings"], uncoveredEdgeIds: [] },
@@ -108,7 +108,7 @@ test("tapp init constructs one evidence-classified model and grounded compact re
 test("a successful init Xcode build removes the scheme blocker with portable runtime evidence", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-xcode-proof-"));
   write(path.join(root, "Unshared.xcodeproj/project.pbxproj"), "// fixture");
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "com.example.unshared", platforms: ["ios"], sourceRoot: "." },
     coverage: { tasks: [], contracts: [], uncoveredNodeIds: ["screen_home"], uncoveredEdgeIds: [] },
@@ -148,7 +148,7 @@ test("a successful init Xcode build removes the scheme blocker with portable run
   assert.equal(withProof.plan.coverageGaps.unknownRequirements.some((item) => item.endsWith(":scheme")), false);
   assert.doesNotMatch(JSON.stringify(withProof.model), new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 
-  writeInitArtifacts({ ...withProof, root, outDir: ".autotap" });
+  writeInitArtifacts({ ...withProof, root, outDir: ".tapp" });
   const refreshed = await buildInitArtifacts({ projectDir: root, platform: "ios" });
   assert.equal(refreshed.model.targets[0].status, "configured", "source-only refresh must retain matching runtime validation");
   assert.equal(refreshed.model.targets[0].runtimeValidation.evidence.capture, "tapp-capture:ios-init-proof");
@@ -159,7 +159,7 @@ test("an empty UI Map remains inconclusive and blocks release planning", async (
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-empty-map-"));
   write(path.join(root, "package.json"), { name: "empty-map-app", dependencies: { vite: "1.0.0" } });
   write(path.join(root, "index.html"), "<main>fixture</main>");
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "empty", platforms: ["web"], sourceRoot: "." },
     nodes: [],
@@ -179,7 +179,7 @@ test("an observed state never hides an inconclusive exploration run", async () =
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-inconclusive-map-"));
   write(path.join(root, "package.json"), { name: "login-wall-app", dependencies: { vite: "1.0.0" } });
   write(path.join(root, "index.html"), "<main>fixture</main>");
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "login-wall", platforms: ["web"], sourceRoot: "." },
     provenance: {
@@ -226,13 +226,13 @@ test("a multi-target workspace uses the repository name instead of the first mod
   write(path.join(root, "gradlew"), "#!/bin/sh\n");
   write(path.join(root, "alpha/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.alpha' } }\n");
   write(path.join(root, "beta/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.beta' } }\n");
-  write(path.join(root, "alpha/.autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
-  write(path.join(root, "alpha/.autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"alphaAuthWorks",title:"Alpha authentication",businessValue:"Alpha users enter",criticality:"high",platforms:["android"],actors:{customer:{}},steps:[{actor:"customer",task:"signIn"}]});`);
+  write(path.join(root, "alpha/.tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
+  write(path.join(root, "alpha/.tapp/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"alphaAuthWorks",title:"Alpha authentication",businessValue:"Alpha users enter",criticality:"high",platforms:["android"],actors:{customer:{}},steps:[{actor:"customer",task:"signIn"}]});`);
   const { model } = await buildInitArtifacts({ projectDir: root });
   assert.equal(model.application.name, "MobileSuite");
   assert.deepEqual(model.artifacts.contracts.map((contract) => contract.name), ["alphaAuthWorks"]);
   assert.deepEqual(model.artifacts.contracts[0].actors, [{ name: "customer", session: "default", credentialRequirements: [], credentialBindings: {} }]);
-  assert.equal(model.artifacts.tasks[0].path, "alpha/.autotap/tasks/sign-in.json");
+  assert.equal(model.artifacts.tasks[0].path, "alpha/.tapp/tasks/sign-in.json");
 });
 
 test("a multi-target workspace reports target-scoped UI Map coverage without hiding missing targets", async () => {
@@ -241,7 +241,7 @@ test("a multi-target workspace reports target-scoped UI Map coverage without hid
   write(path.join(root, "gradlew"), "#!/bin/sh\n");
   write(path.join(root, "login/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.login' } }\n");
   write(path.join(root, "shop/build.gradle"), "plugins { id 'com.android.application' }\nandroid { defaultConfig { applicationId 'com.example.shop' } }\n");
-  write(path.join(root, "login/.autotap/ui-map.json"), {
+  write(path.join(root, "login/.tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "com.example.login", platforms: ["android"], sourceRoot: ".", entryNodes: { android: "screen_sign_in" }, navigationRoots: { android: "screen_sign_in" } },
     nodes: [{ id: "screen_sign_in", semanticKey: "sign-in", name: "Sign In", status: "observed", platforms: ["android"], controls: [], observation: { count: 1 } }],
@@ -255,7 +255,7 @@ test("a multi-target workspace reports target-scoped UI Map coverage without hid
   assert.equal(model.uiMap.nodeCount, 1);
   assert.deepEqual(model.uiMap.observedTargetIds, [login.id]);
   assert.deepEqual(model.uiMap.missingTargetIds, [shop.id]);
-  assert.equal(model.uiMaps.find((map) => map.targetId === login.id).path, "login/.autotap/ui-map.json");
+  assert.equal(model.uiMaps.find((map) => map.targetId === login.id).path, "login/.tapp/ui-map.json");
   assert.equal(model.uiMaps.find((map) => map.targetId === shop.id).status, "missing");
   assert.equal(model.requirements.some((item) => item.id === `${login.id}:ui-map`), false);
   assert.match(model.requirements.find((item) => item.id === `${shop.id}:ui-map`).message, /shop/);
@@ -263,24 +263,24 @@ test("a multi-target workspace reports target-scoped UI Map coverage without hid
   assert.equal(proposal.scope, "login");
   assert.deepEqual(proposal.platforms, ["android"]);
   assert.equal(proposal.groundedBy[0].targetId, login.id);
-  assert.equal(proposal.groundedBy[0].mapPath, "login/.autotap/ui-map.json");
+  assert.equal(proposal.groundedBy[0].mapPath, "login/.tapp/ui-map.json");
   const reviewed = reviewReleasePlan((await buildInitArtifacts({ projectDir: root })).plan, { approve: [proposal.id] });
   const generated = await generateApprovedContractProposals(reviewed, { projectDir: root });
   assert.deepEqual(generated.blocked, []);
-  assert.equal(generated.generated[0].mapPath, "login/.autotap/ui-map.json");
-  assert.match(generated.generated[0].path, /^login\/\.autotap\/proposals\/contracts\//);
-  assert.match(generated.generatedTasks[0].path, /^login\/\.autotap\/proposals\/tasks\//);
+  assert.equal(generated.generated[0].mapPath, "login/.tapp/ui-map.json");
+  assert.match(generated.generated[0].path, /^login\/\.tapp\/proposals\/contracts\//);
+  assert.match(generated.generatedTasks[0].path, /^login\/\.tapp\/proposals\/tasks\//);
   const generatedItem = generated.plan.items.find((item) => item.id === proposal.id);
   const taskEvidence = recordGeneratedTaskProposalValidation({ projectDir: root, item: generatedItem, platform: "android", evidence: "flow-android-target-map", detail: "real replay passed" });
   assert.equal(taskEvidence[0].trusted, true);
-  assert.match(taskEvidence[0].path, /^login\/\.autotap\/proposals\/tasks\//);
+  assert.match(taskEvidence[0].path, /^login\/\.tapp\/proposals\/tasks\//);
   let validated = mergeGeneratedTaskProposalValidation(generated.plan, taskEvidence);
   validated = recordContractProposalValidation(validated, { id: proposal.id, platform: "android", passed: true, evidence: "flow-android-target-map" });
   const promoted = await promoteValidatedProposals(validated, { projectDir: root, ids: [proposal.id] });
-  assert.equal(promoted.promotedContracts[0].path, "login/.autotap/contracts/sign-in-reachable.contract.ts");
-  assert.match(promoted.promotedTasks[0].path, /^login\/\.autotap\/tasks\//);
-  assert.deepEqual(promoted.mapPaths, [fs.realpathSync(path.join(root, "login", ".autotap", "ui-map.json"))]);
-  const covered = JSON.parse(fs.readFileSync(path.join(root, "login", ".autotap", "ui-map.json"), "utf8"));
+  assert.equal(promoted.promotedContracts[0].path, "login/.tapp/contracts/sign-in-reachable.contract.ts");
+  assert.match(promoted.promotedTasks[0].path, /^login\/\.tapp\/tasks\//);
+  assert.deepEqual(promoted.mapPaths, [fs.realpathSync(path.join(root, "login", ".tapp", "ui-map.json"))]);
+  const covered = JSON.parse(fs.readFileSync(path.join(root, "login", ".tapp", "ui-map.json"), "utf8"));
   assert.equal(covered.coverage.contracts.includes("signInReachable"), true);
 });
 
@@ -330,16 +330,16 @@ test("a deterministically managed web target does not invent an owned-URL blocke
 test("application model merges explicit actors and contract placeholders without persisting values", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-actors-"));
   write(path.join(root, "index.html"), "<main>social</main>");
-  write(path.join(root, ".autotap/project.json"), {
+  write(path.join(root, ".tapp/project.json"), {
     kind: "tapp-project-config", schemaVersion: 1,
     actors: {
       alice: { role: "member", session: "isolated", provisioning: "seeded", credentials: { email: { env: "ALICE_EMAIL" }, password: { env: "ALICE_PASSWORD" } } },
       bob: { role: "member", session: "isolated", provisioning: "seeded", credentials: { email: { env: "BOB_EMAIL" }, password: { env: "BOB_PASSWORD" } } },
     },
   });
-  write(path.join(root, ".autotap/tasks/open-feed.json"), { kind: "task", version: 1, name: "openFeed", steps: [{ tap: "Feed" }] });
-  write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", inputs: { email: { required: true, secret: true }, password: { required: true, secret: true } }, steps: [{ type: { field: "Email", value: "{{email}}" } }, { type: { field: "Password", value: "{{password}}" } }, { tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/social.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
+  write(path.join(root, ".tapp/tasks/open-feed.json"), { kind: "task", version: 1, name: "openFeed", steps: [{ tap: "Feed" }] });
+  write(path.join(root, ".tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", inputs: { email: { required: true, secret: true }, password: { required: true, secret: true } }, steps: [{ type: { field: "Email", value: "{{email}}" } }, { type: { field: "Password", value: "{{password}}" } }, { tap: "Sign in" }] });
+  write(path.join(root, ".tapp/contracts/social.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"socialWorks",title:"Social state propagates",businessValue:"Members interact",criticality:"critical",platforms:["web"],actors:{alice:{role:"member",session:"isolated",credentials:{email:"$ALICE_EMAIL",password:"$ALICE_PASSWORD"}},bob:{role:"member",session:"isolated",credentials:{email:"$BOB_EMAIL",password:"$BOB_PASSWORD"}}},steps:[{actor:"alice",task:"openFeed"},{actor:"bob",task:"openFeed"}]});`);
   const built = await buildInitArtifacts({ projectDir: root });
   const { model } = built;
@@ -364,9 +364,9 @@ export default defineContract({name:"socialWorks",title:"Social state propagates
 test("application model blocks missing and conflicting actor credential bindings", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-actor-conflict-"));
   write(path.join(root, "index.html"), "<main>app</main>");
-  write(path.join(root, ".autotap/project.json"), { kind: "tapp-project-config", schemaVersion: 1, actors: { alice: { credentials: { email: { env: "ALICE_EMAIL" } } } } });
-  write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"authWorks",title:"Auth works",businessValue:"Members enter",criticality:"critical",platforms:["web"],actors:{alice:{credentials:{email:"$OTHER_EMAIL",password:"literal-forbidden"}}},steps:[{actor:"alice",task:"signIn"}]});`);
+  write(path.join(root, ".tapp/project.json"), { kind: "tapp-project-config", schemaVersion: 1, actors: { alice: { credentials: { email: { env: "ALICE_EMAIL" } } } } });
+  write(path.join(root, ".tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
+  write(path.join(root, ".tapp/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"authWorks",title:"Auth works",businessValue:"Members enter",criticality:"critical",platforms:["web"],actors:{alice:{credentials:{email:"$OTHER_EMAIL",password:"literal-forbidden"}}},steps:[{actor:"alice",task:"signIn"}]});`);
   const { model } = await buildInitArtifacts({ projectDir: root });
   assert.equal(model.requirements.find((item) => item.id === "actor:alice:credential-bindings")?.severity, "blocking");
   assert.equal(model.requirements.find((item) => item.id === "actor:alice:credential-conflicts")?.severity, "blocking");
@@ -376,7 +376,7 @@ test("application model blocks missing and conflicting actor credential bindings
 test("planner proposes a grounded cross-actor propagation contract only with isolated actors, compatible Tasks, and reset lifecycle", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-cross-actor-plan-"));
   write(path.join(root, "index.html"), "<main>social</main>");
-  write(path.join(root, ".autotap/project.json"), {
+  write(path.join(root, ".tapp/project.json"), {
     kind: "tapp-project-config", schemaVersion: 1,
     actors: {
       alice: { role: "member", session: "isolated", provisioning: "seeded", credentials: { email: { env: "ALICE_EMAIL" }, password: { env: "ALICE_PASSWORD" } } },
@@ -387,7 +387,7 @@ test("planner proposes a grounded cross-actor propagation contract only with iso
       teardown: [{ request: { method: "POST", path: "/__tapp/reset", status: 200 } }],
     },
   });
-  write(path.join(root, ".autotap/tasks/sign-in.yml"), `kind: task
+  write(path.join(root, ".tapp/tasks/sign-in.yml"), `kind: task
 version: 1
 name: signIn
 inputs:
@@ -402,7 +402,7 @@ implementations:
       - type: { field: Password, value: "{{password}}" }
       - tap: Sign in
 `);
-  write(path.join(root, ".autotap/tasks/create-post.yml"), `kind: task
+  write(path.join(root, ".tapp/tasks/create-post.yml"), `kind: task
 version: 1
 name: createPost
 inputs:
@@ -439,7 +439,7 @@ implementations:
   assert.match(source, /"exists": "\$SHARED_POST"/);
   assert.doesNotMatch(source, /\$TEST_EMAIL|\$TEST_PASSWORD/);
 
-  const configPath = path.join(root, ".autotap/project.json");
+  const configPath = path.join(root, ".tapp/project.json");
   const noTeardown = JSON.parse(fs.readFileSync(configPath, "utf8"));
   delete noTeardown.lifecycle.teardown;
   write(configPath, noTeardown);
@@ -450,7 +450,7 @@ implementations:
 test("planner proposes a durable checkout contract only from reviewed outputs, order history, observed states, and reset lifecycle", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-durable-checkout-"));
   write(path.join(root, "index.html"), "<main>commerce</main>");
-  write(path.join(root, ".autotap/project.json"), {
+  write(path.join(root, ".tapp/project.json"), {
     kind: "tapp-project-config", schemaVersion: 1,
     actors: { customer: { role: "customer", session: "default", provisioning: "seeded", credentials: {} } },
     lifecycle: {
@@ -458,7 +458,7 @@ test("planner proposes a durable checkout contract only from reviewed outputs, o
       teardown: [{ request: { method: "POST", path: "/__tapp/reset", status: 200 } }],
     },
   });
-  write(path.join(root, ".autotap/tasks/complete-checkout.yml"), `kind: task
+  write(path.join(root, ".tapp/tasks/complete-checkout.yml"), `kind: task
 version: 1
 name: completeCheckout
 inputs:
@@ -477,7 +477,7 @@ implementations:
       - tap: Checkout
       - tap: Place order
 `);
-  write(path.join(root, ".autotap/tasks/open-orders.yml"), `kind: task
+  write(path.join(root, ".tapp/tasks/open-orders.yml"), `kind: task
 version: 1
 name: openOrders
 postconditions:
@@ -487,7 +487,7 @@ implementations:
     steps:
       - tap: Orders
 `);
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "commerce", platforms: ["web"], sourceRoot: ".", entryNodes: { web: "screen_shop" } },
     provenance: { lastRun: { id: "real-commerce-run", platform: "web", verdict: "ready", inconclusive: false } },
@@ -516,7 +516,7 @@ implementations:
   assert.match(source, /"task": "openOrders"/);
   assert.match(source, /"exists": "\$ORDERED_ITEM"/);
 
-  const mapPath = path.join(root, ".autotap/ui-map.json");
+  const mapPath = path.join(root, ".tapp/ui-map.json");
   const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
   map.nodes = map.nodes.filter((node) => node.semanticKey !== "orders");
   write(mapPath, map);
@@ -563,7 +563,7 @@ test("approved UI Map journeys generate reusable compositional Task drafts befor
   const home = "screen_home";
   const checkout = "screen_checkout";
   const confirmation = "screen_confirmation";
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "store", platforms: ["web"], sourceRoot: ".", entryNodes: { web: home } },
     provenance: { generatedBy: "tapp", runIds: ["web-1"], builds: [], firstObservedAt: "2026-08-04T00:00:00.000Z", lastObservedAt: "2026-08-04T00:00:00.000Z" },
@@ -596,7 +596,7 @@ test("approved UI Map journeys generate reusable compositional Task drafts befor
   assert.equal(confirmationResult.staticValidation[0].platform, "web");
   assert.ok(confirmationResult.staticValidation[0].deterministicSteps >= 6);
   for (const task of result.generatedTasks) {
-    assert.match(task.path, /^\.autotap\/proposals\/tasks\//);
+    assert.match(task.path, /^\.tapp\/proposals\/tasks\//);
     const definition = JSON.parse(fs.readFileSync(path.join(root, task.path), "utf8"));
     assert.equal(definition.generation.trusted, false);
     assert.equal(definition.coverage.edges.length, 1);
@@ -621,7 +621,7 @@ test("approved UI Map journeys generate reusable compositional Task drafts befor
   const taskUpdates = recordGeneratedTaskProposalValidation({ projectDir: root, item: confirmationItem, platform: "web", evidence: "flow-web-proof", detail: "real replay passed" });
   let validatedPlan = mergeGeneratedTaskProposalValidation(result.plan, taskUpdates);
   validatedPlan = recordContractProposalValidation(validatedPlan, { id: confirmationItem.id, platform: "web", passed: true, evidence: "flow-web-proof" });
-  write(path.join(root, ".autotap/release-plan.json"), validatedPlan);
+  write(path.join(root, ".tapp/release-plan.json"), validatedPlan);
   const rebuilt = await buildInitArtifacts({ projectDir: root, ownedUrl: "http://127.0.0.1:3000" });
   let refreshed = writeInitArtifacts({ ...rebuilt, root, refresh: true });
   assert.equal(refreshed.plan.items.find((item) => item.id === confirmationItem.id).generation.trusted, true, "source-only refresh preserves replay evidence");
@@ -641,19 +641,19 @@ test("approved UI Map journeys generate reusable compositional Task drafts befor
   const promoted = await promoteValidatedProposals(replayedPlan, { projectDir: root, ids: [invalidatedItem.id] });
   assert.deepEqual(promoted.promotedContracts.map((item) => item.name), ["orderConfirmationReachable"]);
   assert.deepEqual(promoted.promotedTasks.map((item) => item.name).sort(), ["openCheckout", "openOrderConfirmation"]);
-  assert.equal(fs.existsSync(path.join(root, ".autotap/contracts/order-confirmation-reachable.contract.ts")), true);
-  assert.equal(fs.existsSync(path.join(root, ".autotap/tasks/open-checkout.task.json")), true);
+  assert.equal(fs.existsSync(path.join(root, ".tapp/contracts/order-confirmation-reachable.contract.ts")), true);
+  assert.equal(fs.existsSync(path.join(root, ".tapp/tasks/open-checkout.task.json")), true);
   assert.equal(fs.existsSync(path.join(root, confirmationResult.path)), false, "promoted contract leaves the proposal staging area");
   assert.equal(fs.existsSync(path.join(root, confirmationResult.taskPaths[0])), false, "promoted Task leaves the proposal staging area");
   const promotedItem = promoted.plan.items.find((item) => item.id === invalidatedItem.id);
   assert.equal(promotedItem.decision, "accepted");
   assert.equal(promotedItem.generation.status, "promoted");
-  assert.match(promotedItem.generation.path, /^\.autotap\/contracts\//);
-  const coveredMap = JSON.parse(fs.readFileSync(path.join(root, ".autotap/ui-map.json"), "utf8"));
+  assert.match(promotedItem.generation.path, /^\.tapp\/contracts\//);
+  const coveredMap = JSON.parse(fs.readFileSync(path.join(root, ".tapp/ui-map.json"), "utf8"));
   assert.equal(coveredMap.coverage.tasks.includes("openCheckout"), true);
   assert.equal(coveredMap.coverage.contracts.includes("orderConfirmationReachable"), true);
 
-  write(path.join(root, ".autotap/release-plan.json"), promoted.plan);
+  write(path.join(root, ".tapp/release-plan.json"), promoted.plan);
   const postPromotionBuild = await buildInitArtifacts({ projectDir: root, ownedUrl: "http://127.0.0.1:3000" });
   const postPromotionRefresh = writeInitArtifacts({ ...postPromotionBuild, root, refresh: true });
   assert.equal(postPromotionRefresh.plan.items.filter((item) => item.name === "orderConfirmationReachable").length, 1, "promoted proposal reconciles to its committed contract identity");
@@ -670,7 +670,7 @@ test("UI Map proposal generation composes adjacent-edge Tasks once and preserves
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-reviewed-multi-edge-task-"));
   write(path.join(root, "package.json"), { name: "profile-app", scripts: { start: "node server.js" } });
   write(path.join(root, "index.html"), "<main>profile</main>");
-  write(path.join(root, ".autotap/tasks/open-profile.json"), {
+  write(path.join(root, ".tapp/tasks/open-profile.json"), {
     kind: "task", version: 1, name: "openProfile",
     preconditions: [{ screen: "Home" }],
     implementations: { web: { steps: [
@@ -680,7 +680,7 @@ test("UI Map proposal generation composes adjacent-edge Tasks once and preserves
     postconditions: [{ screen: "Profile" }],
     coverage: { nodes: ["home", "settings", "profile"], edges: ["edge_settings", "edge_profile"] },
   });
-  write(path.join(root, ".autotap/tasks/complete-onboarding.json"), {
+  write(path.join(root, ".tapp/tasks/complete-onboarding.json"), {
     kind: "task", version: 1, name: "completeOnboarding",
     inputs: { email: { required: true, secret: true }, password: { required: true, secret: true } },
     preconditions: [{ screen: "Welcome" }],
@@ -688,7 +688,7 @@ test("UI Map proposal generation composes adjacent-edge Tasks once and preserves
     postconditions: [{ screen: "Home" }],
     coverage: { nodes: ["welcome", "home"], edges: ["edge_onboarding"] },
   });
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "profile", platforms: ["web"], sourceRoot: ".", entryNodes: { web: "screen_welcome" }, navigationRoots: { web: "screen_home" } },
     provenance: { generatedBy: "tapp", runIds: ["web-1"], builds: [], firstObservedAt: "2026-08-05T00:00:00.000Z", lastObservedAt: "2026-08-05T00:00:00.000Z" },

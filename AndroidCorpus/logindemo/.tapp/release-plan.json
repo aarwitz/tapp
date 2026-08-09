@@ -43,7 +43,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/customer-sign-in.contract.ts"
+          "path": ".tapp/contracts/customer-sign-in.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."

@@ -90,9 +90,9 @@ npx -y @aarwitz/tapp ci install .
 ```
 
 The baseline command writes only after autonomous QA and every selected deterministic suite pass
-conclusively. It stores `.autotap/baselines/<platform>/<target-id>.json`; the generated workflow
+conclusively. It stores `.tapp/baselines/<platform>/<target-id>.json`; the generated workflow
 uses that exact target identity so two apps on the same platform never share a baseline. `ci
-install` writes `.github/workflows/tapp.yml` plus `.autotap/ci.json`, refuses unresolved build
+install` writes `.github/workflows/tapp.yml` plus `.tapp/ci.json`, refuses unresolved build
 configuration and existing-file collisions, and never commits, pushes, enables branch protection,
 or creates GitHub resources. Review and pin the generated Tapp release reference to its immutable
 commit SHA before production.
@@ -182,8 +182,8 @@ Then ask your agent:
 
 Full agent playbook: [AGENTS.md](./AGENTS.md) — ships inside the package so agents can read it too.
 Application-model and import contract: [`docs/application-model.md`](docs/application-model.md).
-The desktop Coverage view reads the same `.autotap/application-model.json`,
-`.autotap/release-plan.json`, and `.autotap/ui-map.json`, including explicit proposal review; it
+The desktop Coverage view reads the same `.tapp/application-model.json`,
+`.tapp/release-plan.json`, and `.tapp/ui-map.json`, including explicit proposal review; it
 does not maintain a separate product model. Map nodes identify both the real launch entry and the
 deterministic per-platform navigation root used for bounded changed-surface replay.
 
@@ -271,8 +271,8 @@ The first successful, conclusive run on `main` seeds a repository-scoped Actions
 90-day baseline artifact. Both are keyed by platform and stable application-model target id. Pull requests automatically restore it and fail only on **new**
 high/critical findings or broken Flows—not pre-existing debt. No baseline commit or PAT is required.
 If you prefer a reviewed, durable baseline, run `tapp baseline create` and commit the generated
-`.autotap/baselines/<platform>/<target-id>.json`; `tapp ci install` wires its explicit path into the
-corresponding job. The legacy `.autotap/baseline.json` is still recognized. Automatic baseline restore and the PR comment need `actions: read` and
+`.tapp/baselines/<platform>/<target-id>.json`; `tapp ci install` wires its explicit path into the
+corresponding job. The legacy `.tapp/baseline.json` is still recognized. Automatic baseline restore and the PR comment need `actions: read` and
 `pull-requests: write` as shown above. Secrets are unavailable to workflows from forks, so
 auth-gated apps should either use a non-secret UI-testing launch argument or skip the gate for
 untrusted forks.
@@ -305,14 +305,14 @@ or accept a prebuilt one:
     android-app-id: com.acme.app
     android-project: android
     android-task: :app:assembleDebug
-    flows: android/.autotap/flows/*.yml
+    flows: android/.tapp/flows/*.yml
 ```
 
 For web, pass `platform: web` plus `web-target:` and Tapp uses the application model to run its
 lockfile-backed install/build, start a detected package script or read-only static server, wait for
 readiness, gate it, and stop it even on failure. Pass `url:` instead for an already-running owned
 environment. Add
-`scenarios: .autotap/scenarios/*.yml` to gate isolated cross-account journeys; see
+`scenarios: .tapp/scenarios/*.yml` to gate isolated cross-account journeys; see
 [`docs/scenarios.md`](docs/scenarios.md). Automatic
 baselines are isolated by platform and target, so two same-platform apps are never compared.
 
@@ -351,8 +351,11 @@ verdict calculation run entirely locally — no telemetry, nothing phones home. 
 features are explicit: finding enrichment requires `TAPP_ENABLE_REMOTE_AI=1` (an ambient
 API key alone never changes data handling), and AI flow generation / `assert_ai` only run
 when you invoke them; these send selected metadata (screen names, finding titles) to your
-configured model provider. Runtime configuration uses `TAPP_*` environment variables; deprecated
-aliases remain readable for compatibility.
+configured model provider. Runtime configuration uses `TAPP_*` environment variables. Repository
+artifacts live under `.tapp/`, and desktop run configuration uses `.tapp.yml`. Existing
+`.autotap/`, `.autotap.yml`, and `AUTOTAP_*` inputs remain readable as migration fallbacks; when
+both names exist, Tapp uses the canonical one. Rename the old directory/config in your next
+reviewed repository change—no secrets or evidence formats need to be rewritten.
 
 Committed Flow replay, recording a driven session, autonomous exploration, exact assertions,
 regression comparison, and CI gating require **no API key and no coding agent at runtime**. AI is

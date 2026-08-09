@@ -45,7 +45,7 @@ test("shared interactive session drives and captures a real web application", { 
     assert.ok(Buffer.from(frame.data, "base64").length > 1000);
 
     const saved = await saveInteractiveSessionFlow({ projectDir:project, name:"Recorded browser journey", url });
-    assert.equal(saved.path, ".autotap/flows/recorded-browser-journey.yml");
+    assert.equal(saved.path, ".tapp/flows/recorded-browser-journey.yml");
     assert.match(saved.yaml, /platform: web/);
     assert.match(saved.yaml, /\$TEST_EMAIL/);
     assert.doesNotMatch(saved.yaml, /private@example\.test/);

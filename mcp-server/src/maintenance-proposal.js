@@ -125,16 +125,16 @@ export async function validateWebMaintenanceProposal({ proposal, projectDir, url
   if (!projectDir || !url) throw new Error("web maintenance validation requires projectDir and the running target URL");
   const root = fs.realpathSync(path.resolve(projectDir));
   const operation = proposal.operations[0];
-  const taskRoot = fs.realpathSync(path.join(root, ".autotap", "tasks"));
+  const taskRoot = fs.realpathSync(path.join(root, ".tapp", "tasks"));
   const sourceTask = fs.realpathSync(path.resolve(root, operation.taskPath));
   const sourceContract = fs.realpathSync(path.resolve(root, proposal.contractIntent.path));
-  if (!inside(taskRoot, sourceTask)) throw new Error("maintenance Task must be a regular reviewed file under .autotap/tasks");
+  if (!inside(taskRoot, sourceTask)) throw new Error("maintenance Task must be a regular reviewed file under .tapp/tasks");
   if (!inside(root, sourceContract)) throw new Error("maintenance contract must remain inside the project");
   if (digest(sourceTask) !== operation.taskSha256) throw new Error("Task digest changed after the proposal was created");
   if (digest(sourceContract) !== proposal.contractIntent.sha256) throw new Error("release-contract intent digest changed after the proposal was created");
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-maintenance-validation-"));
-  const tempTasks = path.join(tempRoot, ".autotap", "tasks");
+  const tempTasks = path.join(tempRoot, ".tapp", "tasks");
   const stem = String(proposal.contractIntent.name || "contract").replace(/[^A-Za-z0-9._-]/g, "-");
   const outputDir = evidenceDir ? path.resolve(evidenceDir, stem) : path.join(tempRoot, "evidence");
   const logPath = path.join(outputDir, "validation.log");
@@ -153,7 +153,7 @@ export async function validateWebMaintenanceProposal({ proposal, projectDir, url
     if (!(contract.setup || []).length || !(contract.teardown || []).length) {
       throw new Error("automatic disposable maintenance validation requires controlled contract setup and teardown");
     }
-    const pseudoContractPath = path.join(tempRoot, ".autotap", "contracts", path.basename(sourceContract));
+    const pseudoContractPath = path.join(tempRoot, ".tapp", "contracts", path.basename(sourceContract));
     const execution = compileReleaseContract(contract, { platform: "web", sourcePath: pseudoContractPath });
     const result = await runWebFlow({ flow: execution, url, logPath, screenshotDir: outputDir });
     const contractUnchanged = digest(sourceContract) === proposal.contractIntent.sha256;

@@ -1,8 +1,8 @@
 {
   "measuredAt": "2026-08-04",
   "surface": "local Chromium via Playwright",
-  "releaseContract": "../.autotap/contracts/social-system.contract.ts",
-  "compiledScenario": "../.autotap/scenarios/social-system.yml",
+  "releaseContract": "../.tapp/contracts/social-system.contract.ts",
+  "compiledScenario": "../.tapp/scenarios/social-system.yml",
   "clean": {
     "qaVerdict": "ready",
     "releaseScore": 100,
@@ -46,7 +46,7 @@
       "contractExecution": "failed",
       "maintenanceDisposition": "review-required",
       "maintenanceStatus": "unclassified",
-      "editablePaths": [".autotap/tasks/create-post.yml"],
+      "editablePaths": [".tapp/tasks/create-post.yml"],
       "preservedIntent": ["socialSystemWorks"],
       "gateExitCode": 1
     }

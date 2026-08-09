@@ -19,7 +19,7 @@ run_fixture() {
   mkdir -p "$output_dir"
   echo "Testing Android corpus fixture: $module ($app_id)"
   "$ROOT/scripts/ci-gate.sh" --platform android --apk "$apk" --app-id "$app_id" \
-    "${SERIAL_ARGS[@]}" --actions 12 --timeout 180 --flows "$CORPUS/$module/.autotap/flows/$flow" \
+    "${SERIAL_ARGS[@]}" --actions 12 --timeout 180 --flows "$CORPUS/$module/.tapp/flows/$flow" \
     --project-dir "$CORPUS/$module" --json-out "$output_dir/report.json" --md-out "$output_dir/report.md"
 }
 

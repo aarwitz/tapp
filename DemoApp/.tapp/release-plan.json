@@ -46,7 +46,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/create-complete-task.contract.ts"
+          "path": ".tapp/contracts/create-complete-task.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
@@ -75,7 +75,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/onboarding-summary.contract.ts"
+          "path": ".tapp/contracts/onboarding-summary.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."
@@ -104,7 +104,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/update-profile-reachable.contract.ts"
+          "path": ".tapp/contracts/update-profile-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -112,7 +112,7 @@
       "generation": {
         "id": "proposal_b521734abe46c98b",
         "name": "updateProfileReachable",
-        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "path": ".tapp/contracts/update-profile-reachable.contract.ts",
         "tasks": [
           "completeOnboarding",
           "openUpdateProfile"
@@ -178,7 +178,7 @@
       "groundedBy": [
         {
           "type": "task",
-          "path": ".autotap/tasks/open-release-checklist.yml"
+          "path": ".tapp/tasks/open-release-checklist.yml"
         },
         {
           "type": "capability",
@@ -222,7 +222,7 @@
       {
         "id": "proposal_b521734abe46c98b",
         "name": "updateProfileReachable",
-        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "path": ".tapp/contracts/update-profile-reachable.contract.ts",
         "tasks": [
           "completeOnboarding",
           "openUpdateProfile"

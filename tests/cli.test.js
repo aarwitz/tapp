@@ -46,7 +46,7 @@ test("tapp actor configures only environment-variable bindings and lists them wi
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-actor-cli-"));
   const configured = execFileSync("node", [tappBin, "actor", "set", "alice", project, "--role", "member", "--session", "isolated", "--provisioning", "seeded", "--credential", "email=ALICE_EMAIL", "--credential", "password=ALICE_PASSWORD"], { cwd: root, encoding: "utf8" });
   assert.match(configured, /No credential values were accepted or written/);
-  const persisted = fs.readFileSync(path.join(project, ".autotap", "project.json"), "utf8");
+  const persisted = fs.readFileSync(path.join(project, ".tapp", "project.json"), "utf8");
   assert.match(persisted, /ALICE_EMAIL/);
   assert.doesNotMatch(persisted, /alice@example|password-value/);
   const listed = execFileSync("node", [tappBin, "actor", "list", project], { cwd: root, encoding: "utf8" });
@@ -60,7 +60,7 @@ test("tapp actor configures only environment-variable bindings and lists them wi
 
 test("tapp validates and compiles a reusable Task without an agent or target", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-task-cli-"));
-  const taskDir = path.join(rootDir, ".autotap", "tasks");
+  const taskDir = path.join(rootDir, ".tapp", "tasks");
   fs.mkdirSync(taskDir, { recursive: true });
   const taskPath = path.join(taskDir, "open-home.json");
   const compiledPath = path.join(rootDir, "compiled.json");
@@ -88,7 +88,7 @@ test("tapp ci help documents the portable gate without requiring Xcode", () => {
 });
 
 test("tapp validates a committed Android Flow without an agent or device", () => {
-  const out = execFileSync("node", [tappBin, "flow", "validate", "AndroidCorpus/demoapp/.autotap/flows/smoke.yml"], {
+  const out = execFileSync("node", [tappBin, "flow", "validate", "AndroidCorpus/demoapp/.tapp/flows/smoke.yml"], {
     encoding: "utf8", cwd: root,
   });
   assert.match(out, /Valid android Flow/);
@@ -96,7 +96,7 @@ test("tapp validates a committed Android Flow without an agent or device", () =>
 });
 
 test("tapp validates a committed multi-actor Scenario without a browser or model", { skip: !hasSocialDemo }, () => {
-  const out = execFileSync("node", [tappBin, "scenario", "validate", "SocialDemo/.autotap/scenarios/social-system.yml"], {
+  const out = execFileSync("node", [tappBin, "scenario", "validate", "SocialDemo/.tapp/scenarios/social-system.yml"], {
     cwd: root, encoding: "utf8",
   });
   assert.match(out, /Valid web Scenario/);
@@ -106,7 +106,7 @@ test("tapp validates a committed multi-actor Scenario without a browser or model
 test("tapp validates and compiles a TypeScript release contract without an agent or target", { skip: !hasSocialDemo }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-contract-cli-"));
   const outPath = path.join(dir, "social.json");
-  const contractPath = "SocialDemo/.autotap/contracts/social-system.contract.ts";
+  const contractPath = "SocialDemo/.tapp/contracts/social-system.contract.ts";
   const validated = execFileSync("node", [tappBin, "contract", "validate", contractPath], { cwd: root, encoding: "utf8" });
   assert.match(validated, /Valid Release Contract/);
   assert.match(validated, /critical, 2 actors/);
@@ -127,14 +127,14 @@ test("tapp produces a reviewable PR contract plan from explicit changed files", 
   assert.deepEqual(plan.uncoveredChangedFiles, ["unowned.ts"]);
 
   const nativeProject = path.join(dir, "native-project");
-  const nativeAutotap = path.join(nativeProject, ".autotap");
-  fs.mkdirSync(path.join(nativeAutotap, "tasks"), { recursive: true });
-  fs.writeFileSync(path.join(nativeAutotap, "tasks", "open-update-profile.json"), JSON.stringify({
+  const nativeTapp = path.join(nativeProject, ".tapp");
+  fs.mkdirSync(path.join(nativeTapp, "tasks"), { recursive: true });
+  fs.writeFileSync(path.join(nativeTapp, "tasks", "open-update-profile.json"), JSON.stringify({
     kind: "task", version: 1, name: "openUpdateProfile",
     implementations: { ios: { steps: [{ tap: "Settings" }, { wait_for: "Settings" }, { tap: "Update Profile" }, { wait_for: "Update Profile" }] } },
     coverage: { nodes: ["update-profile"], edges: ["edge_settings", "edge_profile"], sourcePaths: ["Sources/SettingsView.swift"] },
   }));
-  fs.writeFileSync(path.join(nativeAutotap, "ui-map.json"), JSON.stringify({
+  fs.writeFileSync(path.join(nativeTapp, "ui-map.json"), JSON.stringify({
     schemaVersion: 1,
     app: { target: "com.example.app", platforms: ["ios"], navigationRoots: { ios: "screen_dashboard" } },
     coverage: { tasks: [], contracts: [], uncoveredNodeIds: ["screen_update_profile"], uncoveredEdgeIds: ["edge_settings", "edge_profile"] },
@@ -177,12 +177,12 @@ test("tapp init produces a grounded dry-run model and explicit plan review prese
 
 test("tapp baseline import and CI install complete the reviewable repository patch without external writes", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-install-cli-"));
-  fs.mkdirSync(path.join(project, ".autotap", "contracts"), { recursive: true });
+  fs.mkdirSync(path.join(project, ".tapp", "contracts"), { recursive: true });
   fs.writeFileSync(path.join(project, "index.html"), "<main>site</main>");
-  fs.writeFileSync(path.join(project, ".autotap", "contracts", "home.contract.ts"), "fixture");
+  fs.writeFileSync(path.join(project, ".tapp", "contracts", "home.contract.ts"), "fixture");
   const target = { id: "target_web_site", platform: "web", name: "site", sourcePath: ".", status: "configured", build: { tool: "static-files", dependencyStatus: "not-required" }, runtime: { management: "tapp-managed", ownedUrl: null } };
-  const model = { kind: "tapp-application-model", targets: [target], actors: [], artifacts: { contracts: [{ name: "homeWorks", path: ".autotap/contracts/home.contract.ts", scope: ".", platforms: ["web"] }] } };
-  fs.writeFileSync(path.join(project, ".autotap", "application-model.json"), JSON.stringify(model));
+  const model = { kind: "tapp-application-model", targets: [target], actors: [], artifacts: { contracts: [{ name: "homeWorks", path: ".tapp/contracts/home.contract.ts", scope: ".", platforms: ["web"] }] } };
+  fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), JSON.stringify(model));
   const gateReport = path.join(project, "gate-report.json");
   fs.writeFileSync(gateReport, JSON.stringify({ platform: "web", targetKey: target.id, verdict: "ready", inconclusive: false, findings: [], screens: ["Home"], screensExplored: 1, actionsPerformed: 2, flows: [], scenarios: [], contracts: [{ name: "Home works", passed: true }], gate: { failed: false, reasons: [] } }));
   const baseline = execFileSync("node", [tappBin, "baseline", "create", project, "--platform", "web", "--from", gateReport], { cwd: root, encoding: "utf8" });
@@ -192,8 +192,8 @@ test("tapp baseline import and CI install complete the reviewable repository pat
   assert.match(installed, /did not commit, push, enable branch protection, or create GitHub resources/);
   const workflow = fs.readFileSync(path.join(project, ".github", "workflows", "tapp.yml"), "utf8");
   assert.match(workflow, /target-key: "target_web_site"/);
-  assert.match(workflow, /baseline: "\.autotap\/baselines\/web\/target_web_site\.json"/);
-  const ci = JSON.parse(fs.readFileSync(path.join(project, ".autotap", "ci.json"), "utf8"));
+  assert.match(workflow, /baseline: "\.tapp\/baselines\/web\/target_web_site\.json"/);
+  const ci = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "ci.json"), "utf8"));
   assert.equal(ci.status, "ready-for-review");
   let collision;
   try { execFileSync("node", [tappBin, "ci", "install", project], { cwd: root, encoding: "utf8", stdio: "pipe" }); }
@@ -214,11 +214,11 @@ test("tapp init --explore rejects dry-run before browser work", () => {
 test("tapp init --explore safely refreshes existing artifacts through shared semantics", { skip: skipRealBrowser }, () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-explore-refresh-"));
   fs.writeFileSync(path.join(project, "index.html"), "<main>fixture</main>");
-  fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
-  fs.writeFileSync(path.join(project, ".autotap", "application-model.json"), "{}\n");
+  fs.mkdirSync(path.join(project, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), "{}\n");
   const refreshed = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--url", "http://127.0.0.1:9"], { cwd: root, encoding: "utf8", stdio: "pipe" });
   assert.match(refreshed, /Tapp init/);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(project, ".autotap", "application-model.json"), "utf8")).kind, "tapp-application-model");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(project, ".tapp", "application-model.json"), "utf8")).kind, "tapp-application-model");
 });
 
 test("tapp init --explore starts and stops a detected owned web target when URL is omitted", { skip: skipRealBrowser }, async () => {
@@ -260,37 +260,37 @@ test("tapp init --explore grounds a fresh repository map before proposing contra
     const output = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--url", `http://127.0.0.1:${port}`, "--actions", "6", "--timeout", "60", "--json-out", outPath], { cwd: root, encoding: "utf8" });
     assert.match(output, /Exploration: .*evidence:/);
     assert.match(output, /UI Map: observed/);
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "ui-map.json")), true);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "ui-map.json")), true);
     const result = JSON.parse(fs.readFileSync(outPath, "utf8"));
-    const persistedMap = JSON.parse(fs.readFileSync(path.join(project, ".autotap", "ui-map.json"), "utf8"));
+    const persistedMap = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "ui-map.json"), "utf8"));
     assert.equal(persistedMap.provenance.lastRun.id, result.exploration.capture.id);
     assert.equal(persistedMap.provenance.lastRun.platform, "web");
     assert.equal(typeof persistedMap.provenance.lastRun.inconclusive, "boolean");
     assert.ok(result.model.uiMap.nodeCount >= 2);
     assert.equal(result.exploration.platform, "web");
-    assert.equal(result.exploration.uiMapPath, path.join(fs.realpathSync(project), ".autotap", "ui-map.json"));
+    assert.equal(result.exploration.uiMapPath, path.join(fs.realpathSync(project), ".tapp", "ui-map.json"));
     assert.equal(result.plan.items.some((item) => item.origin === "deterministic-ui-map-proposal"), true);
     const checkout = result.plan.items.find((item) => item.name === "checkoutReachable");
     assert.ok(checkout, "runtime map proposes the observed checkout surface");
-    const planPath = path.join(project, ".autotap", "release-plan.json");
+    const planPath = path.join(project, ".tapp", "release-plan.json");
     execFileSync("node", [tappBin, "plan", "review", planPath, "--approve", checkout.id], { cwd: root, encoding: "utf8" });
     const generated = execFileSync("node", [tappBin, "plan", "generate", planPath, "--project-dir", project], { cwd: root, encoding: "utf8" });
     assert.match(generated, /1 grounded Task draft/);
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "proposals", "tasks", "open-checkout.task.json")), true);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "proposals", "tasks", "open-checkout.task.json")), true);
     const validated = execFileSync("node", [tappBin, "plan", "validate", planPath, "--project-dir", project, "--platform", "web", "--url", `http://127.0.0.1:${port}`], { cwd: root, encoding: "utf8" });
     assert.match(validated, /1 passed · 0 failed on web/);
     const validatedPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
     assert.equal(validatedPlan.items.find((item) => item.id === checkout.id).generation.trusted, true);
     assert.equal(validatedPlan.generation.generatedTasks.find((item) => item.name === "openCheckout").trusted, true);
-    const validatedTask = JSON.parse(fs.readFileSync(path.join(project, ".autotap", "proposals", "tasks", "open-checkout.task.json"), "utf8"));
+    const validatedTask = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "proposals", "tasks", "open-checkout.task.json"), "utf8"));
     assert.equal(validatedTask.generation.trusted, true);
     assert.equal(validatedTask.generation.realValidation.web.status, "passed");
     assert.match(validatedTask.generation.realValidation.web.evidence, /flow-web-/);
     const promoted = execFileSync("node", [tappBin, "plan", "promote", planPath, "--project-dir", project, "--item", checkout.id], { cwd: root, encoding: "utf8" });
     assert.match(promoted, /1 Task\(s\) · 1 release contract\(s\)/);
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "tasks", "open-checkout.task.json")), true);
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "contracts", "checkout-reachable.contract.ts")), true);
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "proposals", "tasks", "open-checkout.task.json")), false);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "tasks", "open-checkout.task.json")), true);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "contracts", "checkout-reachable.contract.ts")), true);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "proposals", "tasks", "open-checkout.task.json")), false);
     const promotedPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
     assert.equal(promotedPlan.items.find((item) => item.id === checkout.id).generation.status, "promoted");
   } finally {
@@ -301,14 +301,14 @@ test("tapp init --explore grounds a fresh repository map before proposing contra
 test("tapp init discovers, validates, and fault-checks a grounded cross-actor contract from a contract-free repository", { skip: skipRealBrowser || !hasSocialDemo }, async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-cross-actor-discovery-cli-"));
   for (const file of ["package.json", "index.html", "app.js", "styles.css", "server.js"]) fs.copyFileSync(path.join(root, "SocialDemo", file), path.join(project, file));
-  fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
-  fs.cpSync(path.join(root, "SocialDemo", ".autotap", "tasks"), path.join(project, ".autotap", "tasks"), { recursive: true });
-  fs.copyFileSync(path.join(root, "SocialDemo", ".autotap", "project.json"), path.join(project, ".autotap", "project.json"));
+  fs.mkdirSync(path.join(project, ".tapp"), { recursive: true });
+  fs.cpSync(path.join(root, "SocialDemo", ".tapp", "tasks"), path.join(project, ".tapp", "tasks"), { recursive: true });
+  fs.copyFileSync(path.join(root, "SocialDemo", ".tapp", "project.json"), path.join(project, ".tapp", "project.json"));
   const actorEnv = { ...process.env, ALICE_EMAIL: "alice@example.test", ALICE_PASSWORD: "demo", BOB_EMAIL: "bob@example.test", BOB_PASSWORD: "demo", OCQA_TEST_EMAIL: "alice@example.test", OCQA_TEST_PASSWORD: "demo", TAPP_HOME: path.join(project, "tapp-home") };
   const initPath = path.join(project, "init.json");
   const initialized = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "15", "--timeout", "120", "--email", "alice@example.test", "--password", "demo", "--json-out", initPath], { cwd: root, encoding: "utf8", env: actorEnv });
   assert.match(initialized, /UI Map: observed · 3 states · 2 transitions/);
-  const planPath = path.join(project, ".autotap", "release-plan.json");
+  const planPath = path.join(project, ".tapp", "release-plan.json");
   let plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
   const proposal = plan.items.find((item) => item.origin === "deterministic-cross-actor-proposal");
   assert.equal(proposal.name, "postPropagatesAcrossActors");
@@ -340,7 +340,7 @@ test("tapp init discovers, validates, and fault-checks a grounded cross-actor co
     assert.equal(plan.items.find((item) => item.id === proposal.id).generation.trusted, true);
     const promoted = execFileSync("node", [tappBin, "plan", "promote", planPath, "--project-dir", project, "--item", proposal.id], { cwd: root, encoding: "utf8", env: actorEnv });
     assert.match(promoted, /1 release contract\(s\)/);
-    const contractPath = path.join(project, ".autotap", "contracts", "post-propagates-across-actors.contract.ts");
+    const contractPath = path.join(project, ".tapp", "contracts", "post-propagates-across-actors.contract.ts");
     assert.equal(fs.existsSync(contractPath), true);
 
     server = spawn("node", ["server.js"], { cwd: project, stdio: "ignore", env: { ...actorEnv, PORT: String(port), SOCIAL_DEMO_PROPAGATION_MS: "50", SOCIAL_DEMO_FAULT: "hide-cross-actor-posts" } });
@@ -366,14 +366,14 @@ test("tapp init discovers, validates, and fault-checks a grounded cross-actor co
 test("tapp init discovers, validates, and fault-checks a durable checkout contract from a contract-free repository", { skip: skipRealBrowser || !hasCommerceDemo }, () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-durable-checkout-discovery-cli-"));
   for (const file of ["package.json", "index.html", "app.js", "styles.css", "server.js"]) fs.copyFileSync(path.join(root, "CommerceDemo", file), path.join(project, file));
-  fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
-  fs.cpSync(path.join(root, "CommerceDemo", ".autotap", "tasks"), path.join(project, ".autotap", "tasks"), { recursive: true });
-  fs.copyFileSync(path.join(root, "CommerceDemo", ".autotap", "project.json"), path.join(project, ".autotap", "project.json"));
+  fs.mkdirSync(path.join(project, ".tapp"), { recursive: true });
+  fs.cpSync(path.join(root, "CommerceDemo", ".tapp", "tasks"), path.join(project, ".tapp", "tasks"), { recursive: true });
+  fs.copyFileSync(path.join(root, "CommerceDemo", ".tapp", "project.json"), path.join(project, ".tapp", "project.json"));
   const runtimeEnv = { ...process.env, TAPP_HOME: path.join(project, "tapp-home") };
   const initPath = path.join(project, "init.json");
   const initialized = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "14", "--timeout", "120", "--json-out", initPath], { cwd: root, encoding: "utf8", env: runtimeEnv });
   assert.match(initialized, /UI Map: observed · 5 states · 4 transitions/);
-  const planPath = path.join(project, ".autotap", "release-plan.json");
+  const planPath = path.join(project, ".tapp", "release-plan.json");
   let plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
   const proposal = plan.items.find((item) => item.origin === "deterministic-business-effect-proposal");
   assert.equal(proposal.name, "checkoutCreatesDurableOrder");
@@ -391,7 +391,7 @@ test("tapp init discovers, validates, and fault-checks a durable checkout contra
   plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
   assert.equal(plan.items.find((item) => item.id === proposal.id).generation.trusted, true);
   execFileSync("node", [tappBin, "plan", "promote", planPath, "--project-dir", project, "--item", proposal.id], { cwd: root, encoding: "utf8", env: runtimeEnv });
-  const contractPath = path.join(project, ".autotap", "contracts", "checkout-creates-durable-order.contract.ts");
+  const contractPath = path.join(project, ".tapp", "contracts", "checkout-creates-durable-order.contract.ts");
   assert.equal(fs.existsSync(contractPath), true);
 
   const reportPath = path.join(project, "fault-gate.json");
@@ -441,7 +441,7 @@ test("tapp init discovers, validates, and fault-checks a durable checkout contra
   assert.equal(maintenance.status, "validated-awaiting-review");
   assert.equal(maintenance.autoApply, false);
   assert.equal(maintenance.operations.length, 1);
-  assert.equal(maintenance.operations[0].taskPath, ".autotap/tasks/complete-checkout.yml");
+  assert.equal(maintenance.operations[0].taskPath, ".tapp/tasks/complete-checkout.yml");
   assert.equal(maintenance.operations[0].pointer, "/implementations/web/steps/4/tap");
   assert.equal(maintenance.operations[0].before, "Place order");
   assert.equal(maintenance.operations[0].after, "place-order");
@@ -474,10 +474,10 @@ test("tapp plan generate stays untrusted until tapp plan validate replays the dr
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-plan-generate-cli-"));
   fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({ name: "draft-fixture", scripts: { start: "vite" }, dependencies: { vite: "1" } }));
   fs.writeFileSync(path.join(project, "index.html"), "<main><h1>Home</h1><button>Home</button></main>");
-  fs.mkdirSync(path.join(project, ".autotap", "tasks"), { recursive: true });
-  fs.writeFileSync(path.join(project, ".autotap", "tasks", "open-home.json"), JSON.stringify({ kind: "task", version: 1, name: "openHome", implementations: { web: [{ tap: "Home" }] }, postconditions: [{ screen: "Home" }] }));
+  fs.mkdirSync(path.join(project, ".tapp", "tasks"), { recursive: true });
+  fs.writeFileSync(path.join(project, ".tapp", "tasks", "open-home.json"), JSON.stringify({ kind: "task", version: 1, name: "openHome", implementations: { web: [{ tap: "Home" }] }, postconditions: [{ screen: "Home" }] }));
   execFileSync("node", [tappBin, "init", project, "--url", "http://127.0.0.1:4173"], { cwd: root, encoding: "utf8" });
-  const planPath = path.join(project, ".autotap", "release-plan.json");
+  const planPath = path.join(project, ".tapp", "release-plan.json");
   execFileSync("node", [tappBin, "plan", "review", planPath, "--approve", "openHomeWorks"], { cwd: root, encoding: "utf8" });
   const generated = execFileSync("node", [tappBin, "plan", "generate", planPath, "--project-dir", project], { cwd: root, encoding: "utf8" });
   assert.match(generated, /1 compile-checked\/untrusted · 0 blocked/);

@@ -24,17 +24,17 @@ test("source ownership matches exact files, directories, and bounded globs", () 
 
 test("PR planning always selects critical contracts and uses Task/UI Map ownership for relevance", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-plan-"));
-  write(path.join(root, ".autotap/tasks/open-feed.json"), {
+  write(path.join(root, ".tapp/tasks/open-feed.json"), {
     kind: "task", version: 1, name: "openFeed", steps: [{ tap: "Feed" }],
     coverage: { nodes: ["feed"], edges: [], sourcePaths: ["src/feed"] },
   });
-  write(path.join(root, ".autotap/tasks/open-profile.json"), {
+  write(path.join(root, ".tapp/tasks/open-profile.json"), {
     kind: "task", version: 1, name: "openProfile", steps: [{ tap: "Profile" }], coverage: {},
   });
-  write(path.join(root, ".autotap/contracts/critical.contract.ts"), contract("revenueWorks", "critical", "openProfile"));
-  write(path.join(root, ".autotap/contracts/feed.contract.ts"), contract("feedWorks", "high", "openFeed"));
-  write(path.join(root, ".autotap/contracts/profile.contract.ts"), contract("profileWorks", "high", "openProfile"));
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/contracts/critical.contract.ts"), contract("revenueWorks", "critical", "openProfile"));
+  write(path.join(root, ".tapp/contracts/feed.contract.ts"), contract("feedWorks", "high", "openFeed"));
+  write(path.join(root, ".tapp/contracts/profile.contract.ts"), contract("profileWorks", "high", "openProfile"));
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1, coverage: { tasks: [], contracts: [], uncoveredNodeIds: [], uncoveredEdgeIds: [] },
     nodes: [{ id: "screen_feed", semanticKey: "feed", name: "Feed", sourcePaths: ["src/feed/view.ts"], coveredBy: { tasks: [], contracts: [] } }],
     edges: [],
@@ -46,26 +46,26 @@ test("PR planning always selects critical contracts and uses Task/UI Map ownersh
   assert.deepEqual(plan.uncoveredChangedFiles, ["src/unowned/new.ts"]);
   assert.equal(plan.maintenanceCandidates[0].contract, "feedWorks");
   assert.deepEqual(plan.maintenanceCandidates[0].tasks, ["openFeed"]);
-  assert.deepEqual(plan.maintenanceCandidates[0].taskPaths, [".autotap/tasks/open-feed.json"]);
+  assert.deepEqual(plan.maintenanceCandidates[0].taskPaths, [".tapp/tasks/open-feed.json"]);
   assert.deepEqual(plan.skipped.map((item) => item.name), ["profileWorks"]);
 });
 
 test("changing a reusable Task selects every contract that composes it", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-task-"));
-  write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/a.contract.ts"), contract("accountWorks", "high", "signIn"));
-  write(path.join(root, ".autotap/contracts/b.contract.ts"), contract("checkoutWorks", "high", "signIn"));
-  const plan = await buildPrContractPlan({ projectDir: root, changedFiles: [".autotap/tasks/sign-in.json"] });
+  write(path.join(root, ".tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ tap: "Sign in" }] });
+  write(path.join(root, ".tapp/contracts/a.contract.ts"), contract("accountWorks", "high", "signIn"));
+  write(path.join(root, ".tapp/contracts/b.contract.ts"), contract("checkoutWorks", "high", "signIn"));
+  const plan = await buildPrContractPlan({ projectDir: root, changedFiles: [".tapp/tasks/sign-in.json"] });
   assert.deepEqual(plan.selected.map((item) => item.name), ["accountWorks", "checkoutWorks"]);
   assert.equal(plan.selected.every((item) => item.reasons[0].type === "task-changed"), true);
 });
 
 test("changing a nested Task selects contracts through the full composition graph", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-nested-task-"));
-  write(path.join(root, ".autotap/tasks/fill-form.json"), { kind: "task", version: 1, name: "fillForm", steps: [{ type: { field: "Email", value: "test@example.com" } }] });
-  write(path.join(root, ".autotap/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ task: "fillForm" }, { tap: "Sign in" }] });
-  write(path.join(root, ".autotap/contracts/a.contract.ts"), contract("accountWorks", "high", "signIn"));
-  const plan = await buildPrContractPlan({ projectDir: root, changedFiles: [".autotap/tasks/fill-form.json"] });
+  write(path.join(root, ".tapp/tasks/fill-form.json"), { kind: "task", version: 1, name: "fillForm", steps: [{ type: { field: "Email", value: "test@example.com" } }] });
+  write(path.join(root, ".tapp/tasks/sign-in.json"), { kind: "task", version: 1, name: "signIn", steps: [{ task: "fillForm" }, { tap: "Sign in" }] });
+  write(path.join(root, ".tapp/contracts/a.contract.ts"), contract("accountWorks", "high", "signIn"));
+  const plan = await buildPrContractPlan({ projectDir: root, changedFiles: [".tapp/tasks/fill-form.json"] });
   assert.deepEqual(plan.selected.map((item) => item.name), ["accountWorks"]);
   assert.deepEqual(plan.selected[0].tasks, ["signIn", "fillForm"]);
   assert.equal(plan.selected[0].reasons.some((reason) => reason.type === "task-changed" && reason.task === "fillForm"), true);
@@ -73,9 +73,9 @@ test("changing a nested Task selects contracts through the full composition grap
 
 test("mapped-but-uncovered UI changes are distinct from files unknown to the application model", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-map-gap-"));
-  write(path.join(root, ".autotap/tasks/open-home.json"), { kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }] });
-  write(path.join(root, ".autotap/contracts/home.contract.ts"), contract("homeWorks", "high", "openHome"));
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/tasks/open-home.json"), { kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }] });
+  write(path.join(root, ".tapp/contracts/home.contract.ts"), contract("homeWorks", "high", "openHome"));
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     coverage: { tasks: [], contracts: [], uncoveredNodeIds: ["screen_admin"], uncoveredEdgeIds: [] },
     nodes: [{ id: "screen_admin", semanticKey: "admin", name: "Admin", sourcePaths: ["src/admin"], coveredBy: { tasks: [], contracts: [] } }],
@@ -89,7 +89,7 @@ test("mapped-but-uncovered UI changes are distinct from files unknown to the app
 
 test("an observed static web route schedules bounded advisory exploration for its exact changed file", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-route-target-"));
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     coverage: { tasks: [], contracts: [], uncoveredNodeIds: ["screen_pricing"], uncoveredEdgeIds: [] },
     nodes: [{
@@ -114,12 +114,12 @@ test("an observed static web route schedules bounded advisory exploration for it
 
 test("reviewed Task ownership schedules one native changed-surface replay through observed UI Map edges", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-native-target-"));
-  write(path.join(root, ".autotap/tasks/open-settings.json"), {
+  write(path.join(root, ".tapp/tasks/open-settings.json"), {
     kind: "task", version: 1, name: "openSettings",
     implementations: { ios: { steps: [{ tap: "Settings" }] } },
     coverage: { nodes: ["settings"], sourcePaths: ["Sources/SettingsView.swift"] },
   });
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1,
     app: { target: "app", platforms: ["ios"], sourceRoot: "", entryNodes: { ios: "screen_welcome" }, navigationRoots: { ios: "screen_home" } },
     coverage: { tasks: [], contracts: [], uncoveredNodeIds: ["screen_settings"], uncoveredEdgeIds: ["edge_settings"] },
@@ -154,11 +154,11 @@ test("reviewed Task ownership schedules one native changed-surface replay throug
 
 test("selected critical contract coverage prevents a redundant changed-surface exploration target", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-selected-coverage-"));
-  write(path.join(root, ".autotap/tasks/open-pricing.json"), {
+  write(path.join(root, ".tapp/tasks/open-pricing.json"), {
     kind: "task", version: 1, name: "openPricing", steps: [{ tap: "Pricing" }], coverage: { nodes: ["pricing"] },
   });
-  write(path.join(root, ".autotap/contracts/pricing.contract.ts"), contract("pricingWorks", "critical", "openPricing"));
-  write(path.join(root, ".autotap/ui-map.json"), {
+  write(path.join(root, ".tapp/contracts/pricing.contract.ts"), contract("pricingWorks", "critical", "openPricing"));
+  write(path.join(root, ".tapp/ui-map.json"), {
     schemaVersion: 1, coverage: { tasks: [], contracts: [], uncoveredNodeIds: [], uncoveredEdgeIds: [] },
     nodes: [{ id: "screen_pricing", semanticKey: "pricing", name: "Pricing", sourcePaths: [], routes: [{ platform: "web", path: "/pricing.html", replayable: true }], controls: [], coveredBy: { tasks: ["openPricing"], contracts: ["pricingWorks"] } }],
     edges: [],
@@ -185,8 +185,8 @@ test("only planned replayable web exploration targets become bounded gate seeds"
 test("explicit PR proposal adoption appends one pending item only when map and runtime evidence are current", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-adopt-"));
   const mapNode = { id: "screen_pricing", semanticKey: "pricing", name: "Pricing", status: "observed", routes: [{ platform: "web", path: "/pricing.html", replayable: true }], controls: [] };
-  write(path.join(root, ".autotap/ui-map.json"), { schemaVersion: 1, nodes: [mapNode], edges: [] });
-  write(path.join(root, ".autotap/release-plan.json"), { schemaVersion: 1, kind: "tapp-release-plan", status: "reviewed", items: [] });
+  write(path.join(root, ".tapp/ui-map.json"), { schemaVersion: 1, nodes: [mapNode], edges: [] });
+  write(path.join(root, ".tapp/release-plan.json"), { schemaVersion: 1, kind: "tapp-release-plan", status: "reviewed", items: [] });
   const proposed = {
     id: "proposal_pricing", kind: "release-contract", name: "pricingReachable", title: "Pricing remains reachable",
     origin: "deterministic-ui-map-proposal", decision: "pending", criticality: "high", businessValue: "Protect pricing",
@@ -208,7 +208,7 @@ test("explicit PR proposal adoption appends one pending item only when map and r
   assert.equal(adopted.item.decision, "pending");
   assert.equal(adopted.item.adoption.source, "executed-pr-exploration");
   assert.equal(adopted.plan.status, "awaiting-review");
-  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".autotap/release-plan.json"), "utf8")).items.length, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".tapp/release-plan.json"), "utf8")).items.length, 1);
   assert.equal(fs.readFileSync(prPlanPath, "utf8"), beforePrPlan, "adoption must not mutate its evidence artifact");
   const reconciled = adoptPrCoverageProposal({ projectDir: root, prPlanPath, item: "explore_pricing" });
   assert.equal(reconciled.mode, "reconciled-existing");
@@ -219,8 +219,8 @@ test("explicit PR proposal adoption appends one pending item only when map and r
 
 test("PR proposal adoption refuses unobserved or stale evidence without changing the release plan", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-adopt-stale-"));
-  write(path.join(root, ".autotap/ui-map.json"), { schemaVersion: 1, nodes: [], edges: [] });
-  const releasePlanPath = path.join(root, ".autotap/release-plan.json");
+  write(path.join(root, ".tapp/ui-map.json"), { schemaVersion: 1, nodes: [], edges: [] });
+  const releasePlanPath = path.join(root, ".tapp/release-plan.json");
   write(releasePlanPath, { schemaVersion: 1, kind: "tapp-release-plan", status: "reviewed", items: [] });
   const prPlanPath = path.join(root, "pr-plan.json");
   write(prPlanPath, { schemaVersion: 1, explorationTargets: [{ id: "target", platform: "web", execution: { status: "not-reached", conclusive: false } }] });
@@ -259,15 +259,15 @@ test("bounded PR patches expose declaration identities without retaining source 
 
 test("reviewed symbol ownership narrows affected Tasks while preserving the composed contract", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-symbol-"));
-  write(path.join(root, ".autotap/tasks/checkout.json"), {
+  write(path.join(root, ".tapp/tasks/checkout.json"), {
     kind: "task", version: 1, name: "completeCheckout", steps: [{ tap: "Place order" }],
     coverage: { sourcePaths: ["app.js"], sourceSymbols: [{ path: "app.js", symbols: ["showCheckout"] }] },
   });
-  write(path.join(root, ".autotap/tasks/orders.json"), {
+  write(path.join(root, ".tapp/tasks/orders.json"), {
     kind: "task", version: 1, name: "openOrders", steps: [{ tap: "Orders" }],
     coverage: { sourcePaths: ["app.js"], sourceSymbols: [{ path: "app.js", symbols: ["showOrders"] }] },
   });
-  write(path.join(root, ".autotap/contracts/order.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
+  write(path.join(root, ".tapp/contracts/order.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts";
 export default defineContract({name:"orderPersists",title:"orderPersists",businessValue:"value",criticality:"critical",platforms:["web"],actors:{customer:{}},steps:[{actor:"customer",task:"completeCheckout"},{actor:"customer",task:"openOrders"}]});`);
   const changedFiles = [{ filename: "app.js", patch: "@@ -20,1 +20,1 @@ function showCheckout() {\n-  oldLabel();\n+  newLabel();" }];
   const plan = await buildPrContractPlan({ projectDir: root, platform: "web", changedFiles });
@@ -282,11 +282,11 @@ export default defineContract({name:"orderPersists",title:"orderPersists",busine
 test("unattributable patches fall back to file ownership instead of skipping relevant Tasks", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-symbol-fallback-"));
   for (const [name, symbol] of [["completeCheckout", "showCheckout"], ["openOrders", "showOrders"]]) {
-    write(path.join(root, `.autotap/tasks/${name}.json`), {
+    write(path.join(root, `.tapp/tasks/${name}.json`), {
       kind: "task", version: 1, name, steps: [{ tap: name }],
       coverage: { sourcePaths: ["app.js"], sourceSymbols: [{ path: "app.js", symbols: [symbol] }] },
     });
-    write(path.join(root, `.autotap/contracts/${name}.contract.ts`), contract(`${name}Works`, "high", name));
+    write(path.join(root, `.tapp/contracts/${name}.contract.ts`), contract(`${name}Works`, "high", name));
   }
   const plan = await buildPrContractPlan({
     projectDir: root,

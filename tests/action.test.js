@@ -106,9 +106,9 @@ test("repository CI exercises the public composite Action on every supported pla
   assert.match(ciWorkflow, /create avd[^\n]*--device pixel_6/);
   assert.match(ciWorkflow, /emulator" -list-avds \| grep -Fxq tapp-ci/);
   assert.doesNotMatch(ciWorkflow, /adb wait-for-device/);
-  assert.match(ciWorkflow, /SocialDemo\/\.autotap\/contracts\/\*\.contract\.ts/);
-  assert.match(ciWorkflow, /DemoApp\/\.autotap\/contracts\/\*\.contract\.ts/);
-  assert.match(ciWorkflow, /AndroidCorpus\/logindemo\/\.autotap\/contracts\/\*\.contract\.ts/);
+  assert.match(ciWorkflow, /SocialDemo\/\.tapp\/contracts\/\*\.contract\.ts/);
+  assert.match(ciWorkflow, /DemoApp\/\.tapp\/contracts\/\*\.contract\.ts/);
+  assert.match(ciWorkflow, /AndroidCorpus\/logindemo\/\.tapp\/contracts\/\*\.contract\.ts/);
 });
 
 test("repository workflows pin every third-party Action to a full commit SHA", () => {

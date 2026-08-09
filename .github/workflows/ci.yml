@@ -59,8 +59,8 @@ jobs:
           scheme: DemoApp
           max-actions: "16"
           timeout: "300"
-          flows: ".autotap/flows/demoapp-smoke.yml DemoApp/.autotap/flows/menu-to-daily-summary.yml"
-          contracts: "DemoApp/.autotap/contracts/*.contract.ts"
+          flows: ".tapp/flows/demoapp-smoke.yml DemoApp/.tapp/flows/menu-to-daily-summary.yml"
+          contracts: "DemoApp/.tapp/contracts/*.contract.ts"
           comment-on-pr: "false"
 
   action-web:
@@ -88,8 +88,8 @@ jobs:
           timeout: "300"
           test-email: alice@example.test
           test-password: demo
-          scenarios: "SocialDemo/.autotap/scenarios/*.yml"
-          contracts: "SocialDemo/.autotap/contracts/*.contract.ts"
+          scenarios: "SocialDemo/.tapp/scenarios/*.yml"
+          contracts: "SocialDemo/.tapp/contracts/*.contract.ts"
           comment-on-pr: "false"
       - name: Cold-start a fresh repository through tapp init --explore
         run: node --test --test-name-pattern='tapp init --explore (grounds|starts and stops)' tests/cli.test.js
@@ -150,6 +150,6 @@ jobs:
           timeout: "180"
           test-email: customer@example.test
           test-password: demo
-          flows: "AndroidCorpus/logindemo/.autotap/flows/*.yml"
-          contracts: "AndroidCorpus/logindemo/.autotap/contracts/*.contract.ts"
+          flows: "AndroidCorpus/logindemo/.tapp/flows/*.yml"
+          contracts: "AndroidCorpus/logindemo/.tapp/contracts/*.contract.ts"
           comment-on-pr: "false"

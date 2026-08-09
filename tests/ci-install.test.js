@@ -7,13 +7,13 @@ import { renderGithubWorkflow, writeCiInstallation, writeTargetBaseline } from "
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-install-"));
-  fs.mkdirSync(path.join(root, ".autotap", "contracts"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "contracts"), { recursive: true });
   fs.writeFileSync(path.join(root, "index.html"), "<main>site</main>");
-  fs.writeFileSync(path.join(root, ".autotap", "contracts", "checkout.contract.ts"), "fixture");
+  fs.writeFileSync(path.join(root, ".tapp", "contracts", "checkout.contract.ts"), "fixture");
   const target = { id: "target_web_store", platform: "web", name: "Store", sourcePath: ".", status: "configured", build: { tool: "static-files", dependencyStatus: "not-required" }, runtime: { management: "tapp-managed" } };
   const model = {
     kind: "tapp-application-model", targets: [target], actors: [{ credentialRequirements: ["email", "password"] }],
-    artifacts: { contracts: [{ name: "checkoutWorks", path: ".autotap/contracts/checkout.contract.ts", scope: ".", platforms: ["web"] }] },
+    artifacts: { contracts: [{ name: "checkoutWorks", path: ".tapp/contracts/checkout.contract.ts", scope: ".", platforms: ["web"] }] },
   };
   return { root, model, target };
 }
@@ -24,7 +24,7 @@ test("CI installation renders one target-aware keyless web gate without shell in
   assert.equal(rendered.manifest.status, "ready-for-review");
   assert.equal(rendered.manifest.targets[0].inputs["target-key"], "target_web_store");
   assert.equal(rendered.manifest.targets[0].inputs["web-target"], "target_web_store");
-  assert.equal(rendered.manifest.targets[0].inputs.contracts, ".autotap/contracts/checkout.contract.ts");
+  assert.equal(rendered.manifest.targets[0].inputs.contracts, ".tapp/contracts/checkout.contract.ts");
   assert.equal(rendered.manifest.targets[0].inputs["test-email"], "${{ secrets.TAPP_TEST_EMAIL }}");
   assert.match(rendered.workflow, /uses: actions\/checkout@[a-f0-9]{40}/);
   assert.match(rendered.workflow, /uses: aarwitz\/tapp@v0\.13\.1/);
@@ -36,8 +36,8 @@ test("CI installation wires an accepted target-specific baseline and refuses sil
   const { root, model, target } = fixture();
   writeTargetBaseline({ projectDir: root, target, report: { platform: "web", targetKey: target.id, verdict: "ready", inconclusive: false, findings: [], screens: ["Home"], gate: { failed: false }, contracts: [{ passed: true }] } });
   const rendered = renderGithubWorkflow({ projectDir: root, model, actionRef: "aarwitz/tapp@v0.13.1" });
-  assert.equal(rendered.manifest.targets[0].baseline, ".autotap/baselines/web/target_web_store.json");
-  assert.match(rendered.workflow, /baseline: "\.autotap\/baselines\/web\/target_web_store\.json"/);
+  assert.equal(rendered.manifest.targets[0].baseline, ".tapp/baselines/web/target_web_store.json");
+  assert.match(rendered.workflow, /baseline: "\.tapp\/baselines\/web\/target_web_store\.json"/);
   const installed = writeCiInstallation({ projectDir: root, ...rendered });
   assert.equal(fs.existsSync(installed.workflowPath), true);
   assert.equal(JSON.parse(fs.readFileSync(installed.manifestPath, "utf8")).kind, "tapp-ci-installation");
@@ -63,7 +63,7 @@ test("CI installation scopes module contracts and credentials to the matching An
   const model = {
     kind: "tapp-application-model",
     actors: [{ name: "customer", configured: false, contracts: ["loginWorks"], credentialRequirements: ["email", "password"], credentialBindings: { email: "LOGIN_EMAIL", password: "LOGIN_PASSWORD" } }],
-    artifacts: { contracts: [{ name: "loginWorks", path: "login/.autotap/contracts/login.contract.ts", scope: "login", platforms: ["android"] }] },
+    artifacts: { contracts: [{ name: "loginWorks", path: "login/.tapp/contracts/login.contract.ts", scope: "login", platforms: ["android"] }] },
     targets: [
       { id: "target_login", platform: "android", name: "login", sourcePath: "login", status: "configured", build: { projectDir: ".", task: ":login:assembleDebug" }, runtime: { applicationId: "com.example.login" } },
       { id: "target_shop", platform: "android", name: "shop", sourcePath: "shop", status: "configured", build: { projectDir: ".", task: ":shop:assembleDebug" }, runtime: { applicationId: "com.example.shop" } },
@@ -72,7 +72,7 @@ test("CI installation scopes module contracts and credentials to the matching An
   const rendered = renderGithubWorkflow({ projectDir: root, model, actionRef: "aarwitz/tapp@v0.13.1" });
   const login = rendered.manifest.targets.find((target) => target.id === "target_login");
   const shop = rendered.manifest.targets.find((target) => target.id === "target_shop");
-  assert.deepEqual(login.contracts, ["login/.autotap/contracts/login.contract.ts"]);
+  assert.deepEqual(login.contracts, ["login/.tapp/contracts/login.contract.ts"]);
   assert.deepEqual(login.requiredSecrets, ["LOGIN_EMAIL", "LOGIN_PASSWORD"]);
   assert.equal(login.inputs["test-email"], "${{ secrets.LOGIN_EMAIL }}");
   assert.deepEqual(shop.contracts, []);
@@ -88,8 +88,8 @@ test("CI installation does not leak one shared actor's credentials into unrelate
     kind: "tapp-application-model",
     actors: [{ name: "customer", contracts: ["settingsWorks", "loginWorks"], credentialRequirements: ["email", "password"], credentialBindings: { email: "LOGIN_EMAIL", password: "LOGIN_PASSWORD" } }],
     artifacts: { contracts: [
-      { name: "settingsWorks", path: "demo/.autotap/contracts/settings.contract.ts", scope: "demo", platforms: ["android"], actors: [{ name: "customer", session: "default", credentialRequirements: [], credentialBindings: {} }] },
-      { name: "loginWorks", path: "login/.autotap/contracts/login.contract.ts", scope: "login", platforms: ["android"], actors: [{ name: "customer", session: "default", credentialRequirements: ["email", "password"], credentialBindings: { email: "LOGIN_EMAIL", password: "LOGIN_PASSWORD" } }] },
+      { name: "settingsWorks", path: "demo/.tapp/contracts/settings.contract.ts", scope: "demo", platforms: ["android"], actors: [{ name: "customer", session: "default", credentialRequirements: [], credentialBindings: {} }] },
+      { name: "loginWorks", path: "login/.tapp/contracts/login.contract.ts", scope: "login", platforms: ["android"], actors: [{ name: "customer", session: "default", credentialRequirements: ["email", "password"], credentialBindings: { email: "LOGIN_EMAIL", password: "LOGIN_PASSWORD" } }] },
     ] },
     targets: [
       { id: "target_demo", platform: "android", name: "demo", sourcePath: "demo", status: "configured", build: { projectDir: ".", task: ":demo:assembleDebug" }, runtime: { applicationId: "com.example.demo" } },

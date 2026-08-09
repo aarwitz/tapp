@@ -17,7 +17,7 @@ import { buildUiMapFromMarkers, writeUiMap } from "../mcp-server/src/ui-map.js";
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-operations-"));
   fs.writeFileSync(path.join(root, "index.html"), "<h1>Home</h1><button id='settings'>Settings</button>");
-  fs.mkdirSync(path.join(root, ".autotap", "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "tasks"), { recursive: true });
   const markers = path.join(root, "markers.txt");
   fs.writeFileSync(markers, [
     'OCQA_NAVIGATION_ROOT:{"screen":"Home","role":"screen","controls":[{"kind":"button","label":"Settings","cssId":"settings"}]}',
@@ -27,11 +27,11 @@ function fixture() {
     'OCQA_STATE:{"screen":"Settings","role":"settings","controls":[]}',
   ].join("\n") + "\n");
   const map = buildUiMapFromMarkers({ markersPath: markers, platform: "web", target: "http://127.0.0.1:1", runId: "operation-test" });
-  writeUiMap(path.join(root, ".autotap", "ui-map.json"), map);
+  writeUiMap(path.join(root, ".tapp", "ui-map.json"), map);
   const home = map.nodes.find((node) => node.semanticKey === "home");
   const settings = map.nodes.find((node) => node.semanticKey === "settings");
   const edge = map.edges.find((item) => item.from === home.id && item.to === settings.id);
-  fs.writeFileSync(path.join(root, ".autotap", "tasks", "open-settings.yml"), `kind: task
+  fs.writeFileSync(path.join(root, ".tapp", "tasks", "open-settings.yml"), `kind: task
 version: 1
 name: openSettings
 description: Open settings from the observed home screen.
@@ -75,15 +75,26 @@ test("shared product operations own inspect, review, generation, snapshot, and C
 
 test("product readiness reads validation from the canonical generation record", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-validation-state-"));
-  fs.mkdirSync(path.join(root, ".autotap"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".autotap", "application-model.json"), JSON.stringify({ kind: "tapp-application-model", application: { name: "fixture", platforms: ["web"], targetIds: [] }, targets: [], requirements: [] }));
-  fs.writeFileSync(path.join(root, ".autotap", "release-plan.json"), JSON.stringify({ kind: "tapp-release-plan", items: [{ name: "proof", decision: "approved", generation: { path: ".autotap/proposals/proof.ts", status: "validated-draft", trusted: true } }] }));
+  fs.mkdirSync(path.join(root, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".tapp", "application-model.json"), JSON.stringify({ kind: "tapp-application-model", application: { name: "fixture", platforms: ["web"], targetIds: [] }, targets: [], requirements: [] }));
+  fs.writeFileSync(path.join(root, ".tapp", "release-plan.json"), JSON.stringify({ kind: "tapp-release-plan", items: [{ name: "proof", decision: "approved", generation: { path: ".tapp/proposals/proof.ts", status: "validated-draft", trusted: true } }] }));
   assert.equal(readProductProject({ projectDir: root }).state.validated, true);
+});
+
+test("product snapshots read an existing legacy .autotap tree", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-legacy-tree-"));
+  fs.mkdirSync(path.join(root, ".autotap"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".autotap", "application-model.json"), JSON.stringify({
+    kind: "tapp-application-model", application: { name: "legacy", platforms: [], targetIds: [] }, targets: [], requirements: [],
+  }));
+  const project = readProductProject({ projectDir: root });
+  assert.equal(project.application.name, "legacy");
+  assert.equal(path.basename(project.paths.dir), ".autotap");
 });
 
 test("shared gate operation owns native target prerequisites with exact remediation", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-native-gate-"));
-  fs.mkdirSync(path.join(root, ".autotap"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp"), { recursive: true });
   const model = {
     kind: "tapp-application-model",
     application: { name: "native", platforms: ["ios", "android"], targetIds: ["target_ios", "target_android"] },
@@ -93,14 +104,14 @@ test("shared gate operation owns native target prerequisites with exact remediat
     ],
     requirements: [],
   };
-  fs.writeFileSync(path.join(root, ".autotap", "application-model.json"), JSON.stringify(model));
+  fs.writeFileSync(path.join(root, ".tapp", "application-model.json"), JSON.stringify(model));
   await assert.rejects(runProductGate({ projectDir: root, platform: "ios", target: "target_ios" }), /requires a built simulator \.app/);
   await assert.rejects(runProductGate({ projectDir: root, platform: "android", target: "target_android" }), /requires an application id/);
 });
 
 test("shared target preparation keeps iOS, Android, and web build semantics out of browser adapters", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-target-preparation-"));
-  fs.mkdirSync(path.join(root, ".autotap"), { recursive:true });
+  fs.mkdirSync(path.join(root, ".tapp"), { recursive:true });
   fs.mkdirSync(path.join(root, "Apple", "Product.xcodeproj"), { recursive:true });
   fs.mkdirSync(path.join(root, "android", "app"), { recursive:true });
   const model = {
@@ -113,7 +124,7 @@ test("shared target preparation keeps iOS, Android, and web build semantics out 
     ],
     requirements:[],
   };
-  fs.writeFileSync(path.join(root, ".autotap", "application-model.json"), JSON.stringify(model));
+  fs.writeFileSync(path.join(root, ".tapp", "application-model.json"), JSON.stringify(model));
   const realRoot = fs.realpathSync(root);
 
   const ios = await prepareProductTarget({

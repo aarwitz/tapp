@@ -7,6 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { semanticUiKey } from "./ui-map.js";
+import { isProjectArtifactDirectory, projectArtifactDirectory } from "./project-paths.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -84,12 +85,15 @@ export function loadTaskFile(taskPath) {
   return { ...task, __path: path.resolve(taskPath) };
 }
 
-function findAutotapDir(sourcePath, explicitProjectDir = "") {
-  if (explicitProjectDir) return path.join(path.resolve(explicitProjectDir), ".autotap");
+function findTappDir(sourcePath, explicitProjectDir = "") {
+  if (explicitProjectDir) {
+    const root = path.resolve(explicitProjectDir);
+    return path.join(root, projectArtifactDirectory(root));
+  }
   let current = path.dirname(path.resolve(sourcePath));
   while (current !== path.dirname(current)) {
-    if (path.basename(current) === ".autotap") return current;
-    const candidate = path.join(current, ".autotap");
+    if (isProjectArtifactDirectory(path.basename(current))) return current;
+    const candidate = path.join(current, projectArtifactDirectory(current));
     if (fs.existsSync(candidate)) return candidate;
     current = path.dirname(current);
   }
@@ -97,16 +101,16 @@ function findAutotapDir(sourcePath, explicitProjectDir = "") {
 }
 
 export function loadTaskRegistry({ sourcePath, projectDir = "", taskFiles = [] }) {
-  const autotapDir = findAutotapDir(sourcePath, projectDir);
-  const taskDir = autotapDir ? path.join(autotapDir, "tasks") : "";
+  const tappDir = findTappDir(sourcePath, projectDir);
+  const taskDir = tappDir ? path.join(tappDir, "tasks") : "";
   const reviewed = taskDir && fs.existsSync(taskDir)
     ? fs.readdirSync(taskDir).filter((name) => /\.ya?ml$|\.json$/i.test(name)).map((name) => path.join(taskDir, name))
     : [];
-  // Draft contracts generated under `.autotap/proposals/contracts` may compile
+  // Draft contracts generated under `.tapp/proposals/contracts` may compile
   // against sibling untrusted Task drafts. Ordinary committed contracts never
   // see this directory, so a proposal cannot silently enter the release gate.
-  const proposalSource = String(path.resolve(sourcePath || "")).includes(`${path.sep}.autotap${path.sep}proposals${path.sep}`);
-  const proposalDir = proposalSource && autotapDir ? path.join(autotapDir, "proposals", "tasks") : "";
+  const proposalSource = [".tapp", ".autotap"].some((directory) => String(path.resolve(sourcePath || "")).includes(`${path.sep}${directory}${path.sep}proposals${path.sep}`));
+  const proposalDir = proposalSource && tappDir ? path.join(tappDir, "proposals", "tasks") : "";
   const proposed = proposalDir && fs.existsSync(proposalDir)
     ? fs.readdirSync(proposalDir).filter((name) => /\.ya?ml$|\.json$/i.test(name)).map((name) => path.join(proposalDir, name))
     : [];
@@ -169,7 +173,7 @@ export function compileTaskSteps({ steps, registry, platform = "", flowVars = {}
     const invocation = taskCall(step);
     if (!invocation) { expanded.push(step); continue; }
     const task = registry.get(invocation.call.task);
-    if (!task) throw new Error(`Task '${invocation.call.task}' was not found in .autotap/tasks`);
+    if (!task) throw new Error(`Task '${invocation.call.task}' was not found in .tapp/tasks`);
     if (stack.includes(task.name)) throw new Error(`Task cycle detected: ${[...stack, task.name].join(" -> ")}`);
     const implementation = implementationSteps(task, platform);
     if (!implementation?.steps) throw new Error(`Task '${task.name}' has no '${platform || "shared"}' implementation`);

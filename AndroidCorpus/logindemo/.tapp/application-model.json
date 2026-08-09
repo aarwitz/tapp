@@ -62,7 +62,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/customer-sign-in.contract.ts"
+          ".tapp/contracts/customer-sign-in.contract.ts"
         ],
         "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
       }
@@ -79,12 +79,12 @@
         "existingCustomerCanSignIn"
       ],
       "sourcePaths": [
-        ".autotap/contracts/customer-sign-in.contract.ts"
+        ".tapp/contracts/customer-sign-in.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/customer-sign-in.contract.ts"
+          ".tapp/contracts/customer-sign-in.contract.ts"
         ]
       }
     },
@@ -97,12 +97,12 @@
         "existingCustomerCanSignIn"
       ],
       "sourcePaths": [
-        ".autotap/contracts/customer-sign-in.contract.ts"
+        ".tapp/contracts/customer-sign-in.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/customer-sign-in.contract.ts"
+          ".tapp/contracts/customer-sign-in.contract.ts"
         ]
       }
     },
@@ -117,14 +117,14 @@
         "existingCustomerCanSignIn"
       ],
       "sourcePaths": [
-        ".autotap/contracts/customer-sign-in.contract.ts",
-        ".autotap/tasks/sign-in.yml"
+        ".tapp/contracts/customer-sign-in.contract.ts",
+        ".tapp/tasks/sign-in.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/customer-sign-in.contract.ts",
-          ".autotap/tasks/sign-in.yml"
+          ".tapp/contracts/customer-sign-in.contract.ts",
+          ".tapp/tasks/sign-in.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -151,7 +151,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/customer-sign-in.contract.ts"
+          ".tapp/contracts/customer-sign-in.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -160,7 +160,7 @@
   "revenuePaths": [],
   "systemInvariants": [],
   "configuration": {
-    "path": ".autotap/project.json",
+    "path": ".tapp/project.json",
     "status": "missing",
     "actorCount": 0,
     "lifecycle": {
@@ -186,7 +186,7 @@
   ],
   "stateBoundaries": [],
   "uiMap": {
-    "path": ".autotap/ui-map.json",
+    "path": ".tapp/ui-map.json",
     "status": "observed",
     "nodeCount": 3,
     "edgeCount": 3,
@@ -204,7 +204,7 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        ".autotap/ui-map.json"
+        ".tapp/ui-map.json"
       ],
       "detail": "grounded in prior runtime observations"
     }
@@ -215,7 +215,7 @@
         "id": "task_d061e2ee669c38c3",
         "name": "signIn",
         "scope": ".",
-        "path": ".autotap/tasks/sign-in.yml",
+        "path": ".tapp/tasks/sign-in.yml",
         "version": 1,
         "platforms": [
           "android"
@@ -237,7 +237,7 @@
         "id": "contract_b1d191b9f05a7815",
         "name": "existingCustomerCanSignIn",
         "scope": ".",
-        "path": ".autotap/contracts/customer-sign-in.contract.ts",
+        "path": ".tapp/contracts/customer-sign-in.contract.ts",
         "criticality": "critical",
         "platforms": [
           "android"

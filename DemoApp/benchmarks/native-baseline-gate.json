@@ -100,7 +100,7 @@
     }
   },
   "repositoryBaseline": {
-    "path": ".autotap/baselines/ios/target_bf05ddc53dcded7f.json",
+    "path": ".tapp/baselines/ios/target_bf05ddc53dcded7f.json",
     "platform": "ios",
     "targetIdentityRequired": true,
     "conclusive": true,
@@ -111,7 +111,7 @@
   "ciInstallationDryRun": {
     "jobs": 1,
     "unresolved": 0,
-    "baselineInput": ".autotap/baselines/ios/target_bf05ddc53dcded7f.json",
+    "baselineInput": ".tapp/baselines/ios/target_bf05ddc53dcded7f.json",
     "hostedExecutionVerified": false
   },
   "regressionsFoundInTapp": [

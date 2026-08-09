@@ -117,11 +117,11 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
-          "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
-          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+          "demoapp/.tapp/contracts/settings-reachable.contract.ts",
+          "logindemo/.tapp/contracts/customer-sign-in.contract.ts",
+          "logindemo/.tapp/contracts/profile-reachable.contract.ts",
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts"
         ],
         "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
       }
@@ -137,12 +137,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        "shopdemo/.autotap/tasks/open-cart.task.json"
+        "shopdemo/.tapp/tasks/open-cart.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/tasks/open-cart.task.json"
+          "shopdemo/.tapp/tasks/open-cart.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -156,12 +156,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        "shopdemo/.autotap/tasks/open-checkout.task.json"
+        "shopdemo/.tapp/tasks/open-checkout.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/tasks/open-checkout.task.json"
+          "shopdemo/.tapp/tasks/open-checkout.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -175,12 +175,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        "demoapp/.autotap/tasks/open-dashboard.task.json"
+        "demoapp/.tapp/tasks/open-dashboard.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "demoapp/.autotap/tasks/open-dashboard.task.json"
+          "demoapp/.tapp/tasks/open-dashboard.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -194,12 +194,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+        "shopdemo/.tapp/tasks/open-order-confirmed.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+          "shopdemo/.tapp/tasks/open-order-confirmed.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -213,12 +213,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -234,12 +234,12 @@
         "existingCustomerCanSignIn"
       ],
       "sourcePaths": [
-        "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+          "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
         ]
       }
     },
@@ -255,16 +255,16 @@
         "orderConfirmedReachable"
       ],
       "sourcePaths": [
-        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-        "shopdemo/.autotap/tasks/open-cart.task.json"
+        "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.tapp/tasks/open-cart.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-          "shopdemo/.autotap/tasks/open-cart.task.json"
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.tapp/tasks/open-cart.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -281,16 +281,16 @@
         "orderConfirmedReachable"
       ],
       "sourcePaths": [
-        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-        "shopdemo/.autotap/tasks/open-checkout.task.json"
+        "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.tapp/tasks/open-checkout.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-          "shopdemo/.autotap/tasks/open-checkout.task.json"
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.tapp/tasks/open-checkout.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -306,14 +306,14 @@
         "settingsReachable"
       ],
       "sourcePaths": [
-        "demoapp/.autotap/contracts/settings-reachable.contract.ts",
-        "demoapp/.autotap/tasks/open-dashboard.task.json"
+        "demoapp/.tapp/contracts/settings-reachable.contract.ts",
+        "demoapp/.tapp/tasks/open-dashboard.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
-          "demoapp/.autotap/tasks/open-dashboard.task.json"
+          "demoapp/.tapp/contracts/settings-reachable.contract.ts",
+          "demoapp/.tapp/tasks/open-dashboard.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -329,14 +329,14 @@
         "orderConfirmedReachable"
       ],
       "sourcePaths": [
-        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-        "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+        "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.tapp/tasks/open-order-confirmed.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-          "shopdemo/.autotap/tasks/open-order-confirmed.task.json"
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.tapp/tasks/open-order-confirmed.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -352,14 +352,14 @@
         "profileReachable"
       ],
       "sourcePaths": [
-        "logindemo/.autotap/contracts/profile-reachable.contract.ts",
-        "logindemo/.autotap/tasks/open-profile.task.json"
+        "logindemo/.tapp/contracts/profile-reachable.contract.ts",
+        "logindemo/.tapp/tasks/open-profile.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
-          "logindemo/.autotap/tasks/open-profile.task.json"
+          "logindemo/.tapp/contracts/profile-reachable.contract.ts",
+          "logindemo/.tapp/tasks/open-profile.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -375,14 +375,14 @@
         "settingsReachable"
       ],
       "sourcePaths": [
-        "demoapp/.autotap/contracts/settings-reachable.contract.ts",
-        "demoapp/.autotap/tasks/open-settings.task.json"
+        "demoapp/.tapp/contracts/settings-reachable.contract.ts",
+        "demoapp/.tapp/tasks/open-settings.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "demoapp/.autotap/contracts/settings-reachable.contract.ts",
-          "demoapp/.autotap/tasks/open-settings.task.json"
+          "demoapp/.tapp/contracts/settings-reachable.contract.ts",
+          "demoapp/.tapp/tasks/open-settings.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -399,16 +399,16 @@
         "orderConfirmedReachable"
       ],
       "sourcePaths": [
-        "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-        "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-        "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+        "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+        "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+        "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
-          "shopdemo/.autotap/tasks/open-trail-backpack.task.json"
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
+          "shopdemo/.tapp/tasks/open-trail-backpack.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -422,12 +422,12 @@
         "existingCustomerCanSignIn"
       ],
       "sourcePaths": [
-        "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+        "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+          "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
         ]
       }
     },
@@ -443,16 +443,16 @@
         "profileReachable"
       ],
       "sourcePaths": [
-        "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
-        "logindemo/.autotap/contracts/profile-reachable.contract.ts",
-        "logindemo/.autotap/tasks/sign-in.yml"
+        "logindemo/.tapp/contracts/customer-sign-in.contract.ts",
+        "logindemo/.tapp/contracts/profile-reachable.contract.ts",
+        "logindemo/.tapp/tasks/sign-in.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
-          "logindemo/.autotap/contracts/profile-reachable.contract.ts",
-          "logindemo/.autotap/tasks/sign-in.yml"
+          "logindemo/.tapp/contracts/customer-sign-in.contract.ts",
+          "logindemo/.tapp/contracts/profile-reachable.contract.ts",
+          "logindemo/.tapp/tasks/sign-in.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -480,7 +480,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "demoapp/.autotap/contracts/settings-reachable.contract.ts"
+          "demoapp/.tapp/contracts/settings-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -505,7 +505,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "logindemo/.autotap/contracts/customer-sign-in.contract.ts"
+          "logindemo/.tapp/contracts/customer-sign-in.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -531,7 +531,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "logindemo/.autotap/contracts/profile-reachable.contract.ts"
+          "logindemo/.tapp/contracts/profile-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -558,7 +558,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -586,7 +586,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -600,7 +600,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "shopdemo/.autotap/contracts/checkout-reachable.contract.ts"
+          "shopdemo/.tapp/contracts/checkout-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -612,7 +612,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts"
+          "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -620,7 +620,7 @@
   ],
   "systemInvariants": [],
   "configuration": {
-    "path": ".autotap/project.json",
+    "path": ".tapp/project.json",
     "status": "missing",
     "actorCount": 0,
     "lifecycle": {
@@ -664,11 +664,11 @@
   ],
   "stateBoundaries": [],
   "uiMap": {
-    "path": ".autotap/ui-map.json",
+    "path": ".tapp/ui-map.json",
     "paths": [
-      "demoapp/.autotap/ui-map.json",
-      "logindemo/.autotap/ui-map.json",
-      "shopdemo/.autotap/ui-map.json"
+      "demoapp/.tapp/ui-map.json",
+      "logindemo/.tapp/ui-map.json",
+      "shopdemo/.tapp/ui-map.json"
     ],
     "status": "observed",
     "nodeCount": 14,
@@ -702,16 +702,16 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        "demoapp/.autotap/ui-map.json",
-        "logindemo/.autotap/ui-map.json",
-        "shopdemo/.autotap/ui-map.json"
+        "demoapp/.tapp/ui-map.json",
+        "logindemo/.tapp/ui-map.json",
+        "shopdemo/.tapp/ui-map.json"
       ],
       "detail": "every detected target has a grounded UI Map"
     }
   },
   "uiMaps": [
     {
-      "path": "demoapp/.autotap/ui-map.json",
+      "path": "demoapp/.tapp/ui-map.json",
       "status": "observed",
       "nodeCount": 5,
       "edgeCount": 7,
@@ -733,17 +733,17 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "demoapp/.autotap/ui-map.json"
+          "demoapp/.tapp/ui-map.json"
         ],
         "detail": "grounded in prior runtime observations"
       },
       "targetId": "target_4fa4825fe4191b9c",
       "targetName": "demoapp",
       "platform": "android",
-      "expectedPath": "demoapp/.autotap/ui-map.json"
+      "expectedPath": "demoapp/.tapp/ui-map.json"
     },
     {
-      "path": "logindemo/.autotap/ui-map.json",
+      "path": "logindemo/.tapp/ui-map.json",
       "status": "observed",
       "nodeCount": 3,
       "edgeCount": 3,
@@ -758,17 +758,17 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "logindemo/.autotap/ui-map.json"
+          "logindemo/.tapp/ui-map.json"
         ],
         "detail": "grounded in prior runtime observations"
       },
       "targetId": "target_7488b63ddbfb90b0",
       "targetName": "logindemo",
       "platform": "android",
-      "expectedPath": "logindemo/.autotap/ui-map.json"
+      "expectedPath": "logindemo/.tapp/ui-map.json"
     },
     {
-      "path": "shopdemo/.autotap/ui-map.json",
+      "path": "shopdemo/.tapp/ui-map.json",
       "status": "observed",
       "nodeCount": 6,
       "edgeCount": 7,
@@ -787,14 +787,14 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          "shopdemo/.autotap/ui-map.json"
+          "shopdemo/.tapp/ui-map.json"
         ],
         "detail": "grounded in prior runtime observations"
       },
       "targetId": "target_b0450646e4866df7",
       "targetName": "shopdemo",
       "platform": "android",
-      "expectedPath": "shopdemo/.autotap/ui-map.json"
+      "expectedPath": "shopdemo/.tapp/ui-map.json"
     }
   ],
   "artifacts": {
@@ -803,7 +803,7 @@
         "id": "task_6153404aabb143c0",
         "name": "openDashboard",
         "scope": "demoapp",
-        "path": "demoapp/.autotap/tasks/open-dashboard.task.json",
+        "path": "demoapp/.tapp/tasks/open-dashboard.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -814,7 +814,7 @@
         "id": "task_35d1ebc56eb7f8f3",
         "name": "openSettings",
         "scope": "demoapp",
-        "path": "demoapp/.autotap/tasks/open-settings.task.json",
+        "path": "demoapp/.tapp/tasks/open-settings.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -825,7 +825,7 @@
         "id": "task_b3fee6e633d6a29b",
         "name": "openProfile",
         "scope": "logindemo",
-        "path": "logindemo/.autotap/tasks/open-profile.task.json",
+        "path": "logindemo/.tapp/tasks/open-profile.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -836,7 +836,7 @@
         "id": "task_ad15c0edc36bacf7",
         "name": "signIn",
         "scope": "logindemo",
-        "path": "logindemo/.autotap/tasks/sign-in.yml",
+        "path": "logindemo/.tapp/tasks/sign-in.yml",
         "version": 1,
         "platforms": [
           "android"
@@ -856,7 +856,7 @@
         "id": "task_2d543f4c5228860b",
         "name": "openCart",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/tasks/open-cart.task.json",
+        "path": "shopdemo/.tapp/tasks/open-cart.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -867,7 +867,7 @@
         "id": "task_ecee5c41e2036d55",
         "name": "openCheckout",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/tasks/open-checkout.task.json",
+        "path": "shopdemo/.tapp/tasks/open-checkout.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -878,7 +878,7 @@
         "id": "task_526ede0e88744eb9",
         "name": "openOrderConfirmed",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/tasks/open-order-confirmed.task.json",
+        "path": "shopdemo/.tapp/tasks/open-order-confirmed.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -889,7 +889,7 @@
         "id": "task_aba1b9799634aadd",
         "name": "openTrailBackpack",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/tasks/open-trail-backpack.task.json",
+        "path": "shopdemo/.tapp/tasks/open-trail-backpack.task.json",
         "version": 1,
         "platforms": [
           "android"
@@ -902,7 +902,7 @@
         "id": "contract_9f0f8ad3b2b17aae",
         "name": "settingsReachable",
         "scope": "demoapp",
-        "path": "demoapp/.autotap/contracts/settings-reachable.contract.ts",
+        "path": "demoapp/.tapp/contracts/settings-reachable.contract.ts",
         "criticality": "medium",
         "platforms": [
           "android"
@@ -920,7 +920,7 @@
         "id": "contract_db3d559fde6f08af",
         "name": "existingCustomerCanSignIn",
         "scope": "logindemo",
-        "path": "logindemo/.autotap/contracts/customer-sign-in.contract.ts",
+        "path": "logindemo/.tapp/contracts/customer-sign-in.contract.ts",
         "criticality": "critical",
         "platforms": [
           "android"
@@ -944,7 +944,7 @@
         "id": "contract_ab2d7268f1e5f818",
         "name": "profileReachable",
         "scope": "logindemo",
-        "path": "logindemo/.autotap/contracts/profile-reachable.contract.ts",
+        "path": "logindemo/.tapp/contracts/profile-reachable.contract.ts",
         "criticality": "medium",
         "platforms": [
           "android"
@@ -968,7 +968,7 @@
         "id": "contract_0f41dc2e8289a746",
         "name": "checkoutReachable",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/contracts/checkout-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/checkout-reachable.contract.ts",
         "criticality": "critical",
         "platforms": [
           "android"
@@ -986,7 +986,7 @@
         "id": "contract_71f62add4ea7ca92",
         "name": "orderConfirmedReachable",
         "scope": "shopdemo",
-        "path": "shopdemo/.autotap/contracts/order-confirmed-reachable.contract.ts",
+        "path": "shopdemo/.tapp/contracts/order-confirmed-reachable.contract.ts",
         "criticality": "critical",
         "platforms": [
           "android"

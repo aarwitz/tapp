@@ -13,6 +13,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { parseOcqaMarkers, buildQaReport, computeRegression } from "./report.js";
+import { existingProjectArtifactPath, projectArtifactDirectory } from "./project-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -918,7 +919,7 @@ export async function saveInteractiveSessionFlow({ projectDir, name, addFinalAss
     steps,
   };
   const slug = flowName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "flow";
-  const dir = path.join(root, ".autotap", "flows");
+  const dir = path.join(root, ".tapp", "flows");
   const outPath = path.join(dir, `${slug}.yml`);
   if (fs.existsSync(outPath) && !replace) {
     const error = new Error(`Flow '${path.relative(root, outPath)}' already exists. Choose another name or explicitly replace it.`);
@@ -1589,7 +1590,7 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onPro
 export async function runInitExploration({
   projectDir,
   platform,
-  outDir = ".autotap",
+  outDir = ".tapp",
   url = "",
   target = "",
   bundleId = "",
@@ -1610,7 +1611,7 @@ export async function runInitExploration({
   catch { return { error: `Repository directory not found: ${projectDir || process.cwd()}` }; }
   const selected = String(platform || (url ? "web" : appId || apkPath ? "android" : "ios")).toLowerCase();
   if (!["ios", "android", "web"].includes(selected)) return { error: "platform must be ios|android|web" };
-  const mapPath = path.resolve(root, outDir, "ui-map.json");
+  const mapPath = path.resolve(root, projectArtifactDirectory(root, outDir), "ui-map.json");
   if (!isInsideDir(root, mapPath)) return { error: "UI Map output must remain inside the repository" };
 
   let resolvedTarget = "";
@@ -2152,7 +2153,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           testEmail: { type: "string", description: "Explore: actor/login email; never persisted in the model" },
           testPassword: { type: "string", description: "Explore: actor/login password; never persisted in the model" },
           maxContracts: { type: "integer", minimum: 1, maximum: 50, default: 15 },
-          outDir: { type: "string", description: "Repo-relative artifact directory; default .autotap" },
+          outDir: { type: "string", description: "Repo-relative artifact directory; default .tapp" },
         },
       },
     },
@@ -2160,7 +2161,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_actor_config",
       title: "Inspect or configure named test actors without storing credential values",
       description:
-        "Manage the repository-native .autotap/project.json actor/session contract used by init, release-contract generation, and CI. `read` is inspect-only. `set` writes an explicit actor role, isolation/provisioning policy, and credential-name to environment-variable-name bindings. The tool never accepts, returns, or persists credential values and never overwrites an actor unless replace is explicit.",
+        "Manage the repository-native .tapp/project.json actor/session contract used by init, release-contract generation, and CI. `read` is inspect-only. `set` writes an explicit actor role, isolation/provisioning policy, and credential-name to environment-variable-name bindings. The tool never accepts, returns, or persists credential values and never overwrites an actor unless replace is explicit.",
       inputSchema: {
         type: "object",
         properties: {
@@ -2180,14 +2181,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_release_plan",
       title: "Inspect or explicitly review a Tapp release plan",
       description:
-        "Read the repository-native release plan, apply explicit approve/reject/defer decisions, generate grounded Task/contract drafts, deterministically validate drafts on a real target, or explicitly promote fully replay-validated drafts into reviewed repository-native artifacts. Review changes only decision metadata. Generation writes under .autotap/proposals, never overwrites, never invokes AI, and remains untrusted until real deterministic replay passes. Web validation can build/start/stop the detected managed target when url is omitted.",
+        "Read the repository-native release plan, apply explicit approve/reject/defer decisions, generate grounded Task/contract drafts, deterministically validate drafts on a real target, or explicitly promote fully replay-validated drafts into reviewed repository-native artifacts. Review changes only decision metadata. Generation writes under .tapp/proposals, never overwrites, never invokes AI, and remains untrusted until real deterministic replay passes. Web validation can build/start/stop the detected managed target when url is omitted.",
       inputSchema: {
         type: "object",
         properties: {
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "review", "generate", "validate", "promote"], default: "read" },
-          planPath: { type: "string", description: "Repo-relative plan path; default .autotap/release-plan.json" },
-          projectDir: { type: "string", description: "Generate: repo-relative project root containing the scoped .autotap Task directories" },
+          planPath: { type: "string", description: "Repo-relative plan path; default .tapp/release-plan.json" },
+          projectDir: { type: "string", description: "Generate: repo-relative project root containing the scoped .tapp Task directories" },
           approve: { type: "array", items: { type: "string" }, description: "Plan item ids or names to approve" },
           reject: { type: "array", items: { type: "string" }, description: "Plan item ids or names to reject" },
           defer: { type: "array", items: { type: "string" }, description: "Plan item ids or names to defer" },
@@ -2214,11 +2215,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["inspect", "install", "baseline"], default: "inspect" },
           projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
-          modelPath: { type: "string", description: "Repo-relative application model path; defaults to <projectDir>/.autotap/application-model.json" },
+          modelPath: { type: "string", description: "Repo-relative application model path; defaults to <projectDir>/.tapp/application-model.json" },
           actionRef: { type: "string", description: "GitHub Action reference owner/repository@release-tag-or-sha; defaults to the current Tapp release tag" },
           defaultBranch: { type: "string", default: "main" },
           workflowPath: { type: "string", description: "Install: project-relative output; default .github/workflows/tapp.yml" },
-          manifestPath: { type: "string", description: "Install: project-relative output; default .autotap/ci.json" },
+          manifestPath: { type: "string", description: "Install: project-relative output; default .tapp/ci.json" },
           allowUnresolved: { type: "boolean", default: false, description: "Permit writing a draft whose manifest names unresolved target configuration" },
           replace: { type: "boolean", default: false, description: "Explicitly replace an existing generated workflow/manifest or target baseline" },
           reportPath: { type: "string", description: "Baseline: repo-relative successful conclusive portable-gate JSON report" },
@@ -2240,7 +2241,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "build", "diff"], default: "read" },
           captureId: { type: "string", description: "Read/build from this Tapp capture's ocqa-markers.txt/ui-map.json" },
-          mapPath: { type: "string", description: "Repo-relative UI Map path for read, or build output (default .autotap/ui-map.json)" },
+          mapPath: { type: "string", description: "Repo-relative UI Map path for read, or build output (default .tapp/ui-map.json)" },
           markersPath: { type: "string", description: "Repo-relative OCQA markers path for build when captureId is not supplied" },
           beforePath: { type: "string", description: "Repo-relative baseline UI Map for diff" },
           afterPath: { type: "string", description: "Repo-relative current UI Map for diff" },
@@ -2255,7 +2256,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_task",
       title: "Inspect, validate, or compile a reusable deterministic Task",
       description:
-        "Work with repository-native compositional Tasks in .autotap/tasks. Tasks define inputs, outputs, pre/postconditions, platform implementations, and the UI Map states/transitions they cover. " +
+        "Work with repository-native compositional Tasks in .tapp/tasks. Tasks define inputs, outputs, pre/postconditions, platform implementations, and the UI Map states/transitions they cover. " +
         "Validation is deterministic and can ground selectors/coverage against ui-map.json. Compilation expands a Task into the shared keyless Flow contract with reviewable Task provenance; pass that returned flow to tapp_flow_run to replay it. No AI or API key is used.",
       inputSchema: {
         type: "object",
@@ -2263,7 +2264,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "validate", "compile"], default: "validate" },
-          taskPath: { type: "string", description: "Repo-relative .autotap/tasks/*.yml|json file" },
+          taskPath: { type: "string", description: "Repo-relative .tapp/tasks/*.yml|json file" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Implementation to validate/compile" },
           inputs: { type: "object", additionalProperties: { type: "string" }, description: "Task inputs for compile. Secret inputs must be environment placeholders such as $TEST_PASSWORD, never plaintext." },
           mapPath: { type: "string", description: "Optional repo-relative UI Map v1 used to ground states, edges, and semantic controls" },
@@ -2276,7 +2277,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_release_contract",
       title: "Inspect, validate, compile, or run a release contract",
       description:
-        "Work with repository-native TypeScript release contracts in .autotap/contracts. Contracts express business guarantees through reusable Tasks, named actors, exact/eventual expectations, criticality, policy, and UI Map coverage. " +
+        "Work with repository-native TypeScript release contracts in .tapp/contracts. Contracts express business guarantees through reusable Tasks, named actors, exact/eventual expectations, criticality, policy, and UI Map coverage. " +
         "Compilation targets the same deterministic Flow/Scenario evidence contract; ordinary run is keyless and never invokes a model. Multi-actor isolated replay is currently web-only.",
       inputSchema: {
         type: "object",
@@ -2284,7 +2285,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           operation: { type: "string", enum: ["read", "validate", "compile", "run"], default: "validate" },
-          contractPath: { type: "string", description: "Repo-relative .autotap/contracts/*.contract.ts file" },
+          contractPath: { type: "string", description: "Repo-relative .tapp/contracts/*.contract.ts file" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Target platform; optional when the contract declares exactly one" },
           mapPath: { type: "string", description: "Optional repo-relative UI Map v1 for coverage grounding" },
           updateMap: { type: "boolean", default: false, description: "Explicitly add the reviewed contract coverage to mapPath" },
@@ -2326,10 +2327,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
           platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional platform filter" },
-          mapPath: { type: "string", description: "Project-relative UI Map; defaults to .autotap/ui-map.json" },
+          mapPath: { type: "string", description: "Project-relative UI Map; defaults to .tapp/ui-map.json" },
           prPlanPath: { type: "string", description: "Adopt: project-relative executed PR plan containing conclusive exploration evidence" },
           item: { type: "string", description: "Adopt: stable exploration target id whose reviewable proposal should be appended" },
-          releasePlanPath: { type: "string", description: "Adopt: project-relative target; defaults to .autotap/release-plan.json" },
+          releasePlanPath: { type: "string", description: "Adopt: project-relative target; defaults to .tapp/release-plan.json" },
         },
       },
     },
@@ -2356,7 +2357,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description:
               "Inline Flow: {name, app, steps:[...], vars?}. Example: {name:'login', app:'com.acme.app', steps:[{tap:'Sign In'}, {type:{field:'Email', value:'$TEST_EMAIL'}}, {tap:'Continue'}, {assert_screen:'Home'}]}",
           },
-          flowPath: { type: "string", description: "Alternative to `flow`: repo-relative path to a .yml/.json Flow (e.g. .autotap/flows/login.yml)" },
+          flowPath: { type: "string", description: "Alternative to `flow`: repo-relative path to a .yml/.json Flow (e.g. .tapp/flows/login.yml)" },
           platform: { type: "string", enum: ["ios", "web", "android"], description: "Overrides Flow platform detection" },
           appBundleId: { type: "string", description: "iOS: overrides the Flow's `app:` field" },
           androidAppId: { type: "string", description: "Android: overrides the Flow's `app:` field" },
@@ -2394,7 +2395,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "Write a deterministic E2E Flow from a natural-language goal (e.g. 'sign in and open Settings'), " +
         "GROUNDED in the app's real screens so it can't invent steps. Tapp explores the app to build a " +
         "screen/control map (or reuses a recent run via captureId), then a model authors a Flow using only " +
-        "screens/controls that were actually observed. Saves it to .autotap/flows/<name>.yml and returns the " +
+        "screens/controls that were actually observed. Saves it to .tapp/flows/<name>.yml and returns the " +
         "YAML for review (optionally runs it). Needs a model backend (Tapp subscription token or " +
         "ANTHROPIC_API_KEY). Use this to bootstrap a test you then refine; use tapp_flow_run to replay it.",
       inputSchema: {
@@ -2418,7 +2419,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Save what you've done in the CURRENT interactive session as a reusable, deterministic Flow " +
         "(record-by-doing). Every successful tapp_session_act (tap/type/swipe/back) is recorded; this " +
-        "writes them to .autotap/flows/<name>.yml with wait_for steps auto-inserted on screen changes and a " +
+        "writes them to .tapp/flows/<name>.yml with wait_for steps auto-inserted on screen changes and a " +
         "final assert_screen checkpoint. Typed credentials are templated to $TEST_EMAIL/$TEST_PASSWORD so the " +
         "flow is shareable. The saved flow replays with tapp_flow_run. Do it once → it's a test.",
       inputSchema: {
@@ -2908,7 +2909,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (maxContracts < 1 || maxContracts > 50) return errorResult("maxContracts must be between 1 and 50");
     const { initializeProductProject } = await import("./product-operations.js");
     try {
-      const outDir = isNonEmptyString(args.outDir) ? args.outDir.trim() : ".autotap";
+      const outDir = isNonEmptyString(args.outDir) ? args.outDir.trim() : ".tapp";
       const resolvedOut = path.resolve(projectDir, outDir);
       if (!isInsideDir(projectDir, resolvedOut)) return errorResult("outDir must be inside projectDir");
       const selectedPlatform = isNonEmptyString(args.platform) ? args.platform.trim().toLowerCase()
@@ -2979,7 +2980,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "read").toLowerCase();
     if (!["read", "review", "generate", "validate", "promote"].includes(operation)) return errorResult("operation must be read|review|generate|validate|promote");
-    const planPath = path.resolve(repoRoot, isNonEmptyString(args.planPath) ? args.planPath.trim() : ".autotap/release-plan.json");
+    const planPath = isNonEmptyString(args.planPath) ? path.resolve(repoRoot, args.planPath.trim()) : existingProjectArtifactPath(repoRoot, "release-plan.json");
     if (!isInsideDir(repoRoot, planPath)) return errorResult("planPath must be inside the repo");
     if (!fs.existsSync(planPath)) return errorResult("Release plan not found", { planPath });
     let plan;
@@ -3054,7 +3055,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (!["inspect", "install", "baseline"].includes(operation)) return errorResult("operation must be inspect|install|baseline");
     const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
     if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the repo");
-    const modelPath = isNonEmptyString(args.modelPath) ? path.resolve(repoRoot, args.modelPath.trim()) : path.join(projectDir, ".autotap", "application-model.json");
+    const modelPath = isNonEmptyString(args.modelPath) ? path.resolve(repoRoot, args.modelPath.trim()) : existingProjectArtifactPath(projectDir, "application-model.json");
     if (!isInsideDir(projectDir, modelPath) || !fs.existsSync(modelPath)) return errorResult("Application model not found inside projectDir; run tapp_init first", { modelPath });
     let model;
     try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
@@ -3078,7 +3079,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const rendered = prepareProductCi({ projectDir, modelPath, actionRef, defaultBranch });
       if (operation === "inspect") return richResult(`🧩 CI plan — ${rendered.manifest.targets.length} target job(s) · ${rendered.manifest.unresolved.length} unresolved · read-only`, rendered);
       if (rendered.manifest.unresolved.length && !asBoolean(args.allowUnresolved)) return errorResult("CI workflow not installed because target configuration remains unresolved", { unresolved: rendered.manifest.unresolved, next: "Resolve the application model requirements or explicitly allow an inspect-only draft." });
-      const result = installProductCi({ projectDir, modelPath, actionRef, defaultBranch, workflowPath: isNonEmptyString(args.workflowPath) ? args.workflowPath.trim() : ".github/workflows/tapp.yml", manifestPath: isNonEmptyString(args.manifestPath) ? args.manifestPath.trim() : ".autotap/ci.json", replace: asBoolean(args.replace), allowUnresolved: asBoolean(args.allowUnresolved) });
+      const result = installProductCi({ projectDir, modelPath, actionRef, defaultBranch, workflowPath: isNonEmptyString(args.workflowPath) ? args.workflowPath.trim() : ".github/workflows/tapp.yml", manifestPath: isNonEmptyString(args.manifestPath) ? args.manifestPath.trim() : ".tapp/ci.json", replace: asBoolean(args.replace), allowUnresolved: asBoolean(args.allowUnresolved) });
       return richResult(`✅ Reviewable CI gate installed — ${result.manifest.targets.length} target job(s); no commit, push, branch protection, or GitHub resource was created`, result);
     } catch (error) { return errorResult("Could not prepare CI installation", { detail: error.message || String(error) }); }
   }
@@ -3109,7 +3110,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const markersPath = capture ? path.join(capture.path, "ocqa-markers.txt") : resolveRepoFile(args.markersPath);
       if (!markersPath) return errorResult("markersPath must be inside the repo, or provide captureId");
       if (!fs.existsSync(markersPath)) return errorResult("OCQA markers not found", { markersPath });
-      const outPath = resolveRepoFile(args.mapPath, path.join(".autotap", "ui-map.json"));
+      const outPath = isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(repoRoot, "ui-map.json");
       if (!outPath) return errorResult("mapPath must be inside the repo");
       try {
         const observed = buildUiMapFromMarkers({ markersPath, platform: args.platform || "ios", target: args.target || "", runId: capture?.id || "" });
@@ -3120,7 +3121,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       } catch (error) { return errorResult("Could not build UI Map", { detail: error.message || String(error) }); }
     }
     if (operation !== "read") return errorResult("operation must be read|build|diff");
-    const mapPath = capture ? path.join(capture.path, "ui-map.json") : resolveRepoFile(args.mapPath, path.join(".autotap", "ui-map.json"));
+    const mapPath = capture ? path.join(capture.path, "ui-map.json") : isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(repoRoot, "ui-map.json");
     if (!mapPath) return errorResult("mapPath must be inside the repo");
     if (!fs.existsSync(mapPath)) return errorResult("UI Map not found; run QA or operation=build first", { mapPath });
     try {
@@ -3480,7 +3481,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const ungrounded = ungroundedScreens(parsed.steps, grounding);
     const flow = { name: args.name || parsed.name, app: bundleId, steps: parsed.steps };
     const slug = flow.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "generated-flow";
-    const dir = path.join(repoRoot, ".autotap", "flows");
+    const dir = path.join(repoRoot, ".tapp", "flows");
     fs.mkdirSync(dir, { recursive: true });
     const outPath = path.join(dir, `${slug}.yml`);
     const yamlRes = await runCommand("python3", [path.join(scriptsDir, "flow_lib.py"), "to-yaml", JSON.stringify(flow)], { cwd: repoRoot });

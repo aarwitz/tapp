@@ -49,6 +49,6 @@
       }
     },
     "promotedAt": "2026-08-05T11:29:25.728Z",
-    "promotedFrom": ".autotap/proposals/tasks/open-pricing.task.json"
+    "promotedFrom": ".tapp/proposals/tasks/open-pricing.task.json"
   }
 }

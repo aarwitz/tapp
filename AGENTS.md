@@ -18,7 +18,7 @@ npx -y @aarwitz/tapp shot            # screenshot the booted sim → file path (
 npx -y @aarwitz/tapp apps            # what's installed on the simulator, with bundle ids
 npx -y @aarwitz/tapp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
 npx -y @aarwitz/tapp qa app.apk --platform android --app-id com.acme.app
-npx -y @aarwitz/tapp flow run .autotap/flows/smoke.yml  # committed, keyless E2E replay
+npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
 **Seeing the screen, per client:** if you can read image files into your context (Claude
@@ -92,13 +92,13 @@ Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, find
 
 ## Flows (deterministic E2E tests)
 
-Flow YAML is repository-native test code. Commit it under `.autotap/flows/`; CI can replay it
+Flow YAML is repository-native test code. Commit it under `.tapp/flows/`; CI can replay it
 without a coding agent, model, subscription, or API key. AI generation and `assert_ai` are optional.
 
 - **Record:** every successful `session_act` is recorded. After driving a flow, call
-  `tapp_flow_save { name: "checkout" }` → writes `.autotap/flows/checkout.yml` with waits and
+  `tapp_flow_save { name: "checkout" }` → writes `.tapp/flows/checkout.yml` with waits and
   a final screen assertion auto-inserted; typed credentials are templated to `$TEST_EMAIL`/`$TEST_PASSWORD`.
-- **Replay:** `tapp_flow_run { flowPath: ".autotap/flows/checkout.yml" }` — exact steps,
+- **Replay:** `tapp_flow_run { flowPath: ".tapp/flows/checkout.yml" }` — exact steps,
   deterministic assertions, same result every time. A failed assertion is a finding.
 - **Generate:** `tapp_flow_generate { goal: "log in and add the first item to cart" }` —
   grounded in the app's actually-explored screens, so it can't invent steps.

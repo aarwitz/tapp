@@ -58,7 +58,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/pricing-reachable.contract.ts"
+          ".tapp/contracts/pricing-reachable.contract.ts"
         ],
         "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
       }
@@ -74,12 +74,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-pricing.task.json"
+        ".tapp/tasks/open-pricing.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-pricing.task.json"
+          ".tapp/tasks/open-pricing.task.json"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -97,14 +97,14 @@
         "pricingReachable"
       ],
       "sourcePaths": [
-        ".autotap/contracts/pricing-reachable.contract.ts",
-        ".autotap/tasks/open-pricing.task.json"
+        ".tapp/contracts/pricing-reachable.contract.ts",
+        ".tapp/tasks/open-pricing.task.json"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/pricing-reachable.contract.ts",
-          ".autotap/tasks/open-pricing.task.json"
+          ".tapp/contracts/pricing-reachable.contract.ts",
+          ".tapp/tasks/open-pricing.task.json"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -118,12 +118,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/sign-in.yml"
+        ".tapp/tasks/sign-in.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/sign-in.yml"
+          ".tapp/tasks/sign-in.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -150,7 +150,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/pricing-reachable.contract.ts"
+          ".tapp/contracts/pricing-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -164,7 +164,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/pricing-reachable.contract.ts"
+          ".tapp/contracts/pricing-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -172,7 +172,7 @@
   ],
   "systemInvariants": [],
   "configuration": {
-    "path": ".autotap/project.json",
+    "path": ".tapp/project.json",
     "status": "missing",
     "actorCount": 0,
     "lifecycle": {
@@ -199,7 +199,7 @@
   ],
   "stateBoundaries": [],
   "uiMap": {
-    "path": ".autotap/ui-map.json",
+    "path": ".tapp/ui-map.json",
     "status": "observed",
     "nodeCount": 8,
     "edgeCount": 7,
@@ -233,7 +233,7 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        ".autotap/ui-map.json"
+        ".tapp/ui-map.json"
       ],
       "detail": "grounded in prior runtime observations"
     }
@@ -244,7 +244,7 @@
         "id": "task_16efcab18336a0f7",
         "name": "openPricing",
         "scope": ".",
-        "path": ".autotap/tasks/open-pricing.task.json",
+        "path": ".tapp/tasks/open-pricing.task.json",
         "version": 1,
         "platforms": [
           "web"
@@ -255,7 +255,7 @@
         "id": "task_d061e2ee669c38c3",
         "name": "signIn",
         "scope": ".",
-        "path": ".autotap/tasks/sign-in.yml",
+        "path": ".tapp/tasks/sign-in.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -277,7 +277,7 @@
         "id": "contract_8944f3ec2ae3b18f",
         "name": "pricingReachable",
         "scope": ".",
-        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "path": ".tapp/contracts/pricing-reachable.contract.ts",
         "criticality": "medium",
         "platforms": [
           "web"

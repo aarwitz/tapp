@@ -31,6 +31,7 @@ import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { proposeSelectorMaintenance, validateWebMaintenanceProposal } from "./maintenance-proposal.js";
 import { isBusinessUiMapNode, releasePlanCandidateFromUiMapNode } from "./application-model.js";
+import { existingProjectArtifactPath } from "./project-paths.js";
 
 function parseArgs(argv) {
   const args = { flowLogs: [], failOn: "gate" };
@@ -201,14 +202,14 @@ function targetCoverageDisposition(target, currentNode, projectDir = "") {
     provenance: "runtime-observed",
   });
   if (projectDir) {
-    const releasePlanPath = path.join(path.resolve(projectDir), ".autotap", "release-plan.json");
+    const releasePlanPath = existingProjectArtifactPath(path.resolve(projectDir), "release-plan.json");
     try {
       const releasePlan = JSON.parse(fs.readFileSync(releasePlanPath, "utf8"));
       const existing = (releasePlan.items || []).find((candidate) => candidate.id === item.id || candidate.name === item.name ||
         (candidate.groundedBy || []).some((ground) => ground.type === "ui-map-node" && ground.id === currentNode.id));
       if (existing) return {
         existingReleasePlanItem: {
-          path: ".autotap/release-plan.json",
+          path: ".tapp/release-plan.json",
           id: existing.id,
           name: existing.name,
           decision: existing.decision,
@@ -219,7 +220,7 @@ function targetCoverageDisposition(target, currentNode, projectDir = "") {
           kind: "release-plan-item-proposal",
           status: "matches-existing-release-plan",
           autoApply: false,
-          targetPath: ".autotap/release-plan.json",
+          targetPath: ".tapp/release-plan.json",
           operation: { op: "reconcile-item", item },
           reason: "Fresh PR runtime and changed-file evidence can be attached to the existing grounded item only through explicit adoption; its current human decision is preserved.",
           requiredValidation: "After explicit evidence reconciliation, keep the normal review, generation, deterministic replay, and promotion requirements.",
@@ -231,7 +232,7 @@ function targetCoverageDisposition(target, currentNode, projectDir = "") {
     kind: "release-plan-item-proposal",
     status: "awaiting-explicit-adoption",
     autoApply: false,
-    targetPath: ".autotap/release-plan.json",
+    targetPath: ".tapp/release-plan.json",
     operation: { op: "add-item", item },
     reason: `The changed ${currentNode.name} surface was observed in this PR run but is not covered by a selected release contract.`,
     requiredValidation: "Explicitly adopt and review this item, generate reusable UI-Map-backed Tasks, then replay the resulting contract against the real target before promotion.",

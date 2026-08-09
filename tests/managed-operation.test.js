@@ -58,5 +58,5 @@ test("managed child verifies the exact checkout and inspects through shared prod
   assert.equal(result.envelope.repository.revision, revision);
   assert.deepEqual(result.project.application.platforms, ["web"]);
   assert.equal(result.project.targets[0].platform, "web");
-  assert.equal(fs.existsSync(path.join(root, ".autotap", "application-model.json")), true);
+  assert.equal(fs.existsSync(path.join(root, ".tapp", "application-model.json")), true);
 });

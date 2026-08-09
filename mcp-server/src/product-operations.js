@@ -16,8 +16,9 @@ import {
   reviewReleasePlan,
   writeInitArtifacts,
 } from "./application-model.js";
-import { baselinePathForTarget, renderGithubWorkflow, selectApplicationTarget, writeCiInstallation, writeTargetBaseline } from "./ci-setup.js";
+import { baselinePathForTarget, existingBaselinePathForTarget, renderGithubWorkflow, selectApplicationTarget, writeCiInstallation, writeTargetBaseline } from "./ci-setup.js";
 import { executeReleaseContract, runProductProcess } from "./product-execution.js";
+import { projectArtifactDirectory } from "./project-paths.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const packageVersion = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version;
@@ -50,8 +51,9 @@ function atomicJson(file, value) {
   fs.renameSync(temporary, file);
 }
 
-function artifactPaths(root, outDir = ".autotap") {
-  const dir = path.resolve(root, outDir);
+function artifactPaths(root, outDir = ".tapp") {
+  const selectedOutDir = projectArtifactDirectory(root, outDir);
+  const dir = path.resolve(root, selectedOutDir);
   if (!inside(root, dir)) throw new Error("Artifact directory must remain inside the repository");
   return {
     dir,
@@ -94,7 +96,7 @@ function listProductRuns(root) {
 }
 
 function listRepositoryFlows(root) {
-  const directory = path.join(root, ".autotap", "flows");
+  const directory = path.join(root, projectArtifactDirectory(root), "flows");
   if (!fs.existsSync(directory)) return [];
   return fs.readdirSync(directory, { withFileTypes:true })
     .filter((entry) => entry.isFile() && /\.(?:ya?ml|json)$/i.test(entry.name))
@@ -127,7 +129,7 @@ function listRepositoryFlows(root) {
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-export function readProductProject({ projectDir, outDir = ".autotap" } = {}) {
+export function readProductProject({ projectDir, outDir = ".tapp" } = {}) {
   const root = realProject(projectDir);
   const paths = artifactPaths(root, outDir);
   const model = readJson(paths.model);
@@ -137,7 +139,7 @@ export function readProductProject({ projectDir, outDir = ".autotap" } = {}) {
   const requirements = model?.requirements || [];
   const planItems = plan?.items || [];
   const baselines = (model?.targets || []).map((target) => {
-    const file = baselinePathForTarget(root, target);
+    const file = existingBaselinePathForTarget(root, target);
     return { targetId: target.id, platform: target.platform, path: file, relativePath: path.relative(root, file).replaceAll(path.sep, "/"), exists: fs.existsSync(file) };
   });
   return {
@@ -177,7 +179,7 @@ export function readProductProject({ projectDir, outDir = ".autotap" } = {}) {
 // target identity or configuration rules.
 export async function prepareProductTarget({
   projectDir,
-  outDir = ".autotap",
+  outDir = ".tapp",
   platform = "",
   target = "",
   appPath = "",
@@ -262,7 +264,7 @@ export async function prepareProductTarget({
 export async function initializeProductProject({
   projectDir,
   mode = "inspect",
-  outDir = ".autotap",
+  outDir = ".tapp",
   ownedUrl = "",
   platform = "",
   target = "",
@@ -326,7 +328,7 @@ function resolvePlan(root, outDir, planPath = "") {
   return { file, plan: readJson(file, { required: true }) };
 }
 
-export function reviewProductPlan({ projectDir, outDir = ".autotap", planPath = "", approve = [], reject = [], defer = [] } = {}) {
+export function reviewProductPlan({ projectDir, outDir = ".tapp", planPath = "", approve = [], reject = [], defer = [] } = {}) {
   const root = realProject(projectDir);
   const resolved = resolvePlan(root, outDir, planPath);
   const plan = reviewReleasePlan(resolved.plan, { approve, reject, defer });
@@ -334,7 +336,7 @@ export function reviewProductPlan({ projectDir, outDir = ".autotap", planPath = 
   return { operation: "review-plan", plan, planPath: resolved.file, project: readProductProject({ projectDir: root, outDir }) };
 }
 
-export async function generateProductPlan({ projectDir, outDir = ".autotap", planPath = "" } = {}) {
+export async function generateProductPlan({ projectDir, outDir = ".tapp", planPath = "" } = {}) {
   const root = realProject(projectDir);
   const resolved = resolvePlan(root, outDir, planPath);
   const result = await generateApprovedContractProposals(resolved.plan, { projectDir: root });
@@ -344,7 +346,7 @@ export async function generateProductPlan({ projectDir, outDir = ".autotap", pla
 
 export async function validateProductPlan({
   projectDir,
-  outDir = ".autotap",
+  outDir = ".tapp",
   planPath = "",
   items = [],
   platform = "",
@@ -411,7 +413,7 @@ export async function validateProductPlan({
   return { operation: "validate-plan", platform: selectedPlatform, passed: results.every((item) => item.passed), results, plan, planPath: resolved.file, project: readProductProject({ projectDir: root, outDir }) };
 }
 
-export async function promoteProductPlan({ projectDir, outDir = ".autotap", planPath = "", items = [] } = {}) {
+export async function promoteProductPlan({ projectDir, outDir = ".tapp", planPath = "", items = [] } = {}) {
   const root = realProject(projectDir);
   const resolved = resolvePlan(root, outDir, planPath);
   const result = await promoteValidatedProposals(resolved.plan, { projectDir: root, ids: items || [] });
@@ -423,7 +425,7 @@ export async function promoteProductPlan({ projectDir, outDir = ".autotap", plan
   return { operation: "promote-plan", ...result, plan: written.plan, planPath: written.planPath, modelPath: written.modelPath, project: readProductProject({ projectDir: root, outDir }) };
 }
 
-export function prepareProductCi({ projectDir, outDir = ".autotap", modelPath = "", actionRef = DEFAULT_ACTION_REF, defaultBranch = "main" } = {}) {
+export function prepareProductCi({ projectDir, outDir = ".tapp", modelPath = "", actionRef = DEFAULT_ACTION_REF, defaultBranch = "main" } = {}) {
   const root = realProject(projectDir);
   const modelFile = modelPath ? path.resolve(root, modelPath) : artifactPaths(root, outDir).model;
   if (!inside(root, modelFile)) throw new Error("Application model must remain inside the repository");
@@ -433,7 +435,7 @@ export function prepareProductCi({ projectDir, outDir = ".autotap", modelPath = 
   return { operation: "prepare-ci", ...rendered, project: readProductProject({ projectDir: root, outDir }) };
 }
 
-export function installProductCi({ projectDir, outDir = ".autotap", modelPath = "", actionRef = DEFAULT_ACTION_REF, defaultBranch = "main", workflowPath = ".github/workflows/tapp.yml", manifestPath = ".autotap/ci.json", replace = false, allowUnresolved = false } = {}) {
+export function installProductCi({ projectDir, outDir = ".tapp", modelPath = "", actionRef = DEFAULT_ACTION_REF, defaultBranch = "main", workflowPath = ".github/workflows/tapp.yml", manifestPath = ".tapp/ci.json", replace = false, allowUnresolved = false } = {}) {
   const root = realProject(projectDir);
   const rendered = prepareProductCi({ projectDir: root, outDir, modelPath, actionRef, defaultBranch });
   if (rendered.manifest.unresolved.length && !allowUnresolved) throw new Error(`CI installation is unresolved: ${rendered.manifest.unresolved.map((item) => `${item.platform}:${item.message}`).join("; ")}`);
@@ -443,7 +445,7 @@ export function installProductCi({ projectDir, outDir = ".autotap", modelPath = 
 
 export async function runProductGate({
   projectDir,
-  outDir = ".autotap",
+  outDir = ".tapp",
   platform = "web",
   target = "",
   url = "",
@@ -501,7 +503,7 @@ export async function runProductGate({
     if (!inside(root, baselinePath) || !fs.existsSync(baselinePath)) throw new Error("Baseline must be an existing file inside the repository");
     args.push("--baseline", baselinePath);
   } else {
-    const targetBaseline = baselinePathForTarget(root, selected);
+    const targetBaseline = existingBaselinePathForTarget(root, selected);
     if (fs.existsSync(targetBaseline)) args.push("--baseline", targetBaseline);
   }
   onProgress({ phase: "gate", text: `Running ${selected.platform}:${selected.name} release gate` });
@@ -515,7 +517,7 @@ export async function runProductGate({
   return { operation: "run-gate", passed: execution.code === 0, code: execution.code, stdout: execution.stdout, stderr: execution.stderr, selectedTarget: selected, report, reportPath, markdownPath, runDir, project: readProductProject({ projectDir: root, outDir }) };
 }
 
-export function createProductBaseline({ projectDir, outDir = ".autotap", reportPath, platform = "web", target = "", replace = false, baselinePath = "" } = {}) {
+export function createProductBaseline({ projectDir, outDir = ".tapp", reportPath, platform = "web", target = "", replace = false, baselinePath = "" } = {}) {
   const root = realProject(projectDir);
   const project = readProductProject({ projectDir: root, outDir });
   const selected = selectApplicationTarget(project.model, { platform, target });

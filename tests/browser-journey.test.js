@@ -13,9 +13,9 @@ try { ({ chromium } = await import("playwright")); } catch {}
 function commerceFixture() {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-journey-"));
   for (const file of ["package.json", "index.html", "app.js", "styles.css", "server.js"]) fs.copyFileSync(path.join(repository, "CommerceDemo", file), path.join(project, file));
-  fs.mkdirSync(path.join(project, ".autotap"), { recursive: true });
-  fs.cpSync(path.join(repository, "CommerceDemo", ".autotap", "tasks"), path.join(project, ".autotap", "tasks"), { recursive: true });
-  fs.copyFileSync(path.join(repository, "CommerceDemo", ".autotap", "project.json"), path.join(project, ".autotap", "project.json"));
+  fs.mkdirSync(path.join(project, ".tapp"), { recursive: true });
+  fs.cpSync(path.join(repository, "CommerceDemo", ".tapp", "tasks"), path.join(project, ".tapp", "tasks"), { recursive: true });
+  fs.copyFileSync(path.join(repository, "CommerceDemo", ".tapp", "project.json"), path.join(project, ".tapp", "project.json"));
   return project;
 }
 
@@ -48,7 +48,7 @@ test("browser journey completes onboarding, map review, contract promotion, base
     assert.match(await page.locator("#live-screen-title").innerText(), /Cart/);
     await page.locator("#live-flow-name").fill("Open checkout cart");
     await operate("#save-live-flow");
-    const recordedFlow = path.join(project, ".autotap", "flows", "open-checkout-cart.yml");
+    const recordedFlow = path.join(project, ".tapp", "flows", "open-checkout-cart.yml");
     assert.equal(fs.existsSync(recordedFlow), true);
     assert.match(fs.readFileSync(recordedFlow, "utf8"), /platform: web/);
     assert.doesNotMatch(fs.readFileSync(recordedFlow, "utf8"), /127\.0\.0\.1:\d+/, "managed runtime ports are not committed");
@@ -72,11 +72,11 @@ test("browser journey completes onboarding, map review, contract promotion, base
     await operate("#validate-drafts");
     assert.match(await page.locator("#validation-status").innerText(), /Validated drafts available/);
     await operate("#promote");
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "contracts", "checkout-creates-durable-order.contract.ts")), true);
-    const promotedModel = JSON.parse(fs.readFileSync(path.join(project, ".autotap", "application-model.json"), "utf8"));
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "contracts", "checkout-creates-durable-order.contract.ts")), true);
+    const promotedModel = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "application-model.json"), "utf8"));
     assert.equal(promotedModel.requirements.some((item) => item.id === "contracts"), false, "promotion refreshes canonical product readiness");
     assert.equal(promotedModel.artifacts.contracts.some((item) => item.name === "checkoutCreatesDurableOrder"), true);
-    const promotedPlan = JSON.parse(fs.readFileSync(path.join(project, ".autotap", "release-plan.json"), "utf8"));
+    const promotedPlan = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "release-plan.json"), "utf8"));
     assert.match(promotedPlan.items.find((item) => item.name === "checkoutCreatesDurableOrder").generation.realValidation.web.evidence, /^tapp-capture:flow-web-/);
     assert.doesNotMatch(await page.locator("#connect").innerText(), /No reviewed release contracts exist yet/);
     assert.match(await page.locator("#validation-status").innerText(), /Promoted suite ready/);
@@ -89,7 +89,7 @@ test("browser journey completes onboarding, map review, contract promotion, base
     await page.locator('.primary-nav [data-view="settings"]').click();
     assert.equal(await page.locator("#create-baseline").isEnabled(), true);
     await operate("#create-baseline");
-    assert.equal(fs.existsSync(path.join(project, ".autotap", "baselines", "web")), true);
+    assert.equal(fs.existsSync(path.join(project, ".tapp", "baselines", "web")), true);
     await page.locator('.primary-nav [data-view="runs"]').click();
     await operate("#run-gate");
     await page.locator('.primary-nav [data-view="settings"]').click();

@@ -34,3 +34,15 @@ test("project configuration rejects values, malformed environment names, and cro
 test("contract credential placeholders become non-secret environment bindings", () => {
   assert.deepEqual(credentialBindingsFromValue({ email: "$ALICE_EMAIL", password: "$ALICE_PASSWORD", token: "literal" }), { email: "ALICE_EMAIL", password: "ALICE_PASSWORD" });
 });
+
+test("project configuration prefers .tapp and reads an existing .autotap project during migration", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-legacy-project-config-"));
+  fs.mkdirSync(path.join(root, ".autotap"));
+  fs.writeFileSync(path.join(root, ".autotap", "project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1, actors: {} }));
+  assert.equal(readProjectConfig(root).relativePath, ".autotap/project.json");
+
+  fs.mkdirSync(path.join(root, ".tapp"));
+  fs.writeFileSync(path.join(root, ".tapp", "project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1, actors: { canonical: {} } }));
+  assert.equal(readProjectConfig(root).relativePath, ".tapp/project.json");
+  assert.ok(readProjectConfig(root).config.actors.canonical);
+});

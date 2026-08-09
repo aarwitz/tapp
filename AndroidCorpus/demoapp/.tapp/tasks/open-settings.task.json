@@ -39,7 +39,7 @@
     "planItemIds": [
       "proposal_7a978be219ca61cd"
     ],
-    "mapPath": "demoapp/.autotap/ui-map.json",
+    "mapPath": "demoapp/.tapp/ui-map.json",
     "targetId": "target_4fa4825fe4191b9c",
     "realValidation": {
       "android": {
@@ -52,6 +52,6 @@
       }
     },
     "promotedAt": "2026-08-05T15:06:28.277Z",
-    "promotedFrom": "demoapp/.autotap/proposals/tasks/open-settings.task.json"
+    "promotedFrom": "demoapp/.tapp/proposals/tasks/open-settings.task.json"
   }
 }

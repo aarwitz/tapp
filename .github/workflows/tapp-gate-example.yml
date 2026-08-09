@@ -10,7 +10,7 @@
 # A successful, conclusive run on main automatically seeds/refreshes the baseline in the
 # Actions cache and a 90-day artifact fallback.
 # PRs then fail only on NEW high/critical findings or broken Flows — existing debt doesn't
-# block, regressions do. A committed `.autotap/baseline.json` takes precedence when desired.
+# block, regressions do. A committed `.tapp/baseline.json` takes precedence when desired.
 name: Tapp Gate (example)
 
 on:
@@ -44,4 +44,4 @@ jobs:
           max-actions: 40
           # Explicit, because this repo's default flow dir also holds demoapp-negative.yml —
           # a fixture that fails BY DESIGN (it asserts a screen that doesn't exist).
-          flows: ".autotap/flows/demoapp-smoke.yml DemoApp/.autotap/flows/menu-to-daily-summary.yml"
+          flows: ".tapp/flows/demoapp-smoke.yml DemoApp/.tapp/flows/menu-to-daily-summary.yml"

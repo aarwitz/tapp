@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aarwitz/tapp",
-  "description": "Autonomous QA for iOS + web \u2014 agents get a deterministic ship/no-ship verdict, no test code",
+  "description": "Autonomous QA for iOS, Android, and web \u2014 agents get a deterministic ship/no-ship verdict with evidence",
   "repository": {
     "url": "https://github.com/aarwitz/tapp",
     "source": "github"
   },
-  "version": "0.15.1",
+  "version": "0.16.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@aarwitz/tapp",
-      "version": "0.15.1",
+      "version": "0.16.0",
       "transport": {
         "type": "stdio"
       },

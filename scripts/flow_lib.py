@@ -23,7 +23,7 @@ def load_flow(path):
 
 
 def to_yaml(json_str):
-    """Emit a recorded/inline Flow (JSON string) as tidy YAML for saving to .autotap/flows/*.yml."""
+    """Emit a recorded/inline Flow (JSON string) as tidy YAML for saving to .tapp/flows/*.yml."""
     import yaml
     flow = json.loads(json_str)
     # Order keys for readability. `platform` + `url` make the same repository-native

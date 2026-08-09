@@ -39,7 +39,7 @@
     "planItemIds": [
       "proposal_0d561e9f3f0c0204"
     ],
-    "mapPath": "logindemo/.autotap/ui-map.json",
+    "mapPath": "logindemo/.tapp/ui-map.json",
     "targetId": "target_7488b63ddbfb90b0",
     "realValidation": {
       "android": {
@@ -52,6 +52,6 @@
       }
     },
     "promotedAt": "2026-08-05T15:06:28.277Z",
-    "promotedFrom": "logindemo/.autotap/proposals/tasks/open-profile.task.json"
+    "promotedFrom": "logindemo/.tapp/proposals/tasks/open-profile.task.json"
   }
 }

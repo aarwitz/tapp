@@ -8,8 +8,8 @@ import { applyTaskCoverage, loadTaskFile, validateTaskAgainstUiMap, validateTask
 
 function repository() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-tasks-"));
-  fs.mkdirSync(path.join(root, ".autotap", "tasks"), { recursive: true });
-  fs.mkdirSync(path.join(root, ".autotap", "flows"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "flows"), { recursive: true });
   return root;
 }
 
@@ -20,7 +20,7 @@ function writeJson(file, value) {
 
 test("Flow task calls compile inputs, conditions, outputs, and provenance deterministically", () => {
   const root = repository();
-  writeJson(path.join(root, ".autotap", "tasks", "sign-in.json"), {
+  writeJson(path.join(root, ".tapp", "tasks", "sign-in.json"), {
     kind: "task", version: 1, name: "signIn",
     inputs: { email: { required: true, secret: true }, password: { required: true, secret: true } },
     outputs: { authenticatedEmail: { fromInput: "email" } },
@@ -33,7 +33,7 @@ test("Flow task calls compile inputs, conditions, outputs, and provenance determ
     ] } },
     coverage: { nodes: ["sign-in", "home"], edges: ["edge_signin"] },
   });
-  const flowPath = writeJson(path.join(root, ".autotap", "flows", "smoke.json"), {
+  const flowPath = writeJson(path.join(root, ".tapp", "flows", "smoke.json"), {
     name: "Task-composed smoke", platform: "web", vars: {}, steps: [{
       task: "signIn", with: { email: "$TEST_EMAIL", password: "$TEST_PASSWORD" },
       save: { authenticatedEmail: "SIGNED_IN_EMAIL" },
@@ -52,13 +52,13 @@ test("Flow task calls compile inputs, conditions, outputs, and provenance determ
 
 test("Tasks compose other tasks and reject cycles", () => {
   const root = repository();
-  writeJson(path.join(root, ".autotap", "tasks", "open-home.json"), {
+  writeJson(path.join(root, ".tapp", "tasks", "open-home.json"), {
     kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }, { wait_for: "Home" }],
   });
-  writeJson(path.join(root, ".autotap", "tasks", "navigate.json"), {
+  writeJson(path.join(root, ".tapp", "tasks", "navigate.json"), {
     kind: "task", version: 1, name: "navigateHome", steps: [{ task: "openHome" }, { assert_exists: "Dashboard" }],
   });
-  const flowPath = writeJson(path.join(root, ".autotap", "flows", "nested.json"), {
+  const flowPath = writeJson(path.join(root, ".tapp", "flows", "nested.json"), {
     name: "Nested", platform: "ios", steps: [{ task: "navigateHome" }],
   });
   const compiled = loadFlowFile(flowPath);
@@ -66,7 +66,7 @@ test("Tasks compose other tasks and reject cycles", () => {
   assert.equal(compiled.steps[0].__tappTask.name, "openHome");
   assert.deepEqual(compiled.steps[0].__tappTask.parents, ["navigateHome"]);
 
-  writeJson(path.join(root, ".autotap", "tasks", "open-home.json"), {
+  writeJson(path.join(root, ".tapp", "tasks", "open-home.json"), {
     kind: "task", version: 1, name: "openHome", steps: [{ task: "navigateHome" }],
   });
   assert.throws(() => loadFlowFile(flowPath), /Task cycle detected/);
@@ -88,12 +88,12 @@ test("Task validation requires reviewable named-symbol ownership", () => {
 
 test("Task compilation refuses plaintext secret inputs", () => {
   const root = repository();
-  writeJson(path.join(root, ".autotap", "tasks", "secret.json"), {
+  writeJson(path.join(root, ".tapp", "tasks", "secret.json"), {
     kind: "task", version: 1, name: "useSecret",
     inputs: { password: { required: true, secret: true } },
     steps: [{ type: { field: "Password", value: "{{password}}" } }],
   });
-  const flowPath = writeJson(path.join(root, ".autotap", "flows", "secret.json"), {
+  const flowPath = writeJson(path.join(root, ".tapp", "flows", "secret.json"), {
     name: "Secret", platform: "web", steps: [{ task: "useSecret", with: { password: "do-not-write-me" } }],
   });
   assert.throws(() => loadFlowFile(flowPath), /must reference an environment variable/);
@@ -101,7 +101,7 @@ test("Task compilation refuses plaintext secret inputs", () => {
 
 test("Task grounding checks cited UI Map nodes, edges, and observed controls", () => {
   const root = repository();
-  const taskPath = writeJson(path.join(root, ".autotap", "tasks", "open-feed.json"), {
+  const taskPath = writeJson(path.join(root, ".tapp", "tasks", "open-feed.json"), {
     kind: "task", version: 1, name: "openFeed", steps: [{ tap: "Feed" }, { wait_for: "Feed" }],
     coverage: { nodes: ["home"], edges: ["edge_home_feed"] },
   });
@@ -134,4 +134,18 @@ test("Task grounding accepts a stable same-title state variant identity", () => 
     edges: [],
   };
   assert.deepEqual(validateTaskAgainstUiMap(task, map, "ios").errors, []);
+});
+
+test("Flow compilation reads Tasks from an existing legacy .autotap tree", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-legacy-tasks-"));
+  fs.mkdirSync(path.join(root, ".autotap", "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".autotap", "flows"), { recursive: true });
+  writeJson(path.join(root, ".autotap", "tasks", "open-home.json"), {
+    kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }],
+  });
+  const flowPath = writeJson(path.join(root, ".autotap", "flows", "smoke.json"), {
+    name: "Legacy smoke", platform: "ios", steps: [{ task: "openHome" }],
+  });
+  const flow = loadFlowFile(flowPath);
+  assert.equal(flow.steps[0].__tappTask.name, "openHome");
 });

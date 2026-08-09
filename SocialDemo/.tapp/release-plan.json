@@ -48,7 +48,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/social-system.contract.ts"
+          "path": ".tapp/contracts/social-system.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof."

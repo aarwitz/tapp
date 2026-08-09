@@ -11,7 +11,7 @@ class FakeAndroidDriver {
   async launch() { return this.snapshot(); }
   async snapshot() {
     return {
-      activity: "com.tapp.demo/.MainActivity",
+      activity: "io.github.aarwitz.tapp.demo/.MainActivity",
       screenTitle: this.screen,
       elements: this.screen === "Get Started"
         ? [{ id: "continue_button", label: "Continue", text: "Continue", hittable: true }]
@@ -28,7 +28,7 @@ test("Android Flow replays deterministically without a model", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-flow-"));
   const logPath = path.join(dir, "flow.log");
   const result = await runAndroidFlow({
-    flow: { name: "Android smoke", app: "com.tapp.demo", steps: [{ tap: "Continue" }, { assert_screen: "Dashboard" }, { assert_exists: "Settings" }] },
+    flow: { name: "Android smoke", app: "io.github.aarwitz.tapp.demo", steps: [{ tap: "Continue" }, { assert_screen: "Dashboard" }, { assert_exists: "Settings" }] },
     logPath,
     driver: new FakeAndroidDriver(),
   });

@@ -73,7 +73,7 @@ test("cross-platform gate rejects a Flow suite for the wrong platform before lau
 
 test("default discovery safely ignores another platform's entire Flow suite", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-default-platform-"));
-  const flows = path.join(dir, ".autotap", "flows");
+  const flows = path.join(dir, ".tapp", "flows");
   fs.mkdirSync(flows, { recursive: true });
   fs.writeFileSync(path.join(flows, "browser.yml"), "name: Browser only\nplatform: web\nurl: https://example.test\nsteps:\n  - assert_screen: Home\n");
   const r = spawnSync("bash", [gate,
@@ -87,8 +87,8 @@ test("default discovery safely ignores another platform's entire Flow suite", ()
 
 test("CI gate turns a changed-file manifest into the actual selected contract set before simulator work", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-pr-plan-"));
-  const tasks = path.join(dir, ".autotap", "tasks");
-  const contracts = path.join(dir, ".autotap", "contracts");
+  const tasks = path.join(dir, ".tapp", "tasks");
+  const contracts = path.join(dir, ".tapp", "contracts");
   fs.mkdirSync(tasks, { recursive: true });
   fs.mkdirSync(contracts, { recursive: true });
   fs.writeFileSync(path.join(tasks, "launch.json"), JSON.stringify({ kind: "task", version: 1, name: "launchApp", steps: [{ tap: "Continue" }] }));
@@ -116,8 +116,8 @@ test("CI gate turns a changed-file manifest into the actual selected contract se
 
 test("a valid PR plan selecting zero contracts survives Bash 3.2 nounset handling", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-pr-empty-selection-"));
-  fs.mkdirSync(path.join(dir, ".autotap"), { recursive: true });
-  fs.writeFileSync(path.join(dir, ".autotap", "ui-map.json"), JSON.stringify({ schemaVersion: 1, nodes: [], edges: [], coverage: {} }));
+  fs.mkdirSync(path.join(dir, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".tapp", "ui-map.json"), JSON.stringify({ schemaVersion: 1, nodes: [], edges: [], coverage: {} }));
   const changes = path.join(dir, "changed.json");
   const planPath = path.join(dir, "plan.json");
   fs.writeFileSync(changes, JSON.stringify(["README.md"]));

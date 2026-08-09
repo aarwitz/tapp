@@ -37,7 +37,7 @@ test("desktop release-plan review preserves unknown engine fields and never edit
   assert.match(state, /items\[index\]\["decision"\] = decision/);
   assert.match(state, /output\.write\(to: url, options: \.atomic\)/);
   assert.match(state, /Committed contracts remain accepted/);
-  assert.doesNotMatch(state, /func reviewReleasePlanItem[\s\S]*?\.autotap\/contracts/);
+  assert.doesNotMatch(state, /func reviewReleasePlanItem[\s\S]*?\.tapp\/contracts/);
 });
 
 test("desktop binary retains a repeatable real-schema artifact audit", { skip: !hasDesktopSources }, () => {

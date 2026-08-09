@@ -67,8 +67,8 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/project.json"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/project.json"
         ],
         "detail": "actor, session, provisioning, and environment-variable names are explicit human configuration; credential values are never included"
       }
@@ -97,8 +97,8 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/project.json"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/project.json"
         ],
         "detail": "actor, session, provisioning, and environment-variable names are explicit human configuration; credential values are never included"
       }
@@ -114,12 +114,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/send-message.yml"
+        ".tapp/tasks/send-message.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/send-message.yml"
+          ".tapp/tasks/send-message.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -134,14 +134,14 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/create-post.yml",
-        ".autotap/tasks/like-post.yml"
+        ".tapp/tasks/create-post.yml",
+        ".tapp/tasks/like-post.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/create-post.yml",
-          ".autotap/tasks/like-post.yml"
+          ".tapp/tasks/create-post.yml",
+          ".tapp/tasks/like-post.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -157,12 +157,12 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts"
+        ".tapp/contracts/social-system.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ]
       }
     },
@@ -175,12 +175,12 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts"
+        ".tapp/contracts/social-system.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ]
       }
     },
@@ -193,12 +193,12 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts"
+        ".tapp/contracts/social-system.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ]
       }
     },
@@ -213,14 +213,14 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts",
-        ".autotap/tasks/create-post.yml"
+        ".tapp/contracts/social-system.contract.ts",
+        ".tapp/tasks/create-post.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/tasks/create-post.yml"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/tasks/create-post.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -234,12 +234,12 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts"
+        ".tapp/contracts/social-system.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ]
       }
     },
@@ -254,14 +254,14 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts",
-        ".autotap/tasks/like-post.yml"
+        ".tapp/contracts/social-system.contract.ts",
+        ".tapp/tasks/like-post.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/tasks/like-post.yml"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/tasks/like-post.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -277,14 +277,14 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts",
-        ".autotap/tasks/open-conversation.yml"
+        ".tapp/contracts/social-system.contract.ts",
+        ".tapp/tasks/open-conversation.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/tasks/open-conversation.yml"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/tasks/open-conversation.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -298,12 +298,12 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts"
+        ".tapp/contracts/social-system.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ]
       }
     },
@@ -318,14 +318,14 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts",
-        ".autotap/tasks/send-message.yml"
+        ".tapp/contracts/social-system.contract.ts",
+        ".tapp/tasks/send-message.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/tasks/send-message.yml"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/tasks/send-message.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -341,14 +341,14 @@
         "socialSystemWorks"
       ],
       "sourcePaths": [
-        ".autotap/contracts/social-system.contract.ts",
-        ".autotap/tasks/sign-in.yml"
+        ".tapp/contracts/social-system.contract.ts",
+        ".tapp/tasks/sign-in.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts",
-          ".autotap/tasks/sign-in.yml"
+          ".tapp/contracts/social-system.contract.ts",
+          ".tapp/tasks/sign-in.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -380,7 +380,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -401,14 +401,14 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/social-system.contract.ts"
+          ".tapp/contracts/social-system.contract.ts"
         ],
         "detail": "cross-actor behavior is authored but requires current replay evidence"
       }
     }
   ],
   "configuration": {
-    "path": ".autotap/project.json",
+    "path": ".tapp/project.json",
     "status": "configured",
     "actorCount": 2,
     "lifecycle": {
@@ -418,7 +418,7 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        ".autotap/project.json"
+        ".tapp/project.json"
       ],
       "detail": "explicit human configuration; only environment-variable names are included in the application model"
     }
@@ -446,7 +446,7 @@
     }
   ],
   "uiMap": {
-    "path": ".autotap/ui-map.json",
+    "path": ".tapp/ui-map.json",
     "status": "observed",
     "nodeCount": 3,
     "edgeCount": 2,
@@ -475,7 +475,7 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        ".autotap/ui-map.json"
+        ".tapp/ui-map.json"
       ],
       "detail": "grounded in prior runtime observations"
     }
@@ -486,7 +486,7 @@
         "id": "task_ce376a787119d746",
         "name": "createPost",
         "scope": ".",
-        "path": ".autotap/tasks/create-post.yml",
+        "path": ".tapp/tasks/create-post.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -502,7 +502,7 @@
         "id": "task_b5cca3941c8aa81f",
         "name": "likePost",
         "scope": ".",
-        "path": ".autotap/tasks/like-post.yml",
+        "path": ".tapp/tasks/like-post.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -518,7 +518,7 @@
         "id": "task_7ae856f857170737",
         "name": "openConversation",
         "scope": ".",
-        "path": ".autotap/tasks/open-conversation.yml",
+        "path": ".tapp/tasks/open-conversation.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -534,7 +534,7 @@
         "id": "task_a66164f5d8a5098d",
         "name": "sendMessage",
         "scope": ".",
-        "path": ".autotap/tasks/send-message.yml",
+        "path": ".tapp/tasks/send-message.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -550,7 +550,7 @@
         "id": "task_d061e2ee669c38c3",
         "name": "signIn",
         "scope": ".",
-        "path": ".autotap/tasks/sign-in.yml",
+        "path": ".tapp/tasks/sign-in.yml",
         "version": 1,
         "platforms": [
           "web"
@@ -572,7 +572,7 @@
         "id": "contract_c3fad67bc30d95a2",
         "name": "socialSystemWorks",
         "scope": ".",
-        "path": ".autotap/contracts/social-system.contract.ts",
+        "path": ".tapp/contracts/social-system.contract.ts",
         "criticality": "critical",
         "platforms": [
           "web"

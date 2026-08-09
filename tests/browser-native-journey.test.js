@@ -45,7 +45,7 @@ test("browser opens, drives, captures, and records the real iOS target", {
     assert.match(await page.locator("#live-screen-title").innerText(), /Todo List/);
     await page.locator("#live-flow-name").fill("Open task list from onboarding");
     await operate("#save-live-flow", 30_000);
-    const flow = path.join(project, ".autotap", "flows", "open-task-list-from-onboarding.yml");
+    const flow = path.join(project, ".tapp", "flows", "open-task-list-from-onboarding.yml");
     assert.equal(fs.existsSync(flow), true);
     assert.doesNotMatch(fs.readFileSync(flow, "utf8"), /platform: web|platform: android/);
     await page.locator("#live-frame-loading").waitFor({ state:"hidden", timeout:30_000 });

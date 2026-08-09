@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { LEGACY_TAPP_DIRECTORY, TAPP_DIRECTORY, projectArtifactDirectory } from "./project-paths.js";
 
-export const PROJECT_CONFIG_RELATIVE_PATH = ".autotap/project.json";
+export const PROJECT_CONFIG_RELATIVE_PATH = `${TAPP_DIRECTORY}/project.json`;
+export const LEGACY_PROJECT_CONFIG_RELATIVE_PATH = `${LEGACY_TAPP_DIRECTORY}/project.json`;
 
 const ACTOR_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
@@ -58,15 +60,16 @@ export function validateProjectConfig(config) {
 
 export function readProjectConfig(projectDir, { required = false } = {}) {
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
-  const configPath = path.join(root, PROJECT_CONFIG_RELATIVE_PATH);
+  const relativePath = `${projectArtifactDirectory(root)}/project.json`;
+  const configPath = path.join(root, relativePath);
   if (!fs.existsSync(configPath)) {
     if (required) throw new Error(`Project configuration not found: ${configPath}`);
-    return { root, path: configPath, relativePath: PROJECT_CONFIG_RELATIVE_PATH, config: { kind: "tapp-project-config", schemaVersion: 1, actors: {} }, exists: false, errors: [] };
+    return { root, path: configPath, relativePath, config: { kind: "tapp-project-config", schemaVersion: 1, actors: {} }, exists: false, errors: [] };
   }
   let config;
   try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); }
-  catch (error) { return { root, path: configPath, relativePath: PROJECT_CONFIG_RELATIVE_PATH, config: null, exists: true, errors: [`Invalid JSON: ${error.message}`] }; }
-  return { root, path: configPath, relativePath: PROJECT_CONFIG_RELATIVE_PATH, config, exists: true, errors: validateProjectConfig(config) };
+  catch (error) { return { root, path: configPath, relativePath, config: null, exists: true, errors: [`Invalid JSON: ${error.message}`] }; }
+  return { root, path: configPath, relativePath, config, exists: true, errors: validateProjectConfig(config) };
 }
 
 export function configureActor(projectDir, { name, role = "", session = "default", provisioning = "existing", credentials = {}, replace = false } = {}) {

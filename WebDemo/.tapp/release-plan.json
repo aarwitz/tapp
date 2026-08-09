@@ -43,7 +43,7 @@
       "groundedBy": [
         {
           "type": "contract",
-          "path": ".autotap/contracts/pricing-reachable.contract.ts"
+          "path": ".tapp/contracts/pricing-reachable.contract.ts"
         }
       ],
       "requiredValidation": "Replay on the current target revision; committed status alone is not execution proof.",
@@ -51,12 +51,12 @@
       "generation": {
         "id": "proposal_11eec2a32ab8e47b",
         "name": "pricingReachable",
-        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "path": ".tapp/contracts/pricing-reachable.contract.ts",
         "tasks": [
           "openPricing"
         ],
         "taskPaths": [
-          ".autotap/tasks/open-pricing.task.json"
+          ".tapp/tasks/open-pricing.task.json"
         ],
         "status": "promoted",
         "trusted": true,
@@ -117,7 +117,7 @@
       "groundedBy": [
         {
           "type": "task",
-          "path": ".autotap/tasks/sign-in.yml"
+          "path": ".tapp/tasks/sign-in.yml"
         },
         {
           "type": "capability",
@@ -159,7 +159,7 @@
     "generatedTasks": [
       {
         "name": "openPricing",
-        "path": ".autotap/tasks/open-pricing.task.json",
+        "path": ".tapp/tasks/open-pricing.task.json",
         "status": "promoted",
         "trusted": true,
         "platforms": [
@@ -189,12 +189,12 @@
       {
         "id": "proposal_11eec2a32ab8e47b",
         "name": "pricingReachable",
-        "path": ".autotap/contracts/pricing-reachable.contract.ts",
+        "path": ".tapp/contracts/pricing-reachable.contract.ts",
         "tasks": [
           "openPricing"
         ],
         "taskPaths": [
-          ".autotap/tasks/open-pricing.task.json"
+          ".tapp/tasks/open-pricing.task.json"
         ],
         "status": "promoted",
         "trusted": true,

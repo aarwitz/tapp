@@ -82,9 +82,9 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts",
-          ".autotap/contracts/onboarding-summary.contract.ts",
-          ".autotap/contracts/update-profile-reachable.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts",
+          ".tapp/contracts/onboarding-summary.contract.ts",
+          ".tapp/contracts/update-profile-reachable.contract.ts"
         ],
         "detail": "actor is derived from a reviewed contract; credential values intentionally omitted"
       }
@@ -100,12 +100,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-daily-summary.yml"
+        ".tapp/tasks/open-daily-summary.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-daily-summary.yml"
+          ".tapp/tasks/open-daily-summary.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -119,12 +119,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-release-checklist.yml"
+        ".tapp/tasks/open-release-checklist.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-release-checklist.yml"
+          ".tapp/tasks/open-release-checklist.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -138,12 +138,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/create-todo-item.yml"
+        ".tapp/tasks/create-todo-item.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/create-todo-item.yml"
+          ".tapp/tasks/create-todo-item.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -157,12 +157,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-todo-list.yml"
+        ".tapp/tasks/open-todo-list.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-todo-list.yml"
+          ".tapp/tasks/open-todo-list.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -176,12 +176,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-update-profile.yml"
+        ".tapp/tasks/open-update-profile.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-update-profile.yml"
+          ".tapp/tasks/open-update-profile.yml"
         ],
         "detail": "noun derived from a reusable Task; requires review"
       }
@@ -201,18 +201,18 @@
         "updateProfileReachable"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts",
-        ".autotap/contracts/onboarding-summary.contract.ts",
-        ".autotap/contracts/update-profile-reachable.contract.ts",
-        ".autotap/tasks/complete-onboarding.yml"
+        ".tapp/contracts/create-complete-task.contract.ts",
+        ".tapp/contracts/onboarding-summary.contract.ts",
+        ".tapp/contracts/update-profile-reachable.contract.ts",
+        ".tapp/tasks/complete-onboarding.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts",
-          ".autotap/contracts/onboarding-summary.contract.ts",
-          ".autotap/contracts/update-profile-reachable.contract.ts",
-          ".autotap/tasks/complete-onboarding.yml"
+          ".tapp/contracts/create-complete-task.contract.ts",
+          ".tapp/contracts/onboarding-summary.contract.ts",
+          ".tapp/contracts/update-profile-reachable.contract.ts",
+          ".tapp/tasks/complete-onboarding.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -228,14 +228,14 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts",
-        ".autotap/tasks/complete-todo-item.yml"
+        ".tapp/contracts/create-complete-task.contract.ts",
+        ".tapp/tasks/complete-todo-item.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts",
-          ".autotap/tasks/complete-todo-item.yml"
+          ".tapp/contracts/create-complete-task.contract.ts",
+          ".tapp/tasks/complete-todo-item.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -251,14 +251,14 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts",
-        ".autotap/tasks/create-todo-item.yml"
+        ".tapp/contracts/create-complete-task.contract.ts",
+        ".tapp/tasks/create-todo-item.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts",
-          ".autotap/tasks/create-todo-item.yml"
+          ".tapp/contracts/create-complete-task.contract.ts",
+          ".tapp/tasks/create-todo-item.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -272,12 +272,12 @@
         "newCustomerReachesDailySummary"
       ],
       "sourcePaths": [
-        ".autotap/contracts/onboarding-summary.contract.ts"
+        ".tapp/contracts/onboarding-summary.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/onboarding-summary.contract.ts"
+          ".tapp/contracts/onboarding-summary.contract.ts"
         ]
       }
     },
@@ -290,12 +290,12 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts"
+        ".tapp/contracts/create-complete-task.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts"
         ]
       }
     },
@@ -308,12 +308,12 @@
         "newCustomerReachesDailySummary"
       ],
       "sourcePaths": [
-        ".autotap/contracts/onboarding-summary.contract.ts"
+        ".tapp/contracts/onboarding-summary.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/onboarding-summary.contract.ts"
+          ".tapp/contracts/onboarding-summary.contract.ts"
         ]
       }
     },
@@ -328,14 +328,14 @@
         "newCustomerReachesDailySummary"
       ],
       "sourcePaths": [
-        ".autotap/contracts/onboarding-summary.contract.ts",
-        ".autotap/tasks/open-daily-summary.yml"
+        ".tapp/contracts/onboarding-summary.contract.ts",
+        ".tapp/tasks/open-daily-summary.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/onboarding-summary.contract.ts",
-          ".autotap/tasks/open-daily-summary.yml"
+          ".tapp/contracts/onboarding-summary.contract.ts",
+          ".tapp/tasks/open-daily-summary.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -349,12 +349,12 @@
       ],
       "contracts": [],
       "sourcePaths": [
-        ".autotap/tasks/open-release-checklist.yml"
+        ".tapp/tasks/open-release-checklist.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/tasks/open-release-checklist.yml"
+          ".tapp/tasks/open-release-checklist.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -370,14 +370,14 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts",
-        ".autotap/tasks/open-todo-list.yml"
+        ".tapp/contracts/create-complete-task.contract.ts",
+        ".tapp/tasks/open-todo-list.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts",
-          ".autotap/tasks/open-todo-list.yml"
+          ".tapp/contracts/create-complete-task.contract.ts",
+          ".tapp/tasks/open-todo-list.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -393,14 +393,14 @@
         "updateProfileReachable"
       ],
       "sourcePaths": [
-        ".autotap/contracts/update-profile-reachable.contract.ts",
-        ".autotap/tasks/open-update-profile.yml"
+        ".tapp/contracts/update-profile-reachable.contract.ts",
+        ".tapp/tasks/open-update-profile.yml"
       ],
       "evidence": {
         "basis": "source-observed",
         "paths": [
-          ".autotap/contracts/update-profile-reachable.contract.ts",
-          ".autotap/tasks/open-update-profile.yml"
+          ".tapp/contracts/update-profile-reachable.contract.ts",
+          ".tapp/tasks/open-update-profile.yml"
         ],
         "detail": "derived from a reusable Task name; requires review"
       }
@@ -414,12 +414,12 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts"
+        ".tapp/contracts/create-complete-task.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts"
         ]
       }
     },
@@ -432,12 +432,12 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts"
+        ".tapp/contracts/create-complete-task.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts"
         ]
       }
     },
@@ -450,12 +450,12 @@
         "customerCreatesAndCompletesTask"
       ],
       "sourcePaths": [
-        ".autotap/contracts/create-complete-task.contract.ts"
+        ".tapp/contracts/create-complete-task.contract.ts"
       ],
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts"
         ]
       }
     }
@@ -484,7 +484,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/create-complete-task.contract.ts"
+          ".tapp/contracts/create-complete-task.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -510,7 +510,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/onboarding-summary.contract.ts"
+          ".tapp/contracts/onboarding-summary.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -536,7 +536,7 @@
       "evidence": {
         "basis": "reviewed-artifact",
         "paths": [
-          ".autotap/contracts/update-profile-reachable.contract.ts"
+          ".tapp/contracts/update-profile-reachable.contract.ts"
         ],
         "detail": "committed contract exists; current-revision replay evidence is still required"
       }
@@ -545,7 +545,7 @@
   "revenuePaths": [],
   "systemInvariants": [],
   "configuration": {
-    "path": ".autotap/project.json",
+    "path": ".tapp/project.json",
     "status": "missing",
     "actorCount": 0,
     "lifecycle": {
@@ -572,7 +572,7 @@
   ],
   "stateBoundaries": [],
   "uiMap": {
-    "path": ".autotap/ui-map.json",
+    "path": ".tapp/ui-map.json",
     "status": "observed",
     "nodeCount": 13,
     "edgeCount": 14,
@@ -606,7 +606,7 @@
     "evidence": {
       "basis": "reviewed-artifact",
       "paths": [
-        ".autotap/ui-map.json"
+        ".tapp/ui-map.json"
       ],
       "detail": "grounded in prior runtime observations"
     }
@@ -617,7 +617,7 @@
         "id": "task_427cef9e29ec6e6e",
         "name": "completeOnboarding",
         "scope": ".",
-        "path": ".autotap/tasks/complete-onboarding.yml",
+        "path": ".tapp/tasks/complete-onboarding.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -628,7 +628,7 @@
         "id": "task_346c6032209b701e",
         "name": "completeTodoItem",
         "scope": ".",
-        "path": ".autotap/tasks/complete-todo-item.yml",
+        "path": ".tapp/tasks/complete-todo-item.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -644,7 +644,7 @@
         "id": "task_6e7c2009ffbd2d18",
         "name": "createTodoItem",
         "scope": ".",
-        "path": ".autotap/tasks/create-todo-item.yml",
+        "path": ".tapp/tasks/create-todo-item.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -660,7 +660,7 @@
         "id": "task_c7d595ff68158bb5",
         "name": "openDailySummary",
         "scope": ".",
-        "path": ".autotap/tasks/open-daily-summary.yml",
+        "path": ".tapp/tasks/open-daily-summary.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -671,7 +671,7 @@
         "id": "task_39c5f85136e6b0b4",
         "name": "openReleaseChecklist",
         "scope": ".",
-        "path": ".autotap/tasks/open-release-checklist.yml",
+        "path": ".tapp/tasks/open-release-checklist.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -682,7 +682,7 @@
         "id": "task_227c8b97c63969bc",
         "name": "openTodoList",
         "scope": ".",
-        "path": ".autotap/tasks/open-todo-list.yml",
+        "path": ".tapp/tasks/open-todo-list.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -693,7 +693,7 @@
         "id": "task_0f380460731cc5a3",
         "name": "openUpdateProfile",
         "scope": ".",
-        "path": ".autotap/tasks/open-update-profile.yml",
+        "path": ".tapp/tasks/open-update-profile.yml",
         "version": 1,
         "platforms": [
           "ios"
@@ -706,7 +706,7 @@
         "id": "contract_49ec14893e039d82",
         "name": "customerCreatesAndCompletesTask",
         "scope": ".",
-        "path": ".autotap/contracts/create-complete-task.contract.ts",
+        "path": ".tapp/contracts/create-complete-task.contract.ts",
         "criticality": "high",
         "platforms": [
           "ios"
@@ -716,7 +716,7 @@
         "id": "contract_fce34754ac2883ee",
         "name": "newCustomerReachesDailySummary",
         "scope": ".",
-        "path": ".autotap/contracts/onboarding-summary.contract.ts",
+        "path": ".tapp/contracts/onboarding-summary.contract.ts",
         "criticality": "high",
         "platforms": [
           "ios"
@@ -726,7 +726,7 @@
         "id": "contract_084a32b5dfc7cf29",
         "name": "updateProfileReachable",
         "scope": ".",
-        "path": ".autotap/contracts/update-profile-reachable.contract.ts",
+        "path": ".tapp/contracts/update-profile-reachable.contract.ts",
         "criticality": "medium",
         "platforms": [
           "ios"

@@ -24,7 +24,7 @@ Please report suspected vulnerabilities privately via GitHub Security Advisories
 - **Credentials**: test credentials passed to runs are typed into the app under test and
   never echoed into tool results, transcripts, or logs. `tapp actor set` and MCP
   `tapp_actor_config` accept only credential-to-environment-variable bindings;
-  `.autotap/project.json`, the application model, plan, and CI manifest contain names such as
+  `.tapp/project.json`, the application model, plan, and CI manifest contain names such as
   `ALICE_EMAIL`, never resolved values. Generated GitHub jobs read same-named repository Secrets
   into the Action environment. The VS Code extension stores remembered values in VS Code
   SecretStorage (OS keychain), never plaintext files.

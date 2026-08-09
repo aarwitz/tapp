@@ -14,8 +14,8 @@ import { loadScenarioFile } from "../mcp-server/src/scenario-runtime.js";
 
 function repo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-contract-"));
-  fs.mkdirSync(path.join(root, ".autotap", "contracts"), { recursive: true });
-  fs.mkdirSync(path.join(root, ".autotap", "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "contracts"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "tasks"), { recursive: true });
   return root;
 }
 
@@ -26,12 +26,12 @@ function write(file, value) {
 
 test("TypeScript release contracts compile Tasks and exact expectations to a deterministic Scenario", async () => {
   const root = repo();
-  write(path.join(root, ".autotap", "tasks", "sign-in.json"), JSON.stringify({
+  write(path.join(root, ".tapp", "tasks", "sign-in.json"), JSON.stringify({
     kind: "task", version: 1, name: "signIn",
     inputs: { email: { secret: true }, password: { secret: true } },
     steps: [{ type: { field: "Email", value: "{{email}}" } }, { type: { field: "Password", value: "{{password}}" } }, { tap: "Sign in" }],
   }));
-  const contractPath = write(path.join(root, ".autotap", "contracts", "social.contract.ts"), `
+  const contractPath = write(path.join(root, ".tapp", "contracts", "social.contract.ts"), `
     import { defineContract, type ReleaseContract } from "@aarwitz/tapp/contracts";
     const contract = defineContract({
       name: "socialSystem",
@@ -70,10 +70,10 @@ test("TypeScript release contracts compile Tasks and exact expectations to a det
 test("legacy runtapp and tapp-mcp contract imports remain loadable", async () => {
   for (const [index, specifier] of ["runtapp/contracts", "tapp-mcp/contracts"].entries()) {
     const root = repo();
-    write(path.join(root, ".autotap", "tasks", "open-home.json"), JSON.stringify({
+    write(path.join(root, ".tapp", "tasks", "open-home.json"), JSON.stringify({
       kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }],
     }));
-    const contractPath = write(path.join(root, ".autotap", "contracts", `legacy-${index}.contract.ts`), `
+    const contractPath = write(path.join(root, ".tapp", "contracts", `legacy-${index}.contract.ts`), `
       import { defineContract } from "${specifier}";
       export default defineContract({
         name: "legacyImportWorks",
@@ -102,7 +102,7 @@ test("release contracts reject raw driver actions and ambiguous expectations", (
 
 test("single-actor web contracts preserve deterministic request lifecycle", () => {
   const root = repo();
-  write(path.join(root, ".autotap", "tasks", "open-home.json"), JSON.stringify({
+  write(path.join(root, ".tapp", "tasks", "open-home.json"), JSON.stringify({
     kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }],
   }));
   const contract = {
@@ -113,11 +113,11 @@ test("single-actor web contracts preserve deterministic request lifecycle", () =
     steps: [{ actor: "customer", task: "openHome" }],
     teardown: [{ request: { method: "POST", path: "/__tapp/reset", status: 200 } }],
   };
-  const compiled = compileReleaseContract(contract, { platform: "web", sourcePath: path.join(root, ".autotap", "contracts", "home.contract.ts") });
+  const compiled = compileReleaseContract(contract, { platform: "web", sourcePath: path.join(root, ".tapp", "contracts", "home.contract.ts") });
   assert.equal(compiled.kind, "flow");
   assert.equal(compiled.setup.length, 1);
   assert.equal(compiled.teardown.length, 1);
-  assert.throws(() => compileReleaseContract({ ...contract, platforms: ["ios"] }, { platform: "ios", sourcePath: path.join(root, ".autotap", "contracts", "home.contract.ts") }), /target-native reset/);
+  assert.throws(() => compileReleaseContract({ ...contract, platforms: ["ios"] }, { platform: "ios", sourcePath: path.join(root, ".tapp", "contracts", "home.contract.ts") }), /target-native reset/);
 });
 
 test("release contract grounding and explicit map coverage preserve uncovered behavior", () => {
@@ -145,7 +145,7 @@ test("release contract grounding and explicit map coverage preserve uncovered be
 
 test("compiled release-contract identity survives the shared JSON loader", () => {
   const root = repo();
-  const compiledPath = write(path.join(root, ".autotap", "contracts", "compiled.json"), JSON.stringify({
+  const compiledPath = write(path.join(root, ".tapp", "contracts", "compiled.json"), JSON.stringify({
     name: "System works", kind: "scenario", platform: "web",
     actors: { alice: {}, bob: {} }, steps: [{ actor: "alice", tap: "Go" }],
     releaseContract: { name: "systemWorks", criticality: "critical" },

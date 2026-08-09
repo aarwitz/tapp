@@ -85,7 +85,7 @@
     "contracts": [
       "8/8"
     ],
-    "path": ".autotap/baselines/android/target_f9ef018700dffe80.json"
+    "path": ".tapp/baselines/android/target_f9ef018700dffe80.json"
   },
   "baselineActiveGate": {
     "captureId": "android-20260805-141800",

@@ -22,16 +22,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { existingProjectArtifactPath, isProjectArtifactDirectory } from "../mcp-server/src/project-paths.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 
 // Redirect all writable output away from the (possibly read-only) package dir.
-// The old environment alias remains populated only for older helper integrations.
+// The old environment alias remains a read-only fallback for older integrations.
 const tappHome = (process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp")).trim();
 process.env.TAPP_HOME = tappHome;
-if (!process.env.AUTOTAP_HOME) process.env.AUTOTAP_HOME = tappHome;
 fs.mkdirSync(tappHome, { recursive: true });
 
 const [, , command = "help", ...rest] = process.argv;
@@ -221,7 +221,7 @@ switch (command) {
       console.error("❌ --explore writes grounded UI Map evidence and cannot be combined with --dry-run");
       process.exit(2);
     }
-    const outDir = typeof flags["out-dir"] === "string" ? flags["out-dir"] : ".autotap";
+    const outDir = typeof flags["out-dir"] === "string" ? flags["out-dir"] : ".tapp";
     const artifactDir = path.resolve(projectDir, outDir);
     if (!artifactDir.startsWith(projectDir + path.sep) && artifactDir !== projectDir) {
       console.error("❌ --out-dir must remain inside the repository");
@@ -292,7 +292,7 @@ switch (command) {
   case "plan": {
     const { flags, positionals } = parseVerbArgs(rest);
     const verb = positionals[0] || "show";
-    const planPath = path.resolve(positionals[1] || ".autotap/release-plan.json");
+    const planPath = positionals[1] ? path.resolve(positionals[1]) : existingProjectArtifactPath(process.cwd(), "release-plan.json");
     if (!fs.existsSync(planPath)) {
       console.error(`❌ Release plan not found: ${planPath}`);
       process.exit(2);
@@ -366,7 +366,7 @@ switch (command) {
       break;
     }
     if (verb !== "review") {
-      console.error("usage: tapp plan show [.autotap/release-plan.json]\n       tapp plan review [.autotap/release-plan.json] --approve name[,name] --reject name[,name] --defer name[,name]\n       tapp plan generate [.autotap/release-plan.json] [--project-dir DIR]\n       tapp plan validate [.autotap/release-plan.json] --project-dir DIR --platform web [--url URL] [--target NAME|PATH]\n       tapp plan promote [.autotap/release-plan.json] --project-dir DIR [--item name[,name]]");
+      console.error("usage: tapp plan show [.tapp/release-plan.json]\n       tapp plan review [.tapp/release-plan.json] --approve name[,name] --reject name[,name] --defer name[,name]\n       tapp plan generate [.tapp/release-plan.json] [--project-dir DIR]\n       tapp plan validate [.tapp/release-plan.json] --project-dir DIR --platform web [--url URL] [--target NAME|PATH]\n       tapp plan promote [.tapp/release-plan.json] --project-dir DIR [--item name[,name]]");
       process.exit(2);
     }
     const list = (value) => typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
@@ -377,7 +377,7 @@ switch (command) {
     }
     const { reviewProductPlan } = await import(path.join(packageRoot, "mcp-server", "src", "product-operations.js"));
     const reviewProjectDir = typeof flags["project-dir"] === "string" ? path.resolve(flags["project-dir"])
-      : path.basename(path.dirname(planPath)) === ".autotap" ? path.dirname(path.dirname(planPath)) : path.dirname(planPath);
+      : isProjectArtifactDirectory(path.basename(path.dirname(planPath))) ? path.dirname(path.dirname(planPath)) : path.dirname(planPath);
     try { plan = reviewProductPlan({ projectDir: reviewProjectDir, planPath, ...decisions }).plan; }
     catch (error) { console.error(`❌ Could not review release plan: ${error.message || String(error)}`); process.exit(2); }
     console.log(`✅ Release plan updated — ${plan.items.filter((item) => ["approved", "accepted"].includes(item.decision)).length} accepted/approved · ${plan.items.filter((item) => item.decision === "rejected").length} rejected · ${plan.items.filter((item) => item.decision === "pending").length} pending`);
@@ -608,7 +608,7 @@ switch (command) {
     const verb = positionals[0] || "validate";
     const taskPath = positionals[1] ? path.resolve(positionals[1]) : "";
     if (!["validate", "compile", "run"].includes(verb) || !taskPath) {
-      console.error("usage: tapp task validate <task.yml> [--platform ios|android|web] [--map .autotap/ui-map.json]\n       tapp task compile <task.yml> --platform PLATFORM [--inputs '{\"name\":\"value\"}'] [--out compiled.json]\n       tapp task run <task.yml> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]");
+      console.error("usage: tapp task validate <task.yml> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp task compile <task.yml> --platform PLATFORM [--inputs '{\"name\":\"value\"}'] [--out compiled.json]\n       tapp task run <task.yml> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]");
       process.exit(2);
     }
     if (!fs.existsSync(taskPath)) { console.error(`❌ Task not found: ${taskPath}`); process.exit(2); }
@@ -741,7 +741,7 @@ switch (command) {
     const verb = positionals[0] || "validate";
     const contractPath = positionals[1] ? path.resolve(positionals[1]) : "";
     if (!["validate", "compile", "run"].includes(verb) || !contractPath) {
-      console.error("usage: tapp contract validate <name.contract.ts> [--platform ios|android|web] [--map .autotap/ui-map.json]\n       tapp contract compile <name.contract.ts> --platform PLATFORM [--out compiled.json]\n       tapp contract run <name.contract.ts> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]");
+      console.error("usage: tapp contract validate <name.contract.ts> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp contract compile <name.contract.ts> --platform PLATFORM [--out compiled.json]\n       tapp contract run <name.contract.ts> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]");
       process.exit(2);
     }
     const {
@@ -918,7 +918,7 @@ switch (command) {
         console.error("❌ --platform must be ios|android|web");
         process.exit(2);
       }
-      const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(".autotap", "ui-map.json"));
+      const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(".tapp", "ui-map.json"));
       const observed = buildUiMapFromMarkers({
         markersPath,
         platform,
@@ -936,7 +936,7 @@ switch (command) {
       break;
     }
     if (verb === "inspect") {
-      const mapPath = path.resolve(positionals[1] || path.join(".autotap", "ui-map.json"));
+      const mapPath = positionals[1] ? path.resolve(positionals[1]) : existingProjectArtifactPath(process.cwd(), "ui-map.json");
       if (!fs.existsSync(mapPath)) { console.error(`❌ UI Map not found: ${mapPath}`); process.exit(2); }
       const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
       const errors = validateUiMap(map);
@@ -959,7 +959,7 @@ switch (command) {
       if (!diff.comparableFullSweep && (diff.notObservedNodes.length || diff.notObservedEdges.length)) console.log("ℹ️  Absence is not labeled a regression because the runs were not declared comparable full sweeps.");
       process.exit(diff.lostReachability.length || diff.lostTransitions.length ? 1 : 0);
     }
-    console.error("usage: tapp map build <ocqa-markers.txt> [--platform ios|android|web] [--out .autotap/ui-map.json]\n       tapp map inspect [ui-map.json]\n       tapp map diff <before.json> <after.json> [--comparable]");
+    console.error("usage: tapp map build <ocqa-markers.txt> [--platform ios|android|web] [--out .tapp/ui-map.json]\n       tapp map inspect [ui-map.json]\n       tapp map diff <before.json> <after.json> [--comparable]");
     process.exit(2);
   }
 
@@ -1096,7 +1096,7 @@ switch (command) {
       process.exit(2);
     }
     const projectDir = fs.realpathSync(path.resolve(positionals[1] || (typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd())));
-    const modelPath = path.resolve(projectDir, typeof flags.model === "string" ? flags.model : path.join(".autotap", "application-model.json"));
+    const modelPath = typeof flags.model === "string" ? path.resolve(projectDir, flags.model) : existingProjectArtifactPath(projectDir, "application-model.json");
     if (!modelPath.startsWith(projectDir + path.sep) || !fs.existsSync(modelPath)) {
       console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run tapp init --explore, review/generate/validate/promote the plan, then create the baseline.`);
       process.exit(2);
@@ -1203,7 +1203,7 @@ switch (command) {
       let projectDir;
       try { projectDir = fs.realpathSync(path.resolve(positionals[0] || (typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd()))); }
       catch { console.error(`❌ Repository directory not found: ${positionals[0] || flags["project-dir"] || process.cwd()}`); process.exit(2); }
-      const modelPath = path.resolve(projectDir, typeof flags.model === "string" ? flags.model : path.join(".autotap", "application-model.json"));
+      const modelPath = typeof flags.model === "string" ? path.resolve(projectDir, flags.model) : existingProjectArtifactPath(projectDir, "application-model.json");
       if (!modelPath.startsWith(projectDir + path.sep) || !fs.existsSync(modelPath)) {
         console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run tapp init --explore first.`);
         process.exit(2);
@@ -1242,7 +1242,7 @@ switch (command) {
           actionRef,
           defaultBranch: typeof flags["default-branch"] === "string" ? flags["default-branch"] : "main",
           workflowPath: typeof flags.out === "string" ? flags.out : ".github/workflows/tapp.yml",
-          manifestPath: typeof flags.manifest === "string" ? flags.manifest : ".autotap/ci.json",
+          manifestPath: typeof flags.manifest === "string" ? flags.manifest : ".tapp/ci.json",
           replace: flags.replace === true,
           allowUnresolved: flags["allow-unresolved"] === true,
         });

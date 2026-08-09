@@ -67,7 +67,7 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     assert.equal(job.status, "completed", job.error?.message);
     const projectState = await fetch(`${product.origin}/api/project`, { headers: { cookie } }).then((response) => response.json());
     assert.equal(projectState.state.inspected, true);
-    assert.equal(fs.existsSync(path.join(root, ".autotap", "application-model.json")), true);
+    assert.equal(fs.existsSync(path.join(root, ".tapp", "application-model.json")), true);
   } finally {
     await product.close();
   }
@@ -241,13 +241,13 @@ test("browser repository onboarding stages folder uploads and GitHub selections 
     assert.equal((await uploadFile(".DS_Store", "junk")).ok, false);
     assert.equal((await uploadFile("index.html", "<h1>Uploaded product</h1>")).status, 200);
     assert.equal((await uploadFile("package.json", JSON.stringify({ name:"uploaded-product" }))).status, 200);
-    assert.equal((await uploadFile(".autotap/project.json", JSON.stringify({ kind:"tapp-product-project" }))).status, 200);
+    assert.equal((await uploadFile(".tapp/project.json", JSON.stringify({ kind:"tapp-product-project" }))).status, 200);
     const completed = await fetch(`${product.origin}/api/repositories/uploads/${upload.id}/complete`, { method:"POST", headers:mutationHeaders, body:"{}" }).then((response) => response.json());
     assert.equal(completed.repository.source.kind, "local-folder-upload");
     const stagedRoot = path.join(workspaceRoot, upload.id, "repository");
     assert.equal(fs.existsSync(path.join(stagedRoot, "outside.txt")), false);
     assert.equal(fs.existsSync(path.join(stagedRoot, ".DS_Store")), false);
-    assert.equal(fs.existsSync(path.join(stagedRoot, ".autotap", "project.json")), true, "hidden .autotap config must survive the staged upload");
+    assert.equal(fs.existsSync(path.join(stagedRoot, ".tapp", "project.json")), true, "hidden .tapp config must survive the staged upload");
     assert.equal(completed.repository.fileCount, 3);
 
     const github = await fetch(`${product.origin}/api/repositories/github`, { headers:{ cookie } }).then((response) => response.json());
