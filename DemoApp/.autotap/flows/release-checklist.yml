@@ -1,6 +1,6 @@
 name: Release checklist is reachable
 platform: ios
-app: com.autotap.demoapp
+app: io.github.aarwitz.tapp.demoapp
 reset: app
 
 steps:

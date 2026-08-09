@@ -43,13 +43,18 @@ test("shipped native fixtures use Tapp labels and identifiers", () => {
     read("DemoApp/DemoApp.xcodeproj/project.pbxproj"),
     read("DemoApp/Sources/AboutView.swift"),
     read("DemoApp/Sources/WhatsNewView.swift"),
+    read("DemoApp/.autotap/application-model.json"),
+    read("DemoApp/.autotap/ui-map.json"),
+    read("DemoApp/.autotap/flows/menu-to-daily-summary.yml"),
+    read("DemoApp/.autotap/contracts/onboarding-summary.contract.ts"),
+    read(".autotap/flows/demoapp-smoke.yml"),
   ].join("\n");
   const harness = [
     read("Harness/OCQAHarness.xcodeproj/project.pbxproj"),
     read("Harness/generate-harness-xcodeproj.rb"),
   ].join("\n");
 
-  assert.doesNotMatch(demo, /autotap/i);
+  assert.doesNotMatch(demo, /com\.autotap\.demoapp|\bAutoTap\b/);
   assert.doesNotMatch(harness, /autotap/i);
   assert.match(demo, /io\.github\.aarwitz\.tapp\.demoapp/);
   assert.match(harness, /io\.github\.aarwitz\.tapp\.harness/);

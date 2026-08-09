@@ -7,7 +7,7 @@ export default defineContract({
   criticality: "high",
   platforms: ["ios"],
   policy: { always: true, prRelevant: true, tags: ["activation", "summary"] },
-  app: "com.autotap.demoapp",
+  app: "io.github.aarwitz.tapp.demoapp",
   actors: {
     customer: { session: "isolated", role: "new customer" },
   },

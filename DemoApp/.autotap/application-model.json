@@ -31,7 +31,7 @@
       "runtime": {
         "surface": "iOS Simulator",
         "signingRequired": false,
-        "bundleId": "com.autotap.demoapp"
+        "bundleId": "io.github.aarwitz.tapp.demoapp"
       },
       "evidence": {
         "basis": "source-observed",
@@ -44,7 +44,7 @@
         "status": "validated",
         "basis": "runtime-observed",
         "operation": "xcode-build-install-explore",
-        "target": "com.autotap.demoapp",
+        "target": "io.github.aarwitz.tapp.demoapp",
         "build": {
           "container": "DemoApp.xcodeproj",
           "scheme": "DemoApp",
@@ -566,7 +566,7 @@
       "runtime": {
         "surface": "iOS Simulator",
         "signingRequired": false,
-        "bundleId": "com.autotap.demoapp"
+        "bundleId": "io.github.aarwitz.tapp.demoapp"
       }
     }
   ],

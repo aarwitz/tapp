@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "app": {
-    "target": "com.autotap.demoapp",
+    "target": "io.github.aarwitz.tapp.demoapp",
     "platforms": [
       "ios"
     ],

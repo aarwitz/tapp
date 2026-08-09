@@ -1,5 +1,5 @@
 name: Menu to Daily Summary
-app: com.autotap.demoapp
+app: io.github.aarwitz.tapp.demoapp
 steps:
   - task: completeOnboarding
   - task: openDailySummary
