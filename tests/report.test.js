@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { buildQaReport, severityRank, parseOcqaMarkers } from "../mcp-server/src/report.js";
+import { buildQaReport, severityRank, parseOcqaMarkers, verdictBadge } from "../mcp-server/src/report.js";
 
 function markersFile(lines) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-test-"));
@@ -78,6 +78,18 @@ test("one missing web resource is one finding across routes and failed-request n
   assert.equal(r.findings[0].type, "missing_asset");
   assert.equal(r.findings[0].target, "/assets/js/nav.js");
   assert.equal(r.findings[0].screen, null, "resource defects are canonical across pages");
+});
+
+test("placeholder links deduplicate across web routes but retain distinct destinations", () => {
+  const r = buildQaReport(markersFile([
+    ...CLEAN_RUN,
+    'OCQA_ISSUE:{"type":"placeholder_link","severity":"medium","title":"Link \\"Contact\\" has no destination","screen":"Home","target":"Contact"}',
+    'OCQA_ISSUE:{"type":"placeholder_link","severity":"medium","title":"Link \\"Contact\\" has no destination","screen":"Pricing","target":"Contact"}',
+    'OCQA_ISSUE:{"type":"placeholder_link","severity":"medium","title":"Link \\"App Store\\" has no destination","screen":"Home","target":"App Store"}',
+  ]), { platform: "web" });
+  assert.equal(r.findingCounts.total, 2);
+  assert.deepEqual(r.findings.map((finding) => finding.target).sort(), ["App Store", "Contact"]);
+  assert.ok(r.findings.every((finding) => finding.screen === null));
 });
 
 test("caution and blocked headlines count every reported finding", () => {
@@ -161,6 +173,12 @@ test("web platform gets web-specific honesty labels", () => {
   const r = buildQaReport(markersFile(CLEAN_RUN), { platform: "web" });
   assert.equal(r.platform, "web");
   assert.ok(r.checkedFor.some((c) => /uncaught exceptions/.test(c)));
+  assert.ok(r.checkedFor.some((c) => /placeholder links/.test(c)));
   assert.ok(!r.checkedFor.some((c) => /keyboard/.test(c)), "no iOS keyboard claims on web");
   assert.ok(r.notChecked.some((c) => /first few visible buttons/.test(c)), "web button cap is disclosed");
+  assert.ok(r.notChecked.some((c) => /claim accuracy/.test(c)), "content truth is explicitly out of scope");
+  assert.ok(r.notChecked.some((c) => /privacy/.test(c)), "API data minimization is explicitly out of scope");
+  assert.doesNotMatch(r.headline, /ship-ready/i);
+  assert.equal(verdictBadge(r), "🟢 AUTOMATED CHECKS PASSED");
+  assert.equal(verdictBadge({ ...r, platform: "ios" }), "🟢 SHIP-READY");
 });

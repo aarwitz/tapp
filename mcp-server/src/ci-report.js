@@ -26,7 +26,7 @@
 //   any      fail on any finding at all, or any flow failure. Strictest.
 import fs from "fs";
 import path from "node:path";
-import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss } from "./report.js";
+import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, verdictBadge } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { proposeSelectorMaintenance, validateWebMaintenanceProposal } from "./maintenance-proposal.js";
@@ -337,12 +337,11 @@ function enrichPrPlan(plan, contracts, currentUiMap = null, markersPath = "", pr
   return { ...plan, selected, explorationTargets, maintenanceCandidates, execution: counts };
 }
 
-const VERDICT_BADGE = { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" };
 const SEV_ICON = { critical: "🟥", high: "🟧", medium: "🟨", low: "🟩" };
 
 function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan, gate) {
   const lines = [];
-  lines.push(`## tapp release check — ${VERDICT_BADGE[report.verdict] || report.verdict}`);
+  lines.push(`## tapp release check — ${verdictBadge(report)}`);
   lines.push("");
   lines.push(report.headline);
   lines.push("");

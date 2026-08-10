@@ -40,6 +40,123 @@ export function webControlLabel({ text = "", value = "", ariaLabel = "", title =
     .find(Boolean) || "button";
 }
 
+export function webPlaceholderLinkFindings(links = []) {
+  const findings = [];
+  const seen = new Set();
+  for (const link of links || []) {
+    const rawHref = String(link?.rawHref || "").trim().toLowerCase();
+    const placeholder = rawHref === "#" || /^javascript:(?:void\(0\);?|;?)$/.test(rawHref);
+    if (!placeholder || link?.handlerHint) continue;
+    const label = String(link?.label || "").replace(/\s+/g, " ").trim().slice(0, 100);
+    const fingerprint = String(link?.fingerprint || "link").replace(/\s+/g, " ").trim().slice(0, 100) || "link";
+    const target = label || `unlabeled:${fingerprint}`;
+    if (seen.has(target)) continue;
+    seen.add(target);
+    findings.push({
+      type: "placeholder_link",
+      severity: label ? "medium" : "low",
+      title: label
+        ? `Link "${label}" has no destination (${rawHref === "#" ? 'href="#"' : `href="${rawHref}"`})`
+        : `Unlabeled link has no destination (${rawHref === "#" ? 'href="#"' : `href="${rawHref}"`})`,
+      target,
+    });
+  }
+  return findings;
+}
+
+export function webControlHadEffect({ wired = false, before = {}, after = {} } = {}) {
+  if (wired) return true;
+  return ["url", "title", "heading", "dialogs", "local"]
+    .some((key) => String(before?.[key] ?? "") !== String(after?.[key] ?? ""));
+}
+
+export function shouldReportWebRequestFailure(errorText = "") {
+  // Chromium emits ERR_ABORTED when Tapp deliberately leaves a page while images/video are
+  // still loading. That is navigation lifecycle noise, not evidence that the resource is broken.
+  return !/\bnet::ERR_ABORTED\b/i.test(String(errorText));
+}
+
+async function installWebListenerTracking(context) {
+  await context.addInitScript(() => {
+    const key = Symbol.for("tapp.clickListeners");
+    const add = EventTarget.prototype.addEventListener;
+    const remove = EventTarget.prototype.removeEventListener;
+    EventTarget.prototype.addEventListener = function tappTrackedAdd(type, listener, options) {
+      if (type === "click" && this instanceof Element && listener) {
+        if (!this[key]) Object.defineProperty(this, key, { value: new Set(), configurable: true });
+        this[key].add(listener);
+      }
+      return add.call(this, type, listener, options);
+    };
+    EventTarget.prototype.removeEventListener = function tappTrackedRemove(type, listener, options) {
+      if (type === "click" && this instanceof Element && this[key]) this[key].delete(listener);
+      return remove.call(this, type, listener, options);
+    };
+  });
+}
+
+async function captureWebControlState(page, locator) {
+  const global = await page.evaluate(() => {
+    const visible = (element) => {
+      const style = window.getComputedStyle(element);
+      return style.visibility !== "hidden" && style.display !== "none" && element.getClientRects().length > 0;
+    };
+    const dialogs = [...document.querySelectorAll("dialog[open], [role=dialog], [aria-modal=true]")]
+      .filter(visible)
+      .map((element) => (element.getAttribute("aria-label") || element.textContent || "dialog").replace(/\s+/g, " ").trim().slice(0, 160))
+      .sort();
+    return {
+      title: document.title,
+      heading: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      dialogs: JSON.stringify(dialogs),
+    };
+  }).catch(() => ({ title: "", heading: "", dialogs: "" }));
+
+  const local = await locator.evaluate((element) => {
+    const key = Symbol.for("tapp.clickListeners");
+    const visible = (candidate) => {
+      const style = window.getComputedStyle(candidate);
+      return style.visibility !== "hidden" && style.display !== "none" && candidate.getClientRects().length > 0;
+    };
+    let wired = false;
+    for (let candidate = element; candidate && candidate !== document.body; candidate = candidate.parentElement) {
+      if ((candidate[key] && candidate[key].size > 0) || typeof candidate.onclick === "function" || candidate.hasAttribute("onclick")) {
+        wired = true;
+        break;
+      }
+    }
+    if (!wired && element.matches("button[type=submit], input[type=submit]") && element.closest("form")) wired = true;
+    const describe = (root) => ({
+      tag: root.tagName,
+      className: typeof root.className === "string" ? root.className : "",
+      hidden: root.hidden,
+      open: root.hasAttribute("open"),
+      ariaExpanded: root.getAttribute("aria-expanded"),
+      ariaPressed: root.getAttribute("aria-pressed"),
+      ariaSelected: root.getAttribute("aria-selected"),
+      text: (root.textContent || "").replace(/\s+/g, " ").trim().slice(0, 300),
+      controls: [...root.querySelectorAll("button, a[href], input, textarea, select, [role=button]")]
+        .slice(0, 40)
+        .map((control) => ({
+          tag: control.tagName,
+          visible: visible(control),
+          disabled: !!control.disabled || control.getAttribute("aria-disabled") === "true",
+          checked: "checked" in control ? !!control.checked : null,
+          expanded: control.getAttribute("aria-expanded"),
+          pressed: control.getAttribute("aria-pressed"),
+          selected: control.getAttribute("aria-selected"),
+          label: (control.getAttribute("aria-label") || control.textContent || control.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80),
+        })),
+    });
+    const region = element.parentElement || element;
+    const controlledId = element.getAttribute("aria-controls");
+    const controlled = controlledId ? document.getElementById(controlledId) : null;
+    return { wired, signature: JSON.stringify([describe(region), controlled ? describe(controlled) : null]) };
+  }).catch(() => ({ wired: false, signature: "detached" }));
+
+  return { url: page.url(), ...global, local: local.signature, wired: local.wired };
+}
+
 // Wait for a page to stop presenting an explicit loading state and for its semantic
 // surface to remain unchanged across a couple of samples. This is intentionally bounded:
 // live counters and animation-heavy pages still return evidence, marked unsettled.
@@ -314,7 +431,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   const { chromium } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions());
-  const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await installWebListenerTracking(context);
+  const page = await context.newPage();
   page.setDefaultTimeout(NAV_TIMEOUT_MS);
 
   const deadline = Date.now() + timeoutSec * 1000;
@@ -324,14 +443,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}) });
   };
 
-  // Request counter: cheap "did that click cause network activity" signal for the
-  // dead-button check (a button that fires a request is not dead).
-  let requestCount = 0;
-
   // Async defect listeners: attribute to whatever screen is current when they fire.
   let currentScreen = start.pathname;
   let lastActionTarget = "";
-  page.on("request", () => { requestCount += 1; });
   page.on("pageerror", (err) => issue("js_exception", "high", `Uncaught JS exception: ${String(err.message || err).slice(0, 120)}`, currentScreen));
   page.on("response", (res) => {
     try {
@@ -347,7 +461,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     try {
       const u = new URL(req.url());
       if (u.origin !== start.origin) return;
-      issue("network_error", "medium", `Request failed: ${u.pathname.slice(0, 80)} (${req.failure()?.errorText || "?"})`, currentScreen, u.pathname);
+      const errorText = req.failure()?.errorText || "?";
+      if (!shouldReportWebRequestFailure(errorText)) return;
+      issue("network_error", "medium", `Request failed: ${u.pathname.slice(0, 80)} (${errorText})`, currentScreen, u.pathname);
     } catch {}
   });
 
@@ -363,6 +479,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     ...normalizedSeeds.filter((target) => !targetRoutes.has(target)).map((target) => ({ target, action: `PR target ${target}`, fromScreen: null, prTarget: true })),
   ];
   const screenshotFor = new Map();
+  const placeholderLinksSeen = new Set();
   let actions = 0;
   let screenCount = 0;
   let lastScreen = null;
@@ -428,6 +545,25 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           .filter((el) => el.offsetParent !== null)
           .map((el) => (el.textContent || "").trim())
           .some((text) => /^(loading|fetching|please wait|preparing|connecting)(?:[.…!]*|\s.*)$/i.test(text)),
+        placeholderLinks: [...document.querySelectorAll("a[href]")]
+          .filter((el) => el.offsetParent !== null)
+          .map((el, index) => {
+            const listenerKey = Symbol.for("tapp.clickListeners");
+            const dataHandler = [...el.attributes]
+              .some((attribute) => /^data-(action|toggle|target|modal|waitlist)(?:-|$)/i.test(attribute.name));
+            const svgPath = el.querySelector("svg path")?.getAttribute("d") || "";
+            return {
+              rawHref: el.getAttribute("href") || "",
+              label: (el.getAttribute("aria-label") || el.getAttribute("title") || el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 100),
+              handlerHint: el.getAttribute("role") === "button"
+                || el.hasAttribute("onclick")
+                || typeof el.onclick === "function"
+                || !!el[listenerKey]?.size
+                || el.hasAttribute("aria-controls")
+                || dataHandler,
+              fingerprint: el.id || el.getAttribute("data-testid") || svgPath.slice(0, 80) || `link-${index + 1}`,
+            };
+          }),
         inputs,
         controls,
       };
@@ -465,6 +601,11 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       else {
         const errorText = webErrorSurfaceText({ alertText: info.alertText, candidateTexts: info.errorCandidateTexts });
         if (errorText) issue("error_surface", "high", `Error shown: ${errorText.slice(0, 80)}`, screen);
+      }
+      for (const finding of webPlaceholderLinkFindings(info.placeholderLinks)) {
+        if (placeholderLinksSeen.has(finding.target)) continue;
+        placeholderLinksSeen.add(finding.target);
+        issue(finding.type, finding.severity, finding.title, screen, finding.target);
       }
     }
     return { key, screen, info };
@@ -626,20 +767,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           id: await b.getAttribute("id").catch(() => ""),
         }).slice(0, 40);
         if (/log ?out|sign ?out|delete|remove/i.test(label)) continue; // don't destroy test state
-        const beforeUrl = page.url();
-        // Dead-button detection watches four real effect channels — DOM mutations, dialogs,
-        // network activity, and navigation — instead of the fragile innerHTML-length proxy
-        // (same length ≠ same page; unrelated tickers ≠ this button worked).
-        await page
-          .evaluate(() => {
-            window.__tappMut = 0;
-            if (window.__tappMo) window.__tappMo.disconnect();
-            window.__tappMo = new MutationObserver((muts) => { window.__tappMut += muts.length; });
-            window.__tappMo.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
-          })
-          .catch(() => {});
-        const dialogsBefore = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);
-        const reqBefore = requestCount;
+        // Capture only durable, user-visible semantics around this control. A global
+        // MutationObserver is intentionally avoided: carousels, chat launchers, and live
+        // counters can mutate while an unrelated dead button is clicked, creating verdict jitter.
+        const beforeState = await captureWebControlState(page, b);
         actions += 1;
         lastActionTarget = label;
         emit("ACTION", { type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
@@ -653,16 +784,15 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           continue;
         }
         await waitForWebStability(page);
-        if (page.url() !== beforeUrl) {
+        if (page.url() !== beforeState.url) {
           await observe();
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
           await waitForWebStability(page);
         } else {
-          const mutations = await page.evaluate(() => window.__tappMut || 0).catch(() => 0);
-          const dialogsAfter = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);
-          const hadEffect = mutations > 0 || dialogsAfter !== dialogsBefore || requestCount > reqBefore;
+          const afterState = await captureWebControlState(page, b);
+          const hadEffect = webControlHadEffect({ wired: beforeState.wired, before: beforeState, after: afterState });
           if (!hadEffect) {
-            issue("unresponsive_element", "medium", `Button "${label}" does nothing`, ob.screen, label);
+            issue("unresponsive_element", "medium", `Button "${label}" has no wiring or observable effect`, ob.screen, label);
           } else {
             // Same-URL SPA transitions are real screens too; URL-only observation
             // under-counted coverage and made healthy applications inconclusive.

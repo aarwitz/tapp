@@ -93,6 +93,49 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
   }
 });
 
+test("web QA reports placeholder links and dead controls deterministically despite ambient DOM churn", { skip: skipRealBrowser }, async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-web-determinism-cli-"));
+  const home = path.join(project, "tapp-home");
+  const firstReport = path.join(project, "first.json");
+  const secondReport = path.join(project, "second.json");
+  fs.writeFileSync(path.join(project, "index.html"), `
+    <main>
+      <h1>Stable Home</h1>
+      <a href="#">Download App</a>
+      <a href="#" data-action="open-help">JavaScript Help</a>
+      <button id="working">Working action</button>
+      <button id="dead">Availability</button>
+    </main>
+    <script>
+      document.querySelector('#working').addEventListener('click', () => {});
+      setInterval(() => document.body.setAttribute('data-background-tick', String(Date.now())), 50);
+    </script>
+  `);
+  const port = 50000 + (process.pid % 1000);
+  const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const url = `http://127.0.0.1:${port}`;
+    for (const reportPath of [firstReport, secondReport]) {
+      execFileSync("node", [tappBin, "qa", url, "--platform", "web", "--actions", "4", "--timeout", "30", "--json", reportPath], {
+        cwd: root,
+        encoding: "utf8",
+        env: { ...process.env, TAPP_HOME: home },
+      });
+    }
+    const first = JSON.parse(fs.readFileSync(firstReport, "utf8"));
+    const second = JSON.parse(fs.readFileSync(secondReport, "utf8"));
+    const identity = (finding) => `${finding.type}|${finding.target}`;
+    assert.deepEqual(first.findings.map(identity), second.findings.map(identity));
+    assert.ok(first.findings.some((finding) => finding.type === "placeholder_link" && finding.target === "Download App"));
+    assert.ok(!first.findings.some((finding) => finding.target === "JavaScript Help"), "action-marked hash link is not called dead");
+    assert.ok(first.findings.some((finding) => finding.type === "unresponsive_element" && finding.target === "Availability"));
+    assert.ok(!first.findings.some((finding) => finding.target === "Working action"), "directly wired control is not called dead");
+  } finally {
+    server.kill();
+  }
+});
+
 test("tapp actor configures only environment-variable bindings and lists them without values", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-actor-cli-"));
   const configured = execFileSync("node", [tappBin, "actor", "set", "alice", project, "--role", "member", "--session", "isolated", "--provisioning", "seeded", "--credential", "email=ALICE_EMAIL", "--credential", "password=ALICE_PASSWORD"], { cwd: root, encoding: "utf8" });

@@ -136,6 +136,16 @@ test("first run passes clean evidence but states that regression gating is not a
   assert.match(r.html, /fixture/);
 });
 
+test("clean web CI evidence is scoped as automated checks passed, never ship-ready", () => {
+  const r = runGate({ platform: "web" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.markdown, /AUTOMATED CHECKS PASSED/);
+  assert.doesNotMatch(r.markdown, /SHIP-READY/);
+  assert.match(r.html, /AUTOMATED CHECKS PASSED/);
+  assert.doesNotMatch(r.html, /SHIP-READY/);
+  assert.match(r.report.headline, /not a content, privacy, brand, or business-claim review/i);
+});
+
 test("new high finding against a baseline exits non-zero and writes both artifacts", () => {
   const current = [
     ...cleanMarkers.slice(0, -1),

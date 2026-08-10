@@ -1,7 +1,7 @@
 {
   "name": "tapp",
   "description": "Autonomous QA for iOS, Android, and web. Give coding agents hands, eyes, and deterministic release evidence; record replayable Flows without test code.",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "author": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"

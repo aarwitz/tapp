@@ -11,7 +11,7 @@ the app already on the simulator); it also accepts a repo dir, a `path/to/App.ap
 bundle id, or (qa only) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
-npx -y @aarwitz/tapp qa [target]     # autonomous QA → ship/no-ship verdict + findings (≈ tapp_run_qa)
+npx -y @aarwitz/tapp qa [target]     # autonomous QA → scoped release verdict + findings (≈ tapp_run_qa)
 npx -y @aarwitz/tapp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
 npx -y @aarwitz/tapp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
 npx -y @aarwitz/tapp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
@@ -44,7 +44,7 @@ installs, returns the bundle id) → `tapp_run_qa {appBundleId}`.
 |---|---|---|
 | "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_run_qa` (a full multi-minute QA exploration) |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
-| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps | a manual session (QA exploration is autonomous) |
+| "Is my app broken? Is it ship-ready? Find bugs" | `tapp_run_qa` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps; web `ready` means the disclosed automated checks passed, not that copy/privacy/brand claims were reviewed | a manual session (QA exploration is autonomous) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
 | "What's on screen right now?" | `tapp_screenshot` / `tapp_ui_tree` | relaunching the app |
 
@@ -94,6 +94,10 @@ Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, find
   the user** for them rather than re-running blind.
 - Diff two runs: pass the previous run's `findings` as `baselineFindings` → you get a
   `regression` block (`new` / `persisting` / `resolved`, plus a CI `gate` signal).
+- On web, report the exact verdict but preserve its scope: Tapp deterministically checks technical
+  behavior such as failed requests, missing assets, placeholder links, and inert controls. It does
+  not validate marketing claims against APIs, API field privacy, brand consistency, or subjective
+  marketplace credibility unless an explicit reviewed test/contract covers them.
 
 ## Flows (deterministic E2E tests)
 

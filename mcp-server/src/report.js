@@ -86,6 +86,7 @@ export const ISSUE_CATEGORY = {
   submit_failed: "unresponsive_element",
   error_surface: "network_error_surface",
   unresponsive_element: "unresponsive_element",
+  placeholder_link: "broken_link",
   dead_end: "navigation_dead_end",
   navigation_loop: "repeated_loop",
   navigation_trap: "navigation_dead_end",
@@ -98,6 +99,11 @@ export const CRITICAL_ISSUE_TYPES = new Set(["crash"]);
 
 export function severityRank(s) {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 4;
+}
+
+export function verdictBadge(report) {
+  if (report?.platform === "web" && report?.verdict === "ready") return "🟢 AUTOMATED CHECKS PASSED";
+  return { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" }[report?.verdict] || report?.verdict;
 }
 
 // Turn a capture's OCQA markers into the same ship/no-ship report Tapp produces:
@@ -156,7 +162,9 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   // Chromium can also surface one 404 through both response and requestfailed listeners;
   // keep the concrete missing-asset finding and discard that transport-level duplicate.
   const normalizedIssues = rawIssues.map((issue) => {
-    if (platform !== "web" || !["missing_asset", "network_error"].includes(issue.type)) return issue;
+    if (platform !== "web") return issue;
+    if (issue.type === "placeholder_link" && issue.target) return { ...issue, screen: null };
+    if (!["missing_asset", "network_error"].includes(issue.type)) return issue;
     const title = String(issue.title || "");
     const match = issue.type === "missing_asset"
       ? title.match(/^404 asset:\s+(\S+)/i)
@@ -205,7 +213,9 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const headline = inconclusive
     ? `Inconclusive — only ${screensExplored} screen(s) / ${actionsPerformed} action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.`
     : verdict === "ready"
-    ? "Ship-ready — no release-blocking issues found."
+    ? platform === "web"
+      ? "Automated web checks passed — no release-blocking technical issues found in the exercised surfaces. This is not a content, privacy, brand, or business-claim review."
+      : "Ship-ready — no release-blocking issues found."
     : verdict === "caution"
     ? `Proceed with caution — ${findings.length} issue(s) to review.`
     : `Not ready — ${findings.length} issue(s): ${crit} critical, ${high} high, ${med} medium, ${low} low.`;
@@ -220,11 +230,14 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   if (platform === "web") {
     checkedFor = [
       "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404)",
-      "dead buttons", "error text on pages", "load timeouts",
+      "placeholder links with no destination", "dead buttons", "error text on pages", "load timeouts",
     ];
     notChecked = [
       "app-specific business logic (cover with Flows: record or generate, then assert)",
-      "visual correctness — layout/images/clipping (vision review; needs an API key)",
+      "content and claim accuracy (including copy versus API data)",
+      "privacy or API data minimization",
+      "brand and SEO consistency",
+      "visual credibility or asset quality (vision review; needs an API key)",
       "only the first few visible buttons per page are probed (web beta)",
       "content & reachability regressions require a baseline",
     ];

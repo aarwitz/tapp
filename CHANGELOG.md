@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.16.4
+
+- **Trust-scoped web verdicts:** a clean web crawl is labeled `AUTOMATED CHECKS PASSED` instead of
+  `SHIP-READY`, and reports explicitly disclose that claim accuracy, API privacy/data minimization,
+  brand/SEO consistency, and subjective visual credibility were not checked.
+- **Deterministic placeholder-link coverage:** visible links with `href="#"` (including primary
+  download CTAs) are findings, while links advertising real JavaScript action semantics are
+  exempted and shared footer findings deduplicate across routes.
+- **Stable dead-control results:** control-local semantic state and actual event wiring replace the
+  page-wide mutation counter, so unrelated timers, carousels, and chat widgets cannot randomly hide
+  an inert button. Navigation-aborted media requests are no longer reported as broken resources.
 
 ## 0.16.3
 

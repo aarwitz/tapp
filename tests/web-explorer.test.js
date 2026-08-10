@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webControlLabel, webErrorSurfaceText, webNavigationAction, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
 
 test("focused web inspection rejects non-http targets before launching a browser", async () => {
   await assert.rejects(inspectWebPage({ url: "file:///private/app.html" }), /valid http\(s\) URL/);
@@ -25,6 +25,42 @@ test("web controls retain a semantic label when their visible text is empty", ()
   assert.equal(webControlLabel({ text: "", value: "", ariaLabel: "Choose location", title: "", id: "location" }), "Choose location");
   assert.equal(webControlLabel({ text: "", value: "", ariaLabel: "", title: "Open menu", id: "menu" }), "Open menu");
   assert.equal(webControlLabel({ text: "", value: "", ariaLabel: "", title: "", id: "menu" }), "menu");
+});
+
+test("placeholder links are findings unless they advertise real JavaScript control semantics", () => {
+  assert.deepEqual(webPlaceholderLinkFindings([
+    { rawHref: "#", label: "Download on the App Store", handlerHint: false, fingerprint: "app-store" },
+    { rawHref: "#", label: "", handlerHint: false, fingerprint: "instagram-path" },
+    { rawHref: "#", label: "Join waitlist", handlerHint: true, fingerprint: "waitlist" },
+    { rawHref: "#pricing", label: "Pricing", handlerHint: false, fingerprint: "pricing" },
+  ]), [
+    {
+      type: "placeholder_link",
+      severity: "medium",
+      title: 'Link "Download on the App Store" has no destination (href="#")',
+      target: "Download on the App Store",
+    },
+    {
+      type: "placeholder_link",
+      severity: "low",
+      title: 'Unlabeled link has no destination (href="#")',
+      target: "unlabeled:instagram-path",
+    },
+  ]);
+});
+
+test("dead-control judgment ignores unrelated DOM churn and honors durable wiring or semantic change", () => {
+  const stable = { url: "https://example.test/", heading: "Home", dialogs: "", local: "same" };
+  assert.equal(webControlHadEffect({ wired: false, before: stable, after: stable }), false);
+  assert.equal(webControlHadEffect({ wired: true, before: stable, after: stable }), true);
+  assert.equal(webControlHadEffect({ wired: false, before: stable, after: { ...stable, local: "expanded" } }), true);
+  assert.equal(webControlHadEffect({ wired: false, before: stable, after: { ...stable, dialogs: "location" } }), true);
+});
+
+test("web request failures exclude navigation-aborted resources but retain real transport failures", () => {
+  assert.equal(shouldReportWebRequestFailure("net::ERR_ABORTED"), false);
+  assert.equal(shouldReportWebRequestFailure("net::ERR_CONNECTION_REFUSED"), true);
+  assert.equal(shouldReportWebRequestFailure("net::ERR_NAME_NOT_RESOLVED"), true);
 });
 
 test("web login submits a semantic SPA button even when it is outside a form", async () => {

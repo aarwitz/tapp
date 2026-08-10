@@ -26,7 +26,7 @@ Three platforms, one judgment layer:
   does not link a Tapp SDK.
 - **Web (beta)** — built *on* Playwright. Your agent already has browser hands; tapp adds the
   autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
-  dead buttons, broken links, error pages), and the same verdict.
+  dead buttons, broken links, placeholder `href="#"` links, error pages), and the same verdict.
 
 ```
 you:    "Add a logout button to the settings screen"
@@ -209,13 +209,20 @@ ranks runs, it doesn't promise odds.
 `tapp_run_qa` explores like a user — accessibility surfaces on iOS/Android and a real browser on web —
 and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,
 navigation loops, and dead ends (plus, on web: uncaught JS exceptions, failed/5xx requests,
-broken links and assets). The verdict is **deterministic** (no LLM in the run loop) and **honest**:
+broken links and assets, and visible placeholder links with no destination). The verdict is
+**deterministic** (no LLM in the run loop) and **honest**:
 
 - `blocked` — a release-blocking issue was found.
 - `caution` — issues to review, or the run couldn't see enough.
-- `ready` — genuinely explored with no blockers. **A shallow run is never `ready`** — if the
+- `ready` — genuinely explored with no detected blockers in the checks that ran. **A shallow run
+  is never `ready`** — if the
   app crashed on launch or a login wall blocked exploration, you get `inconclusive: true`,
   not a false pass. Absence of findings is not a pass.
+
+Web beta presents a `ready` result as **AUTOMATED CHECKS PASSED**, not “ship-ready.” Its report
+explicitly excludes content/claim accuracy, privacy and API data minimization, brand/SEO
+consistency, and subjective visual credibility. Those require reviewed contracts, privacy review,
+or human/vision judgment; a green technical crawl must not imply they were validated.
 
 Apps behind a login? Pass `testEmail`/`testPassword` (typed into the login form automatically),
 `appLaunchArgs` (e.g. `["--uitesting"]` if your app supports a bypass), or explicit `loginSteps`

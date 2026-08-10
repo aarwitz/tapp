@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { parseOcqaMarkers, buildQaReport, computeRegression } from "./report.js";
+import { parseOcqaMarkers, buildQaReport, computeRegression, verdictBadge } from "./report.js";
 import { existingProjectArtifactPath, projectArtifactDirectory } from "./project-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1289,7 +1289,6 @@ function errorResult(message, details = {}) {
 // programmatic use. This is what makes Tapp feel like a modern dev harness
 // ("Explored 14 screens · 3 issues · ship: caution") rather than a wall of JSON.
 const SEV = { critical: "🔴", high: "🟠", medium: "🟡", low: "⚪️" };
-const VERDICT_BADGE = { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" };
 
 /** Result with a human-readable text block first and structured data attached for the agent. */
 function richResult(text, structured) {
@@ -1321,7 +1320,7 @@ export function qaNextSteps(report, surface = "mcp") {
 
 function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, uiMap, surface = "mcp" } = {}) {
   const c = report.findingCounts || {};
-  const badge = VERDICT_BADGE[report.verdict] || report.verdict;
+  const badge = verdictBadge(report);
   const sevBits = ["critical", "high", "medium", "low"]
     .map((k) => (c[k] ? `${SEV[k]} ${c[k]} ${k}` : null))
     .filter(Boolean)
