@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeWebSeedRoutes, normalizeWebSeedTargets, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webNavigationAction, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webNavigationAction, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+
+test("focused web inspection rejects non-http targets before launching a browser", async () => {
+  await assert.rejects(inspectWebPage({ url: "file:///private/app.html" }), /valid http\(s\) URL/);
+});
 
 test("web login submits a semantic SPA button even when it is outside a form", async () => {
   let clicked = false;

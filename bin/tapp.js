@@ -461,6 +461,27 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const engine = await engineImport();
     const platform = requestedPlatform(flags, positionals[0] || "");
+    if (platform === "web") {
+      const url = positionals[0] || "";
+      if (!/^https?:\/\//i.test(url)) {
+        console.error("❌ Web open needs an http(s) URL");
+        process.exit(2);
+      }
+      try {
+        const { inspectWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
+        const snap = await inspectWebPage({ url, timeoutMs: Number(flags.timeout) * 1000 || 15_000 });
+        const out = typeof flags.out === "string" ? path.resolve(flags.out) : path.join(tappHome, "shots", `web-${Date.now()}.png`);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, snap.image);
+        console.log(`🌐 Opened \`${snap.url}\`\n`);
+        console.log(engine.formatScreen(snap.screenTitle, snap.elements));
+        console.log(`\n📸 Screenshot: ${out}`);
+      } catch (error) {
+        console.error(`❌ ${error.message || String(error)}`);
+        process.exit(1);
+      }
+      break;
+    }
     if (platform === "android") {
       const target = androidTarget(flags, positionals[0] || "");
       const { AndroidDriver } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
@@ -504,6 +525,23 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const engine = await engineImport();
     const platform = requestedPlatform(flags, positionals[0] || "");
+    if (platform === "web") {
+      const url = positionals[0] || "";
+      if (!/^https?:\/\//i.test(url)) {
+        console.error("❌ Web tree needs an http(s) URL");
+        process.exit(2);
+      }
+      try {
+        const { inspectWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
+        const snap = await inspectWebPage({ url, timeoutMs: Number(flags.timeout) * 1000 || 15_000, screenshot: false });
+        if (flags.json) console.log(JSON.stringify({ platform: "web", url: snap.url, screenTitle: snap.screenTitle, elements: snap.elements }, null, 2));
+        else console.log(engine.formatScreen(snap.screenTitle, snap.elements));
+      } catch (error) {
+        console.error(`❌ ${error.message || String(error)}`);
+        process.exit(1);
+      }
+      break;
+    }
     if (platform === "android") {
       const target = androidTarget(flags, positionals[0] || "");
       const { AndroidDriver } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
@@ -1317,21 +1355,9 @@ switch (command) {
     console.log(`tapp v${pkg.version} — ship with proof. Autonomous QA and deterministic Flows for iOS, Android, and web.
 
 Zero-config verbs (agents and humans can just run these — no server, no setup):
-  tapp app [repo]          Open the browser onboarding, contract-review, and release-evidence workspace
-                           (loopback-only; --no-open · --port PORT)
-  tapp init [repo]         Detect targets and write the application model + reviewable release plan
-                           (--explore builds/starts or connects, grounds the UI Map, then tears down)
-                           (--url URL · --platform PLATFORM · --dry-run · --refresh)
-  tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
-  tapp actor set NAME      Configure an actor using environment-variable names only (never values)
-  tapp plan show [FILE]    Inspect the proposed/accepted release-contract plan
-  tapp plan review [FILE]  Explicitly approve, reject, or defer proposed plan items
-  tapp plan generate [FILE] Generate compile-checked, untrusted contract drafts from approved Tasks
-  tapp plan validate [FILE] Replay drafts on a real target; trust only after all platforms pass
-  tapp plan promote [FILE] Move fully validated drafts into reviewed Tasks/contracts + map coverage
+  tapp open [target]       Launch the app → screen summary + screenshot saved to a file
   tapp qa [target]         Autonomous QA → verdict + findings + evidence
                            (--platform ios|android|web · --app-id ID · --apk FILE · --actions N)
-  tapp open [target]       Launch the app → screen summary + screenshot saved to a file
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
   tapp flow run FILE       Replay a committed deterministic Flow (no AI/API key)
   tapp flow validate FILE  Validate a Flow without launching a target
@@ -1353,6 +1379,18 @@ Zero-config verbs (agents and humans can just run these — no server, no setup)
   tapp build [dir]         Build the iOS app in a repo for the simulator + install it (--scheme S)
   tapp apps                List apps installed on the booted simulator (with bundle ids)
   tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
+  tapp app [repo]          Optional local browser workspace for repository onboarding and review
+                           (loopback-only; --no-open · --port PORT)
+  tapp init [repo]         Detect targets and write the application model + reviewable release plan
+                           (--explore builds/starts or connects, grounds the UI Map, then tears down)
+                           (--url URL · --platform PLATFORM · --dry-run · --refresh)
+  tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
+  tapp actor set NAME      Configure an actor using environment-variable names only (never values)
+  tapp plan show [FILE]    Inspect the proposed/accepted release-contract plan
+  tapp plan review [FILE]  Explicitly approve, reject, or defer proposed plan items
+  tapp plan generate [FILE] Generate compile-checked, untrusted contract drafts from approved Tasks
+  tapp plan validate [FILE] Replay drafts on a real target; trust only after all platforms pass
+  tapp plan promote [FILE] Move fully validated drafts into reviewed Tasks/contracts + map coverage
   tapp ci ...              Merge-blocking release gate — explore + flows + baseline diff (see: tapp ci --help)
   tapp ci install [repo]   Generate a reviewable target-aware GitHub workflow + CI manifest
 

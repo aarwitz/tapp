@@ -97,6 +97,65 @@ export function webBrowserLaunchOptions(environment = process.env) {
   };
 }
 
+// Focused one-screen inspection for the agent-facing `tapp open <url>` and `tapp tree <url>`
+// commands. This deliberately does no exploration or judgment; it opens exactly one page,
+// captures the visible semantic controls, and optionally takes one screenshot.
+export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screenshot = true }) {
+  let target;
+  try { target = new URL(url); }
+  catch { throw new Error("Web inspection needs a valid http(s) URL"); }
+  if (!/^https?:$/.test(target.protocol)) throw new Error("Web inspection needs a valid http(s) URL");
+
+  const { chromium } = await loadPlaywright();
+  const browser = await chromium.launch(webBrowserLaunchOptions());
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    const boundedTimeout = Math.max(1000, Math.min(60_000, Number(timeoutMs) || NAV_TIMEOUT_MS));
+    page.setDefaultTimeout(boundedTimeout);
+    const response = await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: boundedTimeout });
+    if (response && response.status() >= 400) throw new Error(`Could not open ${target.href}: HTTP ${response.status()}`);
+    await page.waitForTimeout(SETTLE_MS);
+    const observed = await page.evaluate(() => {
+      const visible = (element) => element.offsetParent !== null;
+      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, [role=button], [role=tab], [role=checkbox], [role=switch]")]
+        .filter((element) => element.type !== "hidden" && visible(element))
+        .slice(0, 80)
+        .map((element) => {
+          const tag = element.tagName.toLowerCase();
+          const field = ["input", "textarea", "select"].includes(tag);
+          const secure = element.type === "password";
+          const role = element.getAttribute("role") || (tag === "a" ? "link" : tag === "button" ? "button" : "");
+          const label = (element.labels?.[0]?.textContent || element.getAttribute("aria-label") || element.textContent || element.placeholder || element.name || element.id || "").trim().slice(0, 120);
+          return {
+            type: field ? (secure ? "SecureTextField" : "TextField") : "Button",
+            role,
+            label,
+            identifier: element.id || element.getAttribute("data-testid") || element.getAttribute("aria-label") || "",
+            isEnabled: !element.disabled && element.getAttribute("aria-disabled") !== "true",
+            hittable: true,
+            secure,
+          };
+        })
+        .filter((control) => control.label || control.identifier);
+      return {
+        heading: document.querySelector("h1")?.textContent?.trim() || "",
+        title: document.title.trim(),
+        controls,
+      };
+    });
+    const image = screenshot ? await page.screenshot({ type: "png" }) : null;
+    return {
+      url: page.url(),
+      screenTitle: webScreenTitle(observed, target.pathname || target.href),
+      elements: observed.controls,
+      image,
+    };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 export function normalizeWebSeedRoutes(url, routes, limit = 5) {
   const origin = new URL(url);
   const boundedLimit = Math.max(0, Math.min(10, Number(limit) || 0));

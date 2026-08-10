@@ -35,34 +35,22 @@ agent:  *tapp: builds, opens the app, navigates to Settings, screenshots it*
 agent:  "Done — and here it is working on the simulator: [screenshot]"
 ```
 
-## Quickstart
+## Quickstart for coding agents
 
 Requirements: **Node ≥ 18**. iOS needs **macOS + Xcode**; Android needs `adb` plus a connected
 emulator/device; web needs Playwright + Chromium.
 
-**Launch experience — browser Release Studio.** Open the source chooser from anywhere:
+From the app repository, let the agent see the current screen and then ask for a release verdict:
 
 ```bash
-npx -y @aarwitz/tapp app
+npx -y @aarwitz/tapp open   # builds/launches as needed; prints a screenshot path + screen summary
+npx -y @aarwitz/tapp qa     # explores the real app; prints verdict, findings, and evidence report
 ```
 
-Drag and drop a local repository folder or connect through your authenticated GitHub CLI and select
-an authorized repository. To work directly in an existing writable checkout, use `tapp app .`.
-The local, loopback-only workspace detects iOS, Android, and web targets. A single configured target
-builds and explores automatically; Tapp asks only when selection is ambiguous or configuration is
-genuinely missing. It renders the UI Map,
-supports release-contract review and keyless validation, records live semantic actions as committed
-Flows, and produces target-scoped gate, baseline, evidence, and CI artifacts. CLI, MCP, VS Code, and
-the GitHub Action use the same product/gate operations; the retained managed-runner prototype is
-being replaced by the future isolated SaaS worker boundary.
-
-**Zero config — get a verdict right now.** From your app's repo, one command. No server, no
-config file, no test code — you don't even need to know your bundle id:
-
-```bash
-cd YourApp
-npx -y @aarwitz/tapp qa    # finds your Xcode project → builds → installs on the simulator → explores → verdict
-```
+Claude Code can read the saved image with its file-reading tool; Codex can open it with
+`view_image`. The agent should report what the screenshot proves, preserve Tapp's exact
+`ready`/`caution`/`blocked` verdict, and link the HTML evidence report. No server, account, config
+file, test code, API key, or bundle id is required for this loop.
 
 The product, executable, and package leaf are all Tapp: npm distributes it as
 `@aarwitz/tapp`, while the installed command remains `tapp`.
@@ -123,6 +111,12 @@ Optional but recommended (prebuilds the test harness so the first run is fast):
 npx -y @aarwitz/tapp install    # ~2 min, one time
 npx -y @aarwitz/tapp doctor     # verify Xcode / simulators / toolchain
 ```
+
+### Optional browser workspace
+
+`npx -y @aarwitz/tapp app .` opens a local Release Studio for people who want visual repository
+onboarding, release-plan review, and CI preparation. It is not required for the coding-agent
+`open`/`qa` workflow.
 
 ### MCP hookup (optional)
 

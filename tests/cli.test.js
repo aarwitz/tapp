@@ -42,6 +42,32 @@ test("tapp help leads with the zero-config verbs", () => {
   assert.match(out, /tapp actor set NAME/);
 });
 
+test("tapp open and tree give a coding agent focused web evidence", { skip: skipRealBrowser }, async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-open-web-cli-"));
+  const home = path.join(project, "tapp-home");
+  const screenshot = path.join(project, "home.png");
+  fs.writeFileSync(path.join(project, "index.html"), "<main><h1>Agent Home</h1><button id='continue'>Continue</button><label>Email<input id='email' type='email'></label></main>");
+  const port = 49000 + (process.pid % 1000);
+  const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const url = `http://127.0.0.1:${port}`;
+    const opened = execFileSync("node", [tappBin, "open", url, "--platform", "web", "--out", screenshot], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
+    assert.match(opened, /Opened `http:\/\/127\.0\.0\.1:/);
+    assert.match(opened, /Read screen \*\*Agent Home\*\*/);
+    assert.match(opened, /`Continue`/);
+    assert.match(opened, /Screenshot:/);
+    assert.ok(fs.statSync(screenshot).size > 1000, "focused web screenshot is written");
+
+    const tree = JSON.parse(execFileSync("node", [tappBin, "tree", url, "--platform", "web", "--json"], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } }));
+    assert.equal(tree.platform, "web");
+    assert.equal(tree.screenTitle, "Agent Home");
+    assert.deepEqual(tree.elements.map((element) => element.label), ["Continue", "Email"]);
+  } finally {
+    server.kill();
+  }
+});
+
 test("tapp actor configures only environment-variable bindings and lists them without values", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-actor-cli-"));
   const configured = execFileSync("node", [tappBin, "actor", "set", "alice", project, "--role", "member", "--session", "isolated", "--provisioning", "seeded", "--credential", "email=ALICE_EMAIL", "--credential", "password=ALICE_PASSWORD"], { cwd: root, encoding: "utf8" });

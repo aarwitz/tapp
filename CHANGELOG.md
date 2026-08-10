@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.16.1
+- **Agent-first package onboarding:** the npm README and CLI help now lead with the coding-agent
+  `open` → inspect the saved image → `qa` workflow used by Claude Code and Codex CLI. The browser
+  Release Studio remains optional rather than defining the package quickstart.
+- **Focused web evidence:** `tapp open <url> --platform web` now writes a real browser screenshot
+  and semantic control summary; `tapp tree <url> --platform web --json` exposes the same focused
+  page structure without starting a QA crawl.
+- **Manual agent acceptance:** the release checklist now tests natural-language agent prompts,
+  actual screenshot inspection, exact verdict reporting, and healthy/seeded-failure replay.
+
 ## 0.16.0
 - **Canonical repository namespace:** Tapp now creates and documents `.tapp/`, `.tapp.yml`, and
   `TAPP_*` variables across the CLI, MCP server, desktop app, Action, demos, and hosted runner.
