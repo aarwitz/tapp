@@ -1046,7 +1046,9 @@ switch (command) {
     }
 
     console.log(`\n  Home: ${tappHome}`);
-    console.log(healthy ? "\nReady. Add to your agent:  claude mcp add tapp -- npx -y @aarwitz/tapp mcp" : "\nFix the ❌ items above, then re-run: tapp doctor");
+    console.log(healthy
+      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp open [target]\n  npx -y @aarwitz/tapp qa [target]"
+      : "\nFix the ❌ items above, then re-run: tapp doctor");
     process.exit(healthy ? 0 : 1);
   }
 

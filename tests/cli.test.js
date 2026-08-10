@@ -42,6 +42,14 @@ test("tapp help leads with the zero-config verbs", () => {
   assert.match(out, /tapp actor set NAME/);
 });
 
+test("tapp doctor keeps the package-only CLI path primary", () => {
+  const out = execFileSync("node", [tappBin, "doctor"], { cwd: root, encoding: "utf8" });
+  assert.match(out, /Ready\. Start with:/);
+  assert.match(out, /@aarwitz\/tapp open \[target\]/);
+  assert.match(out, /@aarwitz\/tapp qa \[target\]/);
+  assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
+});
+
 test("tapp open and tree give a coding agent focused web evidence", { skip: skipRealBrowser }, async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-open-web-cli-"));
   const home = path.join(project, "tapp-home");

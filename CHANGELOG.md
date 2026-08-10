@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.16.2
+- **CLI-first diagnostics:** `tapp doctor` now sends a ready user directly to the package-only
+  `open` and `qa` workflow instead of presenting MCP setup as the next step.
+
 ## 0.16.1
 - **Agent-first package onboarding:** the npm README and CLI help now lead with the coding-agent
   `open` → inspect the saved image → `qa` workflow used by Claude Code and Codex CLI. The browser
