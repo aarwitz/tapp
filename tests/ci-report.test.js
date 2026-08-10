@@ -136,13 +136,17 @@ test("first run passes clean evidence but states that regression gating is not a
   assert.match(r.html, /fixture/);
 });
 
-test("clean web CI evidence is scoped as automated checks passed, never ship-ready", () => {
+test("clean web CI evidence is scoped, scoreless, and never ship-ready", () => {
   const r = runGate({ platform: "web" });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.markdown, /AUTOMATED CHECKS PASSED/);
+  assert.match(r.markdown, /AUTOMATED CHECKS COMPLETE/);
   assert.doesNotMatch(r.markdown, /SHIP-READY/);
-  assert.match(r.html, /AUTOMATED CHECKS PASSED/);
+  assert.match(r.markdown, /no scalar score/);
+  assert.doesNotMatch(r.markdown, /release score \d/);
+  assert.match(r.html, /AUTOMATED CHECKS COMPLETE/);
   assert.doesNotMatch(r.html, /SHIP-READY/);
+  assert.match(r.html, /no scalar score/);
+  assert.equal(r.report.releaseScore, null);
   assert.match(r.report.headline, /not a content, privacy, brand, or business-claim review/i);
 });
 

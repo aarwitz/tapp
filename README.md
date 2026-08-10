@@ -168,7 +168,7 @@ Then ask your agent:
 | 📸 | `tapp_screenshot` | Whatever's on the sim right now, as an inline image. |
 | 🌳 | `tapp_ui_tree` | The accessibility tree of the current screen (ids, labels, hittability). |
 | 🕹 | `tapp_session_start/act/end` | **Interactive driving** — the Playwright loop. App launches once; each act (tap/type/swipe/back/wait) returns the fresh tree. |
-| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores with no authored test, returns `{verdict, releaseScore, findings[]}`. Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
+| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores with no authored test, returns `{verdict, releaseScore, findings[]}` (`releaseScore` is `null` for exploratory web). Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
 | 🧭 | `tapp_init` | **Repository import** — detect targets; optionally explore a real surface; persist the shared UI Map; construct the evidence-classified model and grounded release plan. |
 | 👤 | `tapp_actor_config` | **Actor/session setup** — store roles, isolation/provisioning, and environment-variable names without accepting or persisting credential values. |
 | ✅ | `tapp_release_plan` | **Release-plan lifecycle** — inspect, approve/reject/defer, generate, real-target validate, and explicitly promote proposed guarantees without silent test edits. |
@@ -193,7 +193,7 @@ deterministic per-platform navigation root used for bounded changed-surface repl
 
 **Adaptive exploration, deterministic judgment.** Exploration is adaptive — two runs may
 traverse different paths through your app. Judgment is deterministic: the same evidence
-trace always produces the same findings, the same score, and the same verdict — no LLM variability
+trace always produces the same findings and verdict — no LLM variability
 in the decision loop. PR gating keys on the **regression diff**
 (stable finding signatures vs. a baseline), so it reacts to what *changed*, not to
 run-to-run path variance. For critical user journeys, committed **Tasks and Flows** provide the stable CI
@@ -201,10 +201,11 @@ suite: reusable semantic actions, exact assertions, condition-based waits, fresh
 and evidence on failure. We call this *flake-resistant*, not magically flake-free—backend outages,
 unstable test data, and poorly identified controls can still make any E2E test fail.
 
-**A release score, not "confidence."** The 0–100 number is a heuristic quality score from
-fixed, documented deductions — we don't call it confidence because it isn't calibrated
-probability. Calibrating it against seeded-fault benchmarks is ongoing work; until then it
-ranks runs, it doesn't promise odds.
+**Native has a heuristic release score; exploratory web does not.** The native 0–100 number comes
+from fixed deductions and is not calibrated probability. Web reports deterministic findings,
+advisory budget-capped control probes, and concrete coverage instead of compressing those unlike
+signals into a scalar. Committed Flows, Tasks, contracts, and baseline regressions provide the web
+merge decision.
 
 `tapp_run_qa` explores like a user — accessibility surfaces on iOS/Android and a real browser on web —
 and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,
@@ -219,10 +220,18 @@ broken links and assets, and visible placeholder links with no destination). The
   app crashed on launch or a login wall blocked exploration, you get `inconclusive: true`,
   not a false pass. Absence of findings is not a pass.
 
-Web beta presents a `ready` result as **AUTOMATED CHECKS PASSED**, not “ship-ready.” Its report
+Web beta presents a `ready` result as **AUTOMATED CHECKS COMPLETE**, not “ship-ready,” and displays
+no scalar score. Exhaustive checks on each exercised page drive the verdict; sampled control probes
+remain visible findings but are advisory. The report
 explicitly excludes content/claim accuracy, privacy and API data minimization, brand/SEO
 consistency, and subjective visual credibility. Those require reviewed contracts, privacy review,
-or human/vision judgment; a green technical crawl must not imply they were validated.
+or human/vision judgment; an exploratory crawl must not imply they were validated.
+
+For a business guarantee such as “every coach is insured,” use a deterministic app-owned verifier
+endpoint that returns success only when the invariant holds, then require that status and the
+customer-visible claim in a release contract. The current DSL does not yet read arbitrary JSON
+response bodies or compare a cross-origin API payload directly with page copy; use a verifier or an
+explicit CI preflight rather than assuming autonomous QA inferred the guarantee.
 
 Apps behind a login? Pass `testEmail`/`testPassword` (typed into the login form automatically),
 `appLaunchArgs` (e.g. `["--uitesting"]` if your app supports a bypass), or explicit `loginSteps`

@@ -26,7 +26,7 @@
 //   any      fail on any finding at all, or any flow failure. Strictest.
 import fs from "fs";
 import path from "node:path";
-import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, verdictBadge } from "./report.js";
+import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, qaScoreLabel, verdictBadge } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { proposeSelectorMaintenance, validateWebMaintenanceProposal } from "./maintenance-proposal.js";
@@ -345,7 +345,10 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
   lines.push("");
   lines.push(report.headline);
   lines.push("");
-  lines.push(`**release score ${report.confidence}/100** · ${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
+  lines.push(`**${qaScoreLabel(report)}** · ${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
+  if (report.platform === "web") {
+    lines.push(`**Verdict basis:** ${report.verdictFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.`);
+  }
   if (report.uiMap) lines.push(`**UI Map:** ${report.uiMap.nodeCount} states · ${report.uiMap.edgeCount} transitions · ${report.uiMap.controlCount} semantic controls`);
   if (report.findings.length) {
     lines.push("");
@@ -488,11 +491,17 @@ if (collapsed.length) {
   report.findings.push(...collapsed);
   report.findingCounts.high += collapsed.length;
   report.findingCounts.total += collapsed.length;
-  // Keep the displayed verdict consistent with the merged findings (same scoring as report.js:
-  // high costs 10 confidence; any high caps the verdict at caution).
-  report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
-  report.releaseScore = report.confidence;
-  if (report.verdict === "ready") report.verdict = report.confidence < 50 ? "blocked" : "caution";
+  report.verdictFindingCounts.high += collapsed.length;
+  report.verdictFindingCounts.total += collapsed.length;
+  // Keep native scoring compatible. Exploratory web deliberately has no scalar; deterministic
+  // baseline regressions still raise its verdict directly.
+  if (Number.isFinite(report.confidence)) {
+    report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
+    report.releaseScore = report.confidence;
+  }
+  if (report.verdict === "ready") {
+    report.verdict = Number.isFinite(report.confidence) && report.confidence < 50 ? "blocked" : "caution";
+  }
   report.headline = `Proceed with caution — ${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }
 const regression = computeRegression(report.findings, baseline?.findings ?? null);

@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { parseOcqaMarkers, buildQaReport, computeRegression, verdictBadge } from "./report.js";
+import { parseOcqaMarkers, buildQaReport, computeRegression, qaScoreLabel, verdictBadge } from "./report.js";
 import { existingProjectArtifactPath, projectArtifactDirectory } from "./project-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1326,11 +1326,14 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     .filter(Boolean)
     .join(", ");
   const L = [];
-  L.push(`### 🧪 QA complete — ${badge} · release score ${report.confidence}/100${bundleId ? `\n\`${bundleId}\`` : ""}`);
+  L.push(`### 🧪 QA complete — ${badge} · ${qaScoreLabel(report)}${bundleId ? `\n\`${bundleId}\`` : ""}`);
   L.push("");
   L.push(report.headline);
   L.push("");
   L.push(`**Coverage** — ${report.screensExplored} screens · ${report.actionsPerformed} actions${timedOut ? " · ⏱️ hit time limit" : ""}`);
+  if (report.platform === "web") {
+    L.push(`**Verdict basis** — ${report.verdictFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory`);
+  }
   if (uiMap) L.push(`**UI Map** — ${uiMap.nodeCount} states · ${uiMap.edgeCount} transitions · ${uiMap.controlCount} semantic controls · ${uiMap.path}`);
   if (reportHtml) L.push(`**Evidence** — 📄 ${reportHtml} (screenshots of every screen + findings, shareable)`);
   if (recording) L.push(`**Recording** — 🎬 ${recording} (full exploration, embedded in the evidence page)`);
@@ -2070,13 +2073,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Run autonomous QA against iOS (appBundleId), Android (androidAppId), OR a web app " +
         "(url — beta, requires Playwright installed) and return a structured " +
-        "ship/no-ship verdict. Use ONLY when the user wants a QA assessment / to find bugs / a verdict — this " +
+        "QA verdict. Use ONLY when the user wants a QA assessment / to find bugs / a verdict — this " +
         "runs for MINUTES exploring the whole app. Do NOT use it just to view, screenshot, or reach a specific " +
         "screen — use tapp_open_app (launch + screenshot) or a session for that. Tapp explores the app " +
         "like a tester (taps, types, navigates, scrolls) and detects real issues — crashes, dead buttons, failed sign-ins, error screens, " +
         "stuck/hung screens; on web also uncaught JS exceptions, failed/5xx requests, broken links and assets. " +
-        "Returns {verdict: ready|caution|blocked, confidence, headline, screensExplored, " +
-        "actionsPerformed, findings:[{type,severity,category,title,screen}]}. The verdict has a coverage floor: " +
+        "Returns {verdict: ready|caution|blocked, confidence, releaseScore, headline, screensExplored, " +
+        "actionsPerformed, findings:[{type,severity,category,title,screen,evaluationTier}]}. Exploratory web " +
+        "sets confidence/releaseScore to null and separates deterministic verdict findings from advisory " +
+        "sampled control probes. The verdict has a coverage floor: " +
         "if the app barely explored (crash on launch / sign-in wall) it returns 'caution' + inconclusive, never a " +
         "false pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
         "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things. " +

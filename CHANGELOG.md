@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.5
+
+- **Scoreless exploratory web QA:** web reports concrete coverage, deterministic verdict findings,
+  and advisory sampled probes instead of a 0–100 scalar that implied broader measurement than the
+  crawl performs. A clean scoped result is `AUTOMATED CHECKS COMPLETE`, never `SHIP-READY`.
+- **Stable verdict basis:** budget-capped dead-control probes remain visible but cannot move the web
+  verdict; exhaustive checks on each exercised page drive it. CI now runs the same live browser
+  fixture twice and requires identical finding identities, evaluation tiers, counts, and verdict.
+- **Honest business-claim boundary:** contract guidance documents the supported deterministic
+  verifier-endpoint pattern and explicitly states that arbitrary/cross-origin JSON response
+  assertions are not yet part of the contract DSL.
+
 ## 0.16.4
 
 - **Trust-scoped web verdicts:** a clean web crawl is labeled `AUTOMATED CHECKS PASSED` instead of

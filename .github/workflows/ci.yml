@@ -93,6 +93,8 @@ jobs:
           comment-on-pr: "false"
       - name: Cold-start a fresh repository through tapp init --explore
         run: node --test --test-name-pattern='tapp init --explore (grounds|starts and stops)' tests/cli.test.js
+      - name: Assert repeat-run web determinism
+        run: node --test --test-name-pattern='placeholder links and dead controls deterministically' tests/cli.test.js
 
   android-corpus:
     name: Android driver + committed Flows

@@ -101,6 +101,7 @@ test("web QA reports placeholder links and dead controls deterministically despi
   fs.writeFileSync(path.join(project, "index.html"), `
     <main>
       <h1>Stable Home</h1>
+      <a href="/next.html">Next page</a>
       <a href="#">Download App</a>
       <a href="#" data-action="open-help">JavaScript Help</a>
       <button id="working">Working action</button>
@@ -110,6 +111,9 @@ test("web QA reports placeholder links and dead controls deterministically despi
       document.querySelector('#working').addEventListener('click', () => {});
       setInterval(() => document.body.setAttribute('data-background-tick', String(Date.now())), 50);
     </script>
+  `);
+  fs.writeFileSync(path.join(project, "next.html"), `
+    <main><h1>Stable Next</h1><a href="/">Home</a></main>
   `);
   const port = 50000 + (process.pid % 1000);
   const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
@@ -127,9 +131,15 @@ test("web QA reports placeholder links and dead controls deterministically despi
     const second = JSON.parse(fs.readFileSync(secondReport, "utf8"));
     const identity = (finding) => `${finding.type}|${finding.target}`;
     assert.deepEqual(first.findings.map(identity), second.findings.map(identity));
+    assert.equal(first.verdict, "ready");
+    assert.equal(second.verdict, first.verdict, "unchanged target produces an identical verdict");
+    assert.equal(first.releaseScore, null, "exploratory web has no scalar score to jitter");
+    assert.equal(second.releaseScore, null);
+    assert.deepEqual(second.verdictFindingCounts, first.verdictFindingCounts);
+    assert.deepEqual(second.sampledFindingCounts, first.sampledFindingCounts);
     assert.ok(first.findings.some((finding) => finding.type === "placeholder_link" && finding.target === "Download App"));
     assert.ok(!first.findings.some((finding) => finding.target === "JavaScript Help"), "action-marked hash link is not called dead");
-    assert.ok(first.findings.some((finding) => finding.type === "unresponsive_element" && finding.target === "Availability"));
+    assert.ok(first.findings.some((finding) => finding.type === "unresponsive_element" && finding.target === "Availability" && finding.evaluationTier === "sampled"));
     assert.ok(!first.findings.some((finding) => finding.target === "Working action"), "directly wired control is not called dead");
   } finally {
     server.kill();

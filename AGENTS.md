@@ -82,10 +82,13 @@ Rules that prevent 90% of failures:
 
 ## Autonomous QA (`tapp_run_qa`)
 
-Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, findings[]}`.
+Returns `{verdict, confidence, releaseScore, headline, screensExplored, actionsPerformed, findings[]}`.
+Exploratory web runs set `confidence` and `releaseScore` to `null`; report their deterministic
+finding counts, advisory sampled-probe counts, and coverage instead of inventing a scalar.
 
-- `verdict`: `ready` | `caution` | `blocked`. **Trust it — it's deterministic.** Report it to the
-  user as-is; never soften a `blocked` or inflate a `caution`.
+- `verdict`: `ready` | `caution` | `blocked`. Report it as-is; never soften a `blocked` or inflate a
+  `caution`. Judgment is deterministic for a given evidence trace, while adaptive exploration and
+  live target state can still change which evidence a run observes.
 - `inconclusive: true` means the run couldn't see enough (crash on launch, login wall). That is
   **not a pass** — tell the user what blocked exploration and what would unblock it.
 - Login walls: pass `testEmail`/`testPassword` (auto-typed into login forms), `appLaunchArgs`
@@ -95,9 +98,10 @@ Returns `{verdict, confidence, headline, screensExplored, actionsPerformed, find
 - Diff two runs: pass the previous run's `findings` as `baselineFindings` → you get a
   `regression` block (`new` / `persisting` / `resolved`, plus a CI `gate` signal).
 - On web, report the exact verdict but preserve its scope: Tapp deterministically checks technical
-  behavior such as failed requests, missing assets, placeholder links, and inert controls. It does
+  behavior such as failed requests, missing assets, and placeholder links. Dead-control probes are
+  budget-capped advisory findings and do not drive the verdict. Tapp does
   not validate marketing claims against APIs, API field privacy, brand consistency, or subjective
-  marketplace credibility unless an explicit reviewed test/contract covers them.
+  marketplace credibility unless an explicit reviewed test/contract or verifier covers them.
 
 ## Flows (deterministic E2E tests)
 

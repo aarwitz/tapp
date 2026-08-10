@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { buildQaReport, severityRank, parseOcqaMarkers, verdictBadge } from "../mcp-server/src/report.js";
+import { buildQaReport, qaScoreLabel, severityRank, parseOcqaMarkers, verdictBadge } from "../mcp-server/src/report.js";
 
 function markersFile(lines) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-test-"));
@@ -179,6 +179,23 @@ test("web platform gets web-specific honesty labels", () => {
   assert.ok(r.notChecked.some((c) => /claim accuracy/.test(c)), "content truth is explicitly out of scope");
   assert.ok(r.notChecked.some((c) => /privacy/.test(c)), "API data minimization is explicitly out of scope");
   assert.doesNotMatch(r.headline, /ship-ready/i);
-  assert.equal(verdictBadge(r), "🟢 AUTOMATED CHECKS PASSED");
+  assert.equal(verdictBadge(r), "🔵 AUTOMATED CHECKS COMPLETE");
+  assert.equal(qaScoreLabel(r), "exploratory web · no scalar score");
+  assert.equal(r.releaseScore, null);
+  assert.equal(r.confidence, null);
+  assert.match(r.scoreUnavailableReason, /instead of a scalar release score/);
   assert.equal(verdictBadge({ ...r, platform: "ios" }), "🟢 SHIP-READY");
+});
+
+test("sampled web probe findings remain advisory and cannot move the deterministic verdict", () => {
+  const sampled = Array.from({ length: 20 }, (_, index) =>
+    `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Home","target":"button-${index}"}`
+  );
+  const r = buildQaReport(markersFile([...CLEAN_RUN, ...sampled]), { platform: "web" });
+  assert.equal(r.verdict, "ready");
+  assert.equal(r.findingCounts.total, 20);
+  assert.equal(r.verdictFindingCounts.total, 0);
+  assert.equal(r.sampledFindingCounts.total, 20);
+  assert.ok(r.findings.every((finding) => finding.evaluationTier === "sampled"));
+  assert.equal(r.releaseScore, null);
 });

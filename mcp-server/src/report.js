@@ -96,14 +96,26 @@ export const ISSUE_CATEGORY = {
   explore_timeout: "performance_timeout",
 };
 export const CRITICAL_ISSUE_TYPES = new Set(["crash"]);
+export const WEB_SAMPLED_ISSUE_TYPES = new Set(["unresponsive_element"]);
 
 export function severityRank(s) {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 4;
 }
 
+export function findingEvaluationTier(finding, platform = "ios") {
+  return platform === "web" && WEB_SAMPLED_ISSUE_TYPES.has(finding?.type) ? "sampled" : "deterministic";
+}
+
 export function verdictBadge(report) {
-  if (report?.platform === "web" && report?.verdict === "ready") return "🟢 AUTOMATED CHECKS PASSED";
+  if (report?.platform === "web" && report?.verdict === "ready") return "🔵 AUTOMATED CHECKS COMPLETE";
   return { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" }[report?.verdict] || report?.verdict;
+}
+
+export function qaScoreLabel(report) {
+  const score = report?.releaseScore ?? report?.confidence;
+  if (Number.isFinite(score)) return `release score ${score}/100`;
+  if (report?.platform === "web") return "exploratory web · no scalar score";
+  return "score unavailable";
 }
 
 // Turn a capture's OCQA markers into the same ship/no-ship report Tapp produces:
@@ -186,7 +198,11 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     const key = `${i.type}|${i.screen}|${i.target ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    findings.push({ ...i, category: ISSUE_CATEGORY[i.type] || i.type });
+    findings.push({
+      ...i,
+      category: ISSUE_CATEGORY[i.type] || i.type,
+      ...(platform === "web" ? { evaluationTier: findingEvaluationTier(i, platform) } : {}),
+    });
   }
   findings.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
 
@@ -197,24 +213,32 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const high = findings.filter((f) => f.severity === "high").length;
   const med = findings.filter((f) => f.severity === "medium").length;
   const low = findings.filter((f) => f.severity === "low").length;
+  const verdictFindings = platform === "web"
+    ? findings.filter((finding) => finding.evaluationTier !== "sampled")
+    : findings;
+  const verdictCrit = verdictFindings.filter((f) => f.severity === "critical").length;
+  const verdictHigh = verdictFindings.filter((f) => f.severity === "high").length;
+  const verdictMed = verdictFindings.filter((f) => f.severity === "medium").length;
+  const verdictLow = verdictFindings.filter((f) => f.severity === "low").length;
+  const sampledFindings = platform === "web" ? findings.filter((finding) => finding.evaluationTier === "sampled") : [];
 
   // Coverage floor: a verdict is only trustworthy if the app was actually exercised.
   const inconclusive = screensExplored < 2 || actionsPerformed < 3;
-  let confidence = Math.max(0, Math.min(100, 100 - crit * 25 - high * 10 - med * 3));
-  if (inconclusive) confidence = Math.min(confidence, 40);
+  let riskScore = Math.max(0, Math.min(100, 100 - verdictCrit * 25 - verdictHigh * 10 - verdictMed * 3));
+  if (inconclusive) riskScore = Math.min(riskScore, 40);
 
   let verdict;
-  if (crit > 0) verdict = "blocked";
+  if (verdictCrit > 0) verdict = "blocked";
   else if (inconclusive) verdict = "caution";
-  else if (confidence < 50) verdict = "blocked";
-  else if (high > 0 || confidence < 80) verdict = "caution";
+  else if (riskScore < 50) verdict = "blocked";
+  else if (verdictHigh > 0 || riskScore < 80) verdict = "caution";
   else verdict = "ready";
 
   const headline = inconclusive
     ? `Inconclusive — only ${screensExplored} screen(s) / ${actionsPerformed} action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.`
     : verdict === "ready"
     ? platform === "web"
-      ? "Automated web checks passed — no release-blocking technical issues found in the exercised surfaces. This is not a content, privacy, brand, or business-claim review."
+      ? "Automated web checks completed — no release-blocking deterministic findings in the exercised surfaces. Sampled control probes are advisory. This is not a content, privacy, brand, or business-claim review."
       : "Ship-ready — no release-blocking issues found."
     : verdict === "caution"
     ? `Proceed with caution — ${findings.length} issue(s) to review.`
@@ -230,7 +254,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   if (platform === "web") {
     checkedFor = [
       "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404)",
-      "placeholder links with no destination", "dead buttons", "error text on pages", "load timeouts",
+      "placeholder links with no destination", "sampled dead-button probes (advisory)", "error text on pages", "load timeouts",
     ];
     notChecked = [
       "app-specific business logic (cover with Flows: record or generate, then assert)",
@@ -272,11 +296,14 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
 
   return {
     verdict,
-    // `releaseScore` is the honest name: a heuristic quality score from fixed deductions,
-    // NOT calibrated statistical confidence. `confidence` is kept as an alias for
-    // compatibility (baselines, desktop app, existing consumers).
-    confidence,
-    releaseScore: confidence,
+    // Exploratory web QA deliberately has no scalar. Its verdict derives from deterministic
+    // checks on exercised pages; budget-capped control probes remain visible but advisory.
+    // Native keeps the legacy heuristic score until it has an equivalent tier split.
+    confidence: platform === "web" ? null : riskScore,
+    releaseScore: platform === "web" ? null : riskScore,
+    scoreUnavailableReason: platform === "web"
+      ? "Exploratory web runs report deterministic findings, advisory sampled probes, and coverage instead of a scalar release score."
+      : null,
     headline,
     inconclusive,
     checkedFor,
@@ -286,6 +313,20 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     screensExplored,
     actionsPerformed,
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },
+    verdictFindingCounts: {
+      critical: verdictCrit,
+      high: verdictHigh,
+      medium: verdictMed,
+      low: verdictLow,
+      total: verdictFindings.length,
+    },
+    sampledFindingCounts: {
+      critical: sampledFindings.filter((f) => f.severity === "critical").length,
+      high: sampledFindings.filter((f) => f.severity === "high").length,
+      medium: sampledFindings.filter((f) => f.severity === "medium").length,
+      low: sampledFindings.filter((f) => f.severity === "low").length,
+      total: sampledFindings.length,
+    },
     findings,
     screens: Array.from(screens),
     screenElementCounts,
