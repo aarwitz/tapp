@@ -10,7 +10,8 @@
   exempted and shared footer findings deduplicate across routes.
 - **Stable dead-control results:** control-local semantic state and actual event wiring replace the
   page-wide mutation counter, so unrelated timers, carousels, and chat widgets cannot randomly hide
-  an inert button. Navigation-aborted media requests are no longer reported as broken resources.
+  an inert button. Navigation-aborted media requests are no longer reported as broken resources,
+  and terse or media-only pages are no longer mislabeled as blank.
 
 ## 0.16.3
 

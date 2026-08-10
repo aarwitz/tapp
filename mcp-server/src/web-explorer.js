@@ -76,6 +76,10 @@ export function shouldReportWebRequestFailure(errorText = "") {
   return !/\bnet::ERR_ABORTED\b/i.test(String(errorText));
 }
 
+export function webPageAppearsBlank({ textLen = 0, controlCount = 0, visualContentCount = 0 } = {}) {
+  return Number(textLen) === 0 && Number(controlCount) === 0 && Number(visualContentCount) === 0;
+}
+
 async function installWebListenerTracking(context) {
   await context.addInitScript(() => {
     const key = Symbol.for("tapp.clickListeners");
@@ -530,6 +534,11 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         title: document.title.trim(),
         controlCount: document.querySelectorAll("a[href], button, [role=button], input, select, textarea").length,
         textLen: (document.body?.innerText || "").trim().length,
+        visualContentCount: [...document.querySelectorAll("img, picture, video, canvas, svg, iframe, object, embed")]
+          .filter((el) => {
+            const style = window.getComputedStyle(el);
+            return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
+          }).length,
         alertText: [...document.querySelectorAll("[role=alert], [aria-live=assertive]")]
           .map((el) => el.textContent.trim()).filter(Boolean).join(" ").slice(0, 120),
         errorCandidateTexts: [...document.querySelectorAll("h1, h2, h3, p, [data-error], [data-testid*=error i]")]
@@ -597,7 +606,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       screenCount = screenshotFor.size;
       await page.screenshot({ path: screenshotPath }).catch(() => {});
       // Deterministic per-page detectors run once per distinct screen.
-      if (info.textLen < 10) issue("blank_screen", "high", "Page rendered no visible text", screen);
+      if (webPageAppearsBlank(info)) issue("blank_screen", "high", "Page rendered no visible content", screen);
       else {
         const errorText = webErrorSurfaceText({ alertText: info.alertText, candidateTexts: info.errorCandidateTexts });
         if (errorText) issue("error_surface", "high", `Error shown: ${errorText.slice(0, 80)}`, screen);

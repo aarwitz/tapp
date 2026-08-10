@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
 
 test("focused web inspection rejects non-http targets before launching a browser", async () => {
   await assert.rejects(inspectWebPage({ url: "file:///private/app.html" }), /valid http\(s\) URL/);
@@ -61,6 +61,13 @@ test("web request failures exclude navigation-aborted resources but retain real 
   assert.equal(shouldReportWebRequestFailure("net::ERR_ABORTED"), false);
   assert.equal(shouldReportWebRequestFailure("net::ERR_CONNECTION_REFUSED"), true);
   assert.equal(shouldReportWebRequestFailure("net::ERR_NAME_NOT_RESOLVED"), true);
+});
+
+test("a terse or visual web page is not mislabeled as blank", () => {
+  assert.equal(webPageAppearsBlank({ textLen: 8, controlCount: 1, visualContentCount: 0 }), false);
+  assert.equal(webPageAppearsBlank({ textLen: 0, controlCount: 0, visualContentCount: 1 }), false);
+  assert.equal(webPageAppearsBlank({ textLen: 0, controlCount: 1, visualContentCount: 0 }), false);
+  assert.equal(webPageAppearsBlank({ textLen: 0, controlCount: 0, visualContentCount: 0 }), true);
 });
 
 test("web login submits a semantic SPA button even when it is outside a form", async () => {
