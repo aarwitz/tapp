@@ -152,11 +152,29 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
 
   const inputFieldsEncountered = Array.from(inputsByScreen.entries()).map(([screen, fields]) => ({ screen, fields }));
 
+  // Web resource failures belong to the resource, not every route that referenced it.
+  // Chromium can also surface one 404 through both response and requestfailed listeners;
+  // keep the concrete missing-asset finding and discard that transport-level duplicate.
+  const normalizedIssues = rawIssues.map((issue) => {
+    if (platform !== "web" || !["missing_asset", "network_error"].includes(issue.type)) return issue;
+    const title = String(issue.title || "");
+    const match = issue.type === "missing_asset"
+      ? title.match(/^404 asset:\s+(\S+)/i)
+      : title.match(/^Request failed:\s+(\S+)/i);
+    const resource = String(issue.target || match?.[1] || "").replace(/[?#].*$/, "");
+    return resource ? { ...issue, screen: null, target: resource } : issue;
+  });
+  const missingResources = new Set(normalizedIssues
+    .filter((issue) => issue.type === "missing_asset" && issue.target)
+    .map((issue) => issue.target));
+  const reportIssues = normalizedIssues.filter((issue) =>
+    !(issue.type === "network_error" && issue.target && missingResources.has(issue.target) && /^Request failed:/i.test(String(issue.title || ""))));
+
   // Dedup by stable signature (type|screen|target) so repeated detections count once —
   // but DIFFERENT controls failing on the same screen each count.
   const seen = new Set();
   const findings = [];
-  for (const i of rawIssues) {
+  for (const i of reportIssues) {
     const key = `${i.type}|${i.screen}|${i.target ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);

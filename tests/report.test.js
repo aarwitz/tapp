@@ -66,6 +66,20 @@ test("findings dedup by type|screen — repeated detections count once", () => {
   assert.equal(r.verdict, "caution", "a high finding caps the verdict at caution");
 });
 
+test("one missing web resource is one finding across routes and failed-request noise", () => {
+  const r = buildQaReport(markersFile([
+    ...CLEAN_RUN,
+    'OCQA_ISSUE:{"type":"missing_asset","severity":"medium","title":"404 asset: /assets/js/nav.js","screen":"Home"}',
+    'OCQA_ISSUE:{"type":"network_error","severity":"medium","title":"Request failed: /assets/js/nav.js (net::ERR_ABORTED)","screen":"Home"}',
+    'OCQA_ISSUE:{"type":"missing_asset","severity":"medium","title":"404 asset: /assets/js/nav.js","screen":"Pricing"}',
+    'OCQA_ISSUE:{"type":"network_error","severity":"medium","title":"Request failed: /assets/js/nav.js (net::ERR_ABORTED)","screen":"Help"}',
+  ]), { platform: "web" });
+  assert.equal(r.findingCounts.total, 1);
+  assert.equal(r.findings[0].type, "missing_asset");
+  assert.equal(r.findings[0].target, "/assets/js/nav.js");
+  assert.equal(r.findings[0].screen, null, "resource defects are canonical across pages");
+});
+
 test("caution and blocked headlines count every reported finding", () => {
   const mediumIssues = Array.from({ length: 8 }, (_, index) =>
     `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Settings","target":"button-${index}"}`

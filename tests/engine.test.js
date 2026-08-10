@@ -24,9 +24,18 @@ test("engine is import-safe and exports the shared surface", () => {
     "findXcodeContainer",
     "explorationEnvFromArgs",
     "formatScreen",
+    "qaNextSteps",
   ]) {
     assert.equal(typeof engine[name], "function", `${name} exported`);
   }
+});
+
+test("QA next steps match the package-only surface without leaking MCP calls", () => {
+  const next = engine.qaNextSteps({ findings: [{ type: "missing_asset" }] }, "cli");
+  assert.match(next.join(" "), /tapp report latest/);
+  assert.match(next.join(" "), /--baseline <report\.json>/);
+  assert.match(next.join(" "), /tapp flow run <file>/);
+  assert.doesNotMatch(next.join(" "), /tapp_open_app|baselineFindings|tapp_session_start/);
 });
 
 test("findXcodeContainer prefers a workspace, skips Pods, accepts a container path directly", () => {

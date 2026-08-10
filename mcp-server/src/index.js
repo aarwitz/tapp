@@ -1304,7 +1304,22 @@ function fmtDuration(ms) {
 }
 
 /** Format a QA report as a scannable release readout with next-step suggestions. */
-function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, uiMap } = {}) {
+export function qaNextSteps(report, surface = "mcp") {
+  if (surface === "cli") {
+    const next = [];
+    if (report?.findings?.length) next.push("inspect the evidence with `tapp report latest`");
+    next.push("re-run with `--baseline <report.json>` to gate a fix");
+    next.push("replay a committed journey with `tapp flow run <file>`");
+    return next;
+  }
+  const next = [];
+  if (report?.findings?.length) next.push("open a flagged screen with `tapp_open_app`");
+  next.push("re-run with `baselineFindings` to gate a fix");
+  next.push("drive it step-by-step via `tapp_session_start`");
+  return next;
+}
+
+function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, uiMap, surface = "mcp" } = {}) {
   const c = report.findingCounts || {};
   const badge = VERDICT_BADGE[report.verdict] || report.verdict;
   const sevBits = ["critical", "high", "medium", "low"]
@@ -1359,10 +1374,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
       }
     }
   }
-  const next = [];
-  if (report.findings && report.findings.length) next.push("open a flagged screen with `tapp_open_app`");
-  next.push("re-run with `baselineFindings` to gate a fix");
-  next.push("drive it step-by-step via `tapp_session_start`");
+  const next = qaNextSteps(report, surface);
   L.push("");
   L.push(`**Next** — ${next.join(" · ")}`);
   // The gate hook belongs at the moment the user thinks "I want this on every PR" —
@@ -1428,7 +1440,7 @@ export function formatScreen(screenTitle, elements) {
 // `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
 // the surfaces can't drift.)
 
-export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], onProgress = () => {} }) {
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], surface = "mcp", onProgress = () => {} }) {
   const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
@@ -1465,11 +1477,11 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
     reportHtml = writeHtmlReport(outDir, { report, label: url.trim() });
   } catch { /* evidence page is best-effort */ }
   const structured = { ...report, regression, platform: "web", uiMap, reportHtml, exploration: { seedRoutes: webResult.seedRoutes || [], targets: webResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
-  const text = formatQaReport(report, { regression, bundleId: url.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap });
+  const text = formatQaReport(report, { regression, bundleId: url.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
 
-export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout, testEmail, testPassword, baselineFindings, clearData = true, seedTargets = [], onProgress = () => {} }) {
+export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout, testEmail, testPassword, baselineFindings, clearData = true, seedTargets = [], surface = "mcp", onProgress = () => {} }) {
   const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "android-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
@@ -1508,11 +1520,11 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
     reportHtml = writeHtmlReport(outDir, { report, label: appId.trim() });
   } catch {}
   const structured = { ...report, regression, platform: "android", uiMap, reportHtml, exploration: { targets: androidResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
-  const text = formatQaReport(report, { regression, bundleId: appId.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap });
+  const text = formatQaReport(report, { regression, bundleId: appId.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
 
-export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onProgress = () => {} }) {
+export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surface = "mcp", onProgress = () => {} }) {
   const captureScript = path.join(scriptsDir, "quick-capture.sh");
   if (!fs.existsSync(captureScript)) return { error: "Capture script not found", details: { captureScript } };
 
@@ -1576,7 +1588,7 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, onPro
     timedOut,
     autoBooted: sim.autoBooted || false,
   };
-  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml, recording, uiMap: uiMap.error ? null : uiMap });
+  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml, recording, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
 

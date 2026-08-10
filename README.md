@@ -99,6 +99,14 @@ npx -y @aarwitz/tapp build [dir]     # just build + install (scheme auto-detecte
 Web (beta): `npx -y @aarwitz/tapp qa http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*
 
+Focused web inspection waits briefly for loading states to settle. If a consent or location modal
+blocks the screen, dismiss it and wait for the content you care about in the same package-only call:
+
+```bash
+npx -y @aarwitz/tapp open https://example.com --tap "Not now" --wait-for "Dashboard"
+npx -y @aarwitz/tapp tree https://example.com --tap "Not now" --wait-for "Dashboard" --json
+```
+
 Android:
 
 ```bash

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.16.3
+
+- **Trustworthy web findings:** error-surface detection now distinguishes standalone failures from
+  help copy, broken assets deduplicate across routes, and covered/failed clicks are no longer
+  misreported as dead buttons.
+- **Settled focused evidence:** web `open` and `tree` wait for loading states and support
+  `--tap TEXT` plus `--wait-for TEXT`, allowing package-only agents to dismiss one blocker and
+  capture the resulting async screen without MCP.
+- **CLI-native follow-up:** package QA reports now point to `tapp report`, `--baseline`, and
+  committed Flow replay instead of suggesting MCP-only calls.
+
 ## 0.16.2
 - **CLI-first diagnostics:** `tapp doctor` now sends a ready user directly to the package-only
   `open` and `qa` workflow instead of presenting MCP setup as the next step.

@@ -20,11 +20,89 @@ import path from "path";
 import { createRequire } from "module";
 import { execFileSync } from "child_process";
 
-const SETTLE_MS = 500;
 const CLICK_SETTLE_MS = 700;
 const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
+const STANDALONE_ERROR_TEXT_RE = /^(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)(?:[.!:]|\s|$)/i;
+
+export function webErrorSurfaceText({ alertText = "", candidateTexts = [] } = {}) {
+  const alert = String(alertText || "").trim();
+  if (alert && ERROR_TEXT_RE.test(alert)) return alert;
+  return (candidateTexts || [])
+    .map((text) => String(text || "").trim())
+    .find((text) => STANDALONE_ERROR_TEXT_RE.test(text)) || "";
+}
+
+export function webControlLabel({ text = "", value = "", ariaLabel = "", title = "", id = "" } = {}) {
+  return [text, value, ariaLabel, title, id]
+    .map((part) => String(part || "").trim())
+    .find(Boolean) || "button";
+}
+
+// Wait for a page to stop presenting an explicit loading state and for its semantic
+// surface to remain unchanged across a couple of samples. This is intentionally bounded:
+// live counters and animation-heavy pages still return evidence, marked unsettled.
+export async function waitForWebStability(page, { timeoutMs = 5_000, intervalMs = 250, stableSamples = 3 } = {}) {
+  const boundedTimeout = Math.max(250, Math.min(15_000, Number(timeoutMs) || 5_000));
+  const boundedInterval = Math.max(100, Math.min(1_000, Number(intervalMs) || 250));
+  const requiredSamples = Math.max(1, Math.min(5, Number(stableSamples) || 2));
+  const started = Date.now();
+  let previousSignature = "";
+  let matchingSamples = 0;
+  let latest = { busy: false, signature: "" };
+
+  while (Date.now() - started < boundedTimeout) {
+    latest = await page.evaluate(() => {
+      const visible = (element) => {
+        const style = window.getComputedStyle(element);
+        return style.visibility !== "hidden" && style.display !== "none" && element.getClientRects().length > 0;
+      };
+      const busySelector = "[aria-busy=true], [role=progressbar], .loading, .spinner, [class*=loading i], [class*=spinner i]";
+      const busyElement = [...document.querySelectorAll(busySelector)].some(visible);
+      const busyText = [...document.querySelectorAll("h1, h2, h3, p, [role=status]")]
+        .filter(visible)
+        .map((element) => (element.textContent || "").trim())
+        .some((text) => /^(loading|fetching|please wait|preparing|connecting)(?:[.…!]*|\s.*)$/i.test(text));
+      const bodyText = (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 2_000);
+      const signature = JSON.stringify([
+        location.href,
+        document.querySelector("h1")?.textContent?.trim() || "",
+        document.title,
+        document.querySelectorAll("button, a[href], input, textarea, select, [role=button]").length,
+        bodyText,
+      ]);
+      return { busy: busyElement || busyText, signature };
+    }).catch(() => latest);
+
+    if (!latest.busy && latest.signature === previousSignature) matchingSamples += 1;
+    else matchingSamples = !latest.busy ? 1 : 0;
+    previousSignature = latest.signature;
+    if (!latest.busy && matchingSamples >= requiredSamples) {
+      return { settled: true, busy: false, elapsedMs: Date.now() - started };
+    }
+    await page.waitForTimeout(boundedInterval);
+  }
+  return { settled: false, busy: !!latest.busy, elapsedMs: Date.now() - started };
+}
+
+async function tapWebText(page, text, timeoutMs) {
+  const requested = String(text || "").trim();
+  if (!requested) return false;
+  const candidates = [
+    page.getByRole("button", { name: requested, exact: true }).first(),
+    page.getByRole("link", { name: requested, exact: true }).first(),
+    page.getByText(requested, { exact: true }).first(),
+  ];
+  for (const candidate of candidates) {
+    if (!(await candidate.isVisible().catch(() => false))) continue;
+    try {
+      await candidate.click({ timeout: Math.min(timeoutMs, 5_000) });
+      return true;
+    } catch {}
+  }
+  throw new Error(`Could not tap visible text “${requested}”`);
+}
 
 // npx installs Tapp into its own cache, so a plain import("playwright") only resolves
 // for repo-dev checkouts. Probe, in order: our own node_modules; the user's project
@@ -100,7 +178,7 @@ export function webBrowserLaunchOptions(environment = process.env) {
 // Focused one-screen inspection for the agent-facing `tapp open <url>` and `tapp tree <url>`
 // commands. This deliberately does no exploration or judgment; it opens exactly one page,
 // captures the visible semantic controls, and optionally takes one screenshot.
-export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screenshot = true }) {
+export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screenshot = true, tapText = "", waitForText = "" }) {
   let target;
   try { target = new URL(url); }
   catch { throw new Error("Web inspection needs a valid http(s) URL"); }
@@ -115,7 +193,20 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
     page.setDefaultTimeout(boundedTimeout);
     const response = await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: boundedTimeout });
     if (response && response.status() >= 400) throw new Error(`Could not open ${target.href}: HTTP ${response.status()}`);
-    await page.waitForTimeout(SETTLE_MS);
+    let stability = await waitForWebStability(page, { timeoutMs: Math.min(5_000, boundedTimeout) });
+    if (tapText) {
+      await tapWebText(page, tapText, boundedTimeout);
+      stability = await waitForWebStability(page, { timeoutMs: Math.min(5_000, boundedTimeout) });
+    }
+    if (waitForText) {
+      const requested = String(waitForText).trim();
+      try {
+        await page.getByText(requested, { exact: false }).first().waitFor({ state: "visible", timeout: boundedTimeout });
+      } catch {
+        throw new Error(`Timed out waiting for visible text “${requested}”`);
+      }
+      stability = await waitForWebStability(page, { timeoutMs: Math.min(5_000, boundedTimeout) });
+    }
     const observed = await page.evaluate(() => {
       const visible = (element) => element.offsetParent !== null;
       const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, [role=button], [role=tab], [role=checkbox], [role=switch]")]
@@ -150,6 +241,8 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
       screenTitle: webScreenTitle(observed, target.pathname || target.href),
       elements: observed.controls,
       image,
+      settled: stability.settled,
+      busy: stability.busy,
     };
   } finally {
     await browser.close().catch(() => {});
@@ -246,7 +339,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       if (u.origin !== start.origin) return;
       if (res.status() >= 500) issue("network_error", "high", `${res.status()} from ${u.pathname.slice(0, 80)}`, currentScreen);
       else if (res.status() === 404 && res.request().resourceType() !== "document") {
-        issue("missing_asset", "medium", `404 asset: ${u.pathname.slice(0, 80)}`, currentScreen);
+        issue("missing_asset", "medium", `404 asset: ${u.pathname.slice(0, 80)}`, currentScreen, u.pathname);
       }
     } catch {}
   });
@@ -254,7 +347,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     try {
       const u = new URL(req.url());
       if (u.origin !== start.origin) return;
-      issue("network_error", "medium", `Request failed: ${u.pathname.slice(0, 80)} (${req.failure()?.errorText || "?"})`, currentScreen);
+      issue("network_error", "medium", `Request failed: ${u.pathname.slice(0, 80)} (${req.failure()?.errorText || "?"})`, currentScreen, u.pathname);
     } catch {}
   });
 
@@ -269,7 +362,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       : { target: start.pathname + start.search, visitKey: `pr-path:${target.id}`, action: `PR target ${target.node.name}`, fromScreen: null, prTarget: true, targetId: target.id, pathTarget: target }),
     ...normalizedSeeds.filter((target) => !targetRoutes.has(target)).map((target) => ({ target, action: `PR target ${target}`, fromScreen: null, prTarget: true })),
   ];
-  const screenshotFor = new Set();
+  const screenshotFor = new Map();
   let actions = 0;
   let screenCount = 0;
   let lastScreen = null;
@@ -320,8 +413,21 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         title: document.title.trim(),
         controlCount: document.querySelectorAll("a[href], button, [role=button], input, select, textarea").length,
         textLen: (document.body?.innerText || "").trim().length,
-        alertText: [...document.querySelectorAll("[role=alert], [class*=error i]")]
+        alertText: [...document.querySelectorAll("[role=alert], [aria-live=assertive]")]
           .map((el) => el.textContent.trim()).filter(Boolean).join(" ").slice(0, 120),
+        errorCandidateTexts: [...document.querySelectorAll("h1, h2, h3, p, [data-error], [data-testid*=error i]")]
+          .filter((el) => el.offsetParent !== null)
+          .map((el) => (el.textContent || "").trim().slice(0, 240))
+          .filter(Boolean)
+          .slice(0, 40),
+        busy: [...document.querySelectorAll("[aria-busy=true], [role=progressbar], .loading, .spinner, [class*=loading i], [class*=spinner i]")]
+          .some((el) => {
+            const style = window.getComputedStyle(el);
+            return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
+          }) || [...document.querySelectorAll("h1, h2, h3, p, [role=status]")]
+          .filter((el) => el.offsetParent !== null)
+          .map((el) => (el.textContent || "").trim())
+          .some((text) => /^(loading|fetching|please wait|preparing|connecting)(?:[.…!]*|\s.*)$/i.test(text)),
         inputs,
         controls,
       };
@@ -332,7 +438,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     const screen = webScreenTitle(info, key);
     const evidenceKey = `${key}::${screen}`;
     currentScreen = screen;
-    emit("STATE", { screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: true });
+    emit("STATE", { screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
     const completedNavigation = pendingNavigation;
     const transitionFrom = webTransitionOrigin(completedNavigation, lastScreen);
     const transitionAction = completedNavigation?.action || lastActionTarget;
@@ -342,15 +448,23 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     lastScreen = screen;
     if (completedNavigation?.prTarget) emit("PR_TARGET", { ...(completedNavigation.targetId ? { targetId: completedNavigation.targetId } : {}), route: completedNavigation.target, status: "observed", screen });
 
-    if (!screenshotFor.has(evidenceKey)) {
-      screenshotFor.add(evidenceKey);
+    const busyRouteEntry = !info.busy
+      ? [...screenshotFor.entries()].find(([, value]) => value.route === key && value.busy)
+      : null;
+    const existingKey = screenshotFor.has(evidenceKey) ? evidenceKey : busyRouteEntry?.[0];
+    const existingScreenshot = existingKey ? screenshotFor.get(existingKey) : null;
+    const shouldCapture = !existingScreenshot || (existingScreenshot.busy && !info.busy);
+    if (shouldCapture) {
+      const screenshotPath = existingScreenshot?.path || path.join(outDir, `state_${screenshotFor.size + 1}_${slug(screen)}.png`);
+      if (existingKey && existingKey !== evidenceKey) screenshotFor.delete(existingKey);
+      screenshotFor.set(evidenceKey, { path: screenshotPath, busy: info.busy, route: key });
       screenCount = screenshotFor.size;
-      await page.screenshot({ path: path.join(outDir, `state_${screenCount}_${slug(screen)}.png`) }).catch(() => {});
+      await page.screenshot({ path: screenshotPath }).catch(() => {});
       // Deterministic per-page detectors run once per distinct screen.
       if (info.textLen < 10) issue("blank_screen", "high", "Page rendered no visible text", screen);
-      else if (info.alertText && ERROR_TEXT_RE.test(info.alertText)) issue("error_surface", "high", `Error shown: ${info.alertText.slice(0, 80)}`, screen);
-      else if (ERROR_TEXT_RE.test(await page.evaluate(() => (document.body?.innerText || "").slice(0, 4000)).catch(() => ""))) {
-        issue("error_surface", "high", "Error text visible on page", screen);
+      else {
+        const errorText = webErrorSurfaceText({ alertText: info.alertText, candidateTexts: info.errorCandidateTexts });
+        if (errorText) issue("error_surface", "high", `Error shown: ${errorText.slice(0, 80)}`, screen);
       }
     }
     return { key, screen, info };
@@ -370,7 +484,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     emit("ACTION", { type: "login", target: "Sign in", screen, narrative: "Filled and submitted the sign-in form with the provided test credentials" });
     actions += 1;
     await submitWebLogin(page).catch(() => false);
-    await page.waitForTimeout(CLICK_SETTLE_MS * 2);
+    await waitForWebStability(page, { timeoutMs: Math.min(5_000, CLICK_SETTLE_MS * 6) });
     // Still on the login form after a submit = the sign-in failed — full stop. (A quiet
     // credential rejection often shows NO other symptom, so this must not be coupled to
     // whether some other detector happened to fire during the attempt.)
@@ -417,7 +531,6 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       // we just left; observe() refines this to the page title once it settles.
       currentScreen = target;
       const nav = await page.goto(start.origin + target, { waitUntil: "domcontentloaded" }).catch((err) => ({ navError: String(err.message || err) }));
-      await page.waitForTimeout(SETTLE_MS);
       if (nav && nav.navError) {
         if (entry.prTarget) emit("PR_TARGET", { ...(entry.targetId ? { targetId: entry.targetId } : {}), ...(entry.pathTarget ? {} : { route: target }), status: "failed", error: nav.navError.slice(0, 160) });
         pendingNavigation = null;
@@ -425,6 +538,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         progress();
         continue;
       }
+      await waitForWebStability(page);
       if (nav && typeof nav.status === "function" && nav.status() === 404) {
         issue("broken_link", "medium", `Broken link: ${target} → 404`, target);
       }
@@ -456,15 +570,17 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
               else if (selector.kind === "label") locator = page.getByText(selector.value, { exact: true }).first();
               else continue;
               if (await locator.isVisible().catch(() => false)) {
-                await locator.click({ timeout: Math.min(step.wait?.timeoutMs || NAV_TIMEOUT_MS, NAV_TIMEOUT_MS) }).catch(() => {});
-                acted = true;
-                break;
+                try {
+                  await locator.click({ timeout: Math.min(step.wait?.timeoutMs || NAV_TIMEOUT_MS, NAV_TIMEOUT_MS) });
+                  acted = true;
+                  break;
+                } catch {}
               }
             }
           }
           if (!acted) { pathError = `Observed control was not found: ${action.target}`; break; }
           pendingNavigation = { action: action.target, fromScreen: beforeScreen };
-          await page.waitForTimeout(CLICK_SETTLE_MS);
+          await waitForWebStability(page);
           ob = await observe() || ob;
           progress();
         }
@@ -502,7 +618,13 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       const n = Math.min(await buttons.count().catch(() => 0), BUTTONS_PER_PAGE);
       for (let i = 0; i < n && actions < maxActions && Date.now() < deadline; i++) {
         const b = buttons.nth(i);
-        const label = ((await b.textContent().catch(() => "")) || (await b.getAttribute("value").catch(() => "")) || "button").trim().slice(0, 40) || "button";
+        const label = webControlLabel({
+          text: await b.textContent().catch(() => ""),
+          value: await b.getAttribute("value").catch(() => ""),
+          ariaLabel: await b.getAttribute("aria-label").catch(() => ""),
+          title: await b.getAttribute("title").catch(() => ""),
+          id: await b.getAttribute("id").catch(() => ""),
+        }).slice(0, 40);
         if (/log ?out|sign ?out|delete|remove/i.test(label)) continue; // don't destroy test state
         const beforeUrl = page.url();
         // Dead-button detection watches four real effect channels — DOM mutations, dialogs,
@@ -521,12 +643,20 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         actions += 1;
         lastActionTarget = label;
         emit("ACTION", { type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
-        await b.click({ timeout: 3000 }).catch(() => {});
-        await page.waitForTimeout(CLICK_SETTLE_MS);
+        let clickSucceeded = false;
+        try {
+          await b.click({ timeout: 3000 });
+          clickSucceeded = true;
+        } catch {}
+        if (!clickSucceeded) {
+          progress();
+          continue;
+        }
+        await waitForWebStability(page);
         if (page.url() !== beforeUrl) {
           await observe();
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-          await page.waitForTimeout(SETTLE_MS);
+          await waitForWebStability(page);
         } else {
           const mutations = await page.evaluate(() => window.__tappMut || 0).catch(() => 0);
           const dialogsAfter = await page.locator("dialog[open], [role=dialog], [aria-modal=true]").count().catch(() => 0);

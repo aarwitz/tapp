@@ -21,6 +21,11 @@ npx -y @aarwitz/tapp qa app.apk --platform android --app-id com.acme.app
 npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
+For focused web evidence, `open` and `tree` accept one semantic interaction plus an async content
+wait: `tapp open https://example.com --tap "Not now" --wait-for "Dashboard"`. Tapp waits for the
+page to stabilize before capturing it and warns honestly if the bounded wait ends while it is still
+loading or changing.
+
 **Seeing the screen, per client:** if you can read image files into your context (Claude
 Code's Read tool, Codex's view-image), open the saved screenshot path the CLI prints —
 that IS the screen. If you cannot (Cursor, VS Code Copilot), connect the MCP server

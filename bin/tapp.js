@@ -424,6 +424,7 @@ switch (command) {
           testEmail: flags.email,
           testPassword: flags.password,
           baselineFindings,
+          surface: "cli",
           onProgress,
         })
       : platform === "android"
@@ -435,6 +436,7 @@ switch (command) {
           testPassword: flags.password,
           baselineFindings,
           clearData: flags["keep-data"] !== true,
+          surface: "cli",
           onProgress,
         })
       : await engine.runQaIos({
@@ -442,6 +444,7 @@ switch (command) {
           maxActions: flags.actions,
           timeout: flags.timeout,
           args: { testEmail: flags.email, testPassword: flags.password, baselineFindings },
+          surface: "cli",
           onProgress,
         });
     process.stderr.write("\n");
@@ -469,13 +472,21 @@ switch (command) {
       }
       try {
         const { inspectWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
-        const snap = await inspectWebPage({ url, timeoutMs: Number(flags.timeout) * 1000 || 15_000 });
+        const snap = await inspectWebPage({
+          url,
+          timeoutMs: Number(flags.timeout) * 1000 || 15_000,
+          tapText: typeof flags.tap === "string" ? flags.tap : "",
+          waitForText: typeof flags["wait-for"] === "string" ? flags["wait-for"] : "",
+        });
         const out = typeof flags.out === "string" ? path.resolve(flags.out) : path.join(tappHome, "shots", `web-${Date.now()}.png`);
         fs.mkdirSync(path.dirname(out), { recursive: true });
         fs.writeFileSync(out, snap.image);
         console.log(`🌐 Opened \`${snap.url}\`\n`);
+        if (typeof flags.tap === "string") console.log(`👆 Tapped \`${flags.tap}\`\n`);
+        if (typeof flags["wait-for"] === "string") console.log(`⏳ Found \`${flags["wait-for"]}\`\n`);
         console.log(engine.formatScreen(snap.screenTitle, snap.elements));
         console.log(`\n📸 Screenshot: ${out}`);
+        if (!snap.settled) console.error("⚠️ Page still showed a loading or changing state when the bounded wait ended.");
       } catch (error) {
         console.error(`❌ ${error.message || String(error)}`);
         process.exit(1);
@@ -533,9 +544,16 @@ switch (command) {
       }
       try {
         const { inspectWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
-        const snap = await inspectWebPage({ url, timeoutMs: Number(flags.timeout) * 1000 || 15_000, screenshot: false });
-        if (flags.json) console.log(JSON.stringify({ platform: "web", url: snap.url, screenTitle: snap.screenTitle, elements: snap.elements }, null, 2));
+        const snap = await inspectWebPage({
+          url,
+          timeoutMs: Number(flags.timeout) * 1000 || 15_000,
+          screenshot: false,
+          tapText: typeof flags.tap === "string" ? flags.tap : "",
+          waitForText: typeof flags["wait-for"] === "string" ? flags["wait-for"] : "",
+        });
+        if (flags.json) console.log(JSON.stringify({ platform: "web", url: snap.url, screenTitle: snap.screenTitle, settled: snap.settled, elements: snap.elements }, null, 2));
         else console.log(engine.formatScreen(snap.screenTitle, snap.elements));
+        if (!snap.settled) console.error("⚠️ Page still showed a loading or changing state when the bounded wait ended.");
       } catch (error) {
         console.error(`❌ ${error.message || String(error)}`);
         process.exit(1);
@@ -1358,9 +1376,11 @@ switch (command) {
 
 Zero-config verbs (agents and humans can just run these — no server, no setup):
   tapp open [target]       Launch the app → screen summary + screenshot saved to a file
+                           (web: --tap TEXT · --wait-for TEXT · --out FILE)
   tapp qa [target]         Autonomous QA → verdict + findings + evidence
                            (--platform ios|android|web · --app-id ID · --apk FILE · --actions N)
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
+                           (web: --tap TEXT · --wait-for TEXT)
   tapp flow run FILE       Replay a committed deterministic Flow (no AI/API key)
   tapp flow validate FILE  Validate a Flow without launching a target
   tapp task validate FILE  Validate a reusable deterministic Task (+ optional UI Map grounding)

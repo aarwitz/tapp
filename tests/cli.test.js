@@ -54,7 +54,18 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-open-web-cli-"));
   const home = path.join(project, "tapp-home");
   const screenshot = path.join(project, "home.png");
-  fs.writeFileSync(path.join(project, "index.html"), "<main><h1>Agent Home</h1><button id='continue'>Continue</button><label>Email<input id='email' type='email'></label></main>");
+  fs.writeFileSync(path.join(project, "index.html"), `
+    <main><h1 id="heading">Loading coach profile…</h1><button id="continue">Continue</button><label>Email<input id="email" type="email"></label></main>
+    <div id="location" role="dialog" aria-modal="true"><button id="dismiss">Not now</button></div>
+    <p id="ready" hidden>Coach Ready</p>
+    <script>
+      setTimeout(() => { document.querySelector('#heading').textContent = 'Agent Home'; }, 900);
+      document.querySelector('#dismiss').addEventListener('click', () => {
+        document.querySelector('#location').remove();
+        setTimeout(() => { document.querySelector('#ready').hidden = false; }, 300);
+      });
+    </script>
+  `);
   const port = 49000 + (process.pid % 1000);
   const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
   try {
@@ -70,7 +81,13 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
     const tree = JSON.parse(execFileSync("node", [tappBin, "tree", url, "--platform", "web", "--json"], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } }));
     assert.equal(tree.platform, "web");
     assert.equal(tree.screenTitle, "Agent Home");
-    assert.deepEqual(tree.elements.map((element) => element.label), ["Continue", "Email"]);
+    assert.equal(tree.settled, true);
+    assert.deepEqual(tree.elements.map((element) => element.label), ["Continue", "Email", "Not now"]);
+
+    const interacted = execFileSync("node", [tappBin, "open", url, "--platform", "web", "--tap", "Not now", "--wait-for", "Coach Ready", "--out", screenshot], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
+    assert.match(interacted, /Tapped `Not now`/);
+    assert.match(interacted, /Found `Coach Ready`/);
+    assert.doesNotMatch(interacted, /still showed a loading state/);
   } finally {
     server.kill();
   }
