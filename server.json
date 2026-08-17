@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aarwitz/tapp",
-  "description": "Autonomous QA for iOS, Android, and web \u2014 agents get a scoped deterministic verdict with evidence",
+  "description": "Autonomous exploration + a deterministic release gate for iOS, Android, and web — agents get findings and evidence, and a pass/fail/inconclusive merge decision",
   "repository": {
     "url": "https://github.com/aarwitz/tapp",
     "source": "github"
   },
-  "version": "0.16.5",
+  "version": "0.17.0-rc.1",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@aarwitz/tapp",
-      "version": "0.16.5",
+      "version": "0.17.0-rc.1",
       "transport": {
         "type": "stdio"
       },

@@ -26,13 +26,21 @@ test("tapp version prints the package version", () => {
   assert.equal(out, rootPackage.version);
 });
 
-test("tapp help leads with the zero-config verbs", () => {
+test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
-  assert.match(out, /Zero-config verbs/);
-  assert.match(out, /tapp qa \[target\]/);
+  // Core leads with the three-word story: explore, prove (contract), gate (ci).
+  assert.match(out, /Core — explore, prove, gate/);
+  assert.match(out, /tapp explore \[target\]/);
+  assert.match(out, /tapp contract run FILE/);
+  assert.match(out, /tapp ci \.\.\./);
+  assert.doesNotMatch(out, /tapp qa \[target\]/); // renamed to explore (qa is a hidden alias)
+  // Primitives, then Advanced (lifecycle/compilers) below.
+  assert.match(out, /Primitives —/);
+  assert.match(out, /tapp tree \[target\]/);
+  assert.match(out, /Advanced —/);
   assert.match(out, /never need to know a bundle id/);
+  // Key verbs remain present (just reorganized).
   assert.match(out, /tapp task validate FILE/);
-  assert.match(out, /tapp contract validate FILE/);
   assert.match(out, /tapp pr plan --base REF/);
   assert.match(out, /tapp init \[repo\]/);
   assert.match(out, /--explore/);
@@ -42,11 +50,26 @@ test("tapp help leads with the zero-config verbs", () => {
   assert.match(out, /tapp actor set NAME/);
 });
 
+test("--help is safe on every verb — shows the reference, writes NOTHING (not even TAPP_HOME)", () => {
+  // A fresh TAPP_HOME that does not exist yet — --help must not create it.
+  const home = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tapp-help-home-")), "home");
+  const env = { ...process.env, TAPP_HOME: home };
+  const explore = execFileSync("node", [tappBin, "explore", "--help"], { encoding: "utf8", env });
+  assert.match(explore, /command reference/);
+  assert.match(explore, /tapp explore \[target\]/);
+  // The dangerous case: init --help must NOT create project artifacts...
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-help-safe-"));
+  execFileSync("node", [tappBin, "init", "--help"], { cwd: dir, encoding: "utf8", env });
+  assert.equal(fs.existsSync(path.join(dir, ".tapp")), false, "init --help must not write project artifacts");
+  // ...and no verb's --help may create TAPP_HOME.
+  assert.equal(fs.existsSync(home), false, "--help must not create TAPP_HOME");
+});
+
 test("tapp doctor keeps the package-only CLI path primary", () => {
   const out = execFileSync("node", [tappBin, "doctor"], { cwd: root, encoding: "utf8" });
   assert.match(out, /Ready\. Start with:/);
   assert.match(out, /@aarwitz\/tapp open \[target\]/);
-  assert.match(out, /@aarwitz\/tapp qa \[target\]/);
+  assert.match(out, /@aarwitz\/tapp explore \[target\]/);
   assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
 });
 
@@ -131,11 +154,11 @@ test("web QA reports placeholder links and dead controls deterministically despi
     const second = JSON.parse(fs.readFileSync(secondReport, "utf8"));
     const identity = (finding) => `${finding.type}|${finding.target}`;
     assert.deepEqual(first.findings.map(identity), second.findings.map(identity));
-    assert.equal(first.verdict, "ready");
-    assert.equal(second.verdict, first.verdict, "unchanged target produces an identical verdict");
-    assert.equal(first.releaseScore, null, "exploratory web has no scalar score to jitter");
-    assert.equal(second.releaseScore, null);
-    assert.deepEqual(second.verdictFindingCounts, first.verdictFindingCounts);
+    assert.equal(first.verdict, undefined, "exploration renders no ship verdict to jitter");
+    assert.equal(first.releaseScore, undefined, "exploratory web has no scalar score to jitter");
+    assert.equal(first.inconclusive, second.inconclusive, "unchanged target produces an identical observation");
+    assert.deepEqual(second.findingCounts, first.findingCounts);
+    assert.deepEqual(second.deterministicFindingCounts, first.deterministicFindingCounts);
     assert.deepEqual(second.sampledFindingCounts, first.sampledFindingCounts);
     assert.ok(first.findings.some((finding) => finding.type === "placeholder_link" && finding.target === "Download App"));
     assert.ok(!first.findings.some((finding) => finding.target === "JavaScript Help"), "action-marked hash link is not called dead");
@@ -288,7 +311,7 @@ test("tapp baseline import and CI install complete the reviewable repository pat
   const model = { kind: "tapp-application-model", targets: [target], actors: [], artifacts: { contracts: [{ name: "homeWorks", path: ".tapp/contracts/home.contract.ts", scope: ".", platforms: ["web"] }] } };
   fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), JSON.stringify(model));
   const gateReport = path.join(project, "gate-report.json");
-  fs.writeFileSync(gateReport, JSON.stringify({ platform: "web", targetKey: target.id, verdict: "ready", inconclusive: false, findings: [], screens: ["Home"], screensExplored: 1, actionsPerformed: 2, flows: [], scenarios: [], contracts: [{ name: "Home works", passed: true }], gate: { failed: false, reasons: [] } }));
+  fs.writeFileSync(gateReport, JSON.stringify({ platform: "web", targetKey: target.id, inconclusive: false, findings: [], screens: ["Home"], screensExplored: 1, actionsPerformed: 2, flows: [], scenarios: [], contracts: [{ name: "Home works", passed: true }], gate: { failed: false, outcome: "pass", reasons: [] } }));
   const baseline = execFileSync("node", [tappBin, "baseline", "create", project, "--platform", "web", "--from", gateReport], { cwd: root, encoding: "utf8" });
   assert.match(baseline, /Conclusive baseline established/);
   const installed = execFileSync("node", [tappBin, "ci", "install", project, "--action-ref", "aarwitz/tapp@v0.13.1"], { cwd: root, encoding: "utf8" });
@@ -457,7 +480,7 @@ test("tapp init discovers, validates, and fault-checks a grounded cross-actor co
     assert.equal(fault?.status, 1);
     assert.match(String(fault?.stdout || ""), /Release Contracts — 🔴 1\/1 failed/);
     const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-    assert.equal(report.verdict, "ready", "single-user exploration remains green under the cross-account-only defect");
+    assert.equal(report.findingCounts.total, 0, "single-user exploration surfaced no findings; only the cross-account contract failed");
     assert.equal(report.contracts[0].passed, false);
     assert.equal(report.contracts[0].steps.find((step) => step.status === "fail").actor, "bob");
     assert.equal(report.gate.failed, true);
@@ -511,7 +534,7 @@ test("tapp init discovers, validates, and fault-checks a durable checkout contra
   assert.equal(fault?.status, 1);
   assert.match(String(fault?.stdout || ""), /Release Contracts — 🔴 1\/1 failed/);
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-  assert.equal(report.verdict, "ready", "generic crawling remains green when confirmation succeeds but durable state is lost");
+  assert.equal(report.findingCounts.total, 0, "generic crawling surfaced no findings; only the durable-state contract failed");
   assert.equal(report.contracts[0].passed, false);
   assert.equal(report.contracts[0].steps.find((step) => step.status === "fail").target, "Tapp Pro Plan");
   assert.equal(report.prPlan.maintenanceCandidates[0].proposal.kind, "task-maintenance-candidate");
@@ -658,17 +681,18 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     });
     const init = await waitFor(1);
     assert.equal(init.result.serverInfo.name, "tapp");
-    assert.match(init.result.serverInfo.version, /^\d+\.\d+\.\d+$/, "handshake reports a real version");
+    assert.match(init.result.serverInfo.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "handshake reports a real version");
     send({ jsonrpc: "2.0", method: "notifications/initialized" });
     send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     const tools = await waitFor(2);
     const names = tools.result.tools.map((t) => t.name);
     assert.ok(names.length >= 15, `expected a full toolset, got ${names.length}`);
-    for (const required of ["tapp_run_qa", "tapp_build", "tapp_open_app", "tapp_session_act", "tapp_scenario_run", "tapp_init", "tapp_actor_config", "tapp_release_plan", "tapp_ci_setup", "tapp_ui_map", "tapp_task", "tapp_release_contract", "tapp_pr_plan"]) {
+    for (const required of ["tapp_explore", "tapp_build", "tapp_open_app", "tapp_session_act", "tapp_scenario_run", "tapp_init", "tapp_actor_config", "tapp_release_plan", "tapp_ci_setup", "tapp_ui_map", "tapp_task", "tapp_release_contract", "tapp_pr_plan"]) {
       assert.ok(names.includes(required), `${required} present`);
     }
-    const qa = tools.result.tools.find((t) => t.name === "tapp_run_qa");
-    assert.ok(qa.inputSchema.properties.androidAppId, "Android QA target is public");
+    assert.ok(!names.includes("tapp_run_qa"), "the run_qa name is renamed to tapp_explore (alias still dispatches)");
+    const qa = tools.result.tools.find((t) => t.name === "tapp_explore");
+    assert.ok(qa.inputSchema.properties.androidAppId, "Android exploration target is public");
     const flow = tools.result.tools.find((t) => t.name === "tapp_flow_run");
     assert.ok(flow.inputSchema.properties.androidAppId, "Android Flow override is public");
     const initTool = tools.result.tools.find((t) => t.name === "tapp_init");

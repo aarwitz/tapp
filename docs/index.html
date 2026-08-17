@@ -193,18 +193,24 @@
 <section>
   <div class="wrap">
     <span class="tag">Platforms</span>
-    <h2>Browser first. One release contract across every integration.</h2>
+    <h2>One engine, every surface. One release contract across integrations.</h2>
     <p class="lead">
-      The browser is the launch experience and web is the first market lane. CLI, MCP, VS Code,
-      iOS, Android, desktop Coverage, and CI use the same repository artifacts and evidence
-      protocol; legacy desktop import/run orchestration is still being migrated.
+      The npm package — CLI, MCP, and the GitHub Action — is the launch surface. VS Code, iOS,
+      Android, the optional browser Studio, desktop Coverage, and CI all use the same repository
+      artifacts and evidence protocol.
     </p>
     <div class="grid">
       <div class="card">
+        <div class="icon">📦</div>
+        <h3>CLI + MCP (npx)</h3>
+        <p><code>npx -y @aarwitz/tapp explore</code> — no server, account, or config. Agents call the
+        same tools over MCP; the same engine gates every PR as a portable GitHub Action.</p>
+      </div>
+      <div class="card">
         <div class="icon">📱</div>
-        <h3>Browser Release Studio</h3>
-        <p>Import an owned checkout, build and explore the real web app, inspect its UI Map, review
-        business contracts, validate without AI, establish a baseline, and preview CI.</p>
+        <h3>Browser Release Studio (optional)</h3>
+        <p>A local workspace: import an owned checkout, build and explore the real web app, inspect
+        its UI Map, review business contracts, validate without AI, establish a baseline, preview CI.</p>
       </div>
       <div class="card">
         <div class="icon">🌐</div>
@@ -243,9 +249,9 @@
         <p>Interactive driving — the Playwright loop. Tap, type, swipe, back, wait.</p>
       </div>
       <div class="card">
-        <div class="icon">🧪</div>
-        <h3><code>tapp_run_qa</code></h3>
-        <p>Autonomous QA — explores the app (iOS bundle id or web URL), returns <code>{verdict, confidence, findings[]}</code>.</p>
+        <div class="icon">🔭</div>
+        <h3><code>tapp_explore</code></h3>
+        <p>Autonomous exploration — explores the app (iOS bundle id or web URL), returns an observation <code>{findings[], coverage, inconclusive}</code>. Not a ship verdict.</p>
       </div>
       <div class="card">
         <div class="icon">🔁</div>
@@ -268,26 +274,27 @@
 
 <section>
   <div class="wrap">
-    <span class="tag">The verdict you can trust</span>
+    <span class="tag">Observe, then judge</span>
     <h2>Deterministic. No LLM in the run loop.</h2>
     <p class="lead">
-      tapp explores like a user and detects crashes, failed sign-ins, dead buttons, stuck loading
+      tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
       screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
-      links — then commits to a verdict. Same evidence in, same verdict out. A shallow run is never
-      <code>ready</code>. Absence of findings is not a pass.
+      links. Exploration <strong>observes</strong> (findings + evidence, never a ship verdict). The
+      <strong>gate</strong> judges: the same evidence + contracts + baseline always produce the same
+      outcome. A shallow run is <code>inconclusive</code>, never a pass — absence of findings is not a pass.
     </p>
     <div class="verdicts">
       <div class="verdict ready">
-        <div class="badge">🟢 ready</div>
-        <p>Genuinely explored, no blockers found.</p>
-      </div>
-      <div class="verdict caution">
-        <div class="badge">🟡 caution</div>
-        <p>Issues to review, or the run couldn't see enough.</p>
+        <div class="badge">🟢 pass</div>
+        <p>Required deterministic checks ran and passed.</p>
       </div>
       <div class="verdict blocked">
-        <div class="badge">🔴 blocked</div>
-        <p>A release-blocking issue was found.</p>
+        <div class="badge">🔴 fail</div>
+        <p>A deterministic violation or regression was observed.</p>
+      </div>
+      <div class="verdict caution">
+        <div class="badge">🟡 inconclusive</div>
+        <p>Required evidence couldn't be obtained — fails closed.</p>
       </div>
     </div>
   </div>
@@ -310,10 +317,10 @@
         <li>Shows exact coverage boundaries, screenshots, and deterministic replay evidence</li>
       </ul>
       <div class="mini-comment">
-        <div class="title">🟢 SHIP-READY</div>
-        <div class="row"><span>Release score</span><span>100</span></div>
+        <div class="title">🟢 PASS</div>
         <div class="row"><span>Screens explored</span><span>4</span></div>
         <div class="row"><span>Findings</span><span>0</span></div>
+        <div class="row"><span>Contracts</span><span>3 / 3</span></div>
         <div class="row"><span>Gate</span><span>PASS</span></div>
       </div>
     </div>

@@ -11,8 +11,8 @@ import { semanticUiKey } from "./ui-map.js";
 
 const PLATFORMS = new Set(["ios", "android", "web"]);
 const CRITICALITIES = new Set(["low", "medium", "high", "critical"]);
-const CONTRACT_AUTHORING_SPECIFIERS = new Set(["@aarwitz/tapp/contracts", "runtapp/contracts", "tapp-mcp/contracts"]);
-const CONTRACT_AUTHORING_IMPORT = /(["'])(?:@aarwitz\/tapp|runtapp|tapp-mcp)\/contracts\1/g;
+const CONTRACT_AUTHORING_SPECIFIERS = new Set(["@aarwitz/tapp/contracts"]);
+const CONTRACT_AUTHORING_IMPORT = /(["'])@aarwitz\/tapp\/contracts\1/g;
 const authoringUrl = pathToFileURL(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "contract-authoring.js")).href;
 
 function expectationAction(expectation) {
@@ -86,7 +86,7 @@ function rewriteAuthoringImport(source, contractPath) {
   }
   const imports = [...source.matchAll(/(?:from\s*|import\s*)["']([^"']+)["']/g)].map((match) => match[1]);
   const unsupported = imports.filter((specifier) => !CONTRACT_AUTHORING_SPECIFIERS.has(specifier));
-  if (unsupported.length) throw new Error(`Release contract imports are limited to @aarwitz/tapp/contracts (legacy runtapp/contracts and tapp-mcp/contracts are also accepted; found ${unsupported.join(", ")})`);
+  if (unsupported.length) throw new Error(`Release contract imports are limited to @aarwitz/tapp/contracts (found ${unsupported.join(", ")})`);
   const output = ts.transpileModule(source, {
     fileName: contractPath,
     compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: true },

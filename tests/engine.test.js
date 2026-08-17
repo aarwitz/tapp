@@ -13,6 +13,11 @@ test("engine is import-safe and exports the shared surface", () => {
     "startMcpServer",
     "runQaIos",
     "runQaWeb",
+    "runQaAndroid",
+    "runExploreTarget",
+    "startManagedWebTarget",
+    "stopManagedWebTarget",
+    "buildAndroidApp",
     "captureUiTree",
     "openApp",
     "ensureBootedSim",
@@ -28,6 +33,53 @@ test("engine is import-safe and exports the shared surface", () => {
   ]) {
     assert.equal(typeof engine[name], "function", `${name} exported`);
   }
+});
+
+test("runExploreTarget refuses to guess without an application model", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-explore-nomodel-"));
+  const r = await engine.runExploreTarget({ projectDir: dir });
+  assert.ok(r.error && /application model/i.test(r.error), r.error);
+});
+
+test("runExploreTarget surfaces an unreadable application model instead of falling back", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-explore-badmodel-"));
+  fs.mkdirSync(path.join(dir, ".tapp"));
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), "{ not json");
+  const r = await engine.runExploreTarget({ projectDir: dir });
+  assert.ok(r.error && /unreadable/i.test(r.error), r.error);
+});
+
+test("runExploreTarget stops (does not silently pick) when the model target is ambiguous", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-explore-ambiguous-"));
+  fs.mkdirSync(path.join(dir, ".tapp"));
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), JSON.stringify({
+    kind: "tapp-application-model",
+    application: { name: "multi", platforms: ["web"], targetIds: ["a", "b"] },
+    targets: [
+      { id: "a", platform: "web", name: "A", sourcePath: "a", runtime: { ownedUrl: null } },
+      { id: "b", platform: "web", name: "B", sourcePath: "b", runtime: { ownedUrl: null } },
+    ],
+    requirements: [],
+  }));
+  const r = await engine.runExploreTarget({ projectDir: dir });
+  assert.ok(r.error && /select one with --target/i.test(r.error), r.error);
+});
+
+test("runExploreTarget requires a confirmed Android application id before building", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-explore-android-"));
+  fs.mkdirSync(path.join(dir, ".tapp"));
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), JSON.stringify({
+    kind: "tapp-application-model",
+    application: { name: "droid", platforms: ["android"], targetIds: ["app"] },
+    targets: [
+      { id: "app", platform: "android", name: "app", sourcePath: "app",
+        build: { tool: "gradle-wrapper", projectDir: ".", task: ":app:assembleDebug" },
+        runtime: { applicationId: null } },
+    ],
+    requirements: [],
+  }));
+  const r = await engine.runExploreTarget({ projectDir: dir });
+  assert.ok(r.error && /application id/i.test(r.error), r.error);
 });
 
 test("QA next steps match the package-only surface without leaking MCP calls", () => {
@@ -82,7 +134,7 @@ test("remote AI requires explicit opt-in — an ambient API key is not consent",
   assert.equal(engine.remoteAiOptedIn({ ANTHROPIC_API_KEY: "sk", TAPP_ENABLE_REMOTE_AI: "1" }), true);
   assert.equal(engine.remoteAiOptedIn({ TAPP_ENABLE_REMOTE_AI: "true" }), true);
   assert.equal(engine.remoteAiOptedIn({ TAPP_SUBSCRIPTION_TOKEN: "tok" }), true, "Tapp subscription token is explicit");
-  assert.equal(engine.remoteAiOptedIn({ AUTOTAP_SUBSCRIPTION_TOKEN: "tok" }), true, "legacy subscription token remains compatible");
+  assert.equal(engine.remoteAiOptedIn({ AUTOTAP_SUBSCRIPTION_TOKEN: "tok" }), false, "the retired AUTOTAP_ token is no longer honored");
   assert.equal(engine.remoteAiOptedIn({}), false);
 });
 

@@ -15,7 +15,7 @@ export function targetSlug(value) {
   return slug || "target";
 }
 
-export function selectApplicationTarget(model, { platform = "", target = "" } = {}) {
+export function selectApplicationTarget(model, { platform = "", target = "", useDefault = false } = {}) {
   if (model?.kind !== "tapp-application-model" || !Array.isArray(model.targets)) {
     throw new Error("Expected a Tapp application model; run tapp init first");
   }
@@ -26,6 +26,14 @@ export function selectApplicationTarget(model, { platform = "", target = "" } = 
     const normalized = requested.replaceAll("\\", "/").replace(/^\.\//, "");
     candidates = candidates.filter((item) => [item.id, item.name, item.sourcePath].some((value) => String(value || "").replaceAll("\\", "/") === normalized));
   }
+  // Target-resolution ladder (ADR-0005 §5): explicit narrowing (above) → exactly one candidate →
+  // the model's recorded default target (opt-in: `explore` uses it, but the gate/baseline stay
+  // strict so CI never silently picks a target) → otherwise list the choices and stop.
+  if (candidates.length > 1 && useDefault && !requested) {
+    const def = String(model.application?.defaultTargetId || "").trim();
+    const chosen = def && candidates.find((item) => item.id === def);
+    if (chosen) return chosen;
+  }
   if (candidates.length !== 1) {
     const summary = candidates.length ? candidates : model.targets.filter((item) => !selectedPlatform || item.platform === selectedPlatform);
     throw new Error(candidates.length
@@ -33,6 +41,22 @@ export function selectApplicationTarget(model, { platform = "", target = "" } = 
       : `No application target matches${selectedPlatform ? ` platform '${selectedPlatform}'` : ""}${requested ? ` and '${requested}'` : ""}`);
   }
   return candidates[0];
+}
+
+// For a bare `tapp explore` in a repo: if the model's default target is a web target with a recorded
+// owned URL, return that URL so exploration hits it directly (the `init --url X` → `explore` path).
+// Targets that must be built/started from source need the prepare pipeline (wired separately), so
+// this returns null and the caller falls back to its normal target resolution.
+export function defaultWebExploreUrl(model) {
+  let target;
+  try {
+    target = selectApplicationTarget(model, { useDefault: true });
+  } catch {
+    return null; // no model, or ambiguous with no recorded default
+  }
+  if (target?.platform !== "web") return null;
+  const url = String(target.runtime?.ownedUrl || "");
+  return /^https?:\/\//i.test(url) ? url : null;
 }
 
 export function baselinePathForTarget(projectDir, target) {
@@ -52,9 +76,15 @@ export function validateBaselineReport(report, { platform, targetId } = {}) {
   const reportTarget = String(report.targetKey || report.baselineIdentity?.targetId || "").trim();
   if (!reportTarget) throw new Error("Baseline source is missing its targetKey; Tapp will not guess which same-platform application produced the evidence");
   if (reportTarget !== targetId) throw new Error(`Baseline target '${reportTarget}' does not match application-model target '${targetId}'`);
-  if (report.inconclusive === true) throw new Error("An inconclusive run cannot become a trusted baseline");
-  if (report.verdict === "blocked") throw new Error("A blocked run cannot become a trusted baseline");
-  if (!report.gate || report.gate.failed !== false) throw new Error("Baseline creation requires a successful portable gate report (gate.failed must be false)");
+  // A trusted baseline must be a clean PASS. The gate outcome is the single authoritative signal
+  // (ADR-0005) — reject fail, inconclusive, error, or a missing/unknown outcome, naming which.
+  const outcome = report.gate?.outcome;
+  if (outcome !== "pass") {
+    const why = outcome === "inconclusive" ? "An inconclusive run"
+      : outcome === "fail" ? "A failing run"
+      : `A non-passing run (${outcome || "no gate outcome"})`;
+    throw new Error(`${why} cannot become a trusted baseline; only a passing gate run can`);
+  }
   for (const collection of ["flows", "scenarios", "contracts"]) {
     const failed = (report[collection] || []).filter((item) => item.passed !== true);
     if (failed.length) throw new Error(`Baseline source contains ${failed.length} failed ${collection}`);
@@ -64,7 +94,7 @@ export function validateBaselineReport(report, { platform, targetId } = {}) {
     platform,
     targetId,
     conclusive: true,
-    verdict: report.verdict,
+    outcome: report.gate?.outcome ?? null,
     screensExplored: Number(report.screensExplored || report.screens.length),
     actionsPerformed: Number(report.actionsPerformed || 0),
     suite: {

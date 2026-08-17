@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.17.0-rc.1
+
+**Observe/judge split (ADR-0005) — a breaking rename + gate-contract change.**
+
+- **`qa` → `explore`.** The exploration verb is now `explore` (`qa` stays a hidden alias). The MCP
+  tool `tapp_run_qa` is renamed `tapp_explore` (old name retained as a dispatch alias).
+- **Exploration is scoreless.** `explore` returns an *observation* (`kind: "tapp-exploration-run"` —
+  findings each with an `authority` tag, coverage, `inconclusive`), never a ship verdict, release
+  score, or confidence. The retired `ready/caution/blocked` + `SHIP-READY` + 0–100 score are gone.
+- **The gate renders the outcome.** The deterministic gate returns `pass | fail | inconclusive` with
+  exact exit codes — `pass` 0 · `fail` 1 · usage/infra `error` 2 · `inconclusive` 3 (fails closed;
+  precedence `fail > inconclusive > pass`). It applies versioned policy to deterministic finding
+  counts + coverage + selected Flows/Scenarios/contracts + (when available) a target-scoped baseline;
+  it no longer consumes a score. GitHub Action output renamed `verdict` → `outcome`.
+- **Structural evidence authority.** A suite whose only issue is a model assertion (`assert_ai`) is
+  `inconclusive` (blocks, fails closed) — never a silent pass, never a fake deterministic fail.
+- **Source-preparing bare `explore`.** A bare `explore` in an initialized repo resolves the model's
+  default target and prepares it from source before exploring: a web target's recorded owned URL is
+  explored directly; a Tapp-managed web target is built/started, waited for, and always stopped; an
+  iOS target is built + installed on the simulator; an Android target is built to an APK + installed.
+  `--platform`/`--target` narrow the selection. It stays an observation — no verdict, no UI-Map write.
+- **`--fail-on blocked` → `--fail-on absolute`.** The gate policy value is renamed (`gate` default,
+  `absolute`, `any`).
+- **`tapp_flow_generate` is a proposal.** Generated Flows land under `.tapp/proposals/flows/` as
+  untrusted drafts; they must be replayed on a real target and explicitly promoted before use.
+- **Help is a Core → Primitives → Advanced hierarchy.** `tapp help` leads with `explore`, `contract`,
+  `ci` (Core), then `open`/`tree` (Primitives), then repository/lifecycle/compiler verbs (Advanced).
+- **Retired pre-rename compatibility (breaking).** The `.autotap`/`.autotap.yml` read path, all
+  `AUTOTAP_*` environment variables, and the `runtapp/contracts` + `tapp-mcp/contracts` authoring
+  specifiers are removed. The only supported names are `.tapp`/`.tapp.yml`/`TAPP_*`/`@aarwitz/tapp/contracts`.
+- **Publication guard.** `tools/sync-public.sh --check` stages the public tree and verifies it
+  (client-sensitive strings, relative doc links, npm package contents, clean tarball install)
+  without pushing; the same battery runs before every real sync.
+- **Safe `--help`.** `--help` on any verb prints the reference and writes nothing — not even
+  `TAPP_HOME` (previously `init --help` created artifacts).
+
 ## 0.16.5
 
 - **Scoreless exploratory web QA:** web reports concrete coverage, deterministic verdict findings,

@@ -109,7 +109,7 @@ function assetPath(pathname) {
 }
 
 function captureRoot() {
-  return path.join(process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp"), "captures");
+  return path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "captures");
 }
 
 function capturePath(captureId, relative = "report.html") {

@@ -12,7 +12,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { parseOcqaMarkers, buildQaReport, computeRegression, qaScoreLabel, verdictBadge } from "./report.js";
+import { parseOcqaMarkers, buildQaReport, computeRegression, observationBadge, observationSummary } from "./report.js";
 import { existingProjectArtifactPath, projectArtifactDirectory } from "./project-paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,10 +21,10 @@ const repoRoot = path.resolve(__dirname, "../..");
 const scriptsDir = path.join(repoRoot, "scripts");
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
 // The old alias remains a read-only fallback; unset repository development stays local.
-const tappHome = (process.env.TAPP_HOME || process.env.AUTOTAP_HOME || "").trim();
+const tappHome = (process.env.TAPP_HOME || "").trim();
 const capturesDir = tappHome ? path.join(tappHome, "captures") : path.join(repoRoot, "captures");
 const MAX_OUTPUT_CHARS = 60_000;
-const requiredAuthToken = (process.env.TAPP_MCP_TOKEN || process.env.AUTOTAP_MCP_TOKEN || "").trim();
+const requiredAuthToken = (process.env.TAPP_MCP_TOKEN || "").trim();
 
 function clampOutput(value, maxChars = MAX_OUTPUT_CHARS) {
   if (typeof value !== "string") {
@@ -1066,7 +1066,7 @@ export async function captureScreenshotImage(maxWidth) {
 // change data-handling behavior. A subscription token is an explicit tapp choice, and
 // explicitly-invoked AI tools (tapp_flow_generate, assert_ai) carry their own consent.
 export function remoteAiOptedIn(env = process.env) {
-  if ((env.TAPP_SUBSCRIPTION_TOKEN || env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim()) return true;
+  if ((env.TAPP_SUBSCRIPTION_TOKEN || "").trim()) return true;
   return ["1", "true", "yes"].includes(String(env.TAPP_ENABLE_REMOTE_AI || "").trim().toLowerCase());
 }
 
@@ -1078,9 +1078,9 @@ export function isInsideDir(root, p) {
 }
 
 function resolveModelBackend() {
-  const token = (process.env.TAPP_SUBSCRIPTION_TOKEN || process.env.AUTOTAP_SUBSCRIPTION_TOKEN || "").trim();
+  const token = (process.env.TAPP_SUBSCRIPTION_TOKEN || "").trim();
   if (token) {
-    const base = (process.env.TAPP_PROXY_URL || process.env.AUTOTAP_PROXY_URL || "http://localhost:8787").replace(/\/$/, "");
+    const base = (process.env.TAPP_PROXY_URL || "http://localhost:8787").replace(/\/$/, "");
     const url = base.endsWith("/v1/messages") ? base : base + "/v1/messages";
     return { url, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } };
   }
@@ -1092,7 +1092,7 @@ function resolveModelBackend() {
 }
 
 async function callModel(backend, { system, userText, model, maxTokens = 1500 }) {
-  const body = JSON.stringify({ model: model || process.env.TAPP_FLOW_MODEL || process.env.AUTOTAP_FLOW_MODEL || "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] });
+  const body = JSON.stringify({ model: model || process.env.TAPP_FLOW_MODEL || "claude-sonnet-4-6", max_tokens: maxTokens, system, messages: [{ role: "user", content: userText }] });
   const res = await fetch(backend.url, { method: "POST", headers: backend.headers, body });
   if (!res.ok) return { error: `model HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
   const data = await res.json();
@@ -1307,7 +1307,7 @@ export function qaNextSteps(report, surface = "mcp") {
   if (surface === "cli") {
     const next = [];
     if (report?.findings?.length) next.push("inspect the evidence with `tapp report latest`");
-    next.push("re-run with `--baseline <report.json>` to gate a fix");
+    next.push("re-run with `--baseline <report.json>` to compare a fix (then `tapp ci` to gate it)");
     next.push("replay a committed journey with `tapp flow run <file>`");
     return next;
   }
@@ -1320,19 +1320,20 @@ export function qaNextSteps(report, surface = "mcp") {
 
 function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, uiMap, surface = "mcp" } = {}) {
   const c = report.findingCounts || {};
-  const badge = verdictBadge(report);
+  const badge = observationBadge(report);
   const sevBits = ["critical", "high", "medium", "low"]
     .map((k) => (c[k] ? `${SEV[k]} ${c[k]} ${k}` : null))
     .filter(Boolean)
     .join(", ");
   const L = [];
-  L.push(`### 🧪 QA complete — ${badge} · ${qaScoreLabel(report)}${bundleId ? `\n\`${bundleId}\`` : ""}`);
+  // Exploration observes; it does not render a ship verdict. The release decision lives in the gate.
+  L.push(`### 🔭 Exploration complete — ${badge} · ${observationSummary(report)}${bundleId ? `\n\`${bundleId}\`` : ""}`);
   L.push("");
   L.push(report.headline);
   L.push("");
   L.push(`**Coverage** — ${report.screensExplored} screens · ${report.actionsPerformed} actions${timedOut ? " · ⏱️ hit time limit" : ""}`);
   if (report.platform === "web") {
-    L.push(`**Verdict basis** — ${report.verdictFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory`);
+    L.push(`**Deterministic basis** — ${report.deterministicFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory`);
   }
   if (uiMap) L.push(`**UI Map** — ${uiMap.nodeCount} states · ${uiMap.edgeCount} transitions · ${uiMap.controlCount} semantic controls · ${uiMap.path}`);
   if (reportHtml) L.push(`**Evidence** — 📄 ${reportHtml} (screenshots of every screen + findings, shareable)`);
@@ -1355,10 +1356,11 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     }
   }
   if (regression && regression.counts) {
-    const g = regression.gate || {};
+    // Exploration reports the comparison (new/persisting/resolved) only — never a gate pass/fail.
+    // The merge decision is the gate's job (tapp ci), not exploration's (ADR-0005).
     L.push("");
     L.push(
-      `**Since last run** — +${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved · gate ${g.failed ? "🔴 FAIL" : "🟢 PASS"}`
+      `**Since last run** — +${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved (comparison only — run \`tapp ci\` to gate)`
     );
   }
   if (inputHint) {
@@ -1690,8 +1692,8 @@ export async function runInitExploration({
     merged.provenance.lastRun = {
       id: qa.structured.capture?.id || observed.provenance?.runIds?.at(-1) || "",
       platform: selected,
-      verdict: qa.structured.verdict,
       inconclusive: qa.structured.inconclusive === true,
+      findingCount: qa.structured.findingCounts?.total ?? 0,
       statesExplored: Number(qa.structured.screensExplored || merged.nodes.length),
       actionsPerformed: Number(qa.structured.actionsPerformed || 0),
       observedAt: observed.provenance?.lastObservedAt || new Date().toISOString(),
@@ -1707,8 +1709,8 @@ export async function runInitExploration({
           resolution: targetResolution,
           evidence: {
             captureId: qa.structured.capture?.id || "",
-            verdict: qa.structured.verdict,
             inconclusive: qa.structured.inconclusive === true,
+            findingCount: qa.structured.findingCounts?.total ?? 0,
             observedAt: observed.provenance?.lastObservedAt || new Date().toISOString(),
           },
         },
@@ -1721,7 +1723,6 @@ export async function runInitExploration({
         controlCount: merged.nodes.reduce((total, node) => total + node.controls.length, 0),
       },
       mapDiff: previous ? diffUiMaps(previous, observed, { comparableFullSweep: false }) : null,
-      verdict: qa.structured.verdict,
       inconclusive: qa.structured.inconclusive === true,
       findings: qa.structured.findings || [],
       capture: qa.structured.capture,
@@ -1733,6 +1734,91 @@ export async function runInitExploration({
   } catch (error) {
     return { error: `Could not ground repository UI Map: ${error.message || String(error)}` };
   }
+}
+
+/**
+ * Source-preparing bare explore (ADR-0005 §5): a `tapp explore` with no explicit target in a
+ * repository with an application model. Selects the model's default target and prepares it from
+ * source before exploring — managed web is built/started/waited-for and always stopped again,
+ * iOS is built + installed on the simulator, Android is built to an APK + installed — then runs
+ * the ordinary exploration engine. Returns the same `{ text, structured, error }` shape as the
+ * direct runQa* entrypoints, so the CLI/MCP surfaces print it unchanged. This is an OBSERVATION:
+ * no verdict, no UI-map write (that is `runInitExploration`'s job); the gate still judges.
+ */
+export async function runExploreTarget({
+  projectDir,
+  platform = "",
+  target = "",
+  maxActions,
+  timeout,
+  testEmail,
+  testPassword,
+  baselineFindings,
+  surface = "cli",
+  onProgress = () => {},
+  onStatus = () => {},
+} = {}) {
+  let root;
+  try { root = fs.realpathSync(path.resolve(projectDir || process.cwd())); }
+  catch { return { error: `Repository directory not found: ${projectDir || process.cwd()}` }; }
+
+  const modelPath = existingProjectArtifactPath(root, "application-model.json");
+  if (!fs.existsSync(modelPath)) {
+    return { error: "No application model found — run `tapp init` first, or pass an explicit target (a bundle id, a path/to/App.app, a repo dir, --app-id/--apk, or an http(s) URL)." };
+  }
+  let model;
+  try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
+  catch (error) { return { error: `Application model is unreadable: ${error.message || String(error)}` }; }
+
+  const { selectApplicationTarget } = await import("./ci-setup.js");
+  let selected;
+  try { selected = selectApplicationTarget(model, { platform, target, useDefault: true }); }
+  catch (error) { return { error: error.message || String(error) }; }
+  const selectedPlatform = selected.platform;
+
+  if (selectedPlatform === "web") {
+    const ownedUrl = String(selected.runtime?.ownedUrl || "").trim();
+    if (/^https?:\/\//i.test(ownedUrl)) {
+      onStatus(`Exploring the owned URL from the application model: ${ownedUrl}`);
+      return runQaWeb({ url: ownedUrl, maxActions, timeout, testEmail, testPassword, baselineFindings, surface, onProgress });
+    }
+    // Tapp-managed: build/start the repo's web target, wait for readiness, and ALWAYS stop it.
+    onStatus(`Preparing the managed web runtime for ${selected.name}…`);
+    const started = await startManagedWebTarget({ root, requestedTarget: selected.sourcePath || selected.name || "", timeout, onStatus });
+    if (started.error) return started;
+    try {
+      return await runQaWeb({ url: started.url, maxActions, timeout, testEmail, testPassword, baselineFindings, surface, onProgress });
+    } finally {
+      await stopManagedWebTarget(started);
+      onStatus("Stopped the managed web runtime.");
+    }
+  }
+
+  if (selectedPlatform === "android") {
+    const appId = String(selected.runtime?.applicationId || "").trim();
+    if (!appId) return { error: `The Android target '${selected.name}' has no confirmed application id — confirm it and rerun \`tapp init\`, or pass --app-id.` };
+    const task = selected.build?.task || "assembleDebug";
+    onStatus(`Building the Android APK (${task})…`);
+    const built = await buildAndroidApp({
+      projectDir: root,
+      gradleProjectDir: path.resolve(root, selected.build?.projectDir || "."),
+      moduleDir: path.resolve(root, selected.sourcePath || "."),
+      task,
+    });
+    if (built.error) return built;
+    onStatus(`Installing and exploring ${appId}…`);
+    return runQaAndroid({ appId, apkPath: built.apkPath, maxActions, timeout, testEmail, testPassword, baselineFindings, surface, onProgress });
+  }
+
+  // iOS
+  if (process.platform !== "darwin") return { error: "iOS exploration requires macOS with Xcode." };
+  const scheme = selected.build?.scheme || selected.build?.proposedScheme || "";
+  const configuration = selected.build?.configuration || "Debug";
+  onStatus(`Building and installing the iOS app${scheme ? ` (scheme ${scheme})` : ""}…`);
+  const resolved = await resolveAppTarget(root, { cwd: root, onStatus, scheme, configuration });
+  if (resolved.error) return resolved;
+  if (resolved.via) onStatus(`Target ${resolved.bundleId} — ${resolved.via}`);
+  return runQaIos({ bundleId: resolved.bundleId, maxActions, timeout, args: { testEmail, testPassword, baselineFindings }, surface, onProgress });
 }
 
 function openLocalPort() {
@@ -1946,7 +2032,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Build the user's iOS app for the simulator from an Xcode project/workspace (auto-detects the " +
         "container and scheme under projectDir, default cwd), install it on the booted simulator, and " +
-        "return the bundle id. Use before tapp_run_qa / tapp_open_app when the app isn't installed yet — " +
+        "return the bundle id. Use before tapp_explore / tapp_open_app when the app isn't installed yet — " +
         "no bundle id needed up front.",
       inputSchema: {
         type: "object",
@@ -2068,22 +2154,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
-      name: "tapp_run_qa",
-      title: "Run autonomous QA",
+      name: "tapp_explore",
+      title: "Explore (autonomous)",
       description:
-        "Run autonomous QA against iOS (appBundleId), Android (androidAppId), OR a web app " +
-        "(url — beta, requires Playwright installed) and return a structured " +
-        "QA verdict. Use ONLY when the user wants a QA assessment / to find bugs / a verdict — this " +
+        "Autonomously explore iOS (appBundleId), Android (androidAppId), OR a web app " +
+        "(url — beta, requires Playwright installed) and return a structured EXPLORATION OBSERVATION. " +
+        "Exploration OBSERVES — it surfaces findings + coverage + evidence; it does NOT render a ship " +
+        "verdict or score. To gate a merge, run the deterministic gate (contracts + baseline via CI). " +
+        "Use when the user wants to find bugs / observe what breaks — this " +
         "runs for MINUTES exploring the whole app. Do NOT use it just to view, screenshot, or reach a specific " +
         "screen — use tapp_open_app (launch + screenshot) or a session for that. Tapp explores the app " +
         "like a tester (taps, types, navigates, scrolls) and detects real issues — crashes, dead buttons, failed sign-ins, error screens, " +
         "stuck/hung screens; on web also uncaught JS exceptions, failed/5xx requests, broken links and assets. " +
-        "Returns {verdict: ready|caution|blocked, confidence, releaseScore, headline, screensExplored, " +
-        "actionsPerformed, findings:[{type,severity,category,title,screen,evaluationTier}]}. Exploratory web " +
-        "sets confidence/releaseScore to null and separates deterministic verdict findings from advisory " +
-        "sampled control probes. The verdict has a coverage floor: " +
-        "if the app barely explored (crash on launch / sign-in wall) it returns 'caution' + inconclusive, never a " +
-        "false pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
+        "Returns {kind:'tapp-exploration-run', headline, inconclusive, screensExplored, " +
+        "actionsPerformed, findingCounts, findings:[{type,severity,category,authority,title,screen}]} — NO " +
+        "verdict/releaseScore. Web separates deterministic findings from advisory sampled control probes. " +
+        "There is a coverage floor: if the app barely explored (crash on launch / sign-in wall) it reports " +
+        "`inconclusive` — absence of findings is NEVER a pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
         "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things. " +
         "Tapp explores autonomously and does NOT pause to prompt for input — " +
         "it fills forms with safe defaults. The result includes `inputFieldsEncountered` (and `inputHint`): if " +
@@ -2138,10 +2225,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "array",
             items: { type: "object" },
             description:
-              "Findings from a previous run (pass back the `findings` array a prior tapp_run_qa returned). " +
-              "When provided, the result adds `regression` {counts:{new,persisting,resolved}, newFindings, resolved, " +
-              "gate:{newHigh,newCritical,failed}} comparing this run to that baseline. For a CI gate: store the " +
-              "baseline once, then fail the build when regression.gate.failed is true (new high/critical introduced).",
+              "Findings from a previous run (pass back the `findings` array a prior tapp_explore returned). " +
+              "When provided, the result adds a `regression` COMPARISON {counts:{new,persisting,resolved}, " +
+              "newFindings, resolved} vs. that baseline — an observation, not a gate signal. To gate a merge, " +
+              "run `tapp ci` (or the GitHub Action): it applies the deterministic policy and returns the " +
+              "pass/fail/inconclusive outcome.",
           },
         },
       },
@@ -2356,7 +2444,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Replay a deterministic, authored end-to-end test (a Flow) against iOS (XCUITest), Android " +
         "(ADB/UIAutomator), or web (Playwright), and return a scannable pass/fail report. A Flow is a list of steps + assertions " +
-        "(see docs/flows-architecture.md). Unlike tapp_run_qa (autonomous exploration), a Flow does EXACTLY " +
+        "(see docs/flows-architecture.md). Unlike tapp_explore (autonomous exploration), a Flow does EXACTLY " +
         "what you specify, the same way every time — use it for regression tests and verifying a fix. Steps: " +
         "{tap: X} · {type: {field: F, value: V}} · {swipe: up} · {back} · {wait_for: SCREEN}. Assertions " +
         "(deterministic): {assert_screen: X} · {assert_exists: X} · {assert_absent: X} · {assert_text: {of, contains}}. " +
@@ -2411,8 +2499,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "Write a deterministic E2E Flow from a natural-language goal (e.g. 'sign in and open Settings'), " +
         "GROUNDED in the app's real screens so it can't invent steps. Tapp explores the app to build a " +
         "screen/control map (or reuses a recent run via captureId), then a model authors a Flow using only " +
-        "screens/controls that were actually observed. Saves it to .tapp/flows/<name>.yml and returns the " +
-        "YAML for review (optionally runs it). Needs a model backend (Tapp subscription token or " +
+        "screens/controls that were actually observed. Saves it as an UNTRUSTED PROPOSAL under " +
+        ".tapp/proposals/flows/<name>.yml (never directly into .tapp/flows/) and returns the YAML for " +
+        "review (optionally runs it). Review → replay against the real app → explicitly PROMOTE (move to " +
+        ".tapp/flows/) before CI depends on it. Needs a model backend (Tapp subscription token or " +
         "ANTHROPIC_API_KEY). Use this to bootstrap a test you then refine; use tapp_flow_run to replay it.",
       inputSchema: {
         type: "object",
@@ -2487,7 +2577,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Launch an installed iOS or Android app and return a SCREENSHOT of the screen it lands on " +
         "(plus the accessibility tree) — with NO exploration. This is the fast way (seconds) to just SEE a " +
-        "screen. Use this — NOT tapp_run_qa — whenever the user wants to view or screenshot a screen. Pass " +
+        "screen. Use this — NOT tapp_explore — whenever the user wants to view or screenshot a screen. Pass " +
         "appLaunchArgs like [\"--uitesting\"] to bypass login and land on the home screen, and appLaunchEnv for " +
         "a backend override. The app is launched fresh and closed afterward. (To screenshot a screen reached by " +
         "real login or several taps, use a session instead and call tapp_screenshot along the way.)",
@@ -2529,7 +2619,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_install_app",
       title: "Install app on sim",
       description:
-        "Build a target iOS app for the booted simulator and install it, so it's ready for tapp_run_qa or " +
+        "Build a target iOS app for the booted simulator and install it, so it's ready for tapp_explore or " +
         "a session. Provide the Xcode project OR workspace path + scheme. Best-effort — apps with CocoaPods/" +
         "signing quirks may still need their normal build. Returns {ok, installed, simulator}.",
       inputSchema: {
@@ -2679,7 +2769,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const text =
       `🔨 Built **${path.basename(built.appPath)}** (scheme \`${built.scheme}\`) in ${fmtDuration(Date.now() - startedAt)}` +
       (bundleId ? ` — installed on the simulator as \`${bundleId}\`` : "") +
-      `\n\nNext: \`tapp_run_qa\` with \`appBundleId: "${bundleId || "<install it first>"}"\`.`;
+      `\n\nNext: \`tapp_explore\` with \`appBundleId: "${bundleId || "<install it first>"}"\`.`;
     return richResult(text, { ok: true, appPath: built.appPath, scheme: built.scheme, container: built.container, bundleId });
   }
 
@@ -2845,7 +2935,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return richResult(L.join("\n"), summary);
   }
 
-  if (name === "tapp_run_qa") {
+  if (name === "tapp_explore" || name === "tapp_run_qa") { // tapp_run_qa: deprecated alias
     const unauthorized = ensureAuthorized(args);
     if (unauthorized) return unauthorized;
     const wantsWeb = isNonEmptyString(args.url);
@@ -2953,7 +3043,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { model, plan, written, exploration } = result;
       const blocking = model.requirements.filter((item) => item.severity === "blocking");
       const pending = plan.items.filter((item) => item.decision === "pending");
-      const summary = `🧭 Tapp init — ${model.application.name} · ${model.targets.length} target(s) · UI Map ${model.uiMap.status} (${model.uiMap.nodeCount} states/${model.uiMap.edgeCount} transitions) · ${plan.items.length} plan item(s), ${pending.length} pending · ${blocking.length} blocking requirement(s)${exploration ? ` · real ${exploration.platform} exploration ${exploration.verdict}${exploration.inconclusive ? " (inconclusive)" : ""}` : ""}`;
+      const summary = `🧭 Tapp init — ${model.application.name} · ${model.targets.length} target(s) · UI Map ${model.uiMap.status} (${model.uiMap.nodeCount} states/${model.uiMap.edgeCount} transitions) · ${plan.items.length} plan item(s), ${pending.length} pending · ${blocking.length} blocking requirement(s)${exploration ? ` · real ${exploration.platform} exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""}` : ""}`;
       return richResult(summary, { model, plan, written: written ? { modelPath: written.modelPath, planPath: written.planPath } : null, exploration });
     } catch (error) { return errorResult("Could not initialize Tapp repository artifacts", { detail: error.message || String(error) }); }
   }
@@ -3493,21 +3583,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const parsed = parseGeneratedFlow(mres.text);
     if (!parsed) return errorResult("Model did not return a valid Flow", { raw: mres.text.slice(0, 500) });
 
-    // 3) Ground-check + write.
+    // 3) Ground-check + write as an UNTRUSTED PROPOSAL (ADR-0005 decision 8: AI-generated work lands
+    //    as a draft under .tapp/proposals/, requires real-target replay + explicit human promotion,
+    //    and only then enters .tapp/flows/ where CI depends on it — never a direct write).
     const ungrounded = ungroundedScreens(parsed.steps, grounding);
     const flow = { name: args.name || parsed.name, app: bundleId, steps: parsed.steps };
     const slug = flow.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "generated-flow";
-    const dir = path.join(repoRoot, ".tapp", "flows");
+    const dir = path.join(repoRoot, ".tapp", "proposals", "flows");
     fs.mkdirSync(dir, { recursive: true });
     const outPath = path.join(dir, `${slug}.yml`);
+    const promotedPath = path.join(".tapp", "flows", `${slug}.yml`);
     const yamlRes = await runCommand("python3", [path.join(scriptsDir, "flow_lib.py"), "to-yaml", JSON.stringify(flow)], { cwd: repoRoot });
     const yaml = (yamlRes.stdout || "").trim();
     if (!yaml) return errorResult("Failed to render flow YAML", { stderr: yamlRes.stderr });
     fs.writeFileSync(outPath, yaml + "\n");
     const rel = path.relative(repoRoot, outPath);
 
-    const L = [`🤖 Generated flow **${flow.name}** from your goal → \`${rel}\``];
-    L.push(`Grounded in ${grounding.screens.length} observed screen(s). ${ungrounded.length ? `⚠️ references unobserved: ${ungrounded.join(", ")} — review before relying on it.` : "All referenced screens were observed."}`);
+    const L = [`🤖 Generated a flow **proposal** **${flow.name}** from your goal → \`${rel}\``];
+    L.push(`⚠️ This is an **untrusted draft**, not a committed test. Grounded in ${grounding.screens.length} observed screen(s). ${ungrounded.length ? `⚠️ references unobserved: ${ungrounded.join(", ")} — review before relying on it.` : "All referenced screens were observed."}`);
+    L.push(`**Review → replay → promote:** review it, replay it against the real app, and only then promote it (move to \`${promotedPath}\`) so CI can depend on it.`);
     L.push("", "```yaml", yaml, "```");
 
     // 4) Optionally replay it now.
@@ -3522,9 +3616,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         L.push("", "---", "", (rep.stdout || "").trim());
       }
     } else {
-      L.push("", `Replay it: \`tapp_flow_run\` with \`flowPath: "${rel}"\`.`);
+      L.push("", `Replay the proposal: \`tapp_flow_run\` with \`flowPath: "${rel}"\`. After it passes, promote it to \`.tapp/flows/\`.`);
     }
-    return richResult(L.join("\n"), { path: rel, flow, groundedScreens: grounding.screens.length, ungrounded });
+    return richResult(L.join("\n"), { path: rel, proposal: true, promotePath: promotedPath, flow, groundedScreens: grounding.screens.length, ungrounded });
   }
 
   if (name === "tapp_ui_tree") {

@@ -136,15 +136,15 @@ test("Task grounding accepts a stable same-title state variant identity", () => 
   assert.deepEqual(validateTaskAgainstUiMap(task, map, "ios").errors, []);
 });
 
-test("Flow compilation reads Tasks from an existing legacy .autotap tree", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-legacy-tasks-"));
-  fs.mkdirSync(path.join(root, ".autotap", "tasks"), { recursive: true });
-  fs.mkdirSync(path.join(root, ".autotap", "flows"), { recursive: true });
-  writeJson(path.join(root, ".autotap", "tasks", "open-home.json"), {
+test("Flow compilation resolves committed Tasks from the .tapp tree", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-tasks-"));
+  fs.mkdirSync(path.join(root, ".tapp", "tasks"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".tapp", "flows"), { recursive: true });
+  writeJson(path.join(root, ".tapp", "tasks", "open-home.json"), {
     kind: "task", version: 1, name: "openHome", steps: [{ tap: "Home" }],
   });
-  const flowPath = writeJson(path.join(root, ".autotap", "flows", "smoke.json"), {
-    name: "Legacy smoke", platform: "ios", steps: [{ task: "openHome" }],
+  const flowPath = writeJson(path.join(root, ".tapp", "flows", "smoke.json"), {
+    name: "Smoke", platform: "ios", steps: [{ task: "openHome" }],
   });
   const flow = loadFlowFile(flowPath);
   assert.equal(flow.steps[0].__tappTask.name, "openHome");

@@ -25,7 +25,7 @@
 #                      [--pr-plan-out <file.json>] # persist the reviewable selection plan
 #                      [--baseline <file.json>]   # prior report to diff against (skipped if absent)
 #                      [--target-key <stable-id>] # isolates target-specific baselines in monorepos
-#                      [--fail-on gate|blocked|any]  # gate policy (default gate; see ci-report.js)
+#                      [--fail-on gate|absolute|any]  # gate policy (default gate; see ci-report.js)
 #                      [--json-out <file.json>]   # write the full report (use as the next baseline)
 #                      [--md-out <file.md>]       # write the rendered markdown report (for a PR comment)
 #                      [--device <name>]          # simulator device to boot if none is (default "iPhone 16 Pro")
@@ -74,7 +74,7 @@ done
 [[ "$PLATFORM" == "ios" || "$PLATFORM" == "android" || "$PLATFORM" == "web" ]] || { echo "❌ --platform must be ios|android|web" >&2; exit 2; }
 [[ "$ACTIONS" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --actions must be a positive integer" >&2; exit 2; }
 [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --timeout must be a positive integer" >&2; exit 2; }
-[[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "blocked" || "$FAIL_ON" == "any" ]] || { echo "❌ --fail-on must be gate|blocked|any" >&2; exit 2; }
+[[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "absolute" || "$FAIL_ON" == "any" ]] || { echo "❌ --fail-on must be gate|absolute|any" >&2; exit 2; }
 if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR" ]] || { echo "❌ Project directory not found: $PROJECT_DIR" >&2; exit 2; }
   PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -274,7 +274,7 @@ xcrun simctl install "$UDID" "$APP_PATH" || { echo "❌ simctl install failed �
 # ── Autonomous exploration (quick-capture builds the harness itself if needed).
 step "Explore ($ACTIONS actions, ${TIMEOUT}s watchdog)"
 set +e
-CAPTURE_ROOT="${TAPP_HOME:-${AUTOTAP_HOME:-$ROOT}}/captures"
+CAPTURE_ROOT="${TAPP_HOME:-$ROOT}/captures"
 mkdir -p "$CAPTURE_ROOT"
 CAPTURE_DIR="$(mktemp -d "$CAPTURE_ROOT/ci.XXXXXX")"
 TAPP_CAPTURE_DIR="$CAPTURE_DIR" OCQA_PR_TARGET_JSON="$IOS_PR_TARGET_JSON" "$ROOT/scripts/quick-capture.sh" explore "$BUNDLE_ID" --actions "$ACTIONS" --timeout "$TIMEOUT"

@@ -45,7 +45,7 @@ root after `npm install`.
 - `tapp_open_app`: launch and inspect one screen quickly.
 - `tapp_ui_tree` / `tapp_screenshot`: inspect the current surface.
 - `tapp_session_start` → `tapp_session_act` → `tapp_session_end`: drive a persistent session.
-- `tapp_run_qa`: autonomous multi-minute exploration and `ready`/`caution`/`blocked` judgment.
+- `tapp_explore`: autonomous multi-minute exploration → an observation (findings + evidence), not a ship verdict.
 - `tapp_flow_save` / `tapp_flow_run` / `tapp_flow_generate`: record, replay, or ground a Flow.
 - `tapp_init`, `tapp_release_plan`, `tapp_task`, `tapp_release_contract`, `tapp_ui_map`: operate the
   shared repository product model and reviewed release-contract lifecycle.
@@ -70,19 +70,20 @@ tapp_session_end
 Android uses `androidAppId` and optionally `apkPath`; web sessions use an owned `url`. Prefer stable
 resource/accessibility ids or exact labels over coordinates.
 
-## Judgment contract
+## Observation and gate contract
 
-`tapp_run_qa` returns a structured verdict, release score (with `confidence` retained as a legacy
-alias), reached screens/actions, findings, coverage limits, and `inconclusive` state.
+`tapp_explore` returns a structured **observation** — `kind: "tapp-exploration-run"`, reached
+screens/actions, findings (each with an `authority` tag), coverage limits, and `inconclusive` state.
+It carries **no** ship verdict, release score, or confidence.
 
-- `blocked`: a release-blocking issue or score floor was reached.
-- `caution`: reviewable issues exist or the run did not establish enough coverage.
-- `ready`: the run reached the minimum evidence floor and found no blocker.
+A crash-on-launch, login wall, missing device, or shallow trace is `inconclusive`, never a pass —
+absence of findings is not a pass. Adaptive exploration can traverse different paths; the
+**merge decision is the gate's**, not exploration's.
 
-A crash-on-launch, login wall, missing device, or shallow trace is never promoted to `ready` merely
-because no finding was emitted. Adaptive exploration can traverse different paths; deterministic
-judgment means the same evidence trace produces the same result. Promoted Flows/Tasks/contracts give
-critical journeys stable replay.
+The **gate** (CI: reviewed contracts + committed Flows/Scenarios + baseline regressions) applies
+versioned deterministic policy to that evidence and returns `pass | fail | inconclusive`
+(`inconclusive` fails closed). The same captured evidence + contracts + baseline always produces the
+same outcome. Promoted Flows/Tasks/contracts give critical journeys stable replay.
 
 ## Credentials, AI, and local data
 

@@ -35,11 +35,14 @@ test("contract credential placeholders become non-secret environment bindings", 
   assert.deepEqual(credentialBindingsFromValue({ email: "$ALICE_EMAIL", password: "$ALICE_PASSWORD", token: "literal" }), { email: "ALICE_EMAIL", password: "ALICE_PASSWORD" });
 });
 
-test("project configuration prefers .tapp and reads an existing .autotap project during migration", () => {
+test("project configuration lives only under .tapp — a legacy .autotap tree is ignored", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-legacy-project-config-"));
   fs.mkdirSync(path.join(root, ".autotap"));
-  fs.writeFileSync(path.join(root, ".autotap", "project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1, actors: {} }));
-  assert.equal(readProjectConfig(root).relativePath, ".autotap/project.json");
+  fs.writeFileSync(path.join(root, ".autotap", "project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1, actors: { legacy: {} } }));
+  // .autotap is no longer a read surface: the resolver only ever reports .tapp.
+  const legacyOnly = readProjectConfig(root);
+  assert.equal(legacyOnly.relativePath, ".tapp/project.json");
+  assert.equal(legacyOnly.exists, false);
 
   fs.mkdirSync(path.join(root, ".tapp"));
   fs.writeFileSync(path.join(root, ".tapp", "project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1, actors: { canonical: {} } }));

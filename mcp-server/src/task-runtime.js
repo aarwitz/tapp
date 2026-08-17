@@ -109,7 +109,7 @@ export function loadTaskRegistry({ sourcePath, projectDir = "", taskFiles = [] }
   // Draft contracts generated under `.tapp/proposals/contracts` may compile
   // against sibling untrusted Task drafts. Ordinary committed contracts never
   // see this directory, so a proposal cannot silently enter the release gate.
-  const proposalSource = [".tapp", ".autotap"].some((directory) => String(path.resolve(sourcePath || "")).includes(`${path.sep}${directory}${path.sep}proposals${path.sep}`));
+  const proposalSource = String(path.resolve(sourcePath || "")).includes(`${path.sep}.tapp${path.sep}proposals${path.sep}`);
   const proposalDir = proposalSource && tappDir ? path.join(tappDir, "proposals", "tasks") : "";
   const proposed = proposalDir && fs.existsSync(proposalDir)
     ? fs.readdirSync(proposalDir).filter((name) => /\.ya?ml$|\.json$/i.test(name)).map((name) => path.join(proposalDir, name))

@@ -5,7 +5,7 @@
 ```
 Harness/ExplorerTests.swift            ← the fingers: a generic XCUITest that drives any app
         ↑ OCQA_* marker protocol (stdout lines — the platform seam)
-mcp-server/src/                        ← the brain: sessions, QA orchestration, verdicts,
+mcp-server/src/                        ← the brain: sessions, exploration orchestration, the gate,
                                           regression, target resolution, formatting
         ↑
 bin/tapp.js (CLI) · `tapp mcp` (MCP) · the VS Code extension     ← the mouths
@@ -19,12 +19,12 @@ surface — and every consumer gets it.
 
 ```bash
 npm install
-npm test          # verdict/regression unit tests, engine import-safety, CLI + MCP smoke
+npm test          # gate/regression unit tests, engine import-safety, CLI + MCP smoke
 ```
 
 The harness rebuilds automatically when its source changes (content-fingerprinted cache in
 `~/.tapp/harness-derived`). To exercise the full pipeline you need macOS + Xcode with a
-simulator runtime; the fastest end-to-end check is `node bin/tapp.js qa <bundleId>` against
+simulator runtime; the fastest end-to-end check is `node bin/tapp.js explore <bundleId>` against
 any installed app.
 
 ## About this repository's history
@@ -39,7 +39,8 @@ commit.
 
 - Engine or harness behavior changes need a test (deterministic parts) or a demonstrated
   run (exploration parts — paste the relevant output in the PR).
-- The judgment layer's invariants are non-negotiable: same evidence trace → same verdict;
-  a shallow run is never `ready`; no LLM in the decision loop; typed secrets never appear
+- The gate's invariants are non-negotiable: exploration observes (no verdict/score) and the gate
+  judges `pass`/`fail`/`inconclusive`; the same evidence + contracts + baseline → the same gate
+  outcome; a shallow run is `inconclusive`, never a pass; no LLM in the decision loop; typed secrets never appear
   in transcripts, logs, or tool results.
 - Exploration is adaptive; don't write tests that assume a fixed traversal path.

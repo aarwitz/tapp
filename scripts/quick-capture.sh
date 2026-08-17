@@ -19,7 +19,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # accidentally reuse stale markers). TAPP_HOME redirects all writable output otherwise —
 # set by the `tapp` CLI when running as an installed npm package, where the package dir
 # must stay read-only. Unset (repo dev flow), everything lands in the repo as before.
-TAPP_RUNTIME_HOME="${TAPP_HOME:-${AUTOTAP_HOME:-}}"
+TAPP_RUNTIME_HOME="${TAPP_HOME:-}"
 if [[ -n "${TAPP_CAPTURE_DIR:-}" ]]; then
   CAPTURE_DIR="$TAPP_CAPTURE_DIR"
 elif [[ -n "$TAPP_RUNTIME_HOME" ]]; then

@@ -87,7 +87,7 @@ inputs:
     required: false
     default: ""
   fail-on:
-    description: "Gate policy: gate (regressions + failed release contracts/flows; default), blocked (verdict-based), any (any finding)"
+    description: "Gate policy: gate (regressions + failed release contracts/flows; default), absolute (any current-run deterministic findings-block or inconclusive run — no baseline needed), any (any finding)"
     required: false
     default: "gate"
   simulator-device:
@@ -127,9 +127,9 @@ outputs:
   report:
     description: "Path to the full JSON report (usable as the next baseline)"
     value: ${{ steps.gate.outputs.report }}
-  verdict:
-    description: "The run verdict: ready | caution | blocked"
-    value: ${{ steps.gate.outputs.verdict }}
+  outcome:
+    description: "The gate outcome: pass | fail | inconclusive (fail and inconclusive both block a merge)"
+    value: ${{ steps.gate.outputs.outcome }}
   gate-failed:
     description: "true when the gate failed (merge should be blocked)"
     value: ${{ steps.gate.outputs.gate_failed }}
@@ -401,8 +401,18 @@ runs:
         RC=$?
         set -e
         echo "gate_failed=$([[ $RC -ne 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-        VERDICT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("verdict","unknown"))' "$REPORT" 2>/dev/null || echo unknown)"
-        echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+        # Outcome is derived from the gate's EXACT exit code (the authoritative contract, equal to
+        # GATE_EXIT[outcome]), so it is correct even when the run crashed before writing a report:
+        # 0 pass · 1 fail · 2 error · 3 inconclusive. fail and inconclusive both block the merge but
+        # stay distinct — no nonzero-collapse.
+        case "$RC" in
+          0) OUTCOME=pass ;;
+          1) OUTCOME=fail ;;
+          2) OUTCOME=error ;;
+          3) OUTCOME=inconclusive ;;
+          *) OUTCOME=fail ;;
+        esac
+        echo "outcome=$OUTCOME" >> "$GITHUB_OUTPUT"
 
     - name: Stage automatic default-branch baseline
       id: baseline-stage
@@ -414,8 +424,10 @@ runs:
         set -euo pipefail
         echo "save=false" >> "$GITHUB_OUTPUT"
         [[ -f "$TAPP_REPORT_PATH" ]] || { echo "No report produced; automatic baseline not updated."; exit 0; }
-        python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); sys.exit(1 if r.get("inconclusive") or r.get("verdict") == "blocked" else 0)' "$TAPP_REPORT_PATH" \
-          || { echo "Blocked or inconclusive run; automatic baseline not updated."; exit 0; }
+        # Only a clean PASS is allowed to become the new baseline. Reading the structured gate
+        # outcome (not the retired `verdict`) prevents a fail/inconclusive run from poisoning it.
+        python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); sys.exit(0 if r.get("gate",{}).get("outcome") == "pass" else 1)' "$TAPP_REPORT_PATH" \
+          || { echo "Non-passing run (fail/inconclusive); automatic baseline not updated."; exit 0; }
         mkdir -p "$RUNNER_TEMP/tapp-baseline"
         cp "$TAPP_REPORT_PATH" "$RUNNER_TEMP/tapp-baseline/baseline.json"
         echo "save=true" >> "$GITHUB_OUTPUT"
@@ -487,11 +499,12 @@ runs:
       shell: bash
       env:
         TAPP_GATE_FAILED: ${{ steps.gate.outputs.gate_failed }}
-        TAPP_VERDICT: ${{ steps.gate.outputs.verdict }}
+        TAPP_OUTCOME: ${{ steps.gate.outputs.outcome }}
       # Runs last so the PR comment + evidence upload happen first, then blocks the merge.
+      # gate_failed is exit-code derived (fail=1, inconclusive=3 both block); outcome is the label.
       run: |
         if [[ "$TAPP_GATE_FAILED" == "true" ]]; then
-          echo "::error::Tapp gate failed (verdict: $TAPP_VERDICT). See the PR comment / step summary."
+          echo "::error::Tapp gate did not pass (outcome: $TAPP_OUTCOME). See the PR comment / step summary."
           exit 1
         fi
-        echo "Tapp gate passed (verdict: $TAPP_VERDICT)."
+        echo "Tapp gate passed (outcome: $TAPP_OUTCOME)."

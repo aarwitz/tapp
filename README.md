@@ -12,21 +12,24 @@ It turns a repository and real product into an observed UI Map, a compact review
 suite, and an inspectable merge decision.
 
 Coding agents can write the code, and (with Playwright & friends) they can even drive the app.
-What nobody gives them is **judgment**: did it actually work? tapp explores your app like a user —
-no test code, no app changes — detects what's broken, and commits to a verdict your merge queue
-can trust: `ready`, `caution`, or `blocked`, with evidence.
+What nobody gives them is **proof it works**. tapp explores your app like a user — no test code,
+no app changes — and surfaces what's broken, with evidence. Then a deterministic gate applies
+versioned policy to that evidence — the findings and coverage, any selected deterministic suites
+(Flows/Scenarios/contracts), and, when available, a target-scoped baseline — and returns a merge
+decision your queue can trust: `pass`, `fail`, or `inconclusive`. Exploration **observes**; the gate
+**judges** — never a soft "ship-ready" guess.
 
-Three platforms, one judgment layer:
+Three platforms, one observe-and-gate engine:
 
-- **iOS** — the missing Playwright for iOS. tapp is hands *and* judgment: a generic XCUITest
+- **iOS** — the missing Playwright for iOS. tapp is hands *and* eyes: a generic XCUITest
   harness drives any app on the simulator via the accessibility surface. Native — no Appium,
   no WebDriverAgent.
 - **Android** — black-box native driving through ADB + UIAutomator. Install an APK, target its
-  application id, and run the same QA, committed Flows, evidence, and regression gate. The app
-  does not link a Tapp SDK.
+  application id, and run the same exploration, committed Flows, evidence, and regression gate. The
+  app does not link a Tapp SDK.
 - **Web (beta)** — built *on* Playwright. Your agent already has browser hands; tapp adds the
   autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
-  dead buttons, broken links, placeholder `href="#"` links, error pages), and the same verdict.
+  dead buttons, broken links, placeholder `href="#"` links, error pages), and the same gate.
 
 ```
 you:    "Add a logout button to the settings screen"
@@ -40,17 +43,17 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 Requirements: **Node ≥ 18**. iOS needs **macOS + Xcode**; Android needs `adb` plus a connected
 emulator/device; web needs Playwright + Chromium.
 
-From the app repository, let the agent see the current screen and then ask for a release verdict:
+From the app repository, let the agent see the current screen and then explore it:
 
 ```bash
 npx -y @aarwitz/tapp open   # builds/launches as needed; prints a screenshot path + screen summary
-npx -y @aarwitz/tapp qa     # explores the real app; prints verdict, findings, and evidence report
+npx -y @aarwitz/tapp explore     # explores the real app; prints findings + evidence (an observation, not a gate)
 ```
 
 Claude Code can read the saved image with its file-reading tool; Codex can open it with
-`view_image`. The agent should report what the screenshot proves, preserve Tapp's exact
-`ready`/`caution`/`blocked` verdict, and link the HTML evidence report. No server, account, config
-file, test code, API key, or bundle id is required for this loop.
+`view_image`. The agent should report what the screenshot proves, relay the exploration findings
+as-is (an observation, not a merge decision — `tapp ci` gates that), and link the HTML evidence
+report. No server, account, config file, test code, API key, or bundle id is required for this loop.
 
 The product, executable, and package leaf are all Tapp: npm distributes it as
 `@aarwitz/tapp`, while the installed command remains `tapp`.
@@ -77,7 +80,7 @@ npx -y @aarwitz/tapp baseline create . --platform web
 npx -y @aarwitz/tapp ci install .
 ```
 
-The baseline command writes only after autonomous QA and every selected deterministic suite pass
+The baseline command writes only after exploration and every selected deterministic suite pass
 conclusively. It stores `.tapp/baselines/<platform>/<target-id>.json`; the generated workflow
 uses that exact target identity so two apps on the same platform never share a baseline. `ci
 install` writes `.github/workflows/tapp.yml` plus `.tapp/ci.json`, refuses unresolved build
@@ -96,7 +99,7 @@ npx -y @aarwitz/tapp apps            # what's installed on the simulator (names 
 npx -y @aarwitz/tapp build [dir]     # just build + install (scheme auto-detected)
 ```
 
-Web (beta): `npx -y @aarwitz/tapp qa http://localhost:3000` *(one-time setup:
+Web (beta): `npx -y @aarwitz/tapp explore http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*
 
 Focused web inspection waits briefly for loading states to settle. If a consent or location modal
@@ -110,7 +113,7 @@ npx -y @aarwitz/tapp tree https://example.com --tap "Not now" --wait-for "Dashbo
 Android:
 
 ```bash
-npx -y @aarwitz/tapp qa path/to/app-debug.apk --platform android --app-id com.acme.app
+npx -y @aarwitz/tapp explore path/to/app-debug.apk --platform android --app-id com.acme.app
 npx -y @aarwitz/tapp open com.acme.app --platform android
 ```
 
@@ -124,7 +127,7 @@ npx -y @aarwitz/tapp doctor     # verify Xcode / simulators / toolchain
 
 `npx -y @aarwitz/tapp app .` opens a local Release Studio for people who want visual repository
 onboarding, release-plan review, and CI preparation. It is not required for the coding-agent
-`open`/`qa` workflow.
+`open`/`explore` workflow.
 
 ### MCP hookup (optional)
 
@@ -156,7 +159,7 @@ args = ["-y", "@aarwitz/tapp", "mcp"]
 **Any other MCP client:** stdio command `npx -y @aarwitz/tapp mcp`.
 
 Then ask your agent:
-> "Run tapp qa on my app — is it ship-ready?"
+> "Explore my app and show me what breaks."
 > "Open com.mycompany.app on the simulator and screenshot the home screen."
 > "Log in with test@example.com, drive to checkout, and record it as a replayable test."
 
@@ -168,7 +171,7 @@ Then ask your agent:
 | 📸 | `tapp_screenshot` | Whatever's on the sim right now, as an inline image. |
 | 🌳 | `tapp_ui_tree` | The accessibility tree of the current screen (ids, labels, hittability). |
 | 🕹 | `tapp_session_start/act/end` | **Interactive driving** — the Playwright loop. App launches once; each act (tap/type/swipe/back/wait) returns the fresh tree. |
-| 🧪 | `tapp_run_qa` | **Autonomous QA** — explores with no authored test, returns `{verdict, releaseScore, findings[]}` (`releaseScore` is `null` for exploratory web). Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
+| 🔭 | `tapp_explore` | **Autonomous exploration** — explores with no authored test, returns an observation `{kind, headline, inconclusive, findingCounts, findings[]}` (no verdict/score — the deterministic gate judges). Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
 | 🧭 | `tapp_init` | **Repository import** — detect targets; optionally explore a real surface; persist the shared UI Map; construct the evidence-classified model and grounded release plan. |
 | 👤 | `tapp_actor_config` | **Actor/session setup** — store roles, isolation/provisioning, and environment-variable names without accepting or persisting credential values. |
 | ✅ | `tapp_release_plan` | **Release-plan lifecycle** — inspect, approve/reject/defer, generate, real-target validate, and explicitly promote proposed guarantees without silent test edits. |
@@ -189,49 +192,43 @@ The desktop Coverage view reads the same `.tapp/application-model.json`,
 does not maintain a separate product model. Map nodes identify both the real launch entry and the
 deterministic per-platform navigation root used for bounded changed-surface replay.
 
-## The verdict you can trust
+## Observation you can read, judgment you can trust
 
-**Adaptive exploration, deterministic judgment.** Exploration is adaptive — two runs may
-traverse different paths through your app. Judgment is deterministic: the same evidence
-trace always produces the same findings and verdict — no LLM variability
-in the decision loop. PR gating keys on the **regression diff**
-(stable finding signatures vs. a baseline), so it reacts to what *changed*, not to
-run-to-run path variance. For critical user journeys, committed **Tasks and Flows** provide the stable CI
-suite: reusable semantic actions, exact assertions, condition-based waits, fresh launch state, bounded timeouts,
-and evidence on failure. We call this *flake-resistant*, not magically flake-free—backend outages,
-unstable test data, and poorly identified controls can still make any E2E test fail.
+**Exploration observes; the gate judges.** Exploration is adaptive — two runs may traverse different
+paths — and it produces an **observation**, never a ship verdict: findings + coverage + evidence. The
+**gate** is deterministic: the same evidence trace, contracts, and baseline always produce the same
+outcome — `pass`, `fail`, or `inconclusive` — with no LLM in the decision loop. PR gating keys on the
+**regression diff** (stable finding signatures vs. a baseline), so it reacts to what *changed*, not to
+run-to-run path variance. For critical user journeys, committed **Tasks and Flows** provide the stable
+CI suite: reusable semantic actions, exact assertions, condition-based waits, fresh launch state,
+bounded timeouts, and evidence on failure. We call this *flake-resistant*, not magically flake-free —
+backend outages, unstable test data, and poorly identified controls can still make any E2E test fail.
 
-**Native has a heuristic release score; exploratory web does not.** The native 0–100 number comes
-from fixed deductions and is not calibrated probability. Web reports deterministic findings,
-advisory budget-capped control probes, and concrete coverage instead of compressing those unlike
-signals into a scalar. Committed Flows, Tasks, contracts, and baseline regressions provide the web
-merge decision.
+**No scores, no soft verdicts.** Exploration reports deterministic findings, advisory budget-capped
+control probes, and concrete coverage — never a 0–100 number or a "ready/ship" label a shallow crawl
+can't honestly earn. The merge decision comes only from the gate: reviewed contracts, committed
+Flows/Scenarios, and baseline regressions.
 
-`tapp_run_qa` explores like a user — accessibility surfaces on iOS/Android and a real browser on web —
-and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,
-navigation loops, and dead ends (plus, on web: uncaught JS exceptions, failed/5xx requests,
-broken links and assets, and visible placeholder links with no destination). The verdict is
-**deterministic** (no LLM in the run loop) and **honest**:
+`tapp_explore` explores like a user — accessibility surfaces on iOS/Android and a real browser on web
+— and detects crashes, failed sign-ins, dead buttons, stuck loading screens, error surfaces,
+navigation loops, and dead ends (plus, on web: uncaught JS exceptions, failed/5xx requests, broken
+links and assets, and visible placeholder links with no destination). The observation is honest about
+its limits:
 
-- `blocked` — a release-blocking issue was found.
-- `caution` — issues to review, or the run couldn't see enough.
-- `ready` — genuinely explored with no detected blockers in the checks that ran. **A shallow run
-  is never `ready`** — if the
-  app crashed on launch or a login wall blocked exploration, you get `inconclusive: true`,
-  not a false pass. Absence of findings is not a pass.
-
-Web beta presents a `ready` result as **AUTOMATED CHECKS COMPLETE**, not “ship-ready,” and displays
-no scalar score. Exhaustive checks on each exercised page drive the verdict; sampled control probes
-remain visible findings but are advisory. The report
-explicitly excludes content/claim accuracy, privacy and API data minimization, brand/SEO
-consistency, and subjective visual credibility. Those require reviewed contracts, privacy review,
-or human/vision judgment; an exploratory crawl must not imply they were validated.
+- It **surfaces findings**; it does not pronounce "ready." **A shallow run is never a pass** — if the
+  app crashed on launch or a login wall blocked exploration, you get `inconclusive: true`, not a false
+  green. Absence of findings is not a pass.
+- The **gate** turns findings + coverage + your reviewed contracts + a baseline into `pass` / `fail` /
+  `inconclusive` (`inconclusive` fails closed). Deterministic — no LLM in the run loop.
+- An exploratory crawl explicitly **excludes** content/claim accuracy, privacy and API data
+  minimization, brand/SEO consistency, and subjective visual credibility. Those require reviewed
+  contracts, privacy review, or human/vision judgment; a crawl must not imply they were validated.
 
 For a business guarantee such as “every coach is insured,” use a deterministic app-owned verifier
 endpoint that returns success only when the invariant holds, then require that status and the
 customer-visible claim in a release contract. The current DSL does not yet read arbitrary JSON
 response bodies or compare a cross-origin API payload directly with page copy; use a verifier or an
-explicit CI preflight rather than assuming autonomous QA inferred the guarantee.
+explicit CI preflight rather than assuming exploration inferred the guarantee.
 
 Apps behind a login? Pass `testEmail`/`testPassword` (typed into the login form automatically),
 `appLaunchArgs` (e.g. `["--uitesting"]` if your app supports a bypass), or explicit `loginSteps`
@@ -350,30 +347,30 @@ your agent proves its UI work instead of claiming it:
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
 (iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp open` from the
 repo root (it finds and builds the Xcode project itself) and look at the screenshot it saves as
-proof. Before declaring a feature done, run `npx -y @aarwitz/tapp qa` (or `qa <url>` for web) and
-report the ship/no-ship verdict. A change is not "done" until it has been seen working.
+proof. Before declaring a feature done, run `npx -y @aarwitz/tapp explore` (or `explore <url>` for web)
+and report the findings + evidence. A change is not "done" until it has been seen working.
 (If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots —
-tapp_build builds + installs the app and returns the bundle id for tapp_run_qa.)
+tapp_build builds + installs the app and returns the bundle id for tapp_explore.)
 ```
 
 ## How it works
 
 Every driver speaks one protocol: structured `OCQA_*` markers (state, actions, issues,
-transitions) that the judgment layer parses into trees, screenshots, findings, and the verdict.
+transitions) that the engine parses into trees, screenshots, findings, coverage, and the gate outcome.
 On **iOS**, a generic **XCUITest harness** attaches to any app by bundle id — no SDK or app code
 changes — and acts through the accessibility tree. On **Android**, ADB + UIAutomator provide the
 same black-box driver contract. On **web** (beta), a deterministic **Playwright crawler** does the
 same in a real browser. Same detectors' spirit,
-same dedup, same regression gate, same honest verdict. Core exploration, evidence collection, and
-verdict calculation run entirely locally — no telemetry, nothing phones home. Optional AI
+same dedup, same regression gate, same honest `pass`/`fail`/`inconclusive` outcome. Core exploration,
+evidence collection, and gate evaluation run entirely locally — no telemetry, nothing phones home. Optional AI
 features are explicit: finding enrichment requires `TAPP_ENABLE_REMOTE_AI=1` (an ambient
 API key alone never changes data handling), and AI flow generation / `assert_ai` only run
 when you invoke them; these send selected metadata (screen names, finding titles) to your
 configured model provider. Runtime configuration uses `TAPP_*` environment variables. Repository
-artifacts live under `.tapp/`, and desktop run configuration uses `.tapp.yml`. Existing
-`.autotap/`, `.autotap.yml`, and `AUTOTAP_*` inputs remain readable as migration fallbacks; when
-both names exist, Tapp uses the canonical one. Rename the old directory/config in your next
-reviewed repository change—no secrets or evidence formats need to be rewritten.
+artifacts live under `.tapp/`, and desktop run configuration uses `.tapp.yml`. These are the only
+names Tapp reads: the pre-rename `.autotap/`, `.autotap.yml`, and `AUTOTAP_*` inputs are no longer
+supported. If you still have an old directory or config, rename it to the `.tapp` names in a
+reviewed change—no secrets or evidence formats need to be rewritten.
 
 Committed Flow replay, recording a driven session, autonomous exploration, exact assertions,
 regression comparison, and CI gating require **no API key and no coding agent at runtime**. AI is

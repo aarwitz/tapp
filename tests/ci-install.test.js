@@ -34,7 +34,7 @@ test("CI installation renders one target-aware keyless web gate without shell in
 
 test("CI installation wires an accepted target-specific baseline and refuses silent overwrite", () => {
   const { root, model, target } = fixture();
-  writeTargetBaseline({ projectDir: root, target, report: { platform: "web", targetKey: target.id, verdict: "ready", inconclusive: false, findings: [], screens: ["Home"], gate: { failed: false }, contracts: [{ passed: true }] } });
+  writeTargetBaseline({ projectDir: root, target, report: { platform: "web", targetKey: target.id, inconclusive: false, findings: [], screens: ["Home"], gate: { failed: false, outcome: "pass" }, contracts: [{ passed: true }] } });
   const rendered = renderGithubWorkflow({ projectDir: root, model, actionRef: "aarwitz/tapp@v0.13.1" });
   assert.equal(rendered.manifest.targets[0].baseline, ".tapp/baselines/web/target_web_store.json");
   assert.match(rendered.workflow, /baseline: "\.tapp\/baselines\/web\/target_web_store\.json"/);

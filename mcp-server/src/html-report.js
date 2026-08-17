@@ -8,7 +8,7 @@
 
 import fs from "fs";
 import path from "path";
-import { buildQaReport, qaScoreLabel, verdictBadge } from "./report.js";
+import { buildQaReport, observationBadge, observationSummary } from "./report.js";
 
 const SEV_COLOR = { critical: "#cf222e", high: "#bc4c00", medium: "#9a6700", low: "#57606a" };
 
@@ -101,9 +101,9 @@ export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
 </style>
 </head>
 <body>
-<h1>${esc(verdictBadge(r))} <span class="dim">· ${esc(qaScoreLabel(r))}</span></h1>
-<div class="meta">${esc(label)} · ${r.screensExplored} screens · ${r.actionsPerformed} actions · ${r.findingCounts.total} finding(s)</div>
-${r.platform === "web" ? `<div class="meta">Verdict basis: ${r.verdictFindingCounts?.total || 0} deterministic finding(s); ${r.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.</div>` : ""}
+<h1>${esc(observationBadge(r))} <span class="dim">· ${esc(observationSummary(r))}</span></h1>
+<div class="meta">${esc(label)} · evidence page (observation, not a release decision)</div>
+${r.platform === "web" ? `<div class="meta">Deterministic basis: ${r.deterministicFindingCounts?.total || 0} deterministic finding(s); ${r.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.</div>` : ""}
 <div class="headline">${esc(r.headline)}</div>
 <h2>Findings</h2>
 <ul class="findings">

@@ -129,24 +129,49 @@ export default defineContract({name:"homeWorks",title:"Home works",businessValue
 test("first run passes clean evidence but states that regression gating is not active", () => {
   const r = runGate();
   assert.equal(r.status, 0, `${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
-  assert.equal(r.report.gate.failed, false);
+  assert.equal(r.report.gate.outcome, "pass");
   assert.match(r.markdown, /Baseline — .*not active yet/);
   assert.match(r.markdown, /blocked\/inconclusive fallback/);
-  assert.match(r.html, /release score 100\/100/);
+  assert.match(r.html, /EXPLORED/); // observation badge, not a ship verdict/score
+  assert.doesNotMatch(r.html, /release score/);
   assert.match(r.html, /fixture/);
 });
 
-test("clean web CI evidence is scoped, scoreless, and never ship-ready", () => {
+test("the gate report shows its scope: target, revision, policy version, and checked/not-checked", () => {
+  const r = runGate({ targetKey: "target_web_store" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.markdown, /target: target_web_store/);
+  assert.match(r.markdown, /revision:/);
+  assert.match(r.markdown, /policy: gate v\d/);
+  assert.match(r.markdown, /Checked:/);
+  assert.match(r.markdown, /Not checked:/);
+});
+
+test("exploration's regression is comparison-only — no gate/outcome/pass-fail in its JSON", () => {
+  const current = [
+    ...cleanMarkers.slice(0, -1),
+    'OCQA_ISSUE:{"type":"error_message","severity":"high","title":"Save failed","screen":"Settings"}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1,"screens":"Home,Settings"}',
+  ];
+  const r = runGate({ baseline: { findings: [], inconclusive: false }, markers: current });
+  // The regression block an agent gets from exploration carries the diff, never a gate verdict.
+  assert.equal(r.report.regression.gate, undefined);
+  assert.equal(r.report.regression.outcome, undefined);
+  assert.equal(r.report.regression.failed, undefined);
+  assert.ok(r.report.regression.counts && Array.isArray(r.report.regression.newFindings));
+});
+
+test("clean web CI evidence is scoped, scoreless, and never a ship verdict", () => {
   const r = runGate({ platform: "web" });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.markdown, /AUTOMATED CHECKS COMPLETE/);
+  assert.match(r.markdown, /Gate \(gate\): 🟢 PASS/); // the gate renders the outcome, not a ship badge
   assert.doesNotMatch(r.markdown, /SHIP-READY/);
-  assert.match(r.markdown, /no scalar score/);
   assert.doesNotMatch(r.markdown, /release score \d/);
-  assert.match(r.html, /AUTOMATED CHECKS COMPLETE/);
+  assert.match(r.html, /EXPLORED|INCONCLUSIVE/); // observation badge
   assert.doesNotMatch(r.html, /SHIP-READY/);
-  assert.match(r.html, /no scalar score/);
-  assert.equal(r.report.releaseScore, null);
+  assert.doesNotMatch(r.html, /release score/);
+  assert.equal(r.report.verdict, undefined);
+  assert.equal(r.report.releaseScore, undefined);
   assert.match(r.report.headline, /not a content, privacy, brand, or business-claim review/i);
 });
 
@@ -158,8 +183,12 @@ test("new high finding against a baseline exits non-zero and writes both artifac
   ];
   const r = runGate({ baseline: { findings: [], inconclusive: false }, markers: current });
   assert.equal(r.status, 1);
-  assert.equal(r.report.regression.gate.newHigh, 1);
-  assert.equal(r.report.gate.failed, true);
+  // regression is comparison-only (no gate signal); the new high finding is in the diff, and the
+  // GATE (not the regression block) renders the fail.
+  assert.equal(r.report.regression.gate, undefined, "regression carries no gate/pass-fail signal");
+  assert.equal(r.report.regression.counts.new, 1);
+  assert.equal(r.report.regression.newFindings.filter((f) => f.severity === "high").length, 1);
+  assert.equal(r.report.gate.outcome, "fail");
   assert.match(r.markdown, /regression gate FAILED/);
   assert.match(r.markdown, /Gate \(gate\): .*FAIL/);
 });
@@ -190,6 +219,43 @@ test("a failed Flow blocks an otherwise clean run", () => {
   assert.equal(r.report.flows[0].passed, false);
   assert.deepEqual(r.report.gate.reasons, ["1 flow(s) failed"]);
   assert.match(r.markdown, /checkout.*failed at/);
+});
+
+test("[authority] a skipped assert_ai suite is inconclusive, not a silent pass", () => {
+  // The reviewer's gap: a model assertion that couldn't run (e.g. no key → skipped) must NOT let
+  // the suite pass the deterministic gate. It fails closed as inconclusive (exit 3).
+  const flowLog = [
+    'OCQA_FLOW_STEP:{"status":"pass","action":"assert_screen","target":"Dashboard"}',
+    'OCQA_FLOW_STEP:{"status":"skip","action":"assert_ai","target":"the dashboard looks correct"}',
+    'OCQA_FLOW_RESULT:{"name":"dashboard","passed":true,"total":2,"executed":2,"failed":0}',
+  ].join("\n");
+  const r = runGate({ baseline: { findings: [], inconclusive: false }, flowLog });
+  assert.equal(r.status, 3, `${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.gate.outcome, "inconclusive");
+  assert.match(r.report.gate.reasons.join(" "), /assert_ai \(model-observed\)/);
+});
+
+test("[authority] a failed assert_ai is inconclusive (needs review), never a deterministic fail", () => {
+  const flowLog = [
+    'OCQA_FLOW_STEP:{"status":"pass","action":"assert_screen","target":"Dashboard"}',
+    'OCQA_FLOW_STEP:{"status":"fail","action":"assert_ai","target":"looks correct","detail":"model disagreed"}',
+    'OCQA_FLOW_RESULT:{"name":"dashboard","passed":false,"total":2,"executed":2,"failed":1}',
+  ].join("\n");
+  const r = runGate({ baseline: { findings: [], inconclusive: false }, flowLog });
+  assert.equal(r.status, 3, "a model disagreement is not deterministic ground truth");
+  assert.equal(r.report.gate.outcome, "inconclusive");
+});
+
+test("[authority] a deterministic failure alongside assert_ai still fails (deterministic wins)", () => {
+  const flowLog = [
+    'OCQA_FLOW_STEP:{"status":"fail","action":"assert_screen","target":"Checkout","detail":"screen not reached"}',
+    'OCQA_FLOW_STEP:{"status":"skip","action":"assert_ai","target":"looks right"}',
+    'OCQA_FLOW_RESULT:{"name":"checkout","passed":false,"total":2,"executed":2,"failed":1}',
+  ].join("\n");
+  const r = runGate({ baseline: { findings: [], inconclusive: false }, flowLog });
+  assert.equal(r.status, 1, "a deterministic step failure is a real fail");
+  assert.equal(r.report.gate.outcome, "fail");
+  assert.deepEqual(r.report.gate.reasons, ["1 flow(s) failed"]);
 });
 
 test("a failed multi-actor Scenario names the actor and blocks the gate", () => {
@@ -298,7 +364,10 @@ test("a failed selector with stable map identity produces one unvalidated Task-o
 
 test("a selected release contract that did not execute blocks the merge", () => {
   const r = runGate({ baseline: { findings: [], inconclusive: false }, prPlan: planFor("mustRun") });
-  assert.equal(r.status, 1);
+  // ADR-0005 deliberate migration: a selected-but-unexecuted contract is missing evidence, not an
+  // observed violation → inconclusive (exit 3), still merge-blocking. Was exit 1 pre-0.17.0.
+  assert.equal(r.status, 3);
+  assert.equal(r.report.gate.outcome, "inconclusive");
   assert.deepEqual(r.report.gate.reasons, ["1 selected release contract(s) did not run"]);
   assert.equal(r.report.prPlan.selected[0].execution.status, "not-run");
 });
@@ -351,7 +420,10 @@ test("a planned replayable PR exploration target that was not reached blocks the
     baselineControls: [], coverage: { status: "not-covered-by-selected-contract" },
   }];
   const r = runGate({ baseline: { findings: [], inconclusive: false }, prPlan: plan, platform: "web" });
-  assert.equal(r.status, 1);
+  // ADR-0005 deliberate migration: a planned target that was never reached is missing evidence →
+  // inconclusive (exit 3), still merge-blocking. Was exit 1 pre-0.17.0.
+  assert.equal(r.status, 3);
+  assert.equal(r.report.gate.outcome, "inconclusive");
   assert.equal(r.report.prPlan.explorationTargets[0].execution.status, "not-reached");
   assert.deepEqual(r.report.gate.reasons, ["1 planned PR exploration target(s) failed or were not reached"]);
 });
@@ -387,6 +459,153 @@ test("native UI Map path evidence is joined by target identity rather than a web
   assert.deepEqual(target.execution.navigation, { mode: "ui-map-path", edgeIds: ["edge_settings"] });
   assert.equal(target.coverageProposal.operation.item.groundedBy.find((item) => item.type === "pr-exploration").navigationMode, "ui-map-path");
   assert.match(r.markdown, /through 1 observed map edge/);
+});
+
+// ── Characterization: gate policy inputs (ADR-0005 constraint 3) ───────────────────────────
+// These LOCK the CURRENT merge decision for every policy input the 0.17.0 gate refactor must
+// preserve. The invariant under refactor is the MERGE DECISION ONLY — blocks (nonzero exit) vs.
+// passes (exit 0) — plus the structural CAUSE read from durable evidence fields (findings,
+// findingCounts, inconclusive). These assertions deliberately DO NOT reference `report.verdict`,
+// `gate.failed`, `reasons`, or a specific nonzero exit code: those are exactly the contract the
+// refactor changes (verdict removed; outcome model with exit 1=fail / 3=inconclusive). Asserting
+// them would force a mid-refactor rewrite and quietly loosen the lock. `blocks()` tolerates the
+// deliberate 1→3 migration. After the refactor, this same frozen evidence must yield the same
+// block/no-block decision and the same structural cause.
+const blocks = (r) => r.status !== 0;
+
+test("[char] a critical finding blocks the bootstrap gate with no baseline", () => {
+  // crash is force-promoted to critical (CRITICAL_ISSUE_TYPES); a conclusive run isolates the
+  // critical-finding path from the inconclusive-coverage path.
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_ACTION:{"type":"tap","target":"Profile"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Settings","elements":20}',
+    'OCQA_ISSUE:{"type":"crash","severity":"low","title":"App crashed","screen":"Settings"}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1,"screens":"Home,Settings"}',
+  ];
+  const r = runGate({ markers }); // no baseline
+  assert.ok(blocks(r), `expected block; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.findingCounts.critical, 1); // cause: a critical finding
+  assert.equal(r.report.inconclusive, false);       // and NOT merely a thin run
+});
+
+test("[char] a single high finding does NOT block a bootstrap run with no baseline", () => {
+  // Boundary: pre-existing debt below critical does not block when there is no baseline to
+  // regress against. Only critical findings or inconclusive coverage block a bootstrap run.
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_ACTION:{"type":"tap","target":"Save"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Settings","elements":20}',
+    'OCQA_ISSUE:{"type":"error_message","severity":"high","title":"Save failed","screen":"Settings"}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1,"screens":"Home,Settings"}',
+  ];
+  const r = runGate({ markers }); // no baseline
+  assert.equal(blocks(r), false, `expected pass; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.findingCounts.high, 1); // the high finding is recorded but not blocking
+});
+
+test("[char] enough medium findings (risk threshold) block a bootstrap run with no baseline", () => {
+  // Locks the score/risk-threshold blocking rule (ADR-0005 kept it explicit): many mediums with no
+  // critical still block. 18 distinct dead controls → risk 100-18*3=46 < 50 → block. This case must
+  // survive the score decoupling unchanged (the whole point of characterizing it first).
+  const deadControls = Array.from({ length: 18 }, (_, i) =>
+    `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${i}","screen":"Settings","control":"btn-${i}"}`);
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_ACTION:{"type":"tap","target":"Scroll"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Settings","elements":20}',
+    ...deadControls,
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":18,"screens":"Home,Settings"}',
+  ];
+  const r = runGate({ markers }); // no baseline
+  assert.ok(blocks(r), `expected block; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.inconclusive, false); // blocked by the risk threshold, not by thin coverage
+  assert.equal(r.report.findingCounts.critical, 0); // and not by a critical
+});
+
+test("[char] inconclusive coverage blocks the bootstrap gate with no baseline", () => {
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"screens":"Home"}',
+  ];
+  const r = runGate({ markers }); // 1 screen / 1 action → below the coverage floor
+  assert.ok(blocks(r), `expected block; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.inconclusive, true); // cause: coverage floor not met
+});
+
+test("[char] content collapse vs a baseline blocks the merge (merge decision is score-independent)", () => {
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Feed"}',
+    'OCQA_ACTION:{"type":"tap","target":"Scroll"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Feed","elements":3}', // was 30 in baseline → collapsed
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":0,"screens":"Home,Feed"}',
+  ];
+  const baseline = {
+    findings: [], inconclusive: false,
+    screens: ["Home", "Feed"], actionsPerformed: 3,
+    screenElementCounts: { Home: 30, Feed: 30 },
+  };
+  const r = runGate({ markers, baseline });
+  assert.ok(blocks(r), `expected block; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.findings.some((f) => f.type === "content_collapse"), true); // cause
+});
+
+test("[char] reachability loss vs a baseline blocks the merge", () => {
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Feed"}',
+    'OCQA_ACTION:{"type":"tap","target":"Scroll"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Feed","elements":20}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":0,"screens":"Home,Feed"}',
+  ];
+  const baseline = {
+    findings: [], inconclusive: false,
+    screens: ["Home", "Feed", "Profile"], actionsPerformed: 3, // Profile no longer reached
+    screenElementCounts: {},
+  };
+  const r = runGate({ markers, baseline });
+  assert.ok(blocks(r), `expected block; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.findings.some((f) => f.type === "screen_unreachable"), true); // cause
+});
+
+test("[char] persisting (pre-existing) high finding with a baseline does NOT block", () => {
+  // Locks the core gate philosophy: pre-existing debt present in the baseline is not a regression.
+  const markers = [
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_ACTION:{"type":"tap","target":"Save"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    'OCQA_STATE:{"screen":"Settings","elements":20}',
+    'OCQA_ISSUE:{"type":"error_message","severity":"high","title":"Save failed","screen":"Settings"}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1,"screens":"Home,Settings"}',
+  ];
+  const baseline = {
+    findings: [{ type: "error_message", severity: "high", screen: "Settings", target: null }],
+    inconclusive: false, screens: ["Home", "Settings"], actionsPerformed: 3, screenElementCounts: {},
+  };
+  const r = runGate({ markers, baseline });
+  assert.equal(blocks(r), false, `expected pass; ${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
+  assert.equal(r.report.findings.some((f) => f.type === "error_message"), true); // still surfaced
+});
+
+test("[char] a clean bootstrap PASS must qualify what it did NOT evaluate (green-light honesty guard)", () => {
+  // The whole point of ADR-0005: an unqualified green light recreates the 94/100 SHIP problem.
+  // A passing bootstrap run with no baseline/contracts MUST state that regression comparison and
+  // business claims were not evaluated. An empty notChecked on a pass fails this test.
+  const r = runGate();
+  assert.equal(blocks(r), false, r.stderr);
+  assert.ok(Array.isArray(r.report.notChecked) && r.report.notChecked.length > 0, "pass must qualify notChecked");
+  assert.match(r.report.notChecked.join(" | "), /regression|baseline/i);
 });
 
 test("observed PR exploration preserves an existing human release-plan decision instead of proposing a duplicate", () => {

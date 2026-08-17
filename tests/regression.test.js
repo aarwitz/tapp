@@ -1,5 +1,6 @@
 // The gate's headline promise: "we catch what your last release didn't have."
-// Pins the baseline diff, the CI gate signal, and the two cross-run detectors.
+// Pins the baseline diff (comparison-only — no gate signal; the gate judges) and the two cross-run
+// detectors. A "new high/critical" is what evaluateGate/the CI gate fails on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -15,14 +16,15 @@ test("regression: new / persisting / resolved, matched by type|screen", () => {
   assert.deepEqual(r.counts, { new: 1, persisting: 1, resolved: 1 });
   assert.equal(r.newFindings[0].type, "crash");
   assert.equal(r.resolved[0].type, "dead_button");
-  assert.deepEqual(r.gate, { newCritical: 1, newHigh: 0, failed: true });
+  assert.equal(r.gate, undefined, "comparison-only — no gate signal");
+  assert.equal(r.newFindings.filter((x) => x.severity === "critical").length, 1, "1 new critical — the gate fails on this");
 });
 
-test("regression gate passes when only pre-existing debt remains", () => {
+test("no new high/critical when only pre-existing debt remains (gate would pass)", () => {
   const baseline = [f("dead_button", "Home", "high")];
   const r = computeRegression([f("dead_button", "Home", "high")], baseline);
   assert.deepEqual(r.counts, { new: 0, persisting: 1, resolved: 0 });
-  assert.equal(r.gate.failed, false, "pre-existing debt does not block");
+  assert.equal(r.newFindings.length, 0, "pre-existing debt is not new — nothing for the gate to fail on");
 });
 
 test("regression returns null without a baseline (first run)", () => {
@@ -57,7 +59,7 @@ test("REVIEW SCENARIO: fixing one control while breaking another on the same scr
   assert.deepEqual(r.counts, { new: 1, persisting: 0, resolved: 1 });
   assert.equal(r.newFindings[0].target, "Delete Account");
   assert.equal(r.resolved[0].target, "Save");
-  assert.equal(r.gate.failed, true, "the newly broken control blocks the gate");
+  assert.equal(r.newFindings[0].severity, "high", "the newly broken control is a new high — the gate fails on it");
 });
 
 test("regression identity migration: legacy target-less baselines match coarsely (no false gate failures on upgrade)", () => {
@@ -65,5 +67,5 @@ test("regression identity migration: legacy target-less baselines match coarsely
   const current = [{ type: "unresponsive_element", screen: "Settings", target: "Save", severity: "high", title: "dead Save" }];
   const r = computeRegression(current, legacyBaseline);
   assert.deepEqual(r.counts, { new: 0, persisting: 1, resolved: 0 });
-  assert.equal(r.gate.failed, false);
+  assert.equal(r.newFindings.length, 0, "coarse match on upgrade → no false new findings for the gate");
 });

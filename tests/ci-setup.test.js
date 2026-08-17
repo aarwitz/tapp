@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { baselinePathForTarget, selectApplicationTarget, validateBaselineReport, writeTargetBaseline } from "../mcp-server/src/ci-setup.js";
+import { baselinePathForTarget, defaultWebExploreUrl, selectApplicationTarget, validateBaselineReport, writeTargetBaseline } from "../mcp-server/src/ci-setup.js";
 
 const target = { id: "target_web_store_a1b2", platform: "web", name: "store", sourcePath: "." };
 const model = { kind: "tapp-application-model", targets: [target, { id: "target_ios_app", platform: "ios", name: "App", sourcePath: "App.xcodeproj" }] };
 const report = {
-  platform: "web", targetKey: target.id, verdict: "ready", inconclusive: false, findings: [], screens: ["Home", "Checkout"], screensExplored: 2, actionsPerformed: 4,
-  flows: [], scenarios: [], contracts: [{ name: "checkoutWorks", passed: true }], gate: { policy: "gate", failed: false, reasons: [] },
+  // No `verdict` field: baseline validation is decoupled from it (reads gate.outcome + inconclusive).
+  platform: "web", targetKey: target.id, inconclusive: false, findings: [], screens: ["Home", "Checkout"], screensExplored: 2, actionsPerformed: 4,
+  flows: [], scenarios: [], contracts: [{ name: "checkoutWorks", passed: true }], gate: { policy: "gate", outcome: "pass", failed: false, reasons: [] },
 };
 
 test("baseline target selection is explicit in multi-target repositories", () => {
@@ -19,13 +20,43 @@ test("baseline target selection is explicit in multi-target repositories", () =>
   assert.throws(() => selectApplicationTarget(model, { platform: "android" }), /No application target/);
 });
 
+test("explore uses the model's recorded default target to break ambiguity; the gate stays strict", () => {
+  const withDefault = { ...model, application: { defaultTargetId: target.id } };
+  // explore opts in (useDefault) → the recorded default resolves the tie
+  assert.equal(selectApplicationTarget(withDefault, { useDefault: true }).id, target.id);
+  // the gate/baseline do NOT opt in → they still refuse to silently pick a target
+  assert.throws(() => selectApplicationTarget(withDefault), /Multiple targets/);
+  // an explicit --target still wins over the default
+  assert.equal(selectApplicationTarget(withDefault, { useDefault: true, target: "App" }).platform, "ios");
+  // useDefault with no recorded default → still lists the choices and stops
+  assert.throws(() => selectApplicationTarget(model, { useDefault: true }), /Multiple targets/);
+});
+
+test("bare explore resolves a web target's recorded owned URL from the model", () => {
+  const webWithUrl = {
+    kind: "tapp-application-model",
+    application: { defaultTargetId: "target_web_store_a1b2" },
+    targets: [{ id: "target_web_store_a1b2", platform: "web", name: "store", runtime: { ownedUrl: "https://store.example.com" } }],
+  };
+  assert.equal(defaultWebExploreUrl(webWithUrl), "https://store.example.com");
+  // No owned URL (managed target that must be started from source) → null (caller prepares it).
+  const managed = { ...webWithUrl, targets: [{ ...webWithUrl.targets[0], runtime: { ownedUrl: "" } }] };
+  assert.equal(defaultWebExploreUrl(managed), null);
+  // Default target is iOS → not a web URL → null (falls back to normal iOS resolution).
+  const iosDefault = {
+    kind: "tapp-application-model", application: { defaultTargetId: "target_ios" },
+    targets: [{ id: "target_ios", platform: "ios", name: "App" }, webWithUrl.targets[0]],
+  };
+  assert.equal(defaultWebExploreUrl(iosDefault), null);
+});
+
 test("baseline validation rejects inconclusive, blocked, cross-platform, and failed-suite reports", () => {
   assert.equal(validateBaselineReport(report, { platform: "web", targetId: target.id }).suite.contracts, 1);
   assert.throws(() => validateBaselineReport({ ...report, platform: "ios" }, { platform: "web", targetId: target.id }), /does not match/);
-  assert.throws(() => validateBaselineReport({ ...report, inconclusive: true }, { platform: "web", targetId: target.id }), /inconclusive/);
-  assert.throws(() => validateBaselineReport({ ...report, verdict: "blocked" }, { platform: "web", targetId: target.id }), /blocked/);
+  assert.throws(() => validateBaselineReport({ ...report, gate: { ...report.gate, outcome: "inconclusive", failed: true } }, { platform: "web", targetId: target.id }), /inconclusive/);
+  assert.throws(() => validateBaselineReport({ ...report, gate: { ...report.gate, outcome: "fail", failed: true } }, { platform: "web", targetId: target.id }), /failing/);
   assert.throws(() => validateBaselineReport({ ...report, contracts: [{ passed: false }] }, { platform: "web", targetId: target.id }), /failed contracts/);
-  assert.throws(() => validateBaselineReport({ ...report, gate: { failed: true } }, { platform: "web", targetId: target.id }), /successful portable gate/);
+  assert.throws(() => validateBaselineReport({ ...report, gate: { failed: true } }, { platform: "web", targetId: target.id }), /only a passing gate run/);
   assert.throws(() => validateBaselineReport({ ...report, targetKey: "" }, { platform: "web", targetId: target.id }), /missing its targetKey/);
   assert.throws(() => validateBaselineReport({ ...report, targetKey: "target_web_admin" }, { platform: "web", targetId: target.id }), /does not match application-model target/);
 });
@@ -52,6 +83,6 @@ test("target baselines are atomic, repository-local, and never overwritten silen
   assert.equal(written.artifact.recordingEvidence, "tapp-capture:ci.portable/exploration.webm");
   assert.doesNotMatch(JSON.stringify(written.artifact), /\/Users\/person|\.\.\/\.\.\/\.tapp/);
   assert.throws(() => writeTargetBaseline({ projectDir: root, target, report }), /already exists/);
-  const replaced = writeTargetBaseline({ projectDir: root, target, report: { ...report, verdict: "caution" }, replace: true });
-  assert.equal(replaced.artifact.verdict, "caution");
+  const replaced = writeTargetBaseline({ projectDir: root, target, report, replace: true });
+  assert.equal(replaced.artifact.baselineIdentity.outcome, "pass"); // identity records outcome, not the retired verdict
 });

@@ -50,7 +50,20 @@ test("Action owns the automatic baseline lifecycle", () => {
   assert.match(action, /baseline-source:[\s\S]*?value:\s*\$\{\{ steps\.baseline\.outputs\.source \}\}/);
   assert.match(action, /github\.ref == format\('refs\/heads\/\{0\}', github\.event\.repository\.default_branch\)/);
   assert.match(action, /steps\.gate\.outputs\.gate_failed == 'false'/);
-  assert.match(action, /r\.get\("inconclusive"\).*r\.get\("verdict"\) == "blocked"/);
+  // ADR-0005: the auto-baseline guard stages a baseline only on a clean PASS (reads gate.outcome,
+  // not the retired verdict) — a fail/inconclusive run must never poison the baseline.
+  assert.match(action, /r\.get\("gate",\{\}\)\.get\("outcome"\) == "pass"/);
+});
+
+test("Action maps the gate's exact exit code to a distinct outcome (no nonzero-collapse)", () => {
+  // ADR-0005 outcome model: 0 pass · 1 fail · 2 error · 3 inconclusive. fail and inconclusive both
+  // block a merge but must stay distinguishable even when no report was written.
+  assert.match(action, /0\)\s*OUTCOME=pass/);
+  assert.match(action, /1\)\s*OUTCOME=fail/);
+  assert.match(action, /2\)\s*OUTCOME=error/);
+  assert.match(action, /3\)\s*OUTCOME=inconclusive/);
+  assert.match(action, /outcome:[\s\S]*?value:\s*\$\{\{ steps\.gate\.outputs\.outcome \}\}/);
+  assert.doesNotMatch(action, /steps\.gate\.outputs\.verdict/); // the retired output is gone
 });
 
 test("Action isolates writable runtime data and exposes CI controls", () => {

@@ -16,17 +16,19 @@
 //                         [--pr-plan <plan.json>]           # selected PR contract execution manifest
 //                         [--project-dir <repo> --maintenance-url <url>]
 //                                                           # optional disposable web patch replay
-//                         [--fail-on <gate|blocked|any>]    # default: gate
+//                         [--fail-on <gate|absolute|any>]    # default: gate
 //
 // Gate policy (--fail-on):
 //   gate     fail when the run introduced NEW high/critical findings vs. the baseline
-//            (no baseline ⇒ falls back to `blocked`), or when any flow failed. The default:
-//            pre-existing debt doesn't block, regressions and broken flows do.
-//   blocked  fail when the verdict is blocked/inconclusive, or when any flow failed.
-//   any      fail on any finding at all, or any flow failure. Strictest.
+//            (no baseline ⇒ falls back to `absolute`), or when any suite failed. The default:
+//            pre-existing debt doesn't block, regressions and broken suites do.
+//   absolute fail on any current-run deterministic findings-block (critical / risk threshold) or an
+//            inconclusive run, or any failed suite — no baseline needed.
+//   any      fail on any finding at all, or any suite failure. Strictest.
 import fs from "fs";
 import path from "node:path";
-import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, qaScoreLabel, verdictBadge } from "./report.js";
+import { execSync } from "node:child_process";
+import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, evaluateGate, GATE_EXIT } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { proposeSelectorMaintenance, validateWebMaintenanceProposal } from "./maintenance-proposal.js";
@@ -59,11 +61,29 @@ function parseArgs(argv) {
     console.error("Required: --markers <ocqa-markers.txt>");
     process.exit(2);
   }
-  if (!["gate", "blocked", "any"].includes(args.failOn)) {
-    console.error(`--fail-on must be gate|blocked|any, got: ${args.failOn}`);
+  if (!["gate", "absolute", "any"].includes(args.failOn)) {
+    console.error(`--fail-on must be gate|absolute|any, got: ${args.failOn}`);
     process.exit(2);
   }
   return args;
+}
+
+// A GateRun records the revision it judged. A commit SHA alone doesn't represent a dirty local
+// checkout, so record both. Best-effort: CI env → git → nulls (never throws / fails the gate).
+function gitRevision(repoDir) {
+  // Inspect the TARGET repository (--project-dir) when given, not the process cwd, so a gate run
+  // launched from elsewhere doesn't record the wrong repo's SHA. GITHUB_SHA still wins in CI.
+  const opts = { stdio: ["ignore", "pipe", "ignore"], ...(repoDir ? { cwd: repoDir } : {}) };
+  const sh = (cmd) => execSync(cmd, opts).toString().trim();
+  let sha = process.env.GITHUB_SHA || null;
+  let dirty = false;
+  try {
+    if (!sha) sha = sh("git rev-parse HEAD") || null;
+    dirty = sh("git status --porcelain").length > 0;
+  } catch {
+    /* not a git checkout / git unavailable */
+  }
+  return { sha, dirty };
 }
 
 async function validateMaintenancePlan(plan, args) {
@@ -101,7 +121,7 @@ async function validateMaintenancePlan(plan, args) {
 // Port of flow_lib.py report() / FlowRunnerService.parseReport — kept in sync deliberately.
 function parseFlowLog(logPath) {
   const name = logPath.split("/").pop().replace(/\.log$/, "");
-  if (!fs.existsSync(logPath)) return { name, passed: false, total: 0, failed: 0, steps: [], missing: true };
+  if (!fs.existsSync(logPath)) return { name, passed: false, total: 0, failed: 0, steps: [], missing: true, modelObserved: false, deterministicFailed: false };
   const steps = [];
   let total = 0, executed = 0, failed = 0, passed = false, sawResult = false, flowName = null, kind = "flow", contract = "", criticality = "";
   for (const raw of fs.readFileSync(logPath, "utf8").split(/\r?\n/)) {
@@ -132,7 +152,12 @@ function parseFlowLog(logPath) {
     failed = steps.filter((s) => s.status === "fail").length;
     passed = steps.length > 0 && failed === 0;
   }
-  return { name: flowName || name, kind, ...(contract ? { contract, criticality } : {}), passed, total, executed, failed, steps };
+  // Structural evidence authority (ADR-0005): assert_ai steps are model-observed. A deterministic
+  // step failure is real; a suite that only carries a model assertion cannot be decided by the
+  // default deterministic gate. evaluateGate reads these flags, never the raw action string.
+  const modelObserved = steps.some((s) => s.action === "assert_ai");
+  const deterministicFailed = steps.some((s) => s.action !== "assert_ai" && s.status === "fail");
+  return { name: flowName || name, kind, ...(contract ? { contract, criticality } : {}), passed, total, executed, failed, steps, modelObserved, deterministicFailed };
 }
 
 function loadBaseline(baselinePath) {
@@ -338,16 +363,19 @@ function enrichPrPlan(plan, contracts, currentUiMap = null, markersPath = "", pr
 }
 
 const SEV_ICON = { critical: "🟥", high: "🟧", medium: "🟨", low: "🟩" };
+const GATE_BADGE = { pass: "🟢 PASS", fail: "🔴 FAIL", inconclusive: "🟡 INCONCLUSIVE" };
 
 function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan, gate) {
   const lines = [];
-  lines.push(`## tapp release check — ${verdictBadge(report)}`);
+  // The header shows the GATE decision (pass/fail/inconclusive), not a ship verdict — exploration
+  // only observes; the gate judges (ADR-0005).
+  lines.push(`## tapp release check — ${GATE_BADGE[gate.outcome] || gate.outcome}`);
   lines.push("");
   lines.push(report.headline);
   lines.push("");
-  lines.push(`**${qaScoreLabel(report)}** · ${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
+  lines.push(`${report.screensExplored} screens · ${report.actionsPerformed} actions · ${report.findingCounts.total} finding(s)`);
   if (report.platform === "web") {
-    lines.push(`**Verdict basis:** ${report.verdictFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.`);
+    lines.push(`**Deterministic basis:** ${report.deterministicFindingCounts?.total || 0} deterministic finding(s); ${report.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.`);
   }
   if (report.uiMap) lines.push(`**UI Map:** ${report.uiMap.nodeCount} states · ${report.uiMap.edgeCount} transitions · ${report.uiMap.controlCount} semantic controls`);
   if (report.findings.length) {
@@ -359,11 +387,15 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
     }
   }
   if (regression) {
-    const g = regression.gate;
+    // This is the GATE's report, so it may judge the regression. computeRegression is comparison-only,
+    // so derive the new-high/critical count here (mirrors evaluateGate).
+    const newCritical = regression.newFindings.filter((f) => f.severity === "critical").length;
+    const newHigh = regression.newFindings.filter((f) => f.severity === "high").length;
+    const regFailed = newCritical + newHigh > 0;
     lines.push("");
-    lines.push(`### Since baseline — ${g.failed ? "🔴 regression gate FAILED" : "🟢 regression gate passed"}`);
+    lines.push(`### Since baseline — ${regFailed ? "🔴 regression gate FAILED" : "🟢 regression gate passed"}`);
     lines.push(`+${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved` +
-      (g.failed ? ` — **${g.newCritical} new critical, ${g.newHigh} new high**` : ""));
+      (regFailed ? ` — **${newCritical} new critical, ${newHigh} new high**` : ""));
     for (const f of regression.newFindings) {
       lines.push(`- NEW ${SEV_ICON[f.severity] || ""} ${f.severity}: ${f.title} (${f.screen ?? "—"})`);
     }
@@ -444,15 +476,23 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
     }
   }
   lines.push("");
-  lines.push(`**Gate (${gate.policy}): ${gate.failed ? "🔴 FAIL" : "🟢 PASS"}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}`);
+  const badge = GATE_BADGE[gate.outcome] || (gate.failed ? "🔴 FAIL" : "🟢 PASS");
+  lines.push(`**Gate (${gate.policy}): ${badge}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}`);
+  // The gate is only authoritative about what it actually ran — record the scope explicitly.
+  const rev = gate.revision?.sha ? `${String(gate.revision.sha).slice(0, 12)}${gate.revision.dirty ? "-dirty" : ""}` : "unknown";
+  lines.push(`_target: ${gate.target || "—"} · revision: ${rev} · policy: ${gate.policy} v${gate.policyVersion || "?"}_`);
+  if (Array.isArray(gate.checked) && gate.checked.length) lines.push(`_Checked: ${gate.checked.join(" · ")}_`);
+  if (Array.isArray(gate.notChecked) && gate.notChecked.length) lines.push(`_Not checked: ${gate.notChecked.join(" · ")}_`);
   return lines.join("\n");
 }
 
 const args = parseArgs(process.argv.slice(2));
 const report = buildQaReport(args.markers, { platform: args.platform || "ios" });
 if (!report) {
-  console.error(`No OCQA markers found at ${args.markers} — the exploration did not run.`);
-  process.exit(1);
+  // Required evidence could not be obtained — this is inconclusive (fails closed), not a gate FAIL
+  // and not a usage error. See the outcome model in report.js (GATE_EXIT).
+  console.error(`No OCQA markers found at ${args.markers} — the exploration did not run (inconclusive).`);
+  process.exit(GATE_EXIT.inconclusive);
 }
 let currentUiMap = null;
 if (args.htmlDir) {
@@ -491,18 +531,12 @@ if (collapsed.length) {
   report.findings.push(...collapsed);
   report.findingCounts.high += collapsed.length;
   report.findingCounts.total += collapsed.length;
-  report.verdictFindingCounts.high += collapsed.length;
-  report.verdictFindingCounts.total += collapsed.length;
-  // Keep native scoring compatible. Exploratory web deliberately has no scalar; deterministic
-  // baseline regressions still raise its verdict directly.
-  if (Number.isFinite(report.confidence)) {
-    report.confidence = Math.max(0, report.confidence - collapsed.length * 10);
-    report.releaseScore = report.confidence;
-  }
-  if (report.verdict === "ready") {
-    report.verdict = Number.isFinite(report.confidence) && report.confidence < 50 ? "blocked" : "caution";
-  }
-  report.headline = `Proceed with caution — ${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
+  report.deterministicFindingCounts.high += collapsed.length;
+  report.deterministicFindingCounts.total += collapsed.length;
+  // Collapsed/unreachable screens are deterministic regressions: they raise the deterministic finding
+  // counts (so findingsBlock sees them) and count as new-vs-baseline (so the gate fails on them).
+  // No score/verdict to mutate — exploration is scoreless; the gate renders the outcome.
+  report.headline = `${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }
 const regression = computeRegression(report.findings, baseline?.findings ?? null);
 const runs = args.flowLogs.map(parseFlowLog);
@@ -519,34 +553,19 @@ try {
   process.exit(2);
 }
 
-const reasons = [];
-const failedFlows = flows.filter((f) => !f.passed);
-if (failedFlows.length) reasons.push(`${failedFlows.length} flow(s) failed`);
-const failedScenarios = scenarios.filter((scenario) => !scenario.passed);
-if (failedScenarios.length) reasons.push(`${failedScenarios.length} multi-actor scenario(s) failed`);
-const failedContracts = contracts.filter((contract) => !contract.passed);
-if (failedContracts.length) reasons.push(`${failedContracts.length} release contract(s) failed`);
-if (prPlan?.execution.notRun) reasons.push(`${prPlan.execution.notRun} selected release contract(s) did not run`);
-if (prPlan?.execution.explorationFailed) reasons.push(`${prPlan.execution.explorationFailed} planned PR exploration target(s) failed or were not reached`);
-if (args.failOn === "any") {
-  if (report.findingCounts.total > 0) reasons.push(`${report.findingCounts.total} finding(s) (fail-on: any)`);
-} else if (args.failOn === "blocked" || (args.failOn === "gate" && !regression)) {
-  if (report.verdict === "blocked") reasons.push("verdict is blocked");
-  if (report.inconclusive) reasons.push("run was inconclusive (coverage floor not met)");
-} else {
-  if (regression?.gate.failed) {
-    reasons.push(`${regression.gate.newCritical} new critical + ${regression.gate.newHigh} new high vs. baseline`);
-  }
-  // A regression gate must also catch regressions in EXPLORABILITY, not just in findings:
-  // a change that makes the app crash at launch (or reintroduces a login wall) produces an
-  // inconclusive run with zero new findings — that must never pass. (Found via corpus
-  // bug-seeding: a seeded crash-at-startup sailed through on the findings diff alone.)
-  if (report.verdict === "blocked") reasons.push("verdict is blocked");
-  if (report.inconclusive && !baseline.inconclusive) {
-    reasons.push("run became inconclusive vs. baseline (app may no longer launch/explore)");
-  }
-}
-const gate = { policy: args.failOn, failed: reasons.length > 0, reasons };
+// The gate decision now lives in a pure, unit-tested evaluator (report.js). A regression gate
+// must catch regressions in EXPLORABILITY, not just findings: a change that makes the app crash at
+// launch (or reintroduces a login wall) produces an inconclusive run with zero new findings — that
+// must never pass (found via corpus bug-seeding). evaluateGate encodes that as an `inconclusive`
+// outcome (exit 3), distinct from a deterministic `fail` (exit 1).
+const decision = evaluateGate({ report, regression, flows, scenarios, contracts, prPlan, baseline, failOn: args.failOn });
+const gate = {
+  ...decision,
+  target: args.targetKey || null,
+  revision: gitRevision(args.projectDir),
+  checked: report.checkedFor,
+  notChecked: report.notChecked,
+};
 
 const md = renderMarkdown(report, regression, flows, scenarios, contracts, prPlan, gate);
 console.log(md);
@@ -563,4 +582,7 @@ if (args.htmlDir) {
   const html = writeHtmlReport(args.htmlDir, { report, label: args.label || "CI run" });
   if (html) console.log(`\nEvidence report: ${html}`);
 }
-process.exit(gate.failed ? 1 : 0);
+// Outcome → exit code (ADR-0005): pass 0 · fail 1 · error 2 · inconclusive 3. fail and inconclusive
+// both block a merge; distinct codes let CI tell "a regression was observed" from "we couldn't be
+// sure" and keep infra/usage errors (2) separate.
+process.exit(gate.exitCode);

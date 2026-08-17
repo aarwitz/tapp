@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { buildQaReport, qaScoreLabel, severityRank, parseOcqaMarkers, verdictBadge } from "../mcp-server/src/report.js";
+import { buildQaReport, observationBadge, observationSummary, severityRank, parseOcqaMarkers, evaluateGate, GATE_EXIT, GATE_POLICY_VERSION } from "../mcp-server/src/report.js";
 
 function markersFile(lines) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-test-"));
@@ -24,28 +24,46 @@ const CLEAN_RUN = [
   'OCQA_COMPLETE:{"actions":3,"states":2,"issues":0,"screens":"Home,Settings"}',
 ];
 
-test("clean run with real coverage → ready at full score", () => {
+test("clean run with real coverage → a scoreless observation with no findings", () => {
   const r = buildQaReport(markersFile(CLEAN_RUN));
   assert.ok(r, "report parses");
-  assert.equal(r.verdict, "ready");
-  assert.equal(r.confidence, 100);
-  assert.equal(r.releaseScore, r.confidence, "releaseScore aliases confidence");
+  assert.equal(r.kind, "tapp-exploration-run");
+  assert.equal(r.verdict, undefined, "exploration renders no ship verdict (ADR-0005)");
+  assert.equal(r.releaseScore, undefined, "exploration renders no score");
+  assert.equal(r.confidence, undefined);
   assert.equal(r.inconclusive, false);
   assert.equal(r.findingCounts.total, 0);
+  assert.match(r.headline, /observation, not a release decision/);
   assert.ok(Array.isArray(r.checkedFor) && r.checkedFor.length > 0, "honesty label present");
   assert.ok(Array.isArray(r.notChecked) && r.notChecked.length > 0, "not-checked label present");
 });
 
-test("determinism: identical trace → identical verdict", () => {
+test("ExplorationRun carries the complete §4 schema contract", () => {
+  const r = buildQaReport(markersFile(CLEAN_RUN));
+  assert.equal(r.kind, "tapp-exploration-run");
+  assert.equal(r.schemaVersion, 1);
+  assert.equal(r.runStatus, "completed");
+  assert.equal(typeof r.stopReason, "string");
+  assert.deepEqual(Object.keys(r.coverage).sort(), ["actionsPerformed", "screens", "screensExplored"]);
+  assert.ok(r.evidence && typeof r.evidence.markers === "string", "evidence references the markers");
+  assert.equal(r.uiMap, null, "uiMap is populated by the map-building consumer");
+  assert.equal(r.comparison, null, "comparison is populated by a baseline diff");
+  const thin = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Home","elements":5}', 'OCQA_ACTION:{"type":"tap"}', 'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0}',
+  ]));
+  assert.equal(thin.runStatus, "limited", "an inconclusive run is limited, not completed");
+});
+
+test("determinism: identical trace → identical observation", () => {
   const a = buildQaReport(markersFile(CLEAN_RUN));
   const b = buildQaReport(markersFile(CLEAN_RUN));
   assert.deepEqual(
-    { v: a.verdict, c: a.confidence, f: a.findings },
-    { v: b.verdict, c: b.confidence, f: b.findings }
+    { f: a.findings, i: a.inconclusive, c: a.findingCounts },
+    { f: b.findings, i: b.inconclusive, c: b.findingCounts }
   );
 });
 
-test("crash is always critical (severity coercion) and blocks the verdict", () => {
+test("crash is always critical (severity coercion) and is a deterministic finding", () => {
   const r = buildQaReport(
     markersFile([
       ...CLEAN_RUN.slice(0, 5),
@@ -53,9 +71,10 @@ test("crash is always critical (severity coercion) and blocks the verdict", () =
       'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1}',
     ])
   );
-  assert.equal(r.verdict, "blocked");
   assert.equal(r.findings[0].severity, "critical", "crash coerced to critical even when marked low");
-  assert.equal(r.confidence, 75);
+  assert.equal(r.findings[0].authority, "deterministic", "marker findings are deterministic-authority");
+  assert.equal(r.findingCounts.critical, 1);
+  assert.equal(r.verdict, undefined, "no verdict — the gate judges (see evaluateGate tests)");
 });
 
 test("findings dedup by type|screen — repeated detections count once", () => {
@@ -63,7 +82,6 @@ test("findings dedup by type|screen — repeated detections count once", () => {
   const r = buildQaReport(markersFile([...CLEAN_RUN.slice(0, 5), issue, issue, issue]));
   assert.equal(r.findingCounts.total, 1);
   assert.equal(r.findingCounts.high, 1);
-  assert.equal(r.verdict, "caution", "a high finding caps the verdict at caution");
 });
 
 test("one missing web resource is one finding across routes and failed-request noise", () => {
@@ -92,23 +110,22 @@ test("placeholder links deduplicate across web routes but retain distinct destin
   assert.ok(r.findings.every((finding) => finding.screen === null));
 });
 
-test("caution and blocked headlines count every reported finding", () => {
+test("observation headline counts every reported finding", () => {
   const mediumIssues = Array.from({ length: 8 }, (_, index) =>
     `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Settings","target":"button-${index}"}`
   );
-  const caution = buildQaReport(markersFile([...CLEAN_RUN, ...mediumIssues]));
-  assert.equal(caution.verdict, "caution");
-  assert.match(caution.headline, /8 issue\(s\) to review/);
+  const eight = buildQaReport(markersFile([...CLEAN_RUN, ...mediumIssues]));
+  assert.match(eight.headline, /8 issue\(s\)/);
+  assert.match(eight.headline, /observation, not a release decision/);
 
-  const blockedIssues = Array.from({ length: 18 }, (_, index) =>
+  const moreIssues = Array.from({ length: 18 }, (_, index) =>
     `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Settings","target":"button-${index}"}`
   );
-  const blocked = buildQaReport(markersFile([...CLEAN_RUN, ...blockedIssues]));
-  assert.equal(blocked.verdict, "blocked");
-  assert.match(blocked.headline, /18 issue\(s\).*18 medium/);
+  const eighteen = buildQaReport(markersFile([...CLEAN_RUN, ...moreIssues]));
+  assert.match(eighteen.headline, /18 issue\(s\).*18 medium/);
 });
 
-test("coverage floor: a shallow run is never ready", () => {
+test("coverage floor: a shallow run is inconclusive and says so", () => {
   const r = buildQaReport(
     markersFile([
       'OCQA_STATE:{"screen":"Launch","elements":5}',
@@ -117,8 +134,8 @@ test("coverage floor: a shallow run is never ready", () => {
     ])
   );
   assert.equal(r.inconclusive, true);
-  assert.notEqual(r.verdict, "ready");
-  assert.ok(r.confidence <= 40, "floor caps the score");
+  assert.equal(r.verdict, undefined);
+  assert.equal(r.releaseScore, undefined);
   assert.match(r.headline, /NOT a pass/i);
 });
 
@@ -132,7 +149,7 @@ test("severityRank orders critical → low", () => {
 test("malformed marker lines are ignored, not fatal", () => {
   const r = buildQaReport(markersFile([...CLEAN_RUN, "OCQA_ISSUE:{not json", 'OCQA_STATE:{"screen":']));
   assert.ok(r);
-  assert.equal(r.verdict, "ready");
+  assert.equal(r.findingCounts.total, 0);
 });
 
 test("parseOcqaMarkers returns null for a missing file", () => {
@@ -179,23 +196,108 @@ test("web platform gets web-specific honesty labels", () => {
   assert.ok(r.notChecked.some((c) => /claim accuracy/.test(c)), "content truth is explicitly out of scope");
   assert.ok(r.notChecked.some((c) => /privacy/.test(c)), "API data minimization is explicitly out of scope");
   assert.doesNotMatch(r.headline, /ship-ready/i);
-  assert.equal(verdictBadge(r), "🔵 AUTOMATED CHECKS COMPLETE");
-  assert.equal(qaScoreLabel(r), "exploratory web · no scalar score");
-  assert.equal(r.releaseScore, null);
-  assert.equal(r.confidence, null);
-  assert.match(r.scoreUnavailableReason, /instead of a scalar release score/);
-  assert.equal(verdictBadge({ ...r, platform: "ios" }), "🟢 SHIP-READY");
+  assert.equal(observationBadge(r), "🔭 EXPLORED");
+  assert.match(observationSummary(r), /observation only/);
+  assert.equal(r.verdict, undefined, "exploration renders no ship verdict");
+  assert.equal(r.releaseScore, undefined);
+  assert.equal(observationBadge({ ...r, inconclusive: true }), "🟡 INCONCLUSIVE (exploration)");
 });
 
-test("sampled web probe findings remain advisory and cannot move the deterministic verdict", () => {
+test("sampled web probe findings remain advisory and stay out of the deterministic counts", () => {
   const sampled = Array.from({ length: 20 }, (_, index) =>
     `OCQA_ISSUE:{"type":"unresponsive_element","severity":"medium","title":"dead ${index}","screen":"Home","target":"button-${index}"}`
   );
   const r = buildQaReport(markersFile([...CLEAN_RUN, ...sampled]), { platform: "web" });
-  assert.equal(r.verdict, "ready");
+  assert.equal(r.verdict, undefined);
   assert.equal(r.findingCounts.total, 20);
-  assert.equal(r.verdictFindingCounts.total, 0);
+  assert.equal(r.deterministicFindingCounts.total, 0, "sampled probes never enter the deterministic (gate) counts");
   assert.equal(r.sampledFindingCounts.total, 20);
   assert.ok(r.findings.every((finding) => finding.evaluationTier === "sampled"));
-  assert.equal(r.releaseScore, null);
+  assert.ok(r.findings.every((finding) => finding.authority === "deterministic"), "source is deterministic; tier is sampled");
+});
+
+// ── evaluateGate: the pure gate decision (ADR-0005) ────────────────────────────────────────
+// Fixed evidence in → identical GateRun out. These assert the outcome model directly (the
+// process-level [char] tests in ci-report.test.js assert the same decisions end-to-end).
+// Fixtures feed the fields evaluateGate actually reads now: deterministicFindingCounts + inconclusive
+// (never the removed `verdict` label).
+const okReport = { inconclusive: false, findingCounts: { total: 0 }, deterministicFindingCounts: { critical: 0, high: 0, medium: 0 } };
+
+test("evaluateGate: clean evidence with no baseline is a pass (exit 0)", () => {
+  const g = evaluateGate({ report: okReport, failOn: "gate" });
+  assert.equal(g.outcome, "pass");
+  assert.equal(g.exitCode, GATE_EXIT.pass);
+  assert.equal(g.failed, false);
+  assert.deepEqual(g.reasons, []);
+  assert.equal(g.policyVersion, GATE_POLICY_VERSION);
+});
+
+test("evaluateGate: a critical finding with no baseline is a fail (exit 1)", () => {
+  const g = evaluateGate({ report: { inconclusive: false, findingCounts: { total: 1 }, deterministicFindingCounts: { critical: 1 } }, failOn: "gate" });
+  assert.equal(g.outcome, "fail");
+  assert.equal(g.exitCode, 1);
+});
+
+test("evaluateGate: the risk threshold blocks (many mediums, no crit) with no baseline", () => {
+  // Decoupled from the score: findingsBlock computes this from counts, not the verdict label.
+  const g = evaluateGate({ report: { inconclusive: false, findingCounts: { total: 18 }, deterministicFindingCounts: { critical: 0, high: 0, medium: 18 } }, failOn: "gate" });
+  assert.equal(g.outcome, "fail");
+});
+
+test("evaluateGate: an inconclusive run is inconclusive even if its risk is low (thin run, not fail)", () => {
+  const g = evaluateGate({ report: { inconclusive: true, findingCounts: { total: 18 }, deterministicFindingCounts: { critical: 0, high: 0, medium: 18 } }, failOn: "gate" });
+  assert.equal(g.outcome, "inconclusive"); // coverage floor wins; findingsBlock defers on inconclusive
+  assert.equal(g.exitCode, GATE_EXIT.inconclusive);
+  assert.equal(g.failed, true);
+});
+
+test("evaluateGate: --fail-on any never passes an inconclusive run, even with zero findings", () => {
+  // "any" is the strictest policy; a run that couldn't be conducted must fail closed, not pass.
+  const g = evaluateGate({ report: { inconclusive: true, findingCounts: { total: 0 }, deterministicFindingCounts: { critical: 0, high: 0, medium: 0 } }, failOn: "any" });
+  assert.equal(g.outcome, "inconclusive");
+  assert.equal(g.exitCode, GATE_EXIT.inconclusive);
+  assert.equal(g.failed, true);
+});
+
+test("evaluateGate: a selected-but-unexecuted contract is inconclusive, not fail", () => {
+  const g = evaluateGate({ report: okReport, baseline: { findings: [] }, regression: { newFindings: [] }, prPlan: { execution: { notRun: 1 } }, failOn: "gate" });
+  assert.equal(g.outcome, "inconclusive");
+  assert.equal(g.exitCode, 3);
+});
+
+test("evaluateGate: precedence is fail > inconclusive > pass", () => {
+  // A failed flow (fail) AND a selected contract that didn't run (inconclusive) → fail wins.
+  const g = evaluateGate({
+    report: okReport, baseline: { findings: [] }, regression: { newFindings: [] },
+    flows: [{ passed: false }], prPlan: { execution: { notRun: 1 } }, failOn: "gate",
+  });
+  assert.equal(g.outcome, "fail");
+  assert.equal(g.exitCode, 1);
+  assert.equal(g.reasons.length, 2); // both reasons surfaced; fail wins the outcome
+});
+
+test("evaluateGate: a new high/critical regression vs a baseline is a fail", () => {
+  const g = evaluateGate({
+    report: okReport, baseline: { findings: [], inconclusive: false },
+    regression: { newFindings: [{ severity: "high" }] }, failOn: "gate",
+  });
+  assert.equal(g.outcome, "fail");
+  assert.match(g.reasons.join(" "), /new high vs\. baseline/);
+});
+
+test("evaluateGate: pre-existing debt (no regression, no crit, below risk threshold) passes", () => {
+  const g = evaluateGate({
+    report: { inconclusive: false, findingCounts: { total: 1 }, deterministicFindingCounts: { critical: 0, high: 1, medium: 0 } },
+    baseline: { findings: [{ type: "x" }], inconclusive: false },
+    regression: { newFindings: [] }, failOn: "gate",
+  });
+  assert.equal(g.outcome, "pass");
+});
+
+test("evaluateGate is a pure function: identical GateRun across repeated calls", () => {
+  const evidence = {
+    report: okReport, baseline: { findings: [] }, regression: { newFindings: [] },
+    flows: [{ passed: false }], failOn: "gate",
+  };
+  assert.deepEqual(evaluateGate(evidence), evaluateGate(evidence));
 });

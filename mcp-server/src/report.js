@@ -106,16 +106,31 @@ export function findingEvaluationTier(finding, platform = "ios") {
   return platform === "web" && WEB_SAMPLED_ISSUE_TYPES.has(finding?.type) ? "sampled" : "deterministic";
 }
 
-export function verdictBadge(report) {
-  if (report?.platform === "web" && report?.verdict === "ready") return "🔵 AUTOMATED CHECKS COMPLETE";
-  return { ready: "🟢 SHIP-READY", caution: "🟡 CAUTION", blocked: "🔴 BLOCKED" }[report?.verdict] || report?.verdict;
+// The deterministic block-by-findings rule, expressed over verdict-tier finding COUNTS — not the
+// score scalar and not the `verdict` label — so the CI gate survives removal of verdict/releaseScore
+// from exploration output. It encodes exactly what `verdict === "blocked"` used to: a critical
+// finding always blocks; otherwise, on a CONCLUSIVE run, a risk threshold blocks. The risk threshold
+// is kept as an explicit, chosen rule (ADR-0005) — `riskFromCounts` is the single source of that
+// formula, shared with buildQaReport's verdict label. Inconclusive runs are a separate gate outcome,
+// never a findings-block, so a thin run reports `inconclusive`, not `fail`.
+export function riskFromCounts({ critical = 0, high = 0, medium = 0 } = {}) {
+  return Math.max(0, Math.min(100, 100 - critical * 25 - high * 10 - medium * 3));
+}
+export function findingsBlock(deterministicFindingCounts = {}, { inconclusive = false } = {}) {
+  if ((deterministicFindingCounts.critical || 0) > 0) return true;
+  if (inconclusive) return false;
+  return riskFromCounts(deterministicFindingCounts) < 50;
 }
 
-export function qaScoreLabel(report) {
-  const score = report?.releaseScore ?? report?.confidence;
-  if (Number.isFinite(score)) return `release score ${score}/100`;
-  if (report?.platform === "web") return "exploratory web · no scalar score";
-  return "score unavailable";
+// Exploration OBSERVES; it never renders a ship verdict or score (ADR-0005). These label the
+// observation honestly. The release decision (pass/fail/inconclusive) is the gate's, shown separately.
+export function observationBadge(report) {
+  return report?.inconclusive ? "🟡 INCONCLUSIVE (exploration)" : "🔭 EXPLORED";
+}
+
+export function observationSummary(report) {
+  const n = report?.findingCounts?.total || 0;
+  return `${report?.screensExplored || 0} screens · ${report?.actionsPerformed || 0} actions · ${n} finding(s) · observation only`;
 }
 
 // Turn a capture's OCQA markers into the same ship/no-ship report Tapp produces:
@@ -201,6 +216,10 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     findings.push({
       ...i,
       category: ISSUE_CATEGORY[i.type] || i.type,
+      // Structural evidence authority (ADR-0005): marker-derived findings are deterministic. The
+      // default gate consumes only deterministic-authority evidence; model-observed findings
+      // (vision/assert_ai) carry authority:"model-observed" and are advisory, never gate fails.
+      authority: "deterministic",
       ...(platform === "web" ? { evaluationTier: findingEvaluationTier(i, platform) } : {}),
     });
   }
@@ -222,27 +241,18 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const verdictLow = verdictFindings.filter((f) => f.severity === "low").length;
   const sampledFindings = platform === "web" ? findings.filter((finding) => finding.evaluationTier === "sampled") : [];
 
-  // Coverage floor: a verdict is only trustworthy if the app was actually exercised.
+  // Coverage floor: exploration is inconclusive if the app wasn't actually exercised. Exploration
+  // OBSERVES — it does not render a ship verdict or score (ADR-0005). Judgment (pass/fail/
+  // inconclusive) is the gate's job (evaluateGate), computed from these findings + coverage + policy.
   const inconclusive = screensExplored < 2 || actionsPerformed < 3;
-  let riskScore = Math.max(0, Math.min(100, 100 - verdictCrit * 25 - verdictHigh * 10 - verdictMed * 3));
-  if (inconclusive) riskScore = Math.min(riskScore, 40);
-
-  let verdict;
-  if (verdictCrit > 0) verdict = "blocked";
-  else if (inconclusive) verdict = "caution";
-  else if (riskScore < 50) verdict = "blocked";
-  else if (verdictHigh > 0 || riskScore < 80) verdict = "caution";
-  else verdict = "ready";
 
   const headline = inconclusive
     ? `Inconclusive — only ${screensExplored} screen(s) / ${actionsPerformed} action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.`
-    : verdict === "ready"
+    : findings.length === 0
     ? platform === "web"
-      ? "Automated web checks completed — no release-blocking deterministic findings in the exercised surfaces. Sampled control probes are advisory. This is not a content, privacy, brand, or business-claim review."
-      : "Ship-ready — no release-blocking issues found."
-    : verdict === "caution"
-    ? `Proceed with caution — ${findings.length} issue(s) to review.`
-    : `Not ready — ${findings.length} issue(s): ${crit} critical, ${high} high, ${med} medium, ${low} low.`;
+      ? "Automated web checks completed — no deterministic findings in the exercised surfaces. Sampled control probes are advisory. An observation, not a release decision, and not a content, privacy, brand, or business-claim review."
+      : "No issues surfaced in the exercised surfaces. An observation, not a release decision."
+    : `${findings.length} issue(s) surfaced for review (${crit} critical, ${high} high, ${med} medium, ${low} low). An observation, not a release decision.`;
 
   // The verdict's own honesty label: exactly which defect classes this run checked, which
   // it structurally could NOT check, and which conditions never came up — so "checked" is
@@ -295,17 +305,21 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   else conditionsNotReached.push("sign-in (no login form encountered this run)");
 
   return {
-    verdict,
-    // Exploratory web QA deliberately has no scalar. Its verdict derives from deterministic
-    // checks on exercised pages; budget-capped control probes remain visible but advisory.
-    // Native keeps the legacy heuristic score until it has an equivalent tier split.
-    confidence: platform === "web" ? null : riskScore,
-    releaseScore: platform === "web" ? null : riskScore,
-    scoreUnavailableReason: platform === "web"
-      ? "Exploratory web runs report deterministic findings, advisory sampled probes, and coverage instead of a scalar release score."
-      : null,
+    // An ExplorationRun observation: findings + coverage + evidence, NO ship verdict or score
+    // (ADR-0005). The gate (evaluateGate) turns this into a pass/fail/inconclusive release outcome.
+    kind: "tapp-exploration-run",
+    schemaVersion: 1,
+    // Complete ExplorationRun contract (ADR-0005 §4). runStatus/stopReason describe HOW the run
+    // ended; coverage/evidence/uiMap/comparison are the structured observation. uiMap and comparison
+    // are populated by consumers that build the map / diff a baseline (null in the bare observation).
+    runStatus: inconclusive ? "limited" : "completed",
+    stopReason: inconclusive ? "coverage-floor-not-met" : "completed",
     headline,
     inconclusive,
+    coverage: { screensExplored, actionsPerformed, screens: Array.from(screens) },
+    evidence: { markers: base.relativeMarkersFilePath },
+    uiMap: null,
+    comparison: null,
     checkedFor,
     notChecked,
     conditionsNotReached,
@@ -313,7 +327,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     screensExplored,
     actionsPerformed,
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },
-    verdictFindingCounts: {
+    deterministicFindingCounts: {
       critical: verdictCrit,
       high: verdictHigh,
       medium: verdictMed,
@@ -355,6 +369,7 @@ export function computeContentCollapse(currentCounts, baselineCounts) {
         type: "content_collapse",
         severity: "high",
         category: "content_collapse",
+        authority: "deterministic",
         title: `Screen lost most of its content (${base} → ${cur} elements)`,
         screen,
         step: null,
@@ -383,6 +398,7 @@ export function computeReachabilityLoss(current, baseline) {
       type: "screen_unreachable",
       severity: "high",
       category: "navigation_dead_end",
+      authority: "deterministic",
       title: "Screen explored in the baseline was never reached this run",
       screen,
       step: null,
@@ -421,15 +437,84 @@ export function computeRegression(current, baseline) {
   const newFindings = current.filter((f) => !currentMatches(f));
   const persisting = current.filter((f) => currentMatches(f));
   const resolved = baseline.filter((b) => !baselineMatched(b));
-  const newCritical = newFindings.filter((f) => f.severity === "critical").length;
-  const newHigh = newFindings.filter((f) => f.severity === "high").length;
 
+  // Comparison ONLY — no gate/pass/fail signal (ADR-0005). Exploration surfaces this diff; the merge
+  // decision is the gate's job. evaluateGate derives its regression fail from `newFindings` severities.
   return {
     hadBaseline: true,
     counts: { new: newFindings.length, persisting: persisting.length, resolved: resolved.length },
     newFindings,
     resolved,
-    // CI gate: fail the build when this run introduced new high/critical findings vs. the baseline.
-    gate: { newCritical, newHigh, failed: newCritical + newHigh > 0 },
+  };
+}
+
+// The gate's public outcome model (ADR-0005). A merge gate is ultimately block / don't-block, but
+// callers need to distinguish WHY: a deterministic violation is not the same as "we couldn't get
+// the evidence." Exit codes are the CI contract; precedence is fail > inconclusive > pass.
+export const GATE_EXIT = { pass: 0, fail: 1, error: 2, inconclusive: 3 };
+// Bump when the gate's decision semantics change (NOT the npm version). Recorded on every GateRun.
+export const GATE_POLICY_VERSION = "1";
+
+// Pure gate evaluator: frozen evidence + policy → a GateRun decision. Extracted verbatim from the
+// former inline logic in ci-report.js so the `[char]` characterization tests keep passing — the
+// merge decision (block/don't-block) is unchanged; this only classifies each reason as a
+// deterministic `fail` or an evidence-absent `inconclusive` and folds them by precedence. Reason
+// MESSAGES are preserved exactly (several are asserted by tests).
+//
+// DECOUPLED FROM THE SCORE (ADR-0005): the block-by-findings decision reads `deterministicFindingCounts` +
+// `inconclusive` via `findingsBlock`, NOT the score scalar or the `verdict` label. `verdict`/
+// `releaseScore` can therefore be removed from exploration output without changing any merge
+// decision. The `riskScore < 50` threshold is retained deliberately (kept explicit, inside
+// `findingsBlock`) and locked by the `[char]` risk-threshold test.
+export function evaluateGate({ report, regression = null, flows = [], scenarios = [], contracts = [], prPlan = null, baseline = null, failOn = "gate" } = {}) {
+  const reasons = []; // { kind: "fail" | "inconclusive", message }
+  const fail = (message) => reasons.push({ kind: "fail", message });
+  const inconclusive = (message) => reasons.push({ kind: "inconclusive", message });
+
+  // Classify each replayed suite by evidence authority (ADR-0005): a DETERMINISTIC step failure (or
+  // a non-model failure like an aborted/missing run) is a real fail; a suite with no deterministic
+  // failure that carries a model-observed (assert_ai) assertion cannot be decided by the default
+  // deterministic gate → inconclusive/needs-review (it must not silently pass, and a model verdict
+  // must not masquerade as a deterministic fail). No `--policy probabilistic` opt-in in 0.17.
+  const deterministicFail = (s) => s.deterministicFailed === true || (s.passed === false && !s.modelObserved);
+  const classify = (s) => (deterministicFail(s) ? "fail" : s.modelObserved ? "needs-review" : "pass");
+  for (const [label, suites] of [["flow", flows], ["multi-actor scenario", scenarios], ["release contract", contracts]]) {
+    const failed = suites.filter((s) => classify(s) === "fail");
+    if (failed.length) fail(`${failed.length} ${label}(s) failed`);
+    const needsReview = suites.filter((s) => classify(s) === "needs-review");
+    if (needsReview.length) inconclusive(`${needsReview.length} ${label}(s) contain assert_ai (model-observed); the deterministic gate cannot decide them — review, or add an explicit probabilistic policy`);
+  }
+  // Selected-but-unexecuted work is missing evidence, not an observed violation → inconclusive.
+  if (prPlan?.execution?.notRun) inconclusive(`${prPlan.execution.notRun} selected release contract(s) did not run`);
+  if (prPlan?.execution?.explorationFailed) inconclusive(`${prPlan.execution.explorationFailed} planned PR exploration target(s) failed or were not reached`);
+
+  if (failOn === "any") {
+    if (report.findingCounts.total > 0) fail(`${report.findingCounts.total} finding(s) (fail-on: any)`);
+    // "any" is the strictest policy — an inconclusive run (evidence not obtained) must never pass it.
+    if (report.inconclusive) inconclusive("run was inconclusive (coverage floor not met)");
+  } else if (failOn === "absolute" || (failOn === "gate" && !regression)) {
+    if (findingsBlock(report.deterministicFindingCounts, { inconclusive: report.inconclusive })) fail("blocking deterministic finding(s)");
+    if (report.inconclusive) inconclusive("run was inconclusive (coverage floor not met)");
+  } else {
+    if (regression?.newFindings?.length) {
+      const newCritical = regression.newFindings.filter((f) => f.severity === "critical").length;
+      const newHigh = regression.newFindings.filter((f) => f.severity === "high").length;
+      if (newCritical + newHigh > 0) fail(`${newCritical} new critical + ${newHigh} new high vs. baseline`);
+    }
+    if (findingsBlock(report.deterministicFindingCounts, { inconclusive: report.inconclusive })) fail("blocking deterministic finding(s)");
+    if (report.inconclusive && !baseline?.inconclusive) inconclusive("run became inconclusive vs. baseline (app may no longer launch/explore)");
+  }
+
+  const outcome = reasons.some((r) => r.kind === "fail") ? "fail"
+    : reasons.some((r) => r.kind === "inconclusive") ? "inconclusive"
+    : "pass";
+  return {
+    policy: failOn,
+    outcome,
+    exitCode: GATE_EXIT[outcome],
+    failed: outcome !== "pass", // retained for markdown/JSON consumers during migration
+    reasons: reasons.map((r) => r.message),
+    reasonDetails: reasons,
+    policyVersion: GATE_POLICY_VERSION,
   };
 }

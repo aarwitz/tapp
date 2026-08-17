@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { LEGACY_TAPP_DIRECTORY, TAPP_DIRECTORY, projectArtifactDirectory } from "./project-paths.js";
+import { TAPP_DIRECTORY, projectArtifactDirectory } from "./project-paths.js";
 
 export const PROJECT_CONFIG_RELATIVE_PATH = `${TAPP_DIRECTORY}/project.json`;
-export const LEGACY_PROJECT_CONFIG_RELATIVE_PATH = `${LEGACY_TAPP_DIRECTORY}/project.json`;
 
 const ACTOR_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;

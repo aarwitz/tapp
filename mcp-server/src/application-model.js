@@ -114,8 +114,8 @@ function applyRuntimeTargetValidation(root, targets, validation) {
         build: { container, scheme, configuration },
         evidence: {
           ...(captureId ? { capture: portableEvidenceReference(`tapp-capture:${captureId}`) } : {}),
-          verdict: String(validation.evidence?.verdict || "unknown"),
           inconclusive: validation.evidence?.inconclusive === true,
+          findingCount: Number(validation.evidence?.findingCount || 0),
           ...(validation.evidence?.observedAt ? { observedAt: String(validation.evidence.observedAt) } : {}),
         },
         detail: "Tapp built this repository target with the recorded scheme, installed it, launched it, and produced UI Map evidence.",
@@ -149,8 +149,8 @@ function persistedTargetValidations(root, outDir) {
       },
       evidence: {
         captureId: capture.startsWith("tapp-capture:") ? capture.slice("tapp-capture:".length) : "",
-        verdict: validation.evidence?.verdict,
         inconclusive: validation.evidence?.inconclusive === true,
+        findingCount: Number(validation.evidence?.findingCount || 0),
         observedAt: validation.evidence?.observedAt,
       },
     }];
@@ -569,7 +569,9 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
 
   const model = {
     schemaVersion: 1, kind: "tapp-application-model",
-    application: { name: applicationName(root, targets), repositoryRoot: ".", platforms: [...new Set(targets.map((target) => target.platform))].sort(), targetIds: targets.map((target) => target.id) },
+    // defaultTargetId: which target a bare `tapp explore` prepares when the repo has several (ADR-0005
+    // §5 resolution ladder). First detected; an explicit --target/--platform always overrides it.
+    application: { name: applicationName(root, targets), repositoryRoot: ".", platforms: [...new Set(targets.map((target) => target.platform))].sort(), targetIds: targets.map((target) => target.id), defaultTargetId: targets[0]?.id || "" },
     targets,
     actors,
     entities,
@@ -1415,8 +1417,8 @@ export function recordContractProposalValidation(plan, { id = "", name = "", pla
 export function recordGeneratedTaskProposalValidation({ projectDir, item, platform, evidence = "", detail = "" } = {}) {
   if (!["ios", "android", "web"].includes(platform)) throw new Error("platform must be ios|android|web");
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
-  const proposalMarkers = [".tapp", ".autotap"].map((directory) => `${path.sep}${directory}${path.sep}proposals${path.sep}tasks${path.sep}`);
-  const reviewedMarkers = [".tapp", ".autotap"].map((directory) => `${path.sep}${directory}${path.sep}tasks${path.sep}`);
+  const proposalMarkers = [`${path.sep}.tapp${path.sep}proposals${path.sep}tasks${path.sep}`];
+  const reviewedMarkers = [`${path.sep}.tapp${path.sep}tasks${path.sep}`];
   const updated = [];
   for (const taskPath of item?.generation?.taskPaths || []) {
     const absolute = path.resolve(root, taskPath);
@@ -1461,8 +1463,7 @@ export function mergeGeneratedTaskProposalValidation(plan, updates = []) {
 }
 
 function promotedDestination(root, source, kind) {
-  const marker = [".tapp", ".autotap"]
-    .map((directory) => `${path.sep}${directory}${path.sep}proposals${path.sep}${kind}${path.sep}`)
+  const marker = [`${path.sep}.tapp${path.sep}proposals${path.sep}${kind}${path.sep}`]
     .find((candidate) => source.includes(candidate));
   if (!marker) throw new Error(`Proposal ${kind.slice(0, -1)} is outside .tapp/proposals/${kind}: ${relative(root, source)}`);
   const index = source.indexOf(marker);
@@ -1505,7 +1506,7 @@ export async function promoteValidatedProposals(plan, { projectDir, ids = [] } =
     for (const taskPath of item.generation.taskPaths || []) {
       const source = path.resolve(root, taskPath);
       if (!fs.existsSync(source)) throw new Error(`Generated Task is missing: ${taskPath}`);
-      if (![".tapp", ".autotap"].some((directory) => String(source).includes(`${path.sep}${directory}${path.sep}proposals${path.sep}tasks${path.sep}`))) continue;
+      if (!String(source).includes(`${path.sep}.tapp${path.sep}proposals${path.sep}tasks${path.sep}`)) continue;
       const destination = promotedDestination(root, source, "tasks");
       moves.set(source, destination);
       let task = taskRecords.get(source);

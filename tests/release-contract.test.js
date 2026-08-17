@@ -67,7 +67,7 @@ test("TypeScript release contracts compile Tasks and exact expectations to a det
   assert.equal(compiled.actors.bob.credentials, undefined);
 });
 
-test("legacy runtapp and tapp-mcp contract imports remain loadable", async () => {
+test("legacy runtapp and tapp-mcp contract imports are rejected — only @aarwitz/tapp/contracts is authoring", async () => {
   for (const [index, specifier] of ["runtapp/contracts", "tapp-mcp/contracts"].entries()) {
     const root = repo();
     write(path.join(root, ".tapp", "tasks", "open-home.json"), JSON.stringify({
@@ -76,17 +76,16 @@ test("legacy runtapp and tapp-mcp contract imports remain loadable", async () =>
     const contractPath = write(path.join(root, ".tapp", "contracts", `legacy-${index}.contract.ts`), `
       import { defineContract } from "${specifier}";
       export default defineContract({
-        name: "legacyImportWorks",
-        title: "Legacy import works",
-        businessValue: "Existing repositories keep compiling after the package rename.",
+        name: "legacyImportRejected",
+        title: "Legacy import rejected",
+        businessValue: "Only the current authoring specifier compiles.",
         criticality: "high",
         platforms: ["web"],
         actors: { customer: {} },
         steps: [{ actor: "customer", task: "openHome" }],
       });
     `);
-    const contract = await loadReleaseContractFile(contractPath);
-    assert.equal(contract.name, "legacyImportWorks");
+    await assert.rejects(loadReleaseContractFile(contractPath), /limited to @aarwitz\/tapp\/contracts/);
   }
 });
 

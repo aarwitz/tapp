@@ -1759,7 +1759,7 @@ class ExplorerTests: XCTestCase {
 
                 let issueTitle = "Dead end: \(titleStr)"
                 issues.append((type: "dead_end", severity: "medium", title: issueTitle, desc: "No interactable elements found"))
-                print("OCQA_ISSUE:{\"type\":\"dead_end\",\"severity\":\"medium\",\"title\":\"\(escapedTitle)\",\"screen\":\"\(escapedTitle)\",\"step\":\(actionCount)}")
+                print("OCQA_ISSUE:{\"type\":\"dead_end\",\"severity\":\"medium\",\"title\":\"\(escapeJSON(issueTitle))\",\"screen\":\"\(escapedTitle)\",\"step\":\(actionCount)}")
 
                 // tryGoBack does swipe-down as its last resort (sheet dismiss)
                 let preBackTitle = titleStr

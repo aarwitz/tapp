@@ -26,7 +26,7 @@ UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys
 [ -z "$UDID" ] && { echo "❌ No booted simulator."; exit 2; }
 # When run through the installed `tapp` CLI, the harness cache lives under TAPP_HOME.
 XCTR=""
-TAPP_RUNTIME_HOME="${TAPP_HOME:-${AUTOTAP_HOME:-}}"
+TAPP_RUNTIME_HOME="${TAPP_HOME:-}"
 [ -n "$TAPP_RUNTIME_HOME" ] && XCTR="$(find "$TAPP_RUNTIME_HOME/harness-derived/Build/Products" -name '*.xctestrun' 2>/dev/null | head -1)"
 [ -z "$XCTR" ] && XCTR="$(find "$HOME/Library/Developer/Xcode/DerivedData/OCQAHarness-"*/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
 [ -z "$XCTR" ] && XCTR="$(find /tmp/tapp-harness-derived/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"

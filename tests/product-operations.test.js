@@ -81,15 +81,16 @@ test("product readiness reads validation from the canonical generation record", 
   assert.equal(readProductProject({ projectDir: root }).state.validated, true);
 });
 
-test("product snapshots read an existing legacy .autotap tree", () => {
+test("product snapshots read only the .tapp tree — a legacy .autotap model is ignored", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-legacy-tree-"));
   fs.mkdirSync(path.join(root, ".autotap"), { recursive: true });
   fs.writeFileSync(path.join(root, ".autotap", "application-model.json"), JSON.stringify({
     kind: "tapp-application-model", application: { name: "legacy", platforms: [], targetIds: [] }, targets: [], requirements: [],
   }));
   const project = readProductProject({ projectDir: root });
-  assert.equal(project.application.name, "legacy");
-  assert.equal(path.basename(project.paths.dir), ".autotap");
+  // The .autotap model is invisible; the snapshot resolves to an empty .tapp workspace.
+  assert.notEqual(project.application?.name, "legacy");
+  assert.equal(path.basename(project.paths.dir), ".tapp");
 });
 
 test("shared gate operation owns native target prerequisites with exact remediation", async () => {

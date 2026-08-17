@@ -2,7 +2,7 @@
 // tapp CLI — ship with proof.
 //
 //   Zero-config verbs (the same engine the MCP tools use, exported by mcp-server/src/index.js):
-//   tapp qa <bundleId|appId|url> Autonomous QA → verdict + findings + evidence
+//   tapp explore <bundleId|appId|url> Autonomous exploration → findings + evidence (observation)
 //   tapp open <bundleId>     Launch app → screen summary + screenshot file
 //   tapp tree <bundleId>     Accessibility tree of the current screen
 //   tapp shot                Screenshot the booted simulator
@@ -30,11 +30,12 @@ const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "
 
 // Redirect all writable output away from the (possibly read-only) package dir.
 // The old environment alias remains a read-only fallback for older integrations.
-const tappHome = (process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp")).trim();
+const tappHome = (process.env.TAPP_HOME || path.join(os.homedir(), ".tapp")).trim();
 process.env.TAPP_HOME = tappHome;
-fs.mkdirSync(tappHome, { recursive: true });
+// TAPP_HOME is created lazily (just before the switch) so `--help`, `help`, and `version` never
+// write anything — not even the home directory.
 
-const [, , command = "help", ...rest] = process.argv;
+let [, , command = "help", ...rest] = process.argv;
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { encoding: "utf8", ...opts });
@@ -133,7 +134,7 @@ const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "i
 
 function requireMacFor(what) {
   if (process.platform === "darwin") return;
-  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: tapp qa https://localhost:3000`);
+  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: tapp explore https://localhost:3000`);
   process.exit(1);
 }
 
@@ -194,6 +195,20 @@ async function resolveTargetOrExit(engine, input) {
   }
   if (resolved.via) console.error(`🎯 Target: ${resolved.bundleId} — ${resolved.via}`);
   return resolved.bundleId;
+}
+
+// Safe help: `--help`/`-h` on ANY verb prints the command reference and does NOTHING else — never
+// builds, launches, writes, or opens (ADR-0005 manual-testing requirement). `ci` keeps its own
+// richer `--help` (a safe usage print in ci-gate.sh); help/version don't need interception.
+if ((rest.includes("--help") || rest.includes("-h")) && !["help", "version", "--version", "-v", "ci"].includes(command)) {
+  console.log(`ℹ️  '${command} --help' — showing the command reference (--help never builds, launches, writes, or opens):\n`);
+  command = "help";
+  rest = [];
+}
+
+// Create TAPP_HOME only for commands that actually use it — never for help/version/--help.
+if (!["help", "version", "--version", "-v"].includes(command)) {
+  fs.mkdirSync(tappHome, { recursive: true });
 }
 
 switch (command) {
@@ -280,7 +295,7 @@ switch (command) {
     console.log(`🧭 Tapp init — ${built.model.application.name}`);
     console.log(`   targets: ${built.model.targets.length ? built.model.targets.map((target) => `${target.platform}:${target.name}`).join(", ") : "none"}`);
     console.log(`   UI Map: ${built.model.uiMap.status} · ${built.model.uiMap.nodeCount} states · ${built.model.uiMap.edgeCount} transitions`);
-    if (exploration) console.log(`   Exploration: ${exploration.verdict}${exploration.inconclusive ? " (inconclusive)" : ""} · ${exploration.uiMap.nodeCount} states · evidence: ${exploration.reportHtml || exploration.capture?.path || "capture recorded"}`);
+    if (exploration) console.log(`   Exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""} · ${exploration.uiMap.nodeCount} states · evidence: ${exploration.reportHtml || exploration.capture?.path || "capture recorded"}`);
     if (exploration?.managedRuntime) console.log(`   Managed web runtime: built/started ${exploration.target} for exploration and stopped it afterward · log: ${exploration.runtime.logPath}`);
     console.log(`   release plan: ${(written?.plan || built.plan).items.length} item(s) · ${pending.length} pending review · ${blocking.length} blocking requirement(s)`);
     for (const requirement of built.model.requirements) console.log(`   ${requirement.severity === "blocking" ? "❌" : "⚠️"} ${requirement.message} Next: ${requirement.remediation}`);
@@ -387,9 +402,13 @@ switch (command) {
   // ---- Zero-config verbs: the same engine the MCP tools use (exported by index.js),
   // invokable by any agent or human with no server setup at all.
 
+  case "explore":
   case "qa": {
+    // `explore` is the canonical verb (ADR-0005: exploration observes; the gate judges). `qa` is a
+    // hidden deprecated alias.
+    if (command === "qa") console.error("note: 'qa' is now 'explore' — 'qa' still works for now.\n");
     const { flags, positionals } = parseVerbArgs(rest);
-    const target = positionals[0] || "";
+    let target = positionals[0] || "";
     let baselineFindings;
     if (flags.baseline) {
       try {
@@ -401,6 +420,41 @@ switch (command) {
       }
     }
     const engine = await engineImport();
+    // Source-preparing bare explore (ADR-0005 §5): no explicit target + a repo application model →
+    // drive the model's default target end to end. Managed web is built/started/waited-for and
+    // always stopped; iOS is built + installed on the simulator; Android is built to an APK +
+    // installed. `--platform`/`--target` narrow which model target is chosen. With no model we fall
+    // through to the ordinary target resolution below, so nothing regresses.
+    if (!target && !flags["app-id"] && !flags.apk) {
+      const modelPath = existingProjectArtifactPath(process.cwd(), "application-model.json");
+      if (modelPath && fs.existsSync(modelPath)) {
+        const modelPlatform = typeof flags.platform === "string" ? flags.platform.toLowerCase() : "";
+        if (modelPlatform === "ios") requireMacFor("iOS testing");
+        const onProgress = (p) =>
+          process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} reached   `);
+        const r = await engine.runExploreTarget({
+          projectDir: process.cwd(),
+          platform: modelPlatform,
+          target: typeof flags.target === "string" ? flags.target : "",
+          maxActions: flags.actions,
+          timeout: flags.timeout,
+          testEmail: flags.email,
+          testPassword: flags.password,
+          baselineFindings,
+          surface: "cli",
+          onProgress,
+          onStatus: (t) => console.error(`ℹ️  ${t}`),
+        });
+        process.stderr.write("\n");
+        if (r.error) { printEngineError(r); process.exit(1); }
+        console.log(r.text);
+        if (flags.json && typeof flags.json === "string") {
+          fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
+          console.log(`\n📄 Full report JSON: ${flags.json} (pass as --baseline next run to diff regressions)`);
+        }
+        break;
+      }
+    }
     const platform = requestedPlatform(flags, target);
     if (!["ios", "android", "web"].includes(platform)) {
       console.error("❌ --platform must be ios|android|web");
@@ -625,7 +679,7 @@ switch (command) {
     }
     console.log("📱 Installed on the booted simulator:\n");
     for (const a of la.apps) console.log(`  ${a.bundleId}  (${a.name})`);
-    console.log(`\nTest one: tapp qa <bundleId>`);
+    console.log(`\nTest one: tapp explore <bundleId>`);
     break;
   }
 
@@ -655,7 +709,7 @@ switch (command) {
       process.exit(1);
     }
     console.log(`🔨 Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installed as ${inst.bundleId}`);
-    console.log(`\nNext: tapp qa ${inst.bundleId}`);
+    console.log(`\nNext: tapp explore ${inst.bundleId}`);
     break;
   }
 
@@ -1065,7 +1119,7 @@ switch (command) {
 
     console.log(`\n  Home: ${tappHome}`);
     console.log(healthy
-      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp open [target]\n  npx -y @aarwitz/tapp qa [target]"
+      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp open [target]\n  npx -y @aarwitz/tapp explore [target]"
       : "\nFix the ❌ items above, then re-run: tapp doctor");
     process.exit(healthy ? 0 : 1);
   }
@@ -1249,7 +1303,7 @@ switch (command) {
         replace: flags.replace === true,
       });
       console.log(`✅ Conclusive baseline established — ${selectedTarget.platform}:${selectedTarget.name}`);
-      console.log(`   ${written.validation.screensExplored} states · ${written.validation.actionsPerformed} actions · ${written.validation.suite.contracts} contracts · verdict ${written.validation.verdict}`);
+      console.log(`   ${written.validation.screensExplored} states · ${written.validation.actionsPerformed} actions · ${written.validation.suite.contracts} contracts · outcome ${written.validation.outcome}`);
       console.log(`   baseline: ${written.path}\n   source gate report: ${reportPath}`);
     } catch (error) { console.error(`❌ Baseline not written: ${error.message}`); process.exit(2); }
     break;
@@ -1372,15 +1426,32 @@ switch (command) {
   }
 
   default: {
-    console.log(`tapp v${pkg.version} — ship with proof. Autonomous QA and deterministic Flows for iOS, Android, and web.
+    console.log(`tapp v${pkg.version} — ship with proof. Autonomous exploration and deterministic release gates for iOS, Android, and web.
 
-Zero-config verbs (agents and humans can just run these — no server, no setup):
+Core — explore, prove, gate (agents and humans can just run these — no server, no setup):
+  tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
+                           release decision — run 'tapp ci' to gate a merge)
+                           (--platform ios|android|web · --app-id ID · --apk FILE · --actions N)
+  tapp contract run FILE   Replay a business-level release contract — the guarantees that must hold
+  tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive
+                           (see: tapp ci --help)
+
+Primitives — an agent's eyes and hands (no setup):
   tapp open [target]       Launch the app → screen summary + screenshot saved to a file
                            (web: --tap TEXT · --wait-for TEXT · --out FILE)
-  tapp qa [target]         Autonomous QA → verdict + findings + evidence
-                           (--platform ios|android|web · --app-id ID · --apk FILE · --actions N)
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
                            (web: --tap TEXT · --wait-for TEXT)
+
+Repository & release:
+  tapp init [repo]         Detect targets and write the application model + reviewable release plan
+                           (--explore grounds the UI Map · --url URL · --platform · --dry-run · --refresh)
+  tapp baseline create [repo] Run/import a conclusive full gate and save a target-scoped baseline
+  tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
+  tapp ci install [repo]   Generate a reviewable target-aware GitHub workflow + CI manifest
+  tapp actor set NAME      Configure an actor using environment-variable names only (never values)
+  tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
+
+Advanced — deterministic suites, lifecycle & compilers:
   tapp flow run FILE       Replay a committed deterministic Flow (no AI/API key)
   tapp flow validate FILE  Validate a Flow without launching a target
   tapp task validate FILE  Validate a reusable deterministic Task (+ optional UI Map grounding)
@@ -1388,38 +1459,32 @@ Zero-config verbs (agents and humans can just run these — no server, no setup)
   tapp task run FILE       Replay a Task directly on iOS, Android, or web
   tapp contract validate FILE  Validate a business-level TypeScript release contract
   tapp contract compile FILE   Compile a contract to the shared deterministic executor
-  tapp contract run FILE       Replay a release contract without AI or a coding agent
-  tapp pr plan --base REF      Select critical + diff-relevant contracts and report uncovered changes
-  tapp pr adopt PLAN --item ID Explicitly add an observed PR coverage proposal to the release plan
   tapp scenario run FILE   Replay an isolated multi-actor system Scenario (web)
   tapp scenario validate FILE  Validate actors, lifecycle, and deterministic steps
-  tapp map build MARKERS    Build/merge the persistent platform-neutral UI Map
-  tapp map inspect [FILE]   Inspect states, controls, platforms, and map validity
-  tapp map diff A B         Diff observed UI structure without false reachability claims
-  tapp baseline create [repo] Run/import a conclusive full gate and save a target-scoped baseline
-  tapp shot                Screenshot the booted simulator → file path (--out file.jpg)
-  tapp build [dir]         Build the iOS app in a repo for the simulator + install it (--scheme S)
-  tapp apps                List apps installed on the booted simulator (with bundle ids)
-  tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
-  tapp app [repo]          Optional local browser workspace for repository onboarding and review
-                           (loopback-only; --no-open · --port PORT)
-  tapp init [repo]         Detect targets and write the application model + reviewable release plan
-                           (--explore builds/starts or connects, grounds the UI Map, then tears down)
-                           (--url URL · --platform PLATFORM · --dry-run · --refresh)
-  tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
-  tapp actor set NAME      Configure an actor using environment-variable names only (never values)
+  tapp pr plan --base REF      Select critical + diff-relevant contracts and report uncovered changes
+  tapp pr adopt PLAN --item ID Explicitly add an observed PR coverage proposal to the release plan
   tapp plan show [FILE]    Inspect the proposed/accepted release-contract plan
   tapp plan review [FILE]  Explicitly approve, reject, or defer proposed plan items
   tapp plan generate [FILE] Generate compile-checked, untrusted contract drafts from approved Tasks
   tapp plan validate [FILE] Replay drafts on a real target; trust only after all platforms pass
   tapp plan promote [FILE] Move fully validated drafts into reviewed Tasks/contracts + map coverage
-  tapp ci ...              Merge-blocking release gate — explore + flows + baseline diff (see: tapp ci --help)
-  tapp ci install [repo]   Generate a reviewable target-aware GitHub workflow + CI manifest
+  tapp map build MARKERS    Build/merge the persistent platform-neutral UI Map
+  tapp map inspect [FILE]   Inspect states, controls, platforms, and map validity
+  tapp map diff A B         Diff observed UI structure without false reachability claims
 
-  [target] is whatever you have — nothing (finds + builds the Xcode project in the current
-  dir, or falls back to the app on the simulator), a repo dir, a path/to/App.app, a bundle
-  id, an Android app id/APK (--platform android --app-id ...), or an http(s) URL.
-  For iOS you never need to know a bundle id up front.
+Simulator & workspace:
+  tapp shot                Screenshot the booted simulator → file path (--out file.jpg)
+  tapp build [dir]         Build the iOS app in a repo for the simulator + install it (--scheme S)
+  tapp apps                List apps installed on the booted simulator (with bundle ids)
+  tapp app [repo]          Optional local browser workspace for repository onboarding and review
+                           (loopback-only; --no-open · --port PORT)
+
+  [target] is whatever you have — nothing (in an initialized repo, bare 'tapp explore' drives the
+  application model's default target from source: managed web is built/started/stopped, iOS is
+  built + installed, Android is built to an APK + installed; otherwise it finds + builds the Xcode
+  project in the current dir, or falls back to the app on the simulator), a repo dir, a
+  path/to/App.app, a bundle id, an Android app id/APK (--platform android --app-id ...), or an
+  http(s) URL. For iOS you never need to know a bundle id up front.
 
 Setup:
   tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)
@@ -1432,7 +1497,7 @@ MCP hookup (optional — for inline screenshots and the tap/type/inspect session
     { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp", "mcp"] } } }
 
 Then ask your agent things like:
-  "Run tapp qa on com.mycompany.app — is it ship-ready?"
+  "Explore com.mycompany.app and show me what breaks"
   "Open the settings screen and show me the screenshot"
   "Drive the login flow and record it as a replayable test"
 

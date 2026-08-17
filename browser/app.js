@@ -243,12 +243,14 @@ function renderDecision(run) {
     return;
   }
   const report = latest.report;
-  const failed = report.gate?.failed === true;
-  const verdict = failed ? "blocked" : report.inconclusive ? "caution" : report.verdict || "caution";
-  card.className = `decision-card ${verdict}`;
-  $("#decision-title").textContent = failed ? "Do not merge" : report.inconclusive ? "Inconclusive" : report.verdict === "ready" ? "Ready to merge" : "Review required";
+  // The decision reflects the GATE outcome (pass/fail/inconclusive), not a ship verdict — exploration
+  // only observes (ADR-0005). Without a gate, it's an observation, not a merge decision.
+  const outcome = report.gate?.outcome || (report.gate?.failed === true ? "fail" : report.inconclusive ? "inconclusive" : report.gate ? "pass" : null);
+  const cssClass = { pass: "ready", fail: "blocked", inconclusive: "caution" }[outcome] || "caution";
+  card.className = `decision-card ${cssClass}`;
+  $("#decision-title").textContent = outcome === "fail" ? "Do not merge" : outcome === "inconclusive" ? "Inconclusive" : outcome === "pass" ? "Ready to merge" : "Observed — not a release decision";
   $("#decision-detail").textContent = report.gate?.reasons?.join(" · ") || report.headline || "Review the evidence below.";
-  $("#overview-evidence").innerHTML = `<div class="latest-run-line"><span class="verdict-dot ${esc(verdict)}"></span><div><strong>${esc(report.headline || pretty(verdict))}</strong><small>${esc(pretty(report.platform || "unknown"))} · ${compactDate(latest.createdAt)} · ${(report.contracts || []).filter((item) => item.passed).length}/${(report.contracts || []).length} contracts passed</small></div></div><p>${esc((report.gate?.reasons || ["No blocking release-gate reason reported."])[0])}</p>${reportLink(report)}`;
+  $("#overview-evidence").innerHTML = `<div class="latest-run-line"><span class="verdict-dot ${esc(cssClass)}"></span><div><strong>${esc(report.headline || pretty(cssClass))}</strong><small>${esc(pretty(report.platform || "unknown"))} · ${compactDate(latest.createdAt)} · ${(report.contracts || []).filter((item) => item.passed).length}/${(report.contracts || []).length} contracts passed</small></div></div><p>${esc((report.gate?.reasons || ["No blocking release-gate reason reported."])[0])}</p>${reportLink(report)}`;
 }
 
 function renderEvidence(runs) {
@@ -284,7 +286,11 @@ function renderRuns(runs) {
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
     const report = run.report;
     const failed = report?.gate?.failed === true;
-    const status = !report ? run.status : failed ? "blocked" : report.inconclusive ? "inconclusive" : report.verdict || "completed";
+    // Status reflects the gate outcome (pass/fail/inconclusive), mapped to the existing CSS classes.
+    const status = !report ? run.status
+      : report.gate?.outcome === "fail" || failed ? "blocked"
+      : report.gate?.outcome === "inconclusive" || report.inconclusive ? "inconclusive"
+      : report.gate?.outcome === "pass" ? "ready" : "completed";
     return `<button class="run-row ${run.id === state.selectedRunId ? "selected" : ""}" data-run-id="${esc(run.id)}"><span class="run-status ${esc(status)}">${failed ? "×" : report ? "✓" : "…"}</span><span><strong>${esc(report?.headline || `Release run ${run.id.slice(-8)}`)}</strong><small>${compactDate(run.createdAt)} · ${esc(pretty(report?.platform || "unknown"))}</small></span><em>${esc(pretty(status))}</em></button>`;
   }).join("") : '<div class="empty">No release runs yet.</div>';
   const selected = runs.find((run) => run.id === state.selectedRunId) || runs[0];

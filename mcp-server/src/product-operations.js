@@ -65,7 +65,7 @@ function artifactPaths(root, outDir = ".tapp") {
 }
 
 function productRunRoot(root) {
-  const home = process.env.TAPP_HOME || process.env.AUTOTAP_HOME || path.join(os.homedir(), ".tapp");
+  const home = process.env.TAPP_HOME || path.join(os.homedir(), ".tapp");
   const identity = crypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
   return path.join(home, "product-runs", identity);
 }
@@ -84,7 +84,7 @@ function listProductRuns(root) {
         id: entry.name,
         createdAt: fs.statSync(dir).birthtime.toISOString(),
         status: report ? "completed" : "incomplete",
-        verdict: report?.verdict || null,
+        outcome: report?.gate?.outcome || null,
         gate: report?.gate || null,
         reportPath: fs.existsSync(reportPath) ? reportPath : null,
         markdownPath: fs.existsSync(markdownPath) ? markdownPath : null,
