@@ -205,7 +205,22 @@ export class AndroidDriver {
     const r = await this.adb(["shell", "am", "start", "-W", "-n", component], { timeout: 30_000 });
     if (r.code !== 0 || !/Status:\s*ok/i.test(String(r.stdout))) throw new Error((r.stderr || r.stdout || `Could not launch ${this.appId}`).trim());
     await sleep(600);
-    return this.snapshot();
+    return this.waitForOwnedSnapshot();
+  }
+
+  async waitForOwnedSnapshot(timeoutMs = 4_000) {
+    const deadline = Date.now() + timeoutMs;
+    let latest;
+    do {
+      latest = await this.snapshot();
+      if (isAndroidAppSnapshot(latest, this.appId)) return latest;
+      if (Date.now() >= deadline) break;
+      // Activity and UIAutomator are intentionally required to agree. During app
+      // launch they may momentarily describe opposite sides of the transition;
+      // retry that mixed snapshot instead of turning it into zero-screen evidence.
+      await sleep(150);
+    } while (Date.now() < deadline);
+    return latest;
   }
 
   async currentActivity() {

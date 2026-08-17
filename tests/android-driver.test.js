@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectAndroidScreen, findAndroidElement, isAndroidAppSnapshot, parseLatestAndroidCrashExitInfo, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
+import { AndroidDriver, detectAndroidScreen, findAndroidElement, isAndroidAppSnapshot, parseLatestAndroidCrashExitInfo, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
 
 const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hierarchy rotation="0">
@@ -47,4 +47,23 @@ test("Android exit history selects the latest real crash instead of a newer non-
     process=io.tapp.demo reason=4 (APP CRASH(EXCEPTION))`;
   assert.equal(parseLatestAndroidCrashExitInfo(history), "2026-08-17 01:55:32.728|17985|4");
   assert.equal(parseLatestAndroidCrashExitInfo("reason=16 (PACKAGE UPDATED)"), null);
+});
+
+test("Android launch retries a mixed activity/UI snapshot until app ownership agrees", async () => {
+  const driver = Object.create(AndroidDriver.prototype);
+  driver.appId = "io.tapp.login";
+  let calls = 0;
+  driver.snapshot = async () => {
+    calls += 1;
+    return calls === 1 ? {
+      activity: "io.tapp.login/.MainActivity",
+      elements: [{ package: "com.android.systemui", text: "stale system surface" }],
+    } : {
+      activity: "io.tapp.login/.MainActivity",
+      elements: [{ package: "io.tapp.login", text: "Sign In" }],
+    };
+  };
+  const snapshot = await driver.waitForOwnedSnapshot(1_000);
+  assert.equal(calls, 2);
+  assert.equal(isAndroidAppSnapshot(snapshot, driver.appId), true);
 });
