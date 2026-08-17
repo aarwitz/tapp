@@ -57,13 +57,36 @@ test("Android launch retries a mixed activity/UI snapshot until app ownership ag
     calls += 1;
     return calls === 1 ? {
       activity: "io.tapp.login/.MainActivity",
-      elements: [{ package: "com.android.systemui", text: "stale system surface" }],
+      elements: [{ package: "io.tapp.other", text: "stale app surface" }],
     } : {
       activity: "io.tapp.login/.MainActivity",
       elements: [{ package: "io.tapp.login", text: "Sign In" }],
     };
   };
   const snapshot = await driver.waitForOwnedSnapshot(1_000);
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
+  assert.equal(isAndroidAppSnapshot(snapshot, driver.appId), true);
+});
+
+test("Android launch dismisses a stale system crash surface before accepting ownership", async () => {
+  const driver = Object.create(AndroidDriver.prototype);
+  driver.appId = "io.tapp.login";
+  let calls = 0;
+  let dismissals = 0;
+  driver.closeSystemDialogs = async () => { dismissals += 1; };
+  driver.snapshot = async () => {
+    calls += 1;
+    if (calls === 1) return {
+      activity: "io.tapp.login/.MainActivity",
+      elements: [{ package: "android", text: "Tapp corpus keeps stopping" }],
+    };
+    return {
+      activity: "io.tapp.login/.MainActivity",
+      elements: [{ package: "io.tapp.login", text: "Sign In" }],
+    };
+  };
+  const snapshot = await driver.waitForOwnedSnapshot(1_000);
+  assert.equal(dismissals, 1);
+  assert.equal(calls, 3);
   assert.equal(isAndroidAppSnapshot(snapshot, driver.appId), true);
 });

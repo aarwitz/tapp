@@ -139,6 +139,13 @@ export function isAndroidAppSnapshot(snapshot, appId) {
   return ownsActivity || ownsElements;
 }
 
+function isSystemOverlayOverApp(snapshot, appId) {
+  if (!snapshot || !appId || !String(snapshot.activity || "").startsWith(`${appId}/`)) return false;
+  const packages = new Set((snapshot.elements || []).map((element) => element.package).filter(Boolean));
+  return packages.size > 0 && !packages.has(appId)
+    && [...packages].every((name) => name === "android" || name.startsWith("com.android.systemui"));
+}
+
 export class AndroidDriver {
   constructor({ adbPath = resolveAdbPath(), serial = "", appId = "" } = {}) {
     if (!adbPath) throw new Error("Android testing needs adb. Install Android SDK platform-tools or set ANDROID_SDK_ROOT.");
@@ -208,12 +215,32 @@ export class AndroidDriver {
     return this.waitForOwnedSnapshot();
   }
 
-  async waitForOwnedSnapshot(timeoutMs = 4_000) {
+  async closeSystemDialogs() {
+    // A crash dialog from the previous app can outlive that process and cover a
+    // newly launched app. The shell broadcast only closes system-owned surfaces;
+    // it does not clear crash history or interact with the app under test.
+    await this.adb(["shell", "am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS"]);
+  }
+
+  async waitForOwnedSnapshot(timeoutMs = 12_000) {
     const deadline = Date.now() + timeoutMs;
     let latest;
+    let consecutiveOwned = 0;
+    let overlayDismissed = false;
     do {
       latest = await this.snapshot();
-      if (isAndroidAppSnapshot(latest, this.appId)) return latest;
+      if (isAndroidAppSnapshot(latest, this.appId)) {
+        consecutiveOwned += 1;
+        // One mixed dumpsys/UIAutomator sample caused cross-run contamination.
+        // Require agreement twice before handing the surface to exploration.
+        if (consecutiveOwned >= 2) return latest;
+      } else {
+        consecutiveOwned = 0;
+        if (!overlayDismissed && isSystemOverlayOverApp(latest, this.appId)) {
+          overlayDismissed = true;
+          await this.closeSystemDialogs();
+        }
+      }
       if (Date.now() >= deadline) break;
       // Activity and UIAutomator are intentionally required to agree. During app
       // launch they may momentarily describe opposite sides of the transition;
