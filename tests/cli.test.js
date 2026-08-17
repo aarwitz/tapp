@@ -230,6 +230,7 @@ test("tapp ci help documents the portable gate without requiring Xcode", () => {
   assert.match(out, /should this merge/i);
   assert.match(out, /bundle id is detected from the \.app when omitted/i);
   assert.match(out, /--json-out/);
+  assert.match(out, /--serial <adb-serial>/);
 });
 
 test("tapp validates a committed Android Flow without an agent or device", () => {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectAndroidScreen, findAndroidElement, isAndroidAppSnapshot, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
+import { detectAndroidScreen, findAndroidElement, isAndroidAppSnapshot, parseLatestAndroidCrashExitInfo, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
 
 const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hierarchy rotation="0">
@@ -36,4 +36,15 @@ test("Android ownership rejects a stale activity paired with another app's UI tr
     activity: "io.tapp.corpus.demo/.MainActivity",
     elements: [{ package: "io.tapp.corpus.demo", text: "Dashboard" }],
   }, "io.tapp.corpus.demo"), true);
+});
+
+test("Android exit history selects the latest real crash instead of a newer non-crash exit", () => {
+  const history = `ApplicationExitInfo #0:
+    timestamp=2026-08-17 01:55:56.196 pid=18132 realUid=10207
+    process=io.tapp.demo reason=9 (EXCESSIVE RESOURCE USAGE)
+  ApplicationExitInfo #1:
+    timestamp=2026-08-17 01:55:32.728 pid=17985 realUid=10207
+    process=io.tapp.demo reason=4 (APP CRASH(EXCEPTION))`;
+  assert.equal(parseLatestAndroidCrashExitInfo(history), "2026-08-17 01:55:32.728|17985|4");
+  assert.equal(parseLatestAndroidCrashExitInfo("reason=16 (PACKAGE UPDATED)"), null);
 });

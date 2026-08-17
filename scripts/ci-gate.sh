@@ -11,7 +11,7 @@
 #
 # Usage:
 #   scripts/ci-gate.sh [--platform ios] --app <path/to/App.app> [--bundle-id <com.example.app>]
-#   scripts/ci-gate.sh --platform android --apk <path/to/app.apk> --app-id <com.example.app>
+#   scripts/ci-gate.sh --platform android --apk <path/to/app.apk> --app-id <com.example.app> [--serial <adb-serial>]
 #   scripts/ci-gate.sh --platform web [--url <http(s)://owned-app>]
 #                      # omit --url with --project-dir to detect/build/start/stop one owned web target
 #                      # bundle id is detected from the .app when omitted
@@ -31,6 +31,7 @@
 #                      [--json-out <file.json>]   # write the full report (use as the next baseline)
 #                      [--md-out <file.md>]       # write the rendered markdown report (for a PR comment)
 #                      [--device <name>]          # simulator device to boot if none is (default "iPhone 16 Pro")
+#                      [--serial <adb-serial>]    # Android emulator/device (default: first connected device)
 #
 # The app must be a SIMULATOR build (xcodebuild ... -destination 'generic/platform=iOS Simulator').
 set -uo pipefail

@@ -41,6 +41,16 @@ function runFile(command, args, { encoding = "utf8", timeout = 30_000, maxBuffer
   });
 }
 
+export function parseLatestAndroidCrashExitInfo(output) {
+  const blocks = String(output || "").split(/ApplicationExitInfo #\d+:/).slice(1);
+  for (const block of blocks) {
+    const reason = block.match(/\breason=(4|5)\s+\((?:APP CRASH|NATIVE CRASH)/);
+    const identity = block.match(/\btimestamp=([^\n]+?)\s+pid=(\d+)\b/);
+    if (reason && identity) return `${identity[1].trim()}|${identity[2]}|${reason[1]}`;
+  }
+  return null;
+}
+
 function entityDecode(value) {
   return String(value || "")
     .replaceAll("&quot;", '"').replaceAll("&apos;", "'")
@@ -169,6 +179,13 @@ export class AndroidDriver {
     if (!this.appId) return false;
     const r = await this.adb(["shell", "pidof", this.appId]);
     return r.code === 0 && /\d/.test(String(r.stdout || ""));
+  }
+
+  async latestCrashExitInfo() {
+    if (!this.appId) return null;
+    const r = await this.adb(["shell", "dumpsys", "activity", "exit-info", this.appId]);
+    if (r.code !== 0) return null;
+    return parseLatestAndroidCrashExitInfo(r.stdout);
   }
 
   async clearData() {

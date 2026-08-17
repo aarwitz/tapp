@@ -133,6 +133,24 @@ test("Android exploration classifies a process exit and never maps the exposed a
   assert.doesNotMatch(markers, /"screen":"Other"|"to":"Other"/);
 });
 
+class TransientCrashDriver extends CrashDriver {
+  constructor() { super(); this.livenessChecks = 0; }
+  async isProcessAlive() {
+    this.livenessChecks += 1;
+    return this.livenessChecks < 3;
+  }
+}
+
+test("Android exploration waits through transient pid liveness before classifying a crash", async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-transient-crash-"));
+  const driver = new TransientCrashDriver();
+  const result = await exploreAndroid({ appId: "io.tapp.crash", maxActions: 3, timeoutSec: 30, outDir, driver });
+  const markers = fs.readFileSync(result.markersPath, "utf8");
+  assert.equal(driver.livenessChecks, 3);
+  assert.match(markers, /OCQA_ISSUE:.*"type":"crash".*"severity":"critical"/);
+  assert.doesNotMatch(markers, /"screen":"Other"|"to":"Other"/);
+});
+
 class TargetPathDriver {
   constructor() { this.appId = "io.tapp.target"; this.screen = "Home"; }
   async ensureDevice() {}

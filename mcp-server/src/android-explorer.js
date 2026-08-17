@@ -9,6 +9,7 @@ import { semanticUiKey } from "./ui-map.js";
 const ERROR_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception|has stopped)\b/i;
 const DESTRUCTIVE_RE = /\b(delete|remove|purchase|buy now|pay now|reset|erase|unsubscribe|sign out|log out|logout)\b/i;
 const AUTH_SUBMIT_RE = /\b(sign[ -]?in|log[ -]?in|continue|submit)\b/i;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function stateHash(snap) {
   return snap.elements.map((e) => `${androidElementKey(e)}:${e.text}:${e.x},${e.y}`).join("|");
@@ -72,12 +73,26 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
   const visited = new Map();
   let issues = 0;
   let actions = 0;
+  const crashExitBaseline = typeof d.latestCrashExitInfo === "function" ? await d.latestCrashExitInfo() : null;
   let snap = await d.launch({ clearData });
   let crashReported = false;
 
   const reportProcessExit = async (screen, step) => {
-    const alive = typeof d.isProcessAlive === "function" ? await d.isProcessAlive() : true;
-    if (alive || crashReported) return false;
+    if (typeof d.isProcessAlive !== "function") return false;
+    // Android may reveal the launcher before the crashing process disappears from
+    // pidof. A one-shot liveness sample made identical crashes scheduler-dependent.
+    // Poll only after app ownership is already lost: external intents and ordinary
+    // Back boundaries keep the originating process alive and remain boundaries.
+    let alive = await d.isProcessAlive();
+    let latestCrash = typeof d.latestCrashExitInfo === "function" ? await d.latestCrashExitInfo() : null;
+    const exitDeadline = Date.now() + 2_000;
+    while (alive && (!latestCrash || latestCrash === crashExitBaseline) && Date.now() < exitDeadline) {
+      await sleep(150);
+      alive = await d.isProcessAlive();
+      latestCrash = typeof d.latestCrashExitInfo === "function" ? await d.latestCrashExitInfo() : null;
+    }
+    const recordedCrash = !!latestCrash && latestCrash !== crashExitBaseline;
+    if ((alive && !recordedCrash) || crashReported) return false;
     crashReported = true;
     emit("ISSUE", { type: "crash", severity: "critical", title: "App process exited during exploration", screen: screen || "Launch", step });
     issues += 1;
