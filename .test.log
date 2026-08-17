@@ -1,0 +1,1892 @@
+
+> @aarwitz/tapp@0.17.0-rc.6 test
+> node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/android-primitives-protocol.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/cloud-runner.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/action.test.js tests/package-surface.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js
+
+TAP version 13
+# Subtest: composite Action does not interpolate inputs into shell source
+ok 1 - composite Action does not interpolate inputs into shell source
+  ---
+  duration_ms: 1.06975
+  type: 'test'
+  ...
+# Subtest: nested third-party Actions are pinned to full commit SHAs
+ok 2 - nested third-party Actions are pinned to full commit SHAs
+  ---
+  duration_ms: 0.181584
+  type: 'test'
+  ...
+# Subtest: Action owns the automatic baseline lifecycle
+ok 3 - Action owns the automatic baseline lifecycle
+  ---
+  duration_ms: 0.562209
+  type: 'test'
+  ...
+# Subtest: Action maps the gate's exact exit code to a distinct outcome (no nonzero-collapse)
+ok 4 - Action maps the gate's exact exit code to a distinct outcome (no nonzero-collapse)
+  ---
+  duration_ms: 0.202041
+  type: 'test'
+  ...
+# Subtest: Action isolates writable runtime data and exposes CI controls
+ok 5 - Action isolates writable runtime data and exposes CI controls
+  ---
+  duration_ms: 0.443417
+  type: 'test'
+  ...
+# Subtest: repository CI exercises the public composite Action on every supported platform
+ok 6 - repository CI exercises the public composite Action on every supported platform
+  ---
+  duration_ms: 0.542375
+  type: 'test'
+  ...
+# Subtest: repository workflows pin every third-party Action to a full commit SHA
+ok 7 - repository workflows pin every third-party Action to a full commit SHA
+  ---
+  duration_ms: 0.331125
+  type: 'test'
+  ...
+# Subtest: repository CI rejects high-severity production dependency advisories
+ok 8 - repository CI rejects high-severity production dependency advisories
+  ---
+  duration_ms: 0.125583
+  type: 'test'
+  ...
+# Subtest: UIAutomator XML becomes the shared accessibility element shape
+ok 9 - UIAutomator XML becomes the shared accessibility element shape
+  ---
+  duration_ms: 9.780958
+  type: 'test'
+  ...
+# Subtest: Android selection prefers stable ids then accessibility descriptions and labels
+ok 10 - Android selection prefers stable ids then accessibility descriptions and labels
+  ---
+  duration_ms: 0.497125
+  type: 'test'
+  ...
+# Subtest: Android ownership rejects a stale activity paired with another app's UI tree
+ok 11 - Android ownership rejects a stale activity paired with another app's UI tree
+  ---
+  duration_ms: 0.144083
+  type: 'test'
+  ...
+# Subtest: Android exit history selects the latest real crash instead of a newer non-crash exit
+ok 12 - Android exit history selects the latest real crash instead of a newer non-crash exit
+  ---
+  duration_ms: 0.333083
+  type: 'test'
+  ...
+# Subtest: Android launch retries a mixed activity/UI snapshot until app ownership agrees
+ok 13 - Android launch retries a mixed activity/UI snapshot until app ownership agrees
+  ---
+  duration_ms: 303.682208
+  type: 'test'
+  ...
+# Subtest: Android launch dismisses a stale system crash surface before accepting ownership
+ok 14 - Android launch dismisses a stale system crash surface before accepting ownership
+  ---
+  duration_ms: 303.342458
+  type: 'test'
+  ...
+# Subtest: Android exploration fills each semantic field once before submitting
+ok 15 - Android exploration fills each semantic field once before submitting
+  ---
+  duration_ms: 3.76875
+  type: 'test'
+  ...
+# Subtest: Android exploration reports a submitted sign-in that remains on the login surface
+ok 16 - Android exploration reports a submitted sign-in that remains on the login surface
+  ---
+  duration_ms: 0.740208
+  type: 'test'
+  ...
+# Subtest: Android blank detection ignores meaningless framework containers
+ok 17 - Android blank detection ignores meaningless framework containers
+  ---
+  duration_ms: 0.127584
+  type: 'test'
+  ...
+# Subtest: Android login-submit recognition handles accessibility identifiers
+ok 18 - Android login-submit recognition handles accessibility identifiers
+  ---
+  duration_ms: 0.047416
+  type: 'test'
+  ...
+# Subtest: Android exploration never maps the launcher after Back leaves the app
+ok 19 - Android exploration never maps the launcher after Back leaves the app
+  ---
+  duration_ms: 0.528583
+  type: 'test'
+  ...
+# Subtest: Android exploration classifies a process exit and never maps the exposed app behind it
+ok 20 - Android exploration classifies a process exit and never maps the exposed app behind it
+  ---
+  duration_ms: 0.591208
+  type: 'test'
+  ...
+# Subtest: Android exploration waits through transient pid liveness before classifying a crash
+ok 21 - Android exploration waits through transient pid liveness before classifying a crash
+  ---
+  duration_ms: 306.330458
+  type: 'test'
+  ...
+# Subtest: Android PR exploration replays one bounded UI Map path before broad crawling
+ok 22 - Android PR exploration replays one bounded UI Map path before broad crawling
+  ---
+  duration_ms: 1.052083
+  type: 'test'
+  ...
+# Subtest: Android Flow replays deterministically without a model
+ok 23 - Android Flow replays deterministically without a model
+  ---
+  duration_ms: 2.4425
+  type: 'test'
+  ...
+# Subtest: Android open leaves the launched app foreground for follow-up eyes-and-hands commands
+ok 24 - Android open leaves the launched app foreground for follow-up eyes-and-hands commands
+  ---
+  duration_ms: 0.721875
+  type: 'test'
+  ...
+# Subtest: Android tree launches an explicit target and can also inspect the current foreground screen
+ok 25 - Android tree launches an explicit target and can also inspect the current foreground screen
+  ---
+  duration_ms: 0.0945
+  type: 'test'
+  ...
+# Subtest: repository validation metadata stores portable evidence references instead of local absolute paths
+ok 26 - repository validation metadata stores portable evidence references instead of local absolute paths
+  ---
+  duration_ms: 0.940625
+  type: 'test'
+  ...
+# Subtest: plan validation resolves artifact paths before changing into the imported repository
+ok 27 - plan validation resolves artifact paths before changing into the imported repository
+  ---
+  duration_ms: 0.144959
+  type: 'test'
+  ...
+# Subtest: revalidating a promoted contract keeps item and top-level generation trust in sync
+ok 28 - revalidating a promoted contract keeps item and top-level generation trust in sync
+  ---
+  duration_ms: 0.135958
+  type: 'test'
+  ...
+# Subtest: tapp init constructs one evidence-classified model and grounded compact release plan across platforms
+ok 29 - tapp init constructs one evidence-classified model and grounded compact release plan across platforms
+  ---
+  duration_ms: 112.038
+  type: 'test'
+  ...
+# Subtest: a successful init Xcode build removes the scheme blocker with portable runtime evidence
+ok 30 - a successful init Xcode build removes the scheme blocker with portable runtime evidence
+  ---
+  duration_ms: 4.74075
+  type: 'test'
+  ...
+# Subtest: an empty UI Map remains inconclusive and blocks release planning
+ok 31 - an empty UI Map remains inconclusive and blocks release planning
+  ---
+  duration_ms: 2.020042
+  type: 'test'
+  ...
+# Subtest: an observed state never hides an inconclusive exploration run
+ok 32 - an observed state never hides an inconclusive exploration run
+  ---
+  duration_ms: 1.466625
+  type: 'test'
+  ...
+# Subtest: init artifacts never overwrite by default and refresh preserves explicit human decisions
+ok 33 - init artifacts never overwrite by default and refresh preserves explicit human decisions
+  ---
+  duration_ms: 81.571875
+  type: 'test'
+  ...
+# Subtest: release-plan review rejects ambiguous or unknown decisions
+ok 34 - release-plan review rejects ambiguous or unknown decisions
+  ---
+  duration_ms: 94.066792
+  type: 'test'
+  ...
+# Subtest: a multi-target workspace uses the repository name instead of the first module name
+ok 35 - a multi-target workspace uses the repository name instead of the first module name
+  ---
+  duration_ms: 42.605625
+  type: 'test'
+  ...
+# Subtest: a multi-target workspace reports target-scoped UI Map coverage without hiding missing targets
+ok 36 - a multi-target workspace reports target-scoped UI Map coverage without hiding missing targets
+  ---
+  duration_ms: 144.912125
+  type: 'test'
+  ...
+# Subtest: backend-only Node packages are not invented as browser application targets
+ok 37 - backend-only Node packages are not invented as browser application targets
+  ---
+  duration_ms: 1.75675
+  type: 'test'
+  ...
+# Subtest: web target dependency installation is derived from repository evidence
+ok 38 - web target dependency installation is derived from repository evidence
+  ---
+  duration_ms: 1.564125
+  type: 'test'
+  ...
+# Subtest: a deterministically managed web target does not invent an owned-URL blocker
+ok 39 - a deterministically managed web target does not invent an owned-URL blocker
+  ---
+  duration_ms: 0.457625
+  type: 'test'
+  ...
+# Subtest: application model merges explicit actors and contract placeholders without persisting values
+ok 40 - application model merges explicit actors and contract placeholders without persisting values
+  ---
+  duration_ms: 281.196083
+  type: 'test'
+  ...
+# Subtest: application model blocks missing and conflicting actor credential bindings
+ok 41 - application model blocks missing and conflicting actor credential bindings
+  ---
+  duration_ms: 64.566708
+  type: 'test'
+  ...
+# Subtest: planner proposes a grounded cross-actor propagation contract only with isolated actors, compatible Tasks, and reset lifecycle
+ok 42 - planner proposes a grounded cross-actor propagation contract only with isolated actors, compatible Tasks, and reset lifecycle
+  ---
+  duration_ms: 418.291833
+  type: 'test'
+  ...
+# Subtest: planner proposes a durable checkout contract only from reviewed outputs, order history, observed states, and reset lifecycle
+ok 43 - planner proposes a durable checkout contract only from reviewed outputs, order history, observed states, and reset lifecycle
+  ---
+  duration_ms: 367.476125
+  type: 'test'
+  ...
+# Subtest: approved Task-backed plan items generate drafts while UI-only ideas without entry evidence stay blocked
+ok 44 - approved Task-backed plan items generate drafts while UI-only ideas without entry evidence stay blocked
+  ---
+  duration_ms: 680.803375
+  type: 'test'
+  ...
+# Subtest: approved UI Map journeys generate reusable compositional Task drafts before contract drafts
+ok 45 - approved UI Map journeys generate reusable compositional Task drafts before contract drafts
+  ---
+  duration_ms: 277.961625
+  type: 'test'
+  ...
+# Subtest: UI Map proposal generation composes adjacent-edge Tasks once and preserves reviewed entry-to-root setup
+ok 46 - UI Map proposal generation composes adjacent-edge Tasks once and preserves reviewed entry-to-root setup
+  ---
+  duration_ms: 259.034417
+  type: 'test'
+  ...
+# Subtest: committed contracts do not mark current-revision keyless validation complete
+ok 47 - committed contracts do not mark current-revision keyless validation complete
+  ---
+  duration_ms: 1.079167
+  type: 'test'
+  ...
+# Subtest: hosted operations remain pending while queued or leased to a runner
+ok 48 - hosted operations remain pending while queued or leased to a runner
+  ---
+  duration_ms: 0.074917
+  type: 'test'
+  ...
+# Subtest: visible source chooser converges folder and GitHub imports into the same product journey
+ok 49 - visible source chooser converges folder and GitHub imports into the same product journey # SKIP
+  ---
+  duration_ms: 0.202666
+  type: 'test'
+  ...
+# Subtest: multiple detected applications require an explicit polished target choice
+ok 50 - multiple detected applications require an explicit polished target choice # SKIP
+  ---
+  duration_ms: 0.053292
+  type: 'test'
+  ...
+# Subtest: browser live controls keep one actionable semantic target and discard hittable static descendants
+ok 51 - browser live controls keep one actionable semantic target and discard hittable static descendants
+  ---
+  duration_ms: 1.883833
+  type: 'test'
+  ...
+# Subtest: browser product is a loopback, authenticated, CSRF-protected adapter over shared operations
+ok 52 - browser product is a loopback, authenticated, CSRF-protected adapter over shared operations
+  ---
+  duration_ms: 110.560042
+  type: 'test'
+  ...
+# Subtest: hosted browser mode trusts only the authenticated relay and preserves same-origin CSRF
+ok 53 - hosted browser mode trusts only the authenticated relay and preserves same-origin CSRF
+  ---
+  duration_ms: 11.519042
+  type: 'test'
+  ...
+# Subtest: hosted direct login serves its own sign-in page and mints a first-party session
+ok 54 - hosted direct login serves its own sign-in page and mints a first-party session
+  ---
+  duration_ms: 416.453292
+  type: 'test'
+  ...
+# Subtest: browser repository onboarding stages folder uploads and GitHub selections without accepting filesystem paths
+ok 55 - browser repository onboarding stages folder uploads and GitHub selections without accepting filesystem paths
+  ---
+  duration_ms: 17.532583
+  type: 'test'
+  ...
+# Subtest: CI gate rejects a missing explicit baseline before simulator work
+ok 56 - CI gate rejects a missing explicit baseline before simulator work
+  ---
+  duration_ms: 10.71875
+  type: 'test'
+  ...
+# Subtest: CI gate rejects an explicit Flow glob that matches nothing
+ok 57 - CI gate rejects an explicit Flow glob that matches nothing
+  ---
+  duration_ms: 11.22425
+  type: 'test'
+  ...
+# Subtest: CI gate rejects an explicit Scenario glob that matches nothing
+ok 58 - CI gate rejects an explicit Scenario glob that matches nothing
+  ---
+  duration_ms: 9.612625
+  type: 'test'
+  ...
+# Subtest: CI gate rejects an explicit release Contract glob that matches nothing
+ok 59 - CI gate rejects an explicit release Contract glob that matches nothing
+  ---
+  duration_ms: 8.865083
+  type: 'test'
+  ...
+# Subtest: CI gate validates structured launch inputs before simulator work
+ok 60 - CI gate validates structured launch inputs before simulator work
+  ---
+  duration_ms: 44.726208
+  type: 'test'
+  ...
+# Subtest: cross-platform gate rejects a Flow suite for the wrong platform before launch
+ok 61 - cross-platform gate rejects a Flow suite for the wrong platform before launch
+  ---
+  duration_ms: 150.905583
+  type: 'test'
+  ...
+# Subtest: default discovery safely ignores another platform's entire Flow suite
+ok 62 - default discovery safely ignores another platform's entire Flow suite
+  ---
+  duration_ms: 161.256792
+  type: 'test'
+  ...
+# Subtest: managed web build/start failure is an infrastructure error (exit 2)
+ok 63 - managed web build/start failure is an infrastructure error (exit 2)
+  ---
+  duration_ms: 3667.06075
+  type: 'test'
+  ...
+# Subtest: CI gate turns a changed-file manifest into the actual selected contract set before simulator work
+ok 64 - CI gate turns a changed-file manifest into the actual selected contract set before simulator work
+  ---
+  duration_ms: 617.114125
+  type: 'test'
+  ...
+# Subtest: a valid PR plan selecting zero contracts survives Bash 3.2 nounset handling
+ok 65 - a valid PR plan selecting zero contracts survives Bash 3.2 nounset handling
+  ---
+  duration_ms: 285.196792
+  type: 'test'
+  ...
+# Subtest: CI installation renders one target-aware keyless web gate without shell interpolation
+ok 66 - CI installation renders one target-aware keyless web gate without shell interpolation
+  ---
+  duration_ms: 3.281833
+  type: 'test'
+  ...
+# Subtest: CI installation wires an accepted target-specific baseline and refuses silent overwrite
+ok 67 - CI installation wires an accepted target-specific baseline and refuses silent overwrite
+  ---
+  duration_ms: 3.818958
+  type: 'test'
+  ...
+# Subtest: CI installation reports unresolved native configuration instead of inventing it
+ok 68 - CI installation reports unresolved native configuration instead of inventing it
+  ---
+  duration_ms: 1.038291
+  type: 'test'
+  ...
+# Subtest: CI installation scopes module contracts and credentials to the matching Android target
+ok 69 - CI installation scopes module contracts and credentials to the matching Android target
+  ---
+  duration_ms: 1.417792
+  type: 'test'
+  ...
+# Subtest: CI installation does not leak one shared actor's credentials into unrelated target contracts
+ok 70 - CI installation does not leak one shared actor's credentials into unrelated target contracts
+  ---
+  duration_ms: 0.576208
+  type: 'test'
+  ...
+# Subtest: CI installation refuses to present an unpinned system Gradle build as ready
+ok 71 - CI installation refuses to present an unpinned system Gradle build as ready
+  ---
+  duration_ms: 0.545041
+  type: 'test'
+  ...
+# Subtest: CI installation refuses to hide blocking application-model requirements
+ok 72 - CI installation refuses to hide blocking application-model requirements
+  ---
+  duration_ms: 0.818708
+  type: 'test'
+  ...
+# Subtest: CI installation maps actor-specific environment bindings to GitHub secrets without values
+ok 73 - CI installation maps actor-specific environment bindings to GitHub secrets without values
+  ---
+  duration_ms: 0.513583
+  type: 'test'
+  ...
+# Subtest: disposable maintenance validation rejects stale digests before touching the source checkout
+ok 74 - disposable maintenance validation rejects stale digests before touching the source checkout
+  ---
+  duration_ms: 2.281792
+  type: 'test'
+  ...
+# Subtest: automatic maintenance replay refuses a stateful contract without controlled lifecycle
+ok 75 - automatic maintenance replay refuses a stateful contract without controlled lifecycle
+  ---
+  duration_ms: 88.007916
+  type: 'test'
+  ...
+# Subtest: first run passes clean evidence but states that regression gating is not active
+ok 76 - first run passes clean evidence but states that regression gating is not active
+  ---
+  duration_ms: 352.560459
+  type: 'test'
+  ...
+# Subtest: the gate report shows its scope: target, revision, policy version, and checked/not-checked
+ok 77 - the gate report shows its scope: target, revision, policy version, and checked/not-checked
+  ---
+  duration_ms: 395.140083
+  type: 'test'
+  ...
+# Subtest: the gate preserves the concrete target when no stable target key is supplied
+ok 78 - the gate preserves the concrete target when no stable target key is supplied
+  ---
+  duration_ms: 342.674875
+  type: 'test'
+  ...
+# Subtest: exploration's regression is comparison-only — no gate/outcome/pass-fail in its JSON
+ok 79 - exploration's regression is comparison-only — no gate/outcome/pass-fail in its JSON
+  ---
+  duration_ms: 296.441084
+  type: 'test'
+  ...
+# Subtest: clean web CI evidence is scoped, scoreless, and never a ship verdict
+ok 80 - clean web CI evidence is scoped, scoreless, and never a ship verdict
+  ---
+  duration_ms: 245.943792
+  type: 'test'
+  ...
+# Subtest: new high finding against a baseline exits non-zero and writes both artifacts
+ok 81 - new high finding against a baseline exits non-zero and writes both artifacts
+  ---
+  duration_ms: 247.367334
+  type: 'test'
+  ...
+# Subtest: target-scoped baselines reject cross-platform or cross-target comparisons
+ok 82 - target-scoped baselines reject cross-platform or cross-target comparisons
+  ---
+  duration_ms: 950.118625
+  type: 'test'
+  ...
+# Subtest: a failed Flow blocks an otherwise clean run
+ok 83 - a failed Flow blocks an otherwise clean run
+  ---
+  duration_ms: 239.48675
+  type: 'test'
+  ...
+# Subtest: [authority] a skipped assert_ai suite is inconclusive, not a silent pass
+ok 84 - [authority] a skipped assert_ai suite is inconclusive, not a silent pass
+  ---
+  duration_ms: 240.800042
+  type: 'test'
+  ...
+# Subtest: [authority] a failed assert_ai is inconclusive (needs review), never a deterministic fail
+ok 85 - [authority] a failed assert_ai is inconclusive (needs review), never a deterministic fail
+  ---
+  duration_ms: 238.093458
+  type: 'test'
+  ...
+# Subtest: [authority] a deterministic failure alongside assert_ai still fails (deterministic wins)
+ok 86 - [authority] a deterministic failure alongside assert_ai still fails (deterministic wins)
+  ---
+  duration_ms: 247.413542
+  type: 'test'
+  ...
+# Subtest: a failed multi-actor Scenario names the actor and blocks the gate
+ok 87 - a failed multi-actor Scenario names the actor and blocks the gate
+  ---
+  duration_ms: 246.2395
+  type: 'test'
+  ...
+# Subtest: a failed release contract is first-class, names its Task and actor, and blocks the gate
+ok 88 - a failed release contract is first-class, names its Task and actor, and blocks the gate
+  ---
+  duration_ms: 250.458125
+  type: 'test'
+  ...
+# Subtest: PR selection is joined to replay evidence and emits a constrained maintenance candidate
+ok 89 - PR selection is joined to replay evidence and emits a constrained maintenance candidate
+  ---
+  duration_ms: 250.531958
+  type: 'test'
+  ...
+# Subtest: a failed selector with stable map identity produces one unvalidated Task-only patch
+ok 90 - a failed selector with stable map identity produces one unvalidated Task-only patch
+  ---
+  duration_ms: 243.905583
+  type: 'test'
+  ...
+# Subtest: a selected release contract that did not execute blocks the merge
+ok 91 - a selected release contract that did not execute blocks the merge
+  ---
+  duration_ms: 245.205417
+  type: 'test'
+  ...
+# Subtest: observed bounded PR exploration records control evidence and emits a review-only coverage proposal
+ok 92 - observed bounded PR exploration records control evidence and emits a review-only coverage proposal
+  ---
+  duration_ms: 231.333666
+  type: 'test'
+  ...
+# Subtest: a planned replayable PR exploration target that was not reached blocks the gate as inconclusive
+ok 93 - a planned replayable PR exploration target that was not reached blocks the gate as inconclusive
+  ---
+  duration_ms: 229.516375
+  type: 'test'
+  ...
+# Subtest: native UI Map path evidence is joined by target identity rather than a web route
+ok 94 - native UI Map path evidence is joined by target identity rather than a web route
+  ---
+  duration_ms: 232.021875
+  type: 'test'
+  ...
+# Subtest: [char] a critical finding blocks the bootstrap gate with no baseline
+ok 95 - [char] a critical finding blocks the bootstrap gate with no baseline
+  ---
+  duration_ms: 229.542333
+  type: 'test'
+  ...
+# Subtest: [char] a single high finding does NOT block a bootstrap run with no baseline
+ok 96 - [char] a single high finding does NOT block a bootstrap run with no baseline
+  ---
+  duration_ms: 239.89825
+  type: 'test'
+  ...
+# Subtest: [char] enough medium findings (risk threshold) block a bootstrap run with no baseline
+ok 97 - [char] enough medium findings (risk threshold) block a bootstrap run with no baseline
+  ---
+  duration_ms: 240.376666
+  type: 'test'
+  ...
+# Subtest: [char] inconclusive coverage blocks the bootstrap gate with no baseline
+ok 98 - [char] inconclusive coverage blocks the bootstrap gate with no baseline
+  ---
+  duration_ms: 235.567667
+  type: 'test'
+  ...
+# Subtest: [char] content collapse vs a baseline blocks the merge (merge decision is score-independent)
+ok 99 - [char] content collapse vs a baseline blocks the merge (merge decision is score-independent)
+  ---
+  duration_ms: 236.755084
+  type: 'test'
+  ...
+# Subtest: [char] reachability loss vs a baseline blocks the merge
+ok 100 - [char] reachability loss vs a baseline blocks the merge
+  ---
+  duration_ms: 229.281917
+  type: 'test'
+  ...
+# Subtest: [char] persisting (pre-existing) high finding with a baseline does NOT block
+ok 101 - [char] persisting (pre-existing) high finding with a baseline does NOT block
+  ---
+  duration_ms: 230.354167
+  type: 'test'
+  ...
+# Subtest: [char] a clean bootstrap PASS must qualify what it did NOT evaluate (green-light honesty guard)
+ok 102 - [char] a clean bootstrap PASS must qualify what it did NOT evaluate (green-light honesty guard)
+  ---
+  duration_ms: 238.1675
+  type: 'test'
+  ...
+# Subtest: observed PR exploration preserves an existing human release-plan decision instead of proposing a duplicate
+ok 103 - observed PR exploration preserves an existing human release-plan decision instead of proposing a duplicate
+  ---
+  duration_ms: 237.221625
+  type: 'test'
+  ...
+# Subtest: baseline target selection is explicit in multi-target repositories
+ok 104 - baseline target selection is explicit in multi-target repositories
+  ---
+  duration_ms: 1.502125
+  type: 'test'
+  ...
+# Subtest: explore uses the model's recorded default target to break ambiguity; the gate stays strict
+ok 105 - explore uses the model's recorded default target to break ambiguity; the gate stays strict
+  ---
+  duration_ms: 0.224042
+  type: 'test'
+  ...
+# Subtest: bare explore resolves a web target's recorded owned URL from the model
+ok 106 - bare explore resolves a web target's recorded owned URL from the model
+  ---
+  duration_ms: 0.389958
+  type: 'test'
+  ...
+# Subtest: baseline validation rejects inconclusive, blocked, cross-platform, and failed-suite reports
+ok 107 - baseline validation rejects inconclusive, blocked, cross-platform, and failed-suite reports
+  ---
+  duration_ms: 0.241542
+  type: 'test'
+  ...
+# Subtest: target baselines are atomic, repository-local, and never overwritten silently
+ok 108 - target baselines are atomic, repository-local, and never overwritten silently
+  ---
+  duration_ms: 2.93425
+  type: 'test'
+  ...
+# Subtest: npm package is @aarwitz/tapp while the installed command remains tapp
+ok 109 - npm package is @aarwitz/tapp while the installed command remains tapp
+  ---
+  duration_ms: 1.153584
+  type: 'test'
+  ...
+# Subtest: tapp version prints the package version
+ok 110 - tapp version prints the package version
+  ---
+  duration_ms: 72.975625
+  type: 'test'
+  ...
+# Subtest: tapp help presents a Core / Primitives / Advanced hierarchy
+ok 111 - tapp help presents a Core / Primitives / Advanced hierarchy
+  ---
+  duration_ms: 69.578917
+  type: 'test'
+  ...
+# Subtest: --help is safe on every verb — shows the reference, writes NOTHING (not even TAPP_HOME)
+ok 112 - --help is safe on every verb — shows the reference, writes NOTHING (not even TAPP_HOME)
+  ---
+  duration_ms: 290.848208
+  type: 'test'
+  ...
+# Subtest: iOS explore accepts explicit launch configuration and rejects malformed launch environments before runtime work
+ok 113 - iOS explore accepts explicit launch configuration and rejects malformed launch environments before runtime work
+  ---
+  duration_ms: 85.762583
+  type: 'test'
+  ...
+# Subtest: tapp doctor keeps the package-only CLI path primary
+ok 114 - tapp doctor keeps the package-only CLI path primary
+  ---
+  duration_ms: 743.358834
+  type: 'test'
+  ...
+# Subtest: tapp open and tree give a coding agent focused web evidence
+ok 115 - tapp open and tree give a coding agent focused web evidence # SKIP
+  ---
+  duration_ms: 0.2355
+  type: 'test'
+  ...
+# Subtest: web QA reports placeholder links and dead controls deterministically despite ambient DOM churn
+ok 116 - web QA reports placeholder links and dead controls deterministically despite ambient DOM churn # SKIP
+  ---
+  duration_ms: 0.081375
+  type: 'test'
+  ...
+# Subtest: tapp actor configures only environment-variable bindings and lists them without values
+ok 117 - tapp actor configures only environment-variable bindings and lists them without values
+  ---
+  duration_ms: 230.753125
+  type: 'test'
+  ...
+# Subtest: tapp validates and compiles a reusable Task without an agent or target
+ok 118 - tapp validates and compiles a reusable Task without an agent or target
+  ---
+  duration_ms: 212.168458
+  type: 'test'
+  ...
+# Subtest: tapp ci help documents the portable gate without requiring Xcode
+ok 119 - tapp ci help documents the portable gate without requiring Xcode
+  ---
+  duration_ms: 57.941709
+  type: 'test'
+  ...
+# Subtest: tapp validates a committed Android Flow without an agent or device
+ok 120 - tapp validates a committed Android Flow without an agent or device
+  ---
+  duration_ms: 89.001208
+  type: 'test'
+  ...
+# Subtest: tapp validates a committed multi-actor Scenario without a browser or model
+ok 121 - tapp validates a committed multi-actor Scenario without a browser or model
+  ---
+  duration_ms: 269.33525
+  type: 'test'
+  ...
+# Subtest: tapp validates and compiles a TypeScript release contract without an agent or target
+ok 122 - tapp validates and compiles a TypeScript release contract without an agent or target
+  ---
+  duration_ms: 678.36025
+  type: 'test'
+  ...
+# Subtest: tapp produces a reviewable PR contract plan from explicit changed files
+ok 123 - tapp produces a reviewable PR contract plan from explicit changed files
+  ---
+  duration_ms: 659.760792
+  type: 'test'
+  ...
+# Subtest: tapp init produces a grounded dry-run model and explicit plan review preserves customer choice
+ok 124 - tapp init produces a grounded dry-run model and explicit plan review preserves customer choice
+  ---
+  duration_ms: 535.681667
+  type: 'test'
+  ...
+# Subtest: tapp baseline import and CI install complete the reviewable repository patch without external writes
+ok 125 - tapp baseline import and CI install complete the reviewable repository patch without external writes
+  ---
+  duration_ms: 680.973583
+  type: 'test'
+  ...
+# Subtest: tapp init --explore rejects dry-run before browser work
+ok 126 - tapp init --explore rejects dry-run before browser work
+  ---
+  duration_ms: 53.683375
+  type: 'test'
+  ...
+# Subtest: tapp init --explore safely refreshes existing artifacts through shared semantics
+ok 127 - tapp init --explore safely refreshes existing artifacts through shared semantics # SKIP
+  ---
+  duration_ms: 0.040292
+  type: 'test'
+  ...
+# Subtest: tapp init --explore starts and stops a detected owned web target when URL is omitted
+ok 128 - tapp init --explore starts and stops a detected owned web target when URL is omitted # SKIP
+  ---
+  duration_ms: 0.023916
+  type: 'test'
+  ...
+# Subtest: tapp init --explore grounds a fresh repository map before proposing contracts
+ok 129 - tapp init --explore grounds a fresh repository map before proposing contracts # SKIP
+  ---
+  duration_ms: 0.022625
+  type: 'test'
+  ...
+# Subtest: tapp init discovers, validates, and fault-checks a grounded cross-actor contract from a contract-free repository
+ok 130 - tapp init discovers, validates, and fault-checks a grounded cross-actor contract from a contract-free repository # SKIP
+  ---
+  duration_ms: 0.018709
+  type: 'test'
+  ...
+# Subtest: tapp init discovers, validates, and fault-checks a durable checkout contract from a contract-free repository
+ok 131 - tapp init discovers, validates, and fault-checks a durable checkout contract from a contract-free repository # SKIP
+  ---
+  duration_ms: 0.016
+  type: 'test'
+  ...
+# Subtest: tapp plan generate stays untrusted until tapp plan validate replays the draft on a real target
+ok 132 - tapp plan generate stays untrusted until tapp plan validate replays the draft on a real target # SKIP
+  ---
+  duration_ms: 0.021917
+  type: 'test'
+  ...
+# Subtest: tapp builds and inspects a repository-native UI Map from shared markers
+ok 133 - tapp builds and inspects a repository-native UI Map from shared markers
+  ---
+  duration_ms: 114.901666
+  type: 'test'
+  ...
+# Subtest: MCP stdio handshake: initialize + tools/list
+ok 134 - MCP stdio handshake: initialize + tools/list
+  ---
+  duration_ms: 460.400292
+  type: 'test'
+  ...
+# Subtest: managed iOS sessions isolate the harness cache and captures inside the leased job
+ok 135 - managed iOS sessions isolate the harness cache and captures inside the leased job # SKIP private cloud runner is not part of the public source tree
+  ---
+  duration_ms: 0.503625
+  type: 'test'
+  ...
+# Subtest: interactive-session startup retains harness stderr for actionable failures
+ok 136 - interactive-session startup retains harness stderr for actionable failures
+  ---
+  duration_ms: 0.100625
+  type: 'test'
+  ...
+# Subtest: the cloud control picker keeps semantic roles and deduplicates accessibility aliases
+ok 137 - the cloud control picker keeps semantic roles and deduplicates accessibility aliases # SKIP private cloud runner is not part of the public source tree
+  ---
+  duration_ms: 0.038458
+  type: 'test'
+  ...
+# Subtest: managed release jobs delegate product semantics to shared operations
+ok 138 - managed release jobs delegate product semantics to shared operations # SKIP private cloud runner is not part of the public source tree
+  ---
+  duration_ms: 0.035583
+  type: 'test'
+  ...
+# Subtest: desktop exploration accepts the harness's resolved transition evidence
+ok 139 - desktop exploration accepts the harness's resolved transition evidence # SKIP
+  ---
+  duration_ms: 0.507875
+  type: 'test'
+  ...
+# Subtest: desktop Coverage consumes the shared application model, release plan, and repository UI Map
+ok 140 - desktop Coverage consumes the shared application model, release plan, and repository UI Map # SKIP
+  ---
+  duration_ms: 0.037875
+  type: 'test'
+  ...
+# Subtest: desktop release-plan review preserves unknown engine fields and never edits contracts
+ok 141 - desktop release-plan review preserves unknown engine fields and never edits contracts # SKIP
+  ---
+  duration_ms: 0.032708
+  type: 'test'
+  ...
+# Subtest: desktop binary retains a repeatable real-schema artifact audit
+ok 142 - desktop binary retains a repeatable real-schema artifact audit # SKIP
+  ---
+  duration_ms: 0.034208
+  type: 'test'
+  ...
+# Subtest: engine is import-safe and exports the shared surface
+ok 143 - engine is import-safe and exports the shared surface
+  ---
+  duration_ms: 0.684584
+  type: 'test'
+  ...
+# Subtest: native recording failures become concise actionable evidence warnings
+ok 144 - native recording failures become concise actionable evidence warnings
+  ---
+  duration_ms: 0.210625
+  type: 'test'
+  ...
+# Subtest: runExploreTarget refuses to guess without an application model
+ok 145 - runExploreTarget refuses to guess without an application model
+  ---
+  duration_ms: 0.444
+  type: 'test'
+  ...
+# Subtest: runExploreTarget surfaces an unreadable application model instead of falling back
+ok 146 - runExploreTarget surfaces an unreadable application model instead of falling back
+  ---
+  duration_ms: 0.464542
+  type: 'test'
+  ...
+# Subtest: runExploreTarget stops (does not silently pick) when the model target is ambiguous
+ok 147 - runExploreTarget stops (does not silently pick) when the model target is ambiguous
+  ---
+  duration_ms: 1.588333
+  type: 'test'
+  ...
+# Subtest: runExploreTarget requires a confirmed Android application id before building
+ok 148 - runExploreTarget requires a confirmed Android application id before building
+  ---
+  duration_ms: 0.403958
+  type: 'test'
+  ...
+# Subtest: QA next steps match the package-only surface without leaking MCP calls
+ok 149 - QA next steps match the package-only surface without leaking MCP calls
+  ---
+  duration_ms: 0.098708
+  type: 'test'
+  ...
+# Subtest: findXcodeContainer prefers a workspace, skips Pods, accepts a container path directly
+ok 150 - findXcodeContainer prefers a workspace, skips Pods, accepts a container path directly
+  ---
+  duration_ms: 1.195833
+  type: 'test'
+  ...
+# Subtest: explorationEnvFromArgs maps creds, overrides, and the interactive channel
+ok 151 - explorationEnvFromArgs maps creds, overrides, and the interactive channel
+  ---
+  duration_ms: 2.5665
+  type: 'test'
+  ...
+# Subtest: interactive channel is NOT enabled without a response path
+ok 152 - interactive channel is NOT enabled without a response path
+  ---
+  duration_ms: 0.626708
+  type: 'test'
+  ...
+# Subtest: remote AI requires explicit opt-in — an ambient API key is not consent
+ok 153 - remote AI requires explicit opt-in — an ambient API key is not consent
+  ---
+  duration_ms: 0.247041
+  type: 'test'
+  ...
+# Subtest: isInsideDir rejects sibling directories sharing a path prefix
+ok 154 - isInsideDir rejects sibling directories sharing a path prefix
+  ---
+  duration_ms: 0.180167
+  type: 'test'
+  ...
+# Subtest: Flow normalization is shared by native and browser drivers
+ok 155 - Flow normalization is shared by native and browser drivers
+  ---
+  duration_ms: 1.105958
+  type: 'test'
+  ...
+# Subtest: Flow YAML preserves platform targets and reset policy
+ok 156 - Flow YAML preserves platform targets and reset policy
+  ---
+  duration_ms: 64.369042
+  type: 'test'
+  ...
+# Subtest: legacy app Flows remain iOS-only instead of leaking into web or Android gates
+ok 157 - legacy app Flows remain iOS-only instead of leaking into web or Android gates
+  ---
+  duration_ms: 0.232417
+  type: 'test'
+  ...
+# Subtest: FlowLog emits the same markers on every platform
+ok 158 - FlowLog emits the same markers on every platform
+  ---
+  duration_ms: 0.985125
+  type: 'test'
+  ...
+# Subtest: FlowLog reports actual execution after fail-fast instead of implying skipped steps passed
+ok 159 - FlowLog reports actual execution after fail-fast instead of implying skipped steps passed
+  ---
+  duration_ms: 0.144
+  type: 'test'
+  ...
+# Subtest: FlowLog identifies compiled release-contract evidence and every attributed step
+ok 160 - FlowLog identifies compiled release-contract evidence and every attributed step
+  ---
+  duration_ms: 0.071209
+  type: 'test'
+  ...
+# Subtest: iOS Flow normalization ignores compiler metadata instead of executing it
+ok 161 - iOS Flow normalization ignores compiler metadata instead of executing it
+  ---
+  duration_ms: 0.74175
+  type: 'test'
+  ...
+# Subtest: iOS Flow evidence preserves reusable Task provenance
+ok 162 - iOS Flow evidence preserves reusable Task provenance
+  ---
+  duration_ms: 0.130584
+  type: 'test'
+  ...
+# Subtest: iOS Flow replay refreshes a stale harness cache before execution
+ok 163 - iOS Flow replay refreshes a stale harness cache before execution
+  ---
+  duration_ms: 0.105417
+  type: 'test'
+  ...
+# Subtest: iOS evidence preserves compiled release-contract identity and criticality
+ok 164 - iOS evidence preserves compiled release-contract identity and criticality
+  ---
+  duration_ms: 0.064042
+  type: 'test'
+  ...
+# Subtest: iOS PR exploration honors bounded UI Map waits and emits stable target evidence
+ok 165 - iOS PR exploration honors bounded UI Map waits and emits stable target evidence
+  ---
+  duration_ms: 0.175875
+  type: 'test'
+  ...
+# Subtest: iOS semantic taps try every exact-label match when duplicate SwiftUI controls exist
+ok 166 - iOS semantic taps try every exact-label match when duplicate SwiftUI controls exist
+  ---
+  duration_ms: 0.100084
+  type: 'test'
+  ...
+# Subtest: iOS root normalization emits the real launch-sheet transition for map grounding
+ok 167 - iOS root normalization emits the real launch-sheet transition for map grounding
+  ---
+  duration_ms: 0.164333
+  type: 'test'
+  ...
+# Subtest: iOS exploration attaches the true launch surface before root normalization
+ok 168 - iOS exploration attaches the true launch surface before root normalization
+  ---
+  duration_ms: 0.077708
+  type: 'test'
+  ...
+# Subtest: native progress calls structural states what they are
+ok 169 - native progress calls structural states what they are
+  ---
+  duration_ms: 0.231667
+  type: 'test'
+  ...
+# Subtest: init carries successful Xcode build evidence into both CLI and MCP application models
+ok 170 - init carries successful Xcode build evidence into both CLI and MCP application models
+  ---
+  duration_ms: 0.331959
+  type: 'test'
+  ...
+# Subtest: the native benchmark fault is explicit and disabled in ordinary DemoApp runs
+ok 171 - the native benchmark fault is explicit and disabled in ordinary DemoApp runs
+  ---
+  duration_ms: 0.081208
+  type: 'test'
+  ...
+# Subtest: iOS deterministic Flow replay receives the same bounded launch arguments and environment as QA
+ok 172 - iOS deterministic Flow replay receives the same bounded launch arguments and environment as QA
+  ---
+  duration_ms: 0.043292
+  type: 'test'
+  ...
+# Subtest: iOS exploration maps a terminal tab sweep instead of leaving its destination disconnected
+ok 173 - iOS exploration maps a terminal tab sweep instead of leaving its destination disconnected
+  ---
+  duration_ms: 0.181708
+  type: 'test'
+  ...
+# Subtest: directed iOS PR exploration keeps its bounded budget on the selected surface
+ok 174 - directed iOS PR exploration keeps its bounded budget on the selected surface
+  ---
+  duration_ms: 0.050125
+  type: 'test'
+  ...
+# Subtest: autonomous iOS QA starts from a fresh launch with the configured environment
+ok 175 - autonomous iOS QA starts from a fresh launch with the configured environment
+  ---
+  duration_ms: 0.057709
+  type: 'test'
+  ...
+# Subtest: iOS exploration records structural transitions even when the visible title is unchanged
+ok 176 - iOS exploration records structural transitions even when the visible title is unchanged
+  ---
+  duration_ms: 0.115375
+  type: 'test'
+  ...
+# Subtest: iOS loop detection requires a cycle across distinct structural states
+ok 177 - iOS loop detection requires a cycle across distinct structural states
+  ---
+  duration_ms: 0.140291
+  type: 'test'
+  ...
+# Subtest: iOS unresponsive findings come from confirmed control taps, not recovery streaks
+ok 178 - iOS unresponsive findings come from confirmed control taps, not recovery streaks
+  ---
+  duration_ms: 0.19325
+  type: 'test'
+  ...
+# Subtest: iOS recovery does not spend a second action after exhausting the requested budget
+ok 179 - iOS recovery does not spend a second action after exhausting the requested budget
+  ---
+  duration_ms: 0.168667
+  type: 'test'
+  ...
+# Subtest: iOS exploration ends a successful sign-in/sign-out cycle without false persistence or trap findings
+ok 180 - iOS exploration ends a successful sign-in/sign-out cycle without false persistence or trap findings
+  ---
+  duration_ms: 0.090333
+  type: 'test'
+  ...
+# Subtest: iOS hang detection excludes determinate progress bars
+ok 181 - iOS hang detection excludes determinate progress bars
+  ---
+  duration_ms: 0.234333
+  type: 'test'
+  ...
+# Subtest: iOS exploration does not call an exhausted internal candidate pool a user-visible dead end
+ok 182 - iOS exploration does not call an exhausted internal candidate pool a user-visible dead end
+  ---
+  duration_ms: 0.089334
+  type: 'test'
+  ...
+# Subtest: iOS unconditional launch crashes are classified before the outer watchdog timeout
+ok 183 - iOS unconditional launch crashes are classified before the outer watchdog timeout
+  ---
+  duration_ms: 0.119208
+  type: 'test'
+  ...
+# Subtest: iOS caller time-budget exhaustion is partial evidence, not an app defect
+ok 184 - iOS caller time-budget exhaustion is partial evidence, not an app defect
+  ---
+  duration_ms: 0.042542
+  type: 'test'
+  ...
+# Subtest: iOS blank detection uses semantic content rather than raw container count
+ok 185 - iOS blank detection uses semantic content rather than raw container count
+  ---
+  duration_ms: 0.132291
+  type: 'test'
+  ...
+# Subtest: managed operation envelope pins repository, revision, target intent, and engine contract
+ok 186 - managed operation envelope pins repository, revision, target intent, and engine contract
+  ---
+  duration_ms: 1.319291
+  type: 'test'
+  ...
+# Subtest: managed operation envelope rejects floating revisions and unknown semantics
+ok 187 - managed operation envelope rejects floating revisions and unknown semantics
+  ---
+  duration_ms: 0.506458
+  type: 'test'
+  ...
+# Subtest: managed child verifies the exact checkout and inspects through shared product operations
+ok 188 - managed child verifies the exact checkout and inspects through shared product operations # SKIP
+  ---
+  duration_ms: 0.232792
+  type: 'test'
+  ...
+# Subtest: managed web targets honor a fixed port declared by the repository start script
+ok 189 - managed web targets honor a fixed port declared by the repository start script
+  ---
+  duration_ms: 539.635125
+  type: 'test'
+  ...
+# Subtest: npm package exposes Tapp as its only current product identity
+ok 190 - npm package exposes Tapp as its only current product identity
+  ---
+  duration_ms: 1.698875
+  type: 'test'
+  ...
+# Subtest: npm package ships only the runtime script allowlist
+ok 191 - npm package ships only the runtime script allowlist
+  ---
+  duration_ms: 0.072209
+  type: 'test'
+  ...
+# Subtest: shipped CI runtime has no retired repository-path fallback
+ok 192 - shipped CI runtime has no retired repository-path fallback
+  ---
+  duration_ms: 0.115458
+  type: 'test'
+  ...
+# Subtest: contract typechecking recognizes only the canonical package import
+ok 193 - contract typechecking recognizes only the canonical package import
+  ---
+  duration_ms: 0.081
+  type: 'test'
+  ...
+# Subtest: shipped native fixtures use Tapp labels and identifiers
+ok 194 - shipped native fixtures use Tapp labels and identifiers
+  ---
+  duration_ms: 0.648125
+  type: 'test'
+  ...
+# Subtest: source ownership matches exact files, directories, and bounded globs
+ok 195 - source ownership matches exact files, directories, and bounded globs
+  ---
+  duration_ms: 0.957625
+  type: 'test'
+  ...
+# Subtest: PR planning always selects critical contracts and uses Task/UI Map ownership for relevance
+ok 196 - PR planning always selects critical contracts and uses Task/UI Map ownership for relevance
+  ---
+  duration_ms: 147.151583
+  type: 'test'
+  ...
+# Subtest: changing a reusable Task selects every contract that composes it
+ok 197 - changing a reusable Task selects every contract that composes it
+  ---
+  duration_ms: 62.26625
+  type: 'test'
+  ...
+# Subtest: changing a nested Task selects contracts through the full composition graph
+ok 198 - changing a nested Task selects contracts through the full composition graph
+  ---
+  duration_ms: 81.826459
+  type: 'test'
+  ...
+# Subtest: mapped-but-uncovered UI changes are distinct from files unknown to the application model
+ok 199 - mapped-but-uncovered UI changes are distinct from files unknown to the application model
+  ---
+  duration_ms: 48.101417
+  type: 'test'
+  ...
+# Subtest: an observed static web route schedules bounded advisory exploration for its exact changed file
+ok 200 - an observed static web route schedules bounded advisory exploration for its exact changed file
+  ---
+  duration_ms: 0.768042
+  type: 'test'
+  ...
+# Subtest: reviewed Task ownership schedules one native changed-surface replay through observed UI Map edges
+ok 201 - reviewed Task ownership schedules one native changed-surface replay through observed UI Map edges
+  ---
+  duration_ms: 40.310125
+  type: 'test'
+  ...
+# Subtest: selected critical contract coverage prevents a redundant changed-surface exploration target
+ok 202 - selected critical contract coverage prevents a redundant changed-surface exploration target
+  ---
+  duration_ms: 44.2625
+  type: 'test'
+  ...
+# Subtest: only planned replayable web exploration targets become bounded gate seeds
+ok 203 - only planned replayable web exploration targets become bounded gate seeds
+  ---
+  duration_ms: 0.559291
+  type: 'test'
+  ...
+# Subtest: explicit PR proposal adoption appends one pending item only when map and runtime evidence are current
+ok 204 - explicit PR proposal adoption appends one pending item only when map and runtime evidence are current
+  ---
+  duration_ms: 2.255833
+  type: 'test'
+  ...
+# Subtest: PR proposal adoption refuses unobserved or stale evidence without changing the release plan
+ok 205 - PR proposal adoption refuses unobserved or stale evidence without changing the release plan
+  ---
+  duration_ms: 0.611542
+  type: 'test'
+  ...
+# Subtest: PR proposal adoption explains how to recover from a stale persistent UI Map
+ok 206 - PR proposal adoption explains how to recover from a stale persistent UI Map
+  ---
+  duration_ms: 0.505208
+  type: 'test'
+  ...
+# Subtest: changed-file parsing accepts GitHub objects and Git ingestion preserves both sides of renames
+ok 207 - changed-file parsing accepts GitHub objects and Git ingestion preserves both sides of renames
+  ---
+  duration_ms: 199.805083
+  type: 'test'
+  ...
+# Subtest: bounded PR patches expose declaration identities without retaining source hunks
+ok 208 - bounded PR patches expose declaration identities without retaining source hunks
+  ---
+  duration_ms: 0.754291
+  type: 'test'
+  ...
+# Subtest: reviewed symbol ownership narrows affected Tasks while preserving the composed contract
+ok 209 - reviewed symbol ownership narrows affected Tasks while preserving the composed contract
+  ---
+  duration_ms: 76.87925
+  type: 'test'
+  ...
+# Subtest: unattributable patches fall back to file ownership instead of skipping relevant Tasks
+ok 210 - unattributable patches fall back to file ownership instead of skipping relevant Tasks
+  ---
+  duration_ms: 95.6765
+  type: 'test'
+  ...
+# Subtest: local git diffs provide the same changed-symbol evidence as hosted PR patches
+ok 211 - local git diffs provide the same changed-symbol evidence as hosted PR patches
+  ---
+  duration_ms: 143.420292
+  type: 'test'
+  ...
+# Subtest: shared product operations own inspect, review, generation, snapshot, and CI preview semantics
+ok 212 - shared product operations own inspect, review, generation, snapshot, and CI preview semantics
+  ---
+  duration_ms: 234.460541
+  type: 'test'
+  ...
+# Subtest: product readiness reads validation from the canonical generation record
+ok 213 - product readiness reads validation from the canonical generation record
+  ---
+  duration_ms: 0.517416
+  type: 'test'
+  ...
+# Subtest: product snapshots read only the .tapp tree — a legacy .autotap model is ignored
+ok 214 - product snapshots read only the .tapp tree — a legacy .autotap model is ignored
+  ---
+  duration_ms: 0.295666
+  type: 'test'
+  ...
+# Subtest: shared gate operation owns native target prerequisites with exact remediation
+ok 215 - shared gate operation owns native target prerequisites with exact remediation
+  ---
+  duration_ms: 1.420917
+  type: 'test'
+  ...
+# Subtest: shared target preparation keeps iOS, Android, and web build semantics out of browser adapters
+ok 216 - shared target preparation keeps iOS, Android, and web build semantics out of browser adapters
+  ---
+  duration_ms: 3.716584
+  type: 'test'
+  ...
+# Subtest: CLI baseline is a thin adapter over shared gate and baseline operations
+ok 217 - CLI baseline is a thin adapter over shared gate and baseline operations
+  ---
+  duration_ms: 0.376583
+  type: 'test'
+  ...
+# Subtest: project actor configuration stores only secret bindings and never overwrites silently
+ok 218 - project actor configuration stores only secret bindings and never overwrites silently
+  ---
+  duration_ms: 11.11075
+  type: 'test'
+  ...
+# Subtest: project configuration rejects values, malformed environment names, and cross-origin lifecycle URLs
+ok 219 - project configuration rejects values, malformed environment names, and cross-origin lifecycle URLs
+  ---
+  duration_ms: 0.198125
+  type: 'test'
+  ...
+# Subtest: contract credential placeholders become non-secret environment bindings
+ok 220 - contract credential placeholders become non-secret environment bindings
+  ---
+  duration_ms: 0.119208
+  type: 'test'
+  ...
+# Subtest: project configuration lives only under .tapp — a legacy .autotap tree is ignored
+ok 221 - project configuration lives only under .tapp — a legacy .autotap tree is ignored
+  ---
+  duration_ms: 1.606542
+  type: 'test'
+  ...
+# Subtest: regression: new / persisting / resolved, matched by type|screen
+ok 222 - regression: new / persisting / resolved, matched by type|screen
+  ---
+  duration_ms: 2.42575
+  type: 'test'
+  ...
+# Subtest: no new high/critical when only pre-existing debt remains (gate would pass)
+ok 223 - no new high/critical when only pre-existing debt remains (gate would pass)
+  ---
+  duration_ms: 0.31125
+  type: 'test'
+  ...
+# Subtest: regression returns null without a baseline (first run)
+ok 224 - regression returns null without a baseline (first run)
+  ---
+  duration_ms: 0.082875
+  type: 'test'
+  ...
+# Subtest: content collapse: rich screen going near-empty fires; small screens don't
+ok 225 - content collapse: rich screen going near-empty fires; small screens don't
+  ---
+  duration_ms: 0.135791
+  type: 'test'
+  ...
+# Subtest: content collapse: unvisited screens are not compared
+ok 226 - content collapse: unvisited screens are not compared
+  ---
+  duration_ms: 0.181792
+  type: 'test'
+  ...
+# Subtest: reachability loss fires only with a comparable action budget
+ok 227 - reachability loss fires only with a comparable action budget
+  ---
+  duration_ms: 0.193667
+  type: 'test'
+  ...
+# Subtest: REVIEW SCENARIO: fixing one control while breaking another on the same screen is a NEW regression
+ok 228 - REVIEW SCENARIO: fixing one control while breaking another on the same screen is a NEW regression
+  ---
+  duration_ms: 0.209666
+  type: 'test'
+  ...
+# Subtest: regression identity migration: legacy target-less baselines match coarsely (no false gate failures on upgrade)
+ok 229 - regression identity migration: legacy target-less baselines match coarsely (no false gate failures on upgrade)
+  ---
+  duration_ms: 0.106667
+  type: 'test'
+  ...
+# Subtest: TypeScript release contracts compile Tasks and exact expectations to a deterministic Scenario
+ok 230 - TypeScript release contracts compile Tasks and exact expectations to a deterministic Scenario
+  ---
+  duration_ms: 69.018042
+  type: 'test'
+  ...
+# Subtest: legacy runtapp and tapp-mcp contract imports are rejected — only @aarwitz/tapp/contracts is authoring
+ok 231 - legacy runtapp and tapp-mcp contract imports are rejected — only @aarwitz/tapp/contracts is authoring
+  ---
+  duration_ms: 1.1485
+  type: 'test'
+  ...
+# Subtest: release contracts reject raw driver actions and ambiguous expectations
+ok 232 - release contracts reject raw driver actions and ambiguous expectations
+  ---
+  duration_ms: 0.148291
+  type: 'test'
+  ...
+# Subtest: single-actor web contracts preserve deterministic request lifecycle
+ok 233 - single-actor web contracts preserve deterministic request lifecycle
+  ---
+  duration_ms: 36.9335
+  type: 'test'
+  ...
+# Subtest: release contract grounding and explicit map coverage preserve uncovered behavior
+ok 234 - release contract grounding and explicit map coverage preserve uncovered behavior
+  ---
+  duration_ms: 1.231
+  type: 'test'
+  ...
+# Subtest: compiled release-contract identity survives the shared JSON loader
+ok 235 - compiled release-contract identity survives the shared JSON loader
+  ---
+  duration_ms: 37.341334
+  type: 'test'
+  ...
+# Subtest: clean run with real coverage → a scoreless observation with no findings
+ok 236 - clean run with real coverage → a scoreless observation with no findings
+  ---
+  duration_ms: 1.870667
+  type: 'test'
+  ...
+# Subtest: ExplorationRun carries the complete §4 schema contract
+ok 237 - ExplorationRun carries the complete §4 schema contract
+  ---
+  duration_ms: 1.209709
+  type: 'test'
+  ...
+# Subtest: ExplorationRun preserves concrete target provenance
+ok 238 - ExplorationRun preserves concrete target provenance
+  ---
+  duration_ms: 1.5895
+  type: 'test'
+  ...
+# Subtest: determinism: identical trace → identical observation
+ok 239 - determinism: identical trace → identical observation
+  ---
+  duration_ms: 1.552208
+  type: 'test'
+  ...
+# Subtest: crash is always critical (severity coercion) and is a deterministic finding
+ok 240 - crash is always critical (severity coercion) and is a deterministic finding
+  ---
+  duration_ms: 0.780833
+  type: 'test'
+  ...
+# Subtest: findings dedup by type|screen — repeated detections count once
+ok 241 - findings dedup by type|screen — repeated detections count once
+  ---
+  duration_ms: 0.366167
+  type: 'test'
+  ...
+# Subtest: one missing web resource is one finding across routes and failed-request noise
+ok 242 - one missing web resource is one finding across routes and failed-request noise
+  ---
+  duration_ms: 0.833375
+  type: 'test'
+  ...
+# Subtest: placeholder links deduplicate across web routes but retain distinct destinations
+ok 243 - placeholder links deduplicate across web routes but retain distinct destinations
+  ---
+  duration_ms: 0.353375
+  type: 'test'
+  ...
+# Subtest: observation headline counts every reported finding
+ok 244 - observation headline counts every reported finding
+  ---
+  duration_ms: 0.972167
+  type: 'test'
+  ...
+# Subtest: native coverage uses the full completed action count when recovery actions are not narrated
+ok 245 - native coverage uses the full completed action count when recovery actions are not narrated
+  ---
+  duration_ms: 1.509125
+  type: 'test'
+  ...
+# Subtest: caller time-budget exhaustion is inconclusive partial evidence, not an app finding
+ok 246 - caller time-budget exhaustion is inconclusive partial evidence, not an app finding
+  ---
+  duration_ms: 1.390959
+  type: 'test'
+  ...
+# Subtest: coverage floor: a shallow run is inconclusive and says so
+ok 247 - coverage floor: a shallow run is inconclusive and says so
+  ---
+  duration_ms: 0.419458
+  type: 'test'
+  ...
+# Subtest: a fully swept one-page web target is conclusive
+ok 248 - a fully swept one-page web target is conclusive
+  ---
+  duration_ms: 0.398291
+  type: 'test'
+  ...
+# Subtest: a one-page web login wall without submitted credentials remains inconclusive
+ok 249 - a one-page web login wall without submitted credentials remains inconclusive
+  ---
+  duration_ms: 0.2805
+  type: 'test'
+  ...
+# Subtest: severityRank orders critical → low
+ok 250 - severityRank orders critical → low
+  ---
+  duration_ms: 0.037166
+  type: 'test'
+  ...
+# Subtest: malformed marker lines are ignored, not fatal
+ok 251 - malformed marker lines are ignored, not fatal
+  ---
+  duration_ms: 0.490333
+  type: 'test'
+  ...
+# Subtest: parseOcqaMarkers returns null for a missing file
+ok 252 - parseOcqaMarkers returns null for a missing file
+  ---
+  duration_ms: 0.039333
+  type: 'test'
+  ...
+# Subtest: two different dead controls on one screen are two findings (identity beyond type|screen)
+ok 253 - two different dead controls on one screen are two findings (identity beyond type|screen)
+  ---
+  duration_ms: 0.3345
+  type: 'test'
+  ...
+# Subtest: checkedFor never claims sign-in checks when no login form was encountered
+ok 254 - checkedFor never claims sign-in checks when no login form was encountered
+  ---
+  duration_ms: 0.218084
+  type: 'test'
+  ...
+# Subtest: a login surface without a submitted attempt does not claim sign-in checks
+ok 255 - a login surface without a submitted attempt does not claim sign-in checks
+  ---
+  duration_ms: 0.232
+  type: 'test'
+  ...
+# Subtest: checkedFor claims failed sign-ins only after a real login submission
+ok 256 - checkedFor claims failed sign-ins only after a real login submission
+  ---
+  duration_ms: 0.22125
+  type: 'test'
+  ...
+# Subtest: native login preamble and replay markers count as real sign-in submissions
+ok 257 - native login preamble and replay markers count as real sign-in submissions
+  ---
+  duration_ms: 0.471334
+  type: 'test'
+  ...
+# Subtest: web platform gets web-specific honesty labels
+ok 258 - web platform gets web-specific honesty labels
+  ---
+  duration_ms: 0.297958
+  type: 'test'
+  ...
+# Subtest: the shareable HTML evidence enumerates checked and unchecked scope
+ok 259 - the shareable HTML evidence enumerates checked and unchecked scope
+  ---
+  duration_ms: 0.673625
+  type: 'test'
+  ...
+# Subtest: sampled web probe findings remain advisory and stay out of the deterministic counts
+ok 260 - sampled web probe findings remain advisory and stay out of the deterministic counts
+  ---
+  duration_ms: 0.344708
+  type: 'test'
+  ...
+# Subtest: evaluateGate: clean evidence with no baseline is a pass (exit 0)
+ok 261 - evaluateGate: clean evidence with no baseline is a pass (exit 0)
+  ---
+  duration_ms: 0.059833
+  type: 'test'
+  ...
+# Subtest: evaluateGate: a critical finding with no baseline is a fail (exit 1)
+ok 262 - evaluateGate: a critical finding with no baseline is a fail (exit 1)
+  ---
+  duration_ms: 0.039958
+  type: 'test'
+  ...
+# Subtest: evaluateGate: a deterministic failed sign-in is an absolute fail without a baseline
+ok 263 - evaluateGate: a deterministic failed sign-in is an absolute fail without a baseline
+  ---
+  duration_ms: 0.052458
+  type: 'test'
+  ...
+# Subtest: evaluateGate: sampled/model-observed auth advisories are not absolute failures
+ok 264 - evaluateGate: sampled/model-observed auth advisories are not absolute failures
+  ---
+  duration_ms: 0.154792
+  type: 'test'
+  ...
+# Subtest: evaluateGate: the risk threshold blocks (many mediums, no crit) with no baseline
+ok 265 - evaluateGate: the risk threshold blocks (many mediums, no crit) with no baseline
+  ---
+  duration_ms: 0.037667
+  type: 'test'
+  ...
+# Subtest: evaluateGate: an inconclusive run is inconclusive even if its risk is low (thin run, not fail)
+ok 266 - evaluateGate: an inconclusive run is inconclusive even if its risk is low (thin run, not fail)
+  ---
+  duration_ms: 0.032375
+  type: 'test'
+  ...
+# Subtest: evaluateGate: --fail-on any never passes an inconclusive run, even with zero findings
+ok 267 - evaluateGate: --fail-on any never passes an inconclusive run, even with zero findings
+  ---
+  duration_ms: 0.030292
+  type: 'test'
+  ...
+# Subtest: evaluateGate: a selected-but-unexecuted contract is inconclusive, not fail
+ok 268 - evaluateGate: a selected-but-unexecuted contract is inconclusive, not fail
+  ---
+  duration_ms: 0.038791
+  type: 'test'
+  ...
+# Subtest: evaluateGate: precedence is fail > inconclusive > pass
+ok 269 - evaluateGate: precedence is fail > inconclusive > pass
+  ---
+  duration_ms: 0.054334
+  type: 'test'
+  ...
+# Subtest: evaluateGate: a new high/critical regression vs a baseline is a fail
+ok 270 - evaluateGate: a new high/critical regression vs a baseline is a fail
+  ---
+  duration_ms: 0.085958
+  type: 'test'
+  ...
+# Subtest: evaluateGate: pre-existing debt (no regression, no crit, below risk threshold) passes
+ok 271 - evaluateGate: pre-existing debt (no regression, no crit, below risk threshold) passes
+  ---
+  duration_ms: 0.031166
+  type: 'test'
+  ...
+# Subtest: evaluateGate is a pure function: identical GateRun across repeated calls
+ok 272 - evaluateGate is a pure function: identical GateRun across repeated calls
+  ---
+  duration_ms: 0.077583
+  type: 'test'
+  ...
+# Subtest: Scenario validation requires real isolated actors
+ok 273 - Scenario validation requires real isolated actors
+  ---
+  duration_ms: 1.142833
+  type: 'test'
+  ...
+# Subtest: web Scenario interleaves isolated actor contexts over shared state without AI
+ok 274 - web Scenario interleaves isolated actor contexts over shared state without AI
+  ---
+  duration_ms: 2.378417
+  type: 'test'
+  ...
+# Subtest: Flow task calls compile inputs, conditions, outputs, and provenance deterministically
+ok 275 - Flow task calls compile inputs, conditions, outputs, and provenance deterministically
+  ---
+  duration_ms: 75.093834
+  type: 'test'
+  ...
+# Subtest: Tasks compose other tasks and reject cycles
+ok 276 - Tasks compose other tasks and reject cycles
+  ---
+  duration_ms: 233.892167
+  type: 'test'
+  ...
+# Subtest: Task validation forbids fixed waits and AI assertions in keyless replay
+ok 277 - Task validation forbids fixed waits and AI assertions in keyless replay
+  ---
+  duration_ms: 0.601542
+  type: 'test'
+  ...
+# Subtest: Task validation requires reviewable named-symbol ownership
+ok 278 - Task validation requires reviewable named-symbol ownership
+  ---
+  duration_ms: 0.208917
+  type: 'test'
+  ...
+# Subtest: Task compilation refuses plaintext secret inputs
+ok 279 - Task compilation refuses plaintext secret inputs
+  ---
+  duration_ms: 76.871625
+  type: 'test'
+  ...
+# Subtest: Task grounding checks cited UI Map nodes, edges, and observed controls
+ok 280 - Task grounding checks cited UI Map nodes, edges, and observed controls
+  ---
+  duration_ms: 47.481916
+  type: 'test'
+  ...
+# Subtest: Task grounding accepts a stable same-title state variant identity
+ok 281 - Task grounding accepts a stable same-title state variant identity
+  ---
+  duration_ms: 0.338292
+  type: 'test'
+  ...
+# Subtest: Flow compilation resolves committed Tasks from the .tapp tree
+ok 282 - Flow compilation resolves committed Tasks from the .tapp tree
+  ---
+  duration_ms: 75.099709
+  type: 'test'
+  ...
+# Subtest: UI Map builds stable nodes, controls, transitions, provenance, and redacts dynamic text
+ok 283 - UI Map builds stable nodes, controls, transitions, provenance, and redacts dynamic text
+  ---
+  duration_ms: 10.153459
+  type: 'test'
+  ...
+# Subtest: UI Map separates same-title structural states without fragmenting dynamic list content
+ok 284 - UI Map separates same-title structural states without fragmenting dynamic list content
+  ---
+  duration_ms: 2.951083
+  type: 'test'
+  ...
+# Subtest: UI Map separates a same-title state when a prerequisite control disappears
+ok 285 - UI Map separates a same-title state when a prerequisite control disappears
+  ---
+  duration_ms: 2.343291
+  type: 'test'
+  ...
+# Subtest: UI Map keeps same-route SPA form expansion in one semantic screen
+ok 286 - UI Map keeps same-route SPA form expansion in one semantic screen
+  ---
+  duration_ms: 2.017292
+  type: 'test'
+  ...
+# Subtest: UI Map retains same-screen form preparation required by a later transition
+ok 287 - UI Map retains same-screen form preparation required by a later transition
+  ---
+  duration_ms: 1.53225
+  type: 'test'
+  ...
+# Subtest: UI Map redacts dynamic routes and refuses to call query-dependent observations replayable
+ok 288 - UI Map redacts dynamic routes and refuses to call query-dependent observations replayable
+  ---
+  duration_ms: 0.786625
+  type: 'test'
+  ...
+# Subtest: UI Map compiles a bounded semantic replay path from the observed navigation root
+ok 289 - UI Map compiles a bounded semantic replay path from the observed navigation root
+  ---
+  duration_ms: 2.253709
+  type: 'test'
+  ...
+# Subtest: UI Map reconciles an inferred state change with its explicit transition marker
+ok 290 - UI Map reconciles an inferred state change with its explicit transition marker
+  ---
+  duration_ms: 1.301375
+  type: 'test'
+  ...
+# Subtest: UI Map attributes browser route opens to their semantic link and deduplicates confirmation
+ok 291 - UI Map attributes browser route opens to their semantic link and deduplicates confirmation
+  ---
+  duration_ms: 0.772459
+  type: 'test'
+  ...
+# Subtest: UI Map merge preserves learned history and accumulates platform variants
+ok 292 - UI Map merge preserves learned history and accumulates platform variants
+  ---
+  duration_ms: 1.272333
+  type: 'test'
+  ...
+# Subtest: UI Map diff does not call shallow-run absence a regression
+ok 293 - UI Map diff does not call shallow-run absence a regression
+  ---
+  duration_ms: 0.837916
+  type: 'test'
+  ...
+# Subtest: UI Map text redaction removes common secret/customer identifiers
+ok 294 - UI Map text redaction removes common secret/customer identifiers
+  ---
+  duration_ms: 0.040834
+  type: 'test'
+  ...
+# Subtest: focused web inspection rejects non-http targets before launching a browser
+ok 295 - focused web inspection rejects non-http targets before launching a browser
+  ---
+  duration_ms: 1.925542
+  type: 'test'
+  ...
+# Subtest: help copy about possible failures is not treated as a visible error surface
+ok 296 - help copy about possible failures is not treated as a visible error surface
+  ---
+  duration_ms: 0.6525
+  type: 'test'
+  ...
+# Subtest: web controls retain a semantic label when their visible text is empty
+ok 297 - web controls retain a semantic label when their visible text is empty
+  ---
+  duration_ms: 0.155042
+  type: 'test'
+  ...
+# Subtest: placeholder links are findings unless they advertise real JavaScript control semantics
+ok 298 - placeholder links are findings unless they advertise real JavaScript control semantics
+  ---
+  duration_ms: 1.23975
+  type: 'test'
+  ...
+# Subtest: dead-control judgment ignores unrelated DOM churn and honors durable wiring or semantic change
+ok 299 - dead-control judgment ignores unrelated DOM churn and honors durable wiring or semantic change
+  ---
+  duration_ms: 0.260666
+  type: 'test'
+  ...
+# Subtest: web request failures exclude navigation-aborted resources but retain real transport failures
+ok 300 - web request failures exclude navigation-aborted resources but retain real transport failures
+  ---
+  duration_ms: 0.15625
+  type: 'test'
+  ...
+# Subtest: a terse or visual web page is not mislabeled as blank
+ok 301 - a terse or visual web page is not mislabeled as blank
+  ---
+  duration_ms: 0.184125
+  type: 'test'
+  ...
+# Subtest: web login submits a semantic SPA button even when it is outside a form
+ok 302 - web login submits a semantic SPA button even when it is outside a form
+  ---
+  duration_ms: 0.252209
+  type: 'test'
+  ...
+# Subtest: SPA screen identity prefers the visible h1 over a static document title
+ok 303 - SPA screen identity prefers the visible h1 over a static document title
+  ---
+  duration_ms: 0.47225
+  type: 'test'
+  ...
+# Subtest: actions after a same-URL SPA transition are attributed to the latest observation
+ok 304 - actions after a same-URL SPA transition are attributed to the latest observation
+  ---
+  duration_ms: 0.498041
+  type: 'test'
+  ...
+# Subtest: BFS navigation attributes transitions to the link label, never a stale button action
+ok 305 - BFS navigation attributes transitions to the link label, never a stale button action
+  ---
+  duration_ms: 0.1125
+  type: 'test'
+  ...
+# Subtest: BFS navigation owns an edge by the screen where the link was observed
+ok 306 - BFS navigation owns an edge by the screen where the link was observed
+  ---
+  duration_ms: 0.048
+  type: 'test'
+  ...
+# Subtest: web map roles are derived from observed semantics
+ok 307 - web map roles are derived from observed semantics
+  ---
+  duration_ms: 0.439292
+  type: 'test'
+  ...
+# Subtest: hosted web exploration fails closed without its public-egress proxy
+ok 308 - hosted web exploration fails closed without its public-egress proxy
+  ---
+  duration_ms: 0.273333
+  type: 'test'
+  ...
+# Subtest: PR seed routes are same-origin, bounded, deduplicated, and exclude the start page
+ok 309 - PR seed routes are same-origin, bounded, deduplicated, and exclude the start page
+  ---
+  duration_ms: 0.205958
+  type: 'test'
+  ...
+# Subtest: web PR targets accept only bounded route or deterministic UI Map path plans
+ok 310 - web PR targets accept only bounded route or deterministic UI Map path plans
+  ---
+  duration_ms: 0.175
+  type: 'test'
+  ...
+# Subtest: browser Flow uses the shared committed test format without an LLM
+ok 311 - browser Flow uses the shared committed test format without an LLM
+  ---
+  duration_ms: 2.968125
+  type: 'test'
+  ...
+# Subtest: single-actor browser Flows execute bounded same-origin setup and teardown
+ok 312 - single-actor browser Flows execute bounded same-origin setup and teardown
+  ---
+  duration_ms: 19.648791
+  type: 'test'
+  ...
+# Subtest: shared interactive session drives and captures a real web application
+ok 313 - shared interactive session drives and captures a real web application # SKIP
+  ---
+  duration_ms: 0.687125
+  type: 'test'
+  ...
+1..313
+# tests 313
+# suites 0
+# pass 294
+# fail 0
+# cancelled 0
+# skipped 19
+# todo 0
+# duration_ms 8382.398959
