@@ -14,6 +14,22 @@ const SEV_COLOR = { critical: "#cf222e", high: "#bc4c00", medium: "#9a6700", low
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+const VALID_PLATFORMS = new Set(["web", "android", "ios"]);
+
+// Recover a capture's platform when no in-memory report is available. Prefer the run's persisted
+// metadata (ui-map.json → app.platforms) — it is authoritative and survives a renamed folder — and
+// fall back to the capture-id prefix (web-*/android-*, ios unprefixed) only for legacy captures that
+// predate the map. Defaults to ios if nothing is resolvable, matching buildQaReport's own default.
+export function capturePlatform(captureDir) {
+  try {
+    const map = JSON.parse(fs.readFileSync(path.join(captureDir, "ui-map.json"), "utf8"));
+    const fromMap = (map?.app?.platforms || []).find((p) => VALID_PLATFORMS.has(p));
+    if (fromMap) return fromMap;
+  } catch { /* no map, unreadable, or no valid platform — fall back to the id prefix */ }
+  const base = path.basename(captureDir);
+  return base.startsWith("web-") ? "web" : base.startsWith("android-") ? "android" : "ios";
+}
+
 // Two capture layouts exist: web runs write state_*.png at the capture root; iOS runs
 // export XCUITest attachments into screenshots/ as UUID files with a manifest carrying
 // the human-readable state_N_<Screen> names.
@@ -50,7 +66,11 @@ function collectShots(captureDir) {
 }
 
 export function writeHtmlReport(captureDir, { report, label = "", recordingWarning = "" } = {}) {
-  const r = report || buildQaReport(path.join(captureDir, "ocqa-markers.txt"));
+  // Rebuild path (e.g. `tapp report`): no report object is passed, so buildQaReport would default to
+  // native — rendering a web/android page with the wrong "Checked / Not checked" scope, overclaiming
+  // native checks it never ran. Recover the run's real platform (metadata first, id prefix as a
+  // legacy fallback). When a report object IS passed (explore/init), it is already correct.
+  const r = report || buildQaReport(path.join(captureDir, "ocqa-markers.txt"), { platform: capturePlatform(captureDir) });
   if (!r) return null;
 
   const shots = collectShots(captureDir);

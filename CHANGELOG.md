@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.0-rc.1
+## 0.17.0-rc.7
 
 **Observe/judge split (ADR-0005) — a breaking rename + gate-contract change.**
 

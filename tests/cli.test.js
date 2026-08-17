@@ -87,6 +87,38 @@ test("tapp doctor keeps the package-only CLI path primary", () => {
   assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
 });
 
+test("tapp report latest picks the newest capture WITH exploration markers, skipping flow/scenario dirs", () => {
+  // The captures directory fills with flow-*/scenario-* evidence dirs that have no ocqa-markers.txt.
+  // `report` (latest) must resolve to the newest capture that actually has exploration markers, or it
+  // fails despite valid captures being present.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-report-latest-"));
+  const captures = path.join(home, "captures");
+  fs.mkdirSync(captures, { recursive: true });
+  const mk = (name, withMarkers, mtimeSec) => {
+    const dir = path.join(captures, name);
+    fs.mkdirSync(dir);
+    if (withMarkers) fs.writeFileSync(path.join(dir, "ocqa-markers.txt"),
+      'OCQA_STATE:{"screen":"Home","elements":10}\nOCQA_COMPLETE:{"actions":1,"states":1,"issues":0}\n');
+    else fs.writeFileSync(path.join(dir, "flow-report.json"), "{}"); // non-exploration evidence
+    fs.utimesSync(dir, mtimeSec, mtimeSec); // future mtimes → dominate any real repo captures
+    return dir;
+  };
+  const future = Date.now() / 1000 + 86400;
+  mk("web-20260101-000001", true, future);              // exploration capture (older of the two)
+  mk("flow-web-9999999999999-abcdef01", false, future + 10); // newest, but NO exploration markers
+  const env = { ...process.env, TAPP_HOME: home };
+
+  const out = execFileSync("node", [tappBin, "report"], { cwd: root, encoding: "utf8", env });
+  assert.match(out, /Evidence report/);
+  assert.match(out, /web-20260101-000001/, "selected the exploration capture");
+  assert.doesNotMatch(out, /flow-web-9999999999999/, "did not select the newer flow dir");
+
+  // An explicitly named non-exploration capture still fails clearly (no silent success).
+  const bad = spawnSync("node", [tappBin, "report", "flow-web-9999999999999-abcdef01"], { cwd: root, encoding: "utf8", env });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr + bad.stdout, /no markers/i);
+});
+
 test("tapp open and tree give a coding agent focused web evidence", { skip: skipRealBrowser }, async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-open-web-cli-"));
   const home = path.join(project, "tapp-home");

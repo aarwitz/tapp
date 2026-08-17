@@ -1460,9 +1460,15 @@ switch (command) {
     const runs = roots
       .flatMap((root) => fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => path.join(root, e.name)))
       .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    const wanted = rest[0] && rest[0] !== "latest" ? runs.find((r) => path.basename(r) === rest[0]) : runs[0];
+    const hasMarkers = (dir) => fs.existsSync(path.join(dir, "ocqa-markers.txt"));
+    // `latest` (default) resolves to the newest *exploration* capture — the captures directory is
+    // also full of flow-*/scenario-* evidence dirs with no ocqa-markers.txt, and picking the newest
+    // of those made `tapp report` fail even though valid exploration captures existed. An explicitly
+    // named capture is honored as-is so a non-exploration capture still gets a clear "no markers".
+    const explicit = rest[0] && rest[0] !== "latest";
+    const wanted = explicit ? runs.find((r) => path.basename(r) === rest[0]) : runs.find(hasMarkers);
     if (!wanted) {
-      bad("No captures found", rest[0] ? `no capture named "${rest[0]}"` : "run a QA exploration first");
+      bad("No captures found", explicit ? `no capture named "${rest[0]}"` : "run an exploration first (no capture with exploration markers was found)");
       process.exit(1);
     }
     const { writeHtmlReport } = await import(path.join(packageRoot, "mcp-server", "src", "html-report.js"));
@@ -1472,7 +1478,9 @@ switch (command) {
       process.exit(1);
     }
     ok("Evidence report", out);
-    spawnSync("open", [out], { stdio: "ignore" });
+    // Only launch a browser from an interactive terminal — agents, scripts, and tests that invoke
+    // `tapp report` non-interactively get the path without a surprise GUI window.
+    if (process.stdout.isTTY) spawnSync("open", [out], { stdio: "ignore" });
     break;
   }
 

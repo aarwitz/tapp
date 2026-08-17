@@ -25,6 +25,34 @@ const CLEAN_RUN = [
   'OCQA_COMPLETE:{"actions":3,"states":2,"issues":0,"screens":"Home,Settings"}',
 ];
 
+// `tapp report` rebuilds the HTML with no report object, so writeHtmlReport must recover the run's
+// platform to render the right "Checked / Not checked" scope. It prefers persisted metadata
+// (ui-map.json → app.platforms) and falls back to the capture-id prefix only for legacy captures.
+// Regression guard: before this, a web/android capture rebuilt with the native scope, over-claiming
+// checks it never ran — the worst place to be dishonest in a product built on honest coverage.
+test("writeHtmlReport rebuild derives platform from metadata first, capture-id prefix as legacy fallback", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-report-platform-"));
+  const scopeOf = (id, platforms) => {
+    const dir = path.join(root, id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "ocqa-markers.txt"), CLEAN_RUN.join("\n") + "\n");
+    if (platforms) fs.writeFileSync(path.join(dir, "ui-map.json"), JSON.stringify({ schemaVersion: 1, app: { platforms }, nodes: [], edges: [] }));
+    const out = writeHtmlReport(dir, { label: id }); // rebuild path — no report object passed
+    return (fs.readFileSync(out, "utf8").match(/Checked this run<\/h2><ul>([\s\S]*?)<\/ul>/) || ["", ""])[1];
+  };
+  // Legacy fallback: no ui-map → the capture-id prefix decides.
+  assert.match(scopeOf("web-legacy-1"), /broken links \(404\)/);
+  assert.match(scopeOf("android-legacy-2"), /crashes \/ process exits/);
+  assert.match(scopeOf("20260101-000003"), /keyboard-covered actions/); // unprefixed → native
+  // Persisted metadata WINS over a contradicting folder prefix.
+  const webFolderAndroidMap = scopeOf("web-20990101-000009", ["android"]);
+  assert.match(webFolderAndroidMap, /crashes \/ process exits/);
+  assert.doesNotMatch(webFolderAndroidMap, /broken links \(404\)/);
+  const nativeFolderWebMap = scopeOf("20990101-000010", ["web"]); // unprefixed folder, map says web
+  assert.match(nativeFolderWebMap, /broken links \(404\)/);
+  assert.doesNotMatch(nativeFolderWebMap, /keyboard-covered actions/);
+});
+
 test("clean run with real coverage → a scoreless observation with no findings", () => {
   const r = buildQaReport(markersFile(CLEAN_RUN));
   assert.ok(r, "report parses");

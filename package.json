@@ -1,6 +1,6 @@
 {
   "name": "@aarwitz/tapp",
-  "version": "0.17.0-rc.6",
+  "version": "0.17.0-rc.7",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Release contracts, autonomous QA, and evidence-backed CI gates for iOS, Android, and web.",
   "license": "MIT",
