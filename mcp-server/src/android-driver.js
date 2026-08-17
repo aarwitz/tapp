@@ -118,8 +118,15 @@ export function detectAndroidScreen(elements, activity = "") {
 
 export function isAndroidAppSnapshot(snapshot, appId) {
   if (!snapshot || !appId) return false;
-  if (String(snapshot.activity || "").startsWith(`${appId}/`)) return true;
-  return snapshot.elements.some((e) => e.package === appId);
+  const activity = String(snapshot.activity || "");
+  const ownsActivity = activity.startsWith(`${appId}/`);
+  const packages = new Set((snapshot.elements || []).map((e) => e.package).filter(Boolean));
+  const ownsElements = packages.has(appId);
+  // dumpXml and dumpsys used to run concurrently. If an app crashed while they were sampled, a
+  // stale activity from the dead app could be paired with another app's UI tree and Tapp would map
+  // that unrelated app as the crash destination. When both signals exist, require agreement.
+  if (activity && packages.size) return ownsActivity && ownsElements;
+  return ownsActivity || ownsElements;
 }
 
 export class AndroidDriver {
@@ -156,6 +163,12 @@ export class AndroidDriver {
 
   async forceStop() {
     if (this.appId) await this.adb(["shell", "am", "force-stop", this.appId]);
+  }
+
+  async isProcessAlive() {
+    if (!this.appId) return false;
+    const r = await this.adb(["shell", "pidof", this.appId]);
+    return r.code === 0 && /\d/.test(String(r.stdout || ""));
   }
 
   async clearData() {

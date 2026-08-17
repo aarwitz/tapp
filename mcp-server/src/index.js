@@ -984,7 +984,10 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
   const before = new Set(listCaptureRuns(80).map((r) => r.id));
   const proc = spawn("bash", cmdArgs, { cwd: repoRoot, env: { ...process.env, ...env } });
   proc.stdout.on("data", () => {});
-  proc.stderr.on("data", () => {});
+  let captureStderr = "";
+  proc.stderr.on("data", (chunk) => {
+    captureStderr = (captureStderr + chunk.toString("utf8")).slice(-8_000);
+  });
   const closed = new Promise((res) => proc.on("close", (code) => res(code ?? 1)));
 
   let captureDir = null;
@@ -1037,7 +1040,18 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
   await closed;
   const created = listCaptureRuns(80).find((r) => !before.has(r.id))
     || (captureDir ? { id: path.basename(captureDir), path: captureDir, relativePath: path.relative(repoRoot, captureDir) } : null);
-  return { created, timedOut };
+  return { created, timedOut, captureStderr };
+}
+
+export function recordingUnavailableReason(stderr = "") {
+  const text = String(stderr);
+  if (/resource busy|host recording is already in progress/i.test(text)) {
+    return "the simulator recorder is busy with another host recording";
+  }
+  if (/could not start simulator video recording/i.test(text)) {
+    return "the simulator could not start video recording";
+  }
+  return "the simulator did not produce a recording";
 }
 
 // Grab the booted simulator's current screen and return it downscaled + JPEG-compressed so the
@@ -1318,7 +1332,7 @@ export function qaNextSteps(report, surface = "mcp") {
   return next;
 }
 
-function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, uiMap, surface = "mcp" } = {}) {
+function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured, reportHtml, recording, recordingWarning, uiMap, surface = "mcp" } = {}) {
   const c = report.findingCounts || {};
   const badge = observationBadge(report);
   const sevBits = ["critical", "high", "medium", "low"]
@@ -1338,6 +1352,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
   if (uiMap) L.push(`**UI Map** — ${uiMap.nodeCount} states · ${uiMap.edgeCount} transitions · ${uiMap.controlCount} semantic controls · ${uiMap.path}`);
   if (reportHtml) L.push(`**Evidence** — 📄 ${reportHtml} (screenshots of every screen + findings, shareable)`);
   if (recording) L.push(`**Recording** — 🎬 ${recording} (full exploration, embedded in the evidence page)`);
+  else if (recordingWarning) L.push(`**Recording** — ⚠️ unavailable: ${recordingWarning}; screenshots were still captured`);
   L.push(`**Issues** — ${c.total ? `${c.total}${sevBits ? ` (${sevBits})` : ""}` : "none found ✨"}`);
   if (Array.isArray(report.findings) && report.findings.length) {
     L.push("");
@@ -1367,7 +1382,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     L.push("");
     L.push(`> ℹ️ ${inputHint}`);
   }
-  // The honesty label: a "ready" is a claim about exactly these classes, nothing more.
+  // The observation's scope: enumerate exactly what ran and what remains unchecked.
   if (Array.isArray(report.checkedFor) && report.checkedFor.length) {
     L.push("");
     L.push(`> ✅ Checked: ${report.checkedFor.join(" · ")}`);
@@ -1381,11 +1396,10 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
   const next = qaNextSteps(report, surface);
   L.push("");
   L.push(`**Next** — ${next.join(" · ")}`);
-  // The gate hook belongs at the moment the user thinks "I want this on every PR" —
-  // i.e. right after a verdict that found something, or after they hand-diffed a baseline.
+  // The gate hook belongs at the moment the user thinks "I want these checks on every PR".
   if ((report.findings && report.findings.length) || regression) {
     L.push("");
-    L.push("> 🚦 Teams: get this verdict on every PR automatically (evidence + regression gate) — https://github.com/aarwitz/tapp#ci-gate");
+    L.push("> 🚦 Teams: run these checks plus reviewed release contracts as a merge gate on every PR — https://github.com/aarwitz/tapp#ci-gate");
   }
   return L.join("\n");
 }
@@ -1466,7 +1480,7 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
   } catch (err) {
     return { error: String(err.message || err) };
   }
-  const report = buildQaReport(webResult.markersPath, { platform: "web" });
+  const report = buildQaReport(webResult.markersPath, { platform: "web", target: url.trim() });
   if (!report) return { error: "Web exploration produced no markers", details: { capture: { id, path: outDir } } };
   const backend = remoteAiOptedIn() ? resolveModelBackend() : null;
   if (backend && report.findings.length) {
@@ -1509,7 +1523,7 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
   } catch (error) {
     return { error: error.message || String(error), details: { capture: { id, path: outDir } } };
   }
-  const report = buildQaReport(androidResult.markersPath, { platform: "android" });
+  const report = buildQaReport(androidResult.markersPath, { platform: "android", target: appId.trim() });
   if (!report) return { error: "Android exploration produced no markers", details: { capture: { id, path: outDir } } };
   const backend = remoteAiOptedIn() ? resolveModelBackend() : null;
   if (backend && report.findings.length) {
@@ -1541,10 +1555,10 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const env = explorationEnvFromArgs(args);
 
-  const { created, timedOut } = await runExploreStreaming(bundleId, actions, timeoutSec, env, onProgress);
+  const { created, timedOut, captureStderr } = await runExploreStreaming(bundleId, actions, timeoutSec, env, onProgress);
   if (!created) return { error: "Exploration produced no capture run", details: { timedOut } };
 
-  const report = buildQaReport(path.join(created.path, "ocqa-markers.txt"));
+  const report = buildQaReport(path.join(created.path, "ocqa-markers.txt"), { platform: "ios", target: bundleId });
   if (!report) {
     return {
       error: "No markers parsed from exploration (the app may not have launched)",
@@ -1574,13 +1588,14 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
   // Cross-run regression vs. a caller-supplied baseline (the CI gate).
   const regression = computeRegression(report.findings, args.baselineFindings);
   const uiMap = await writeRunUiMap({ markersPath: path.join(created.path, "ocqa-markers.txt"), platform: "ios", target: bundleId, runId: created.id, outDir: created.path });
+  const recording =
+    ["exploration.webm", "exploration.mov"].map((f) => path.join(created.path, f)).find((p) => fs.existsSync(p)) || null;
+  const recordingWarning = recording ? null : recordingUnavailableReason(captureStderr);
   let reportHtml = null;
   try {
     const { writeHtmlReport } = await import("./html-report.js");
-    reportHtml = writeHtmlReport(created.path, { report, label: bundleId });
+    reportHtml = writeHtmlReport(created.path, { report, label: bundleId, recordingWarning });
   } catch { /* evidence page is best-effort */ }
-  const recording =
-    ["exploration.webm", "exploration.mov"].map((f) => path.join(created.path, f)).find((p) => fs.existsSync(p)) || null;
   const structured = {
     ...report,
     regression,
@@ -1588,11 +1603,12 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
     inputHint,
     reportHtml,
     recording,
+    recordingWarning,
     capture: { id: created.id, path: created.path, relativePath: created.relativePath },
     timedOut,
     autoBooted: sim.autoBooted || false,
   };
-  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml, recording, uiMap: uiMap.error ? null : uiMap, surface });
+  const text = formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiConfigured: !!backend, reportHtml, recording, recordingWarning, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
 
@@ -1753,6 +1769,8 @@ export async function runExploreTarget({
   timeout,
   testEmail,
   testPassword,
+  appLaunchArgs,
+  appLaunchEnv,
   baselineFindings,
   surface = "cli",
   onProgress = () => {},
@@ -1775,6 +1793,10 @@ export async function runExploreTarget({
   try { selected = selectApplicationTarget(model, { platform, target, useDefault: true }); }
   catch (error) { return { error: error.message || String(error) }; }
   const selectedPlatform = selected.platform;
+
+  if (selectedPlatform !== "ios" && ((Array.isArray(appLaunchArgs) && appLaunchArgs.length) || (appLaunchEnv && Object.keys(appLaunchEnv).length))) {
+    return { error: "appLaunchArgs/appLaunchEnv apply only to iOS targets." };
+  }
 
   if (selectedPlatform === "web") {
     const ownedUrl = String(selected.runtime?.ownedUrl || "").trim();
@@ -1818,7 +1840,7 @@ export async function runExploreTarget({
   const resolved = await resolveAppTarget(root, { cwd: root, onStatus, scheme, configuration });
   if (resolved.error) return resolved;
   if (resolved.via) onStatus(`Target ${resolved.bundleId} — ${resolved.via}`);
-  return runQaIos({ bundleId: resolved.bundleId, maxActions, timeout, args: { testEmail, testPassword, baselineFindings }, surface, onProgress });
+  return runQaIos({ bundleId: resolved.bundleId, maxActions, timeout, args: { testEmail, testPassword, baselineFindings, appLaunchArgs, appLaunchEnv }, surface, onProgress });
 }
 
 function openLocalPort() {
@@ -2949,12 +2971,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // MCP concerns: auth, arg validation, and progress notifications.
     const progressToken = request.params && request.params._meta ? request.params._meta.progressToken : undefined;
     const budget = Math.max(1, Math.min(1000, asInteger(args.maxActions, 60)));
-    const notifyProgress = (unit) => (p) => {
+    const notifyProgress = (metric) => (p) => {
       if (progressToken === undefined) return;
       const total = p.max || budget;
       server.notification({
         method: "notifications/progress",
-        params: { progressToken, progress: p.action || 0, total, message: `🔍 Exploring… ${p.action}/${total} actions · ${p.states} ${unit} reached` },
+        params: { progressToken, progress: p.action || 0, total, message: `🔍 Exploring… ${p.action}/${total} actions · ${p.states} ${metric}` },
       }).catch(() => {});
     };
     if (wantsWeb) {
@@ -2965,7 +2987,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         testEmail: args.testEmail,
         testPassword: args.testPassword,
         baselineFindings: args.baselineFindings,
-        onProgress: notifyProgress("pages"),
+        onProgress: notifyProgress("pages reached"),
       });
       if (r.error) return errorResult(r.error, r.details || {});
       return richResult(r.text, r.structured);
@@ -2982,14 +3004,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         testPassword: args.testPassword,
         baselineFindings: args.baselineFindings,
         clearData: args.clearData !== false,
-        onProgress: notifyProgress("screens"),
+        onProgress: notifyProgress("screens reached"),
       });
       if (r.error) return errorResult(r.error, r.details || {});
       return richResult(r.text, r.structured);
     }
 
     let lastProgress = null;
-    const iosProgress = notifyProgress("screens");
+    const iosProgress = notifyProgress("structural states observed");
     const r = await runQaIos({
       bundleId: String(args.appBundleId).trim(),
       maxActions: args.maxActions,
@@ -3686,7 +3708,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (isNonEmptyString(args.apkPath)) await driver.install(path.resolve(args.apkPath));
         const snap = await driver.launch({ clearData: args.clearData === true });
         const data = await driver.screenshot();
-        await driver.forceStop().catch(() => {});
         return {
           content: [
             { type: "text", text: `🚀 Launched \`${appId}\` (Android)\n\n` + formatScreen(snap.screenTitle, snap.elements) },

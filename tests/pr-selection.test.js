@@ -229,6 +229,44 @@ test("PR proposal adoption refuses unobserved or stale evidence without changing
   assert.equal(fs.readFileSync(releasePlanPath, "utf8"), before);
 });
 
+test("PR proposal adoption explains how to recover from a stale persistent UI Map", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-adopt-stale-map-"));
+  write(path.join(root, ".tapp/ui-map.json"), { schemaVersion: 1, nodes: [], edges: [] });
+  const releasePlanPath = path.join(root, ".tapp/release-plan.json");
+  write(releasePlanPath, { schemaVersion: 1, kind: "tapp-release-plan", status: "reviewed", items: [] });
+  const prPlanPath = path.join(root, "pr-plan.json");
+  write(prPlanPath, {
+    schemaVersion: 1,
+    explorationTargets: [{
+      id: "explore_dashboard",
+      platform: "web",
+      navigation: { route: "/dashboard.html" },
+      execution: { status: "observed", conclusive: true },
+      coverageProposal: {
+        kind: "release-plan-item-proposal",
+        autoApply: false,
+        operation: {
+          op: "add-item",
+          item: {
+            id: "proposal_dashboard",
+            kind: "release-contract",
+            name: "dashboardReachable",
+            origin: "deterministic-ui-map-proposal",
+            decision: "pending",
+            groundedBy: [{ type: "ui-map-node", id: "screen_dashboard" }],
+          },
+        },
+      },
+    }],
+  });
+  const before = fs.readFileSync(releasePlanPath, "utf8");
+  assert.throws(
+    () => adoptPrCoverageProposal({ projectDir: root, prPlanPath, item: "explore_dashboard" }),
+    /tapp init --explore --refresh.*tapp pr gate.*tapp pr adopt/,
+  );
+  assert.equal(fs.readFileSync(releasePlanPath, "utf8"), before);
+});
+
 test("changed-file parsing accepts GitHub objects and Git ingestion preserves both sides of renames", () => {
   assert.deepEqual(parseChangedFiles([{ filename: "src/new.ts", previous_filename: "src/old.ts" }]), ["src/new.ts", "src/old.ts"]);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-git-"));

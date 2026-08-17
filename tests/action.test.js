@@ -84,7 +84,7 @@ test("Action isolates writable runtime data and exposes CI controls", () => {
   assert.match(action, /--target-key "\$TAPP_INPUT_TARGET_KEY"/);
   assert.match(action, /name: tapp-evidence-\$\{\{ inputs\.platform \}\}-\$\{\{ steps\.target\.outputs\.key \}\}/);
   assert.match(action, /tapp-release-check:\$\{process\.env\.TAPP_TARGET_KEY\}/);
-  assert.match(action, /legacyMarker/);
+  assert.doesNotMatch(action, /\.autotap|autotap-release-check|legacyMarker/);
   assert.match(action, /scenarios:[\s\S]*?TAPP_INPUT_SCENARIOS: \$\{\{ inputs\.scenarios \}\}/);
   assert.match(action, /--scenarios "\$TAPP_INPUT_SCENARIOS"/);
   assert.match(action, /pr-selection:[\s\S]*?default: "true"/);

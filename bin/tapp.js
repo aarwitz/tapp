@@ -130,6 +130,27 @@ function repeatedFlagValues(argv, name) {
   return values;
 }
 
+function iosLaunchOptions(flags, argv) {
+  const appLaunchArgs = repeatedFlagValues(argv, "launch-arg");
+  let appLaunchEnv;
+  if (typeof flags["launch-env"] === "string") {
+    try {
+      const parsed = JSON.parse(flags["launch-env"]);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object" || Object.values(parsed).some((value) => typeof value !== "string")) {
+        throw new Error("expected a JSON object with string values");
+      }
+      appLaunchEnv = parsed;
+    } catch (error) {
+      console.error(`❌ --launch-env must be a JSON object with string values: ${error.message}`);
+      process.exit(2);
+    }
+  }
+  return {
+    ...(appLaunchArgs.length ? { appLaunchArgs } : {}),
+    ...(appLaunchEnv ? { appLaunchEnv } : {}),
+  };
+}
+
 const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "index.js"));
 
 function requireMacFor(what) {
@@ -197,11 +218,38 @@ async function resolveTargetOrExit(engine, input) {
   return resolved.bundleId;
 }
 
+function safeCommandUsage(verb) {
+  const usage = {
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--dry-run]",
+    open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]",
+    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]",
+    shot: "tapp shot [--out FILE]",
+    apps: "tapp apps",
+    build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
+    flow: "tapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--email VALUE] [--password VALUE]",
+    task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
+    contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]",
+    scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]",
+    map: "tapp map build MARKERS [--platform PLATFORM] [--out FILE] [--replace]\ntapp map inspect [FILE]\ntapp map diff BEFORE AFTER [--comparable]",
+    pr: "tapp pr plan [--base REF|--changed-files FILE] [--head REF] [--platform PLATFORM] [--out FILE]\ntapp pr gate PLAN [gate target/options]\ntapp pr adopt PLAN --item ID [--project-dir DIR]",
+    plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]",
+    baseline: "tapp baseline create [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
+    actor: "tapp actor set NAME --email-env ENV --password-env ENV [--project-dir DIR]\ntapp actor list [repo]",
+    app: "tapp app [repo] [--no-open] [--port PORT]",
+    report: "tapp report [captureId|latest]",
+    doctor: "tapp doctor",
+    install: "tapp install",
+    mcp: "tapp mcp",
+  };
+  return usage[verb] || `tapp ${verb}`;
+}
+
 // Safe help: `--help`/`-h` on ANY verb prints the command reference and does NOTHING else — never
 // builds, launches, writes, or opens (ADR-0005 manual-testing requirement). `ci` keeps its own
 // richer `--help` (a safe usage print in ci-gate.sh); help/version don't need interception.
 if ((rest.includes("--help") || rest.includes("-h")) && !["help", "version", "--version", "-v", "ci"].includes(command)) {
-  console.log(`ℹ️  '${command} --help' — showing the command reference (--help never builds, launches, writes, or opens):\n`);
+  console.log(`Usage:\n  ${safeCommandUsage(command).replaceAll("\n", "\n  ")}\n\nℹ️  --help never builds, launches, writes, or opens. Full command reference:\n`);
   command = "help";
   rest = [];
 }
@@ -271,7 +319,7 @@ switch (command) {
         testEmail: typeof flags.email === "string" ? flags.email : undefined,
         testPassword: typeof flags.password === "string" ? flags.password : undefined,
         runExploration: engine?.runInitExploration,
-        onProgress: (progress) => process.stderr.write(`\r🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${platform === "web" ? "pages" : "screens"} reached   `),
+        onProgress: (progress) => process.stderr.write(`\r🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached"}   `),
         onStatus: (status) => console.error(`⏳ ${status}`),
         outDir,
         maxContracts,
@@ -408,6 +456,7 @@ switch (command) {
     // hidden deprecated alias.
     if (command === "qa") console.error("note: 'qa' is now 'explore' — 'qa' still works for now.\n");
     const { flags, positionals } = parseVerbArgs(rest);
+    const launchOptions = iosLaunchOptions(flags, rest);
     let target = positionals[0] || "";
     let baselineFindings;
     if (flags.baseline) {
@@ -431,7 +480,7 @@ switch (command) {
         const modelPlatform = typeof flags.platform === "string" ? flags.platform.toLowerCase() : "";
         if (modelPlatform === "ios") requireMacFor("iOS testing");
         const onProgress = (p) =>
-          process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} reached   `);
+          process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} states observed   `);
         const r = await engine.runExploreTarget({
           projectDir: process.cwd(),
           platform: modelPlatform,
@@ -440,6 +489,7 @@ switch (command) {
           timeout: flags.timeout,
           testEmail: flags.email,
           testPassword: flags.password,
+          ...launchOptions,
           baselineFindings,
           surface: "cli",
           onProgress,
@@ -461,15 +511,19 @@ switch (command) {
       process.exit(2);
     }
     if (platform === "ios") requireMacFor("iOS testing");
+    if (platform !== "ios" && Object.keys(launchOptions).length) {
+      console.error("❌ --launch-arg and --launch-env apply only to iOS targets");
+      process.exit(2);
+    }
     if (platform === "web" && !/^https?:\/\//i.test(target)) {
       console.error("❌ Web QA needs an http(s) URL");
       process.exit(2);
     }
     const bundleId = platform === "ios" ? await resolveTargetOrExit(engine, target) : null;
     const android = platform === "android" ? androidTarget(flags, target) : null;
-    const unit = platform === "web" ? "pages" : "screens";
+    const progressMetric = platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached";
     const onProgress = (p) =>
-      process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${unit} reached   `);
+      process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${progressMetric}   `);
     const r = platform === "web"
       ? await engine.runQaWeb({
           url: target,
@@ -497,7 +551,7 @@ switch (command) {
           bundleId,
           maxActions: flags.actions,
           timeout: flags.timeout,
-          args: { testEmail: flags.email, testPassword: flags.password, baselineFindings },
+          args: { testEmail: flags.email, testPassword: flags.password, baselineFindings, ...launchOptions },
           surface: "cli",
           onProgress,
         });
@@ -555,7 +609,6 @@ switch (command) {
       if (target.apkPath) await driver.install(target.apkPath);
       const snap = await driver.launch({ clearData: flags["clear-data"] === true });
       const data = await driver.screenshot();
-      await driver.forceStop();
       console.log(`🚀 Launched \`${target.appId}\` (Android)\n`);
       console.log(engine.formatScreen(snap.screenTitle, snap.elements));
       const out = typeof flags.out === "string" ? flags.out : path.join(tappHome, "shots", `${target.appId}-${Date.now()}.png`);
@@ -615,12 +668,17 @@ switch (command) {
       break;
     }
     if (platform === "android") {
-      const target = androidTarget(flags, positionals[0] || "");
+      const input = positionals[0] || "";
+      const hasTarget = !!(input || flags["app-id"] || flags.apk);
+      const target = hasTarget
+        ? androidTarget(flags, input)
+        : { serial: typeof flags.serial === "string" ? flags.serial : undefined };
       const { AndroidDriver } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
       const driver = new AndroidDriver(target);
       await driver.ensureDevice();
-      const snap = await driver.snapshot();
-      if (flags.json) console.log(JSON.stringify({ screenTitle: snap.screenTitle, elements: snap.elements }, null, 2));
+      if (target.apkPath) await driver.install(target.apkPath);
+      const snap = target.appId ? await driver.launch() : await driver.snapshot();
+      if (flags.json) console.log(JSON.stringify({ platform: "android", appId: target.appId || null, activity: snap.activity, screenTitle: snap.screenTitle, elements: snap.elements }, null, 2));
       else console.log(engine.formatScreen(snap.screenTitle, snap.elements));
       break;
     }

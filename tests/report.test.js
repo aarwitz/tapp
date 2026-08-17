@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { buildQaReport, observationBadge, observationSummary, severityRank, parseOcqaMarkers, evaluateGate, GATE_EXIT, GATE_POLICY_VERSION } from "../mcp-server/src/report.js";
+import { writeHtmlReport } from "../mcp-server/src/html-report.js";
 
 function markersFile(lines) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-test-"));
@@ -52,6 +53,13 @@ test("ExplorationRun carries the complete §4 schema contract", () => {
     'OCQA_STATE:{"screen":"Home","elements":5}', 'OCQA_ACTION:{"type":"tap"}', 'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0}',
   ]));
   assert.equal(thin.runStatus, "limited", "an inconclusive run is limited, not completed");
+});
+
+test("ExplorationRun preserves concrete target provenance", () => {
+  const r = buildQaReport(markersFile(CLEAN_RUN), { platform: "android", target: " io.tapp.corpus.demo " });
+  assert.equal(r.platform, "android");
+  assert.equal(r.target, "io.tapp.corpus.demo");
+  assert.equal(buildQaReport(markersFile(CLEAN_RUN)).target, null);
 });
 
 test("determinism: identical trace → identical observation", () => {
@@ -125,6 +133,35 @@ test("observation headline counts every reported finding", () => {
   assert.match(eighteen.headline, /18 issue\(s\).*18 medium/);
 });
 
+test("native coverage uses the full completed action count when recovery actions are not narrated", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Unknown","elements":6}',
+    'OCQA_ACTION:{"type":"tap","target":"tab_bar_pos_0"}',
+    'OCQA_COMPLETE:{"actions":10,"states":1,"issues":0,"screens":""}',
+  ]));
+  assert.equal(r.actionsPerformed, 10);
+});
+
+test("caller time-budget exhaustion is inconclusive partial evidence, not an app finding", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_STATE:{"screen":"Settings","elements":20}',
+    'OCQA_ACTION:{"type":"tap","target":"Profile"}',
+    'OCQA_ACTION:{"type":"tap","target":"Back"}',
+    // Compatibility proof: old captures included this misleading issue marker. It must be ignored.
+    'OCQA_ISSUE:{"type":"explore_timeout","severity":"high","title":"Exploration timed out"}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1,"timedOut":true,"timeoutSeconds":30}',
+  ]));
+  assert.equal(r.inconclusive, true);
+  assert.equal(r.runStatus, "limited");
+  assert.equal(r.stopReason, "time-budget-exhausted");
+  assert.equal(r.findingCounts.total, 0);
+  assert.match(r.headline, /30s time budget.*partial.*not an app performance finding/i);
+  assert.ok(r.notChecked.some((item) => /full requested action budget/.test(item)));
+  assert.equal(evaluateGate({ report: r }).outcome, "inconclusive");
+});
+
 test("coverage floor: a shallow run is inconclusive and says so", () => {
   const r = buildQaReport(
     markersFile([
@@ -137,6 +174,27 @@ test("coverage floor: a shallow run is inconclusive and says so", () => {
   assert.equal(r.verdict, undefined);
   assert.equal(r.releaseScore, undefined);
   assert.match(r.headline, /NOT a pass/i);
+});
+
+test("a fully swept one-page web target is conclusive", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0}',
+  ]), { platform: "web" });
+  assert.equal(r.inconclusive, false);
+  assert.equal(r.stopReason, "completed");
+});
+
+test("a one-page web login wall without submitted credentials remains inconclusive", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/login"}',
+    'OCQA_STATE:{"screen":"Sign in","elements":8,"inputs":[{"label":"Password","secure":true}]}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0}',
+  ]), { platform: "web" });
+  assert.equal(r.inconclusive, true);
+  assert.equal(r.stopReason, "login-wall-no-credentials");
+  assert.ok(r.notChecked.some((item) => /sign-in behavior/.test(item)));
 });
 
 test("severityRank orders critical → low", () => {
@@ -175,15 +233,41 @@ test("checkedFor never claims sign-in checks when no login form was encountered"
   assert.ok(r.conditionsNotReached.some((c) => /sign-in/.test(c)));
 });
 
-test("checkedFor claims sign-in checks when a secure field was seen", () => {
+test("a login surface without a submitted attempt does not claim sign-in checks", () => {
   const r = buildQaReport(
     markersFile([
       'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',
       ...CLEAN_RUN,
     ])
   );
-  assert.ok(r.checkedFor.some((c) => /sign-in/.test(c)));
+  assert.ok(!r.checkedFor.some((c) => /sign-in/.test(c)));
+  assert.ok(r.notChecked.some((c) => /sign-in behavior/.test(c)));
   assert.equal(r.loginEncountered, true);
+});
+
+test("checkedFor claims failed sign-ins only after a real login submission", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',
+    'OCQA_ACTION:{"type":"login","target":"Sign in"}',
+    ...CLEAN_RUN,
+  ]));
+  assert.ok(r.checkedFor.some((c) => /failed sign-ins/.test(c)));
+  assert.ok(!r.notChecked.some((c) => /sign-in behavior/.test(c)));
+});
+
+test("native login preamble and replay markers count as real sign-in submissions", () => {
+  for (const submitted of [
+    "OCQA_STATE:login_preamble_submitted",
+    'OCQA_ACTION:{"type":"login_tap","target":"Sign in"}',
+  ]) {
+    const r = buildQaReport(markersFile([
+      'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',
+      submitted,
+      ...CLEAN_RUN,
+    ]));
+    assert.ok(r.checkedFor.some((c) => /failed sign-ins/.test(c)), submitted);
+    assert.ok(!r.notChecked.some((c) => /no test credentials supplied/.test(c)), submitted);
+  }
 });
 
 test("web platform gets web-specific honesty labels", () => {
@@ -201,6 +285,25 @@ test("web platform gets web-specific honesty labels", () => {
   assert.equal(r.verdict, undefined, "exploration renders no ship verdict");
   assert.equal(r.releaseScore, undefined);
   assert.equal(observationBadge({ ...r, inconclusive: true }), "🟡 INCONCLUSIVE (exploration)");
+});
+
+test("the shareable HTML evidence enumerates checked and unchecked scope", () => {
+  const markers = markersFile(CLEAN_RUN);
+  const report = buildQaReport(markers, { platform: "web" });
+  const htmlPath = writeHtmlReport(path.dirname(markers), {
+    report,
+    label: "https://example.test",
+    recordingWarning: "the simulator recorder is busy with another host recording",
+  });
+  const html = fs.readFileSync(htmlPath, "utf8");
+  assert.match(html, /Checked this run/);
+  assert.match(html, /uncaught exceptions/);
+  assert.match(html, /Not checked this run/);
+  assert.match(html, /content and claim accuracy/);
+  assert.match(html, /Conditions not reached/);
+  assert.match(html, /sign-in/);
+  assert.match(html, /Recording/);
+  assert.match(html, /recorder is busy/);
 });
 
 test("sampled web probe findings remain advisory and stay out of the deterministic counts", () => {
@@ -236,6 +339,34 @@ test("evaluateGate: a critical finding with no baseline is a fail (exit 1)", () 
   const g = evaluateGate({ report: { inconclusive: false, findingCounts: { total: 1 }, deterministicFindingCounts: { critical: 1 } }, failOn: "gate" });
   assert.equal(g.outcome, "fail");
   assert.equal(g.exitCode, 1);
+});
+
+test("evaluateGate: a deterministic failed sign-in is an absolute fail without a baseline", () => {
+  const report = {
+    inconclusive: false,
+    findingCounts: { total: 1 },
+    deterministicFindingCounts: { critical: 0, high: 1, medium: 0 },
+    findings: [{ type: "auth_failed", severity: "high", authority: "deterministic", evaluationTier: "deterministic" }],
+  };
+  const g = evaluateGate({ report, failOn: "gate" });
+  assert.equal(g.outcome, "fail");
+  assert.equal(g.exitCode, GATE_EXIT.fail);
+  assert.match(g.reasons.join(" "), /sign-in attempt/);
+});
+
+test("evaluateGate: sampled/model-observed auth advisories are not absolute failures", () => {
+  for (const finding of [
+    { type: "auth_failed", severity: "high", authority: "deterministic", evaluationTier: "sampled" },
+    { type: "auth_failed", severity: "high", authority: "model-observed", evaluationTier: "deterministic" },
+  ]) {
+    const report = {
+      inconclusive: false,
+      findingCounts: { total: 1 },
+      deterministicFindingCounts: { critical: 0, high: 0, medium: 0 },
+      findings: [finding],
+    };
+    assert.equal(evaluateGate({ report, failOn: "gate" }).outcome, "pass");
+  }
 });
 
 test("evaluateGate: the risk threshold blocks (many mediums, no crit) with no baseline", () => {

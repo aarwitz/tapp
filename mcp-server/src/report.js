@@ -1,6 +1,6 @@
 // Pure report/gate logic shared by the MCP server (index.js) and the CI gate CLI
-// (ci-report.js). Turns a capture's OCQA markers into the same ship/no-ship report the Tapp
-// app produces, and diffs two runs' findings into the CI regression gate. No shell, no server —
+// (ci-report.js). Turns a capture's OCQA markers into a scoreless exploration observation,
+// and applies explicit policy separately in the CI gate. No shell, no server —
 // keep it dependency-free so the CI path stays importable and testable.
 import fs from "fs";
 import path from "path";
@@ -133,9 +133,9 @@ export function observationSummary(report) {
   return `${report?.screensExplored || 0} screens · ${report?.actionsPerformed || 0} actions · ${n} finding(s) · observation only`;
 }
 
-// Turn a capture's OCQA markers into the same ship/no-ship report Tapp produces:
-// deduped findings + a trustworthy verdict with a coverage floor (mirrors OrchestratorService).
-export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
+// Turn a capture's OCQA markers into a scoreless observation with deduped findings and an
+// explicit coverage floor. Release judgment is applied later by evaluateGate.
+export function buildQaReport(markersFilePath, { platform = "ios", target = null } = {}) {
   const base = parseOcqaMarkers(markersFilePath);
   if (!base) return null;
 
@@ -145,6 +145,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const inputsByScreen = new Map();
   const screenElementCounts = {}; // screen -> max elements observed (content-collapse detection)
   let anySecure = false;
+  let loginAttempted = false;
   let actions = 0;
 
   for (const line of raw.split(/\r?\n/)) {
@@ -163,6 +164,17 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
       }
     } else if (t.startsWith("OCQA_ACTION:")) {
       actions += 1;
+      try {
+        const action = JSON.parse(t.slice("OCQA_ACTION:".length));
+        if (action?.type === "login" || String(action?.type || "").startsWith("login_")) loginAttempted = true;
+      } catch {
+        /* ignore malformed */
+      }
+    } else if (
+      t === "OCQA_STATE:login_preamble_submitted" ||
+      t === "OCQA_STATE:login_preamble_two_step_submitted"
+    ) {
+      loginAttempted = true;
     } else if (t.startsWith("OCQA_STATE:{")) {
       try {
         const s = JSON.parse(t.slice("OCQA_STATE:".length));
@@ -202,7 +214,12 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   const missingResources = new Set(normalizedIssues
     .filter((issue) => issue.type === "missing_asset" && issue.target)
     .map((issue) => issue.target));
+  // Older native captures represented the caller's wall-clock budget as a high-severity app
+  // finding. A timeout makes the evidence partial/inconclusive; it does not prove an app
+  // performance defect (the harness has a separate app_hang detector for that).
+  const timeBudgetExhausted = base.complete?.timedOut === true || normalizedIssues.some((issue) => issue.type === "explore_timeout");
   const reportIssues = normalizedIssues.filter((issue) =>
+    issue.type !== "explore_timeout" &&
     !(issue.type === "network_error" && issue.target && missingResources.has(issue.target) && /^Request failed:/i.test(String(issue.title || ""))));
 
   // Dedup by stable signature (type|screen|target) so repeated detections count once —
@@ -226,8 +243,13 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   findings.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
 
   const screensExplored = screens.size || base.uniqueScreens.length;
-  const actionsPerformed =
-    actions || (base.complete && typeof base.complete === "object" ? base.complete.actions || 0 : 0);
+  // Some native recovery operations are counted by the harness budget but intentionally do not
+  // emit a public action narrative. Preserve the larger authoritative completion count instead of
+  // understating coverage whenever at least one narrated action exists.
+  const actionsPerformed = Math.max(
+    actions,
+    base.complete && typeof base.complete === "object" ? base.complete.actions || 0 : 0,
+  );
   const crit = findings.filter((f) => f.severity === "critical").length;
   const high = findings.filter((f) => f.severity === "high").length;
   const med = findings.filter((f) => f.severity === "medium").length;
@@ -244,9 +266,22 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
   // Coverage floor: exploration is inconclusive if the app wasn't actually exercised. Exploration
   // OBSERVES — it does not render a ship verdict or score (ADR-0005). Judgment (pass/fail/
   // inconclusive) is the gate's job (evaluateGate), computed from these findings + coverage + policy.
-  const inconclusive = screensExplored < 2 || actionsPerformed < 3;
+  // A one-page web target can still be swept exhaustively: page errors, requests, links, assets,
+  // placeholder anchors, and visible controls do not require a second route. Native exploration
+  // retains the stronger multi-screen/action floor. A credentialless single-screen login remains
+  // inconclusive so a login wall can never turn into a clean pass.
+  const coverageFloorMet = platform === "web"
+    ? screensExplored >= 1 && actionsPerformed >= 1
+    : screensExplored >= 2 && actionsPerformed >= 3;
+  const credentiallessLoginWall = anySecure && !loginAttempted && screensExplored <= 1;
+  const inconclusive = !coverageFloorMet || credentiallessLoginWall || timeBudgetExhausted;
+  const stopReason = credentiallessLoginWall ? "login-wall-no-credentials"
+    : timeBudgetExhausted ? "time-budget-exhausted"
+    : coverageFloorMet ? "completed" : "coverage-floor-not-met";
 
-  const headline = inconclusive
+  const headline = timeBudgetExhausted
+    ? `Inconclusive — exploration reached its ${base.complete?.timeoutSeconds || "configured"}s time budget after ${actionsPerformed} action(s) across ${screensExplored} screen(s). Findings are partial; this is not an app performance finding. Increase --timeout or request fewer actions.`
+    : inconclusive
     ? `Inconclusive — only ${screensExplored} screen(s) / ${actionsPerformed} action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.`
     : findings.length === 0
     ? platform === "web"
@@ -254,7 +289,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
       : "No issues surfaced in the exercised surfaces. An observation, not a release decision."
     : `${findings.length} issue(s) surfaced for review (${crit} critical, ${high} high, ${med} medium, ${low} low). An observation, not a release decision.`;
 
-  // The verdict's own honesty label: exactly which defect classes this run checked, which
+  // The observation's honesty label: exactly which defect classes this run checked, which
   // it structurally could NOT check, and which conditions never came up — so "checked" is
   // never claimed for a state the run didn't reach. Platform-aware: a web run doesn't
   // inherit iOS keyboard assertions and vice versa.
@@ -300,9 +335,12 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
       "content & reachability regressions require a baseline" ,
     ];
   }
-  // "Failed sign-ins" is only a claim when a sign-in surface was actually encountered.
-  if (anySecure) checkedFor.splice(2, 0, "failed sign-ins");
+  // "Failed sign-ins" is only a claim when credentials were actually submitted. Merely seeing a
+  // password field proves that a login surface was reached, not that authentication was exercised.
+  if (loginAttempted) checkedFor.splice(2, 0, "failed sign-ins");
+  else if (anySecure) notChecked.push("sign-in behavior (login form reached, no test credentials supplied)");
   else conditionsNotReached.push("sign-in (no login form encountered this run)");
+  if (timeBudgetExhausted) notChecked.push("the full requested action budget (run reached its wall-clock timeout)");
 
   return {
     // An ExplorationRun observation: findings + coverage + evidence, NO ship verdict or score
@@ -313,7 +351,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     // ended; coverage/evidence/uiMap/comparison are the structured observation. uiMap and comparison
     // are populated by consumers that build the map / diff a baseline (null in the bare observation).
     runStatus: inconclusive ? "limited" : "completed",
-    stopReason: inconclusive ? "coverage-floor-not-met" : "completed",
+    stopReason,
     headline,
     inconclusive,
     coverage: { screensExplored, actionsPerformed, screens: Array.from(screens) },
@@ -324,6 +362,7 @@ export function buildQaReport(markersFilePath, { platform = "ios" } = {}) {
     notChecked,
     conditionsNotReached,
     platform,
+    target: typeof target === "string" && target.trim() ? target.trim() : null,
     screensExplored,
     actionsPerformed,
     findingCounts: { critical: crit, high, medium: med, low, total: findings.length },
@@ -453,7 +492,7 @@ export function computeRegression(current, baseline) {
 // the evidence." Exit codes are the CI contract; precedence is fail > inconclusive > pass.
 export const GATE_EXIT = { pass: 0, fail: 1, error: 2, inconclusive: 3 };
 // Bump when the gate's decision semantics change (NOT the npm version). Recorded on every GateRun.
-export const GATE_POLICY_VERSION = "1";
+export const GATE_POLICY_VERSION = "2";
 
 // Pure gate evaluator: frozen evidence + policy → a GateRun decision. Extracted verbatim from the
 // former inline logic in ci-report.js so the `[char]` characterization tests keep passing — the
@@ -484,6 +523,16 @@ export function evaluateGate({ report, regression = null, flows = [], scenarios 
     const needsReview = suites.filter((s) => classify(s) === "needs-review");
     if (needsReview.length) inconclusive(`${needsReview.length} ${label}(s) contain assert_ai (model-observed); the deterministic gate cannot decide them — review, or add an explicit probabilistic policy`);
   }
+  // A submitted sign-in that remains on the login surface is an explicit exercised guarantee,
+  // not ordinary pre-existing UI debt. Letting it pass without a baseline would produce the
+  // contradictory public result "failed sign-in detected" + gate PASS. Keep sampled probes out,
+  // but fail every deterministic auth failure under every gate policy (including with a baseline).
+  const authFailures = (report.findings || []).filter((finding) =>
+    finding?.type === "auth_failed" &&
+    finding?.authority !== "model-observed" &&
+    finding?.evaluationTier !== "sampled"
+  );
+  if (authFailures.length) fail(`${authFailures.length} deterministic sign-in attempt(s) failed`);
   // Selected-but-unexecuted work is missing evidence, not an observed violation → inconclusive.
   if (prPlan?.execution?.notRun) inconclusive(`${prPlan.execution.notRun} selected release contract(s) did not run`);
   if (prPlan?.execution?.explorationFailed) inconclusive(`${prPlan.execution.explorationFailed} planned PR exploration target(s) failed or were not reached`);

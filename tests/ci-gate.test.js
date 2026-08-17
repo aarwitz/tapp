@@ -85,6 +85,21 @@ test("default discovery safely ignores another platform's entire Flow suite", ()
   assert.doesNotMatch(r.stderr, /unbound variable|None of the supplied Flows/);
 });
 
+test("managed web build/start failure is an infrastructure error (exit 2)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-managed-failure-"));
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({
+    name: "broken-managed-target",
+    private: true,
+    scripts: { start: "node missing-server.js" },
+  }));
+  fs.writeFileSync(path.join(dir, "index.html"), "<main>never served</main>");
+  const r = spawnSync("bash", [gate,
+    "--platform", "web", "--project-dir", dir, "--timeout", "5",
+  ], { encoding: "utf8", cwd: root });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /Managed web runtime exited before becoming ready/);
+});
+
 test("CI gate turns a changed-file manifest into the actual selected contract set before simulator work", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-pr-plan-"));
   const tasks = path.join(dir, ".tapp", "tasks");

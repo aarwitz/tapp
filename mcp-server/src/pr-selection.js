@@ -428,16 +428,17 @@ export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releaseP
   if (!ground || !fs.existsSync(mapPath)) throw new Error("Coverage proposal requires the repository's persistent UI Map");
   const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
   const node = (map.nodes || []).find((candidate) => candidate.id === ground.id && candidate.status !== "proposed");
-  if (!node) throw new Error(`Coverage proposal UI Map node is stale or missing: ${ground.id}`);
+  const refreshAdvice = "refresh the persistent UI Map with `tapp init --explore --refresh`, rerun `tapp pr gate`, then retry `tapp pr adopt`";
+  if (!node) throw new Error(`Coverage proposal UI Map node is stale or missing: ${ground.id}; ${refreshAdvice}`);
   if (target.navigation?.route && !(node.routes || []).some((route) => route.platform === target.platform && route.path === target.navigation.route && route.replayable === true)) {
-    throw new Error(`Coverage proposal route is stale in the persistent UI Map: ${target.navigation.route}`);
+    throw new Error(`Coverage proposal route is stale in the persistent UI Map: ${target.navigation.route}; ${refreshAdvice}`);
   }
   if (target.navigation?.mode === "ui-map-path") {
     const currentNavigation = replayableUiMapNavigation(map, node.id, target.platform);
     const expectedEdges = (target.navigation.steps || []).map((step) => step.edgeId);
     const currentEdges = (currentNavigation.steps || []).map((step) => step.edgeId);
     if (currentNavigation.status !== "replayable" || JSON.stringify(expectedEdges) !== JSON.stringify(currentEdges)) {
-      throw new Error(`Coverage proposal UI Map path is stale for ${node.name}`);
+      throw new Error(`Coverage proposal UI Map path is stale for ${node.name}; ${refreshAdvice}`);
     }
   }
   const releasePlan = JSON.parse(fs.readFileSync(targetPath, "utf8"));

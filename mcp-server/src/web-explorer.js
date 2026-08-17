@@ -45,7 +45,7 @@ export function webPlaceholderLinkFindings(links = []) {
   const seen = new Set();
   for (const link of links || []) {
     const rawHref = String(link?.rawHref || "").trim().toLowerCase();
-    const placeholder = rawHref === "#" || /^javascript:(?:void\(0\);?|;?)$/.test(rawHref);
+    const placeholder = rawHref === "" || rawHref === "#" || /^javascript:(?:void\(0\);?|;?)$/.test(rawHref);
     if (!placeholder || link?.handlerHint) continue;
     const label = String(link?.label || "").replace(/\s+/g, " ").trim().slice(0, 100);
     const fingerprint = String(link?.fingerprint || "link").replace(/\s+/g, " ").trim().slice(0, 100) || "link";

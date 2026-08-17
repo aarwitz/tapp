@@ -37,6 +37,15 @@ test("npm package ships only the runtime script allowlist", () => {
   );
 });
 
+test("shipped CI runtime has no retired repository-path fallback", () => {
+  assert.doesNotMatch(read("scripts/ci-gate.sh"), /\.autotap|AUTOTAP_/);
+});
+
+test("contract typechecking recognizes only the canonical package import", () => {
+  const config = JSON.parse(read("tsconfig.contracts.json"));
+  assert.deepEqual(Object.keys(config.compilerOptions.paths), ["@aarwitz/tapp/contracts"]);
+});
+
 test("shipped native fixtures use Tapp labels and identifiers", () => {
   const demo = [
     read("DemoApp/Info.plist"),

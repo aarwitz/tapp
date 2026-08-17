@@ -946,6 +946,7 @@ class ExplorerTests: XCTestCase {
         var elementScreenPresence: [String: Set<String>] = [:]
         var totalDistinctStates = 0
         var recentStateHashes: [String] = []
+        var recentScreenTitles: [String] = []
         var actionsSinceNewState = 0
         var sameScreenStreak = 0
         var screenTextEntryCount: [String: Int] = [:]
@@ -1238,6 +1239,15 @@ class ExplorerTests: XCTestCase {
         let initialControlsJson = mapControlsJSON(initialElements)
         print("OCQA_STATE:{\"screen\":\"\(escapeJSON(initialTitle))\",\"hash\":\"\(computeHash(initialElements))\",\"elements\":\(initialElements.count),\"action\":0,\"role\":\"\(escapeJSON(initialRole))\",\"summary\":\"\(escapeJSON(initialSummary))\",\"settled\":\(isScreenSettled() ? "true" : "false"),\"atext\":[\(initialAtext)],\"inputs\":[\(initialInputJson)],\"controls\":[\(initialControlsJson)]}")
 
+        // The launch surface is real evidence even when root normalization immediately dismisses
+        // it. Attach it before the first action so the HTML report's "every screen explored" claim
+        // includes onboarding/login sheets rather than beginning at the post-dismiss destination.
+        let initialScreenshot = app.screenshot()
+        let initialAttachment = XCTAttachment(screenshot: initialScreenshot)
+        initialAttachment.name = "state_0_\(initialTitle.replacingOccurrences(of: " ", with: "_"))"
+        initialAttachment.lifetime = .keepAlways
+        add(initialAttachment)
+
         navigateToRootScreen(actionCount: &actionCount)
 
         // The first state is the true customer launch surface. Directed replay begins after
@@ -1386,8 +1396,10 @@ class ExplorerTests: XCTestCase {
             }
 
             recentStateHashes.append(stateHash)
+            recentScreenTitles.append(titleStr)
             if recentStateHashes.count > 12 {
                 recentStateHashes.removeFirst(recentStateHashes.count - 12)
+                recentScreenTitles.removeFirst(recentScreenTitles.count - 12)
             }
 
             if previousStateHash == stateHash {
@@ -1474,9 +1486,18 @@ class ExplorerTests: XCTestCase {
             // is the fuller a11y text inventory that grounds the vision reviewer (see visionTextInventory).
             let escapedTitle = escapeJSON(titleStr)
             let settled = isScreenSettled()
-            let atextJson = visionTextInventory(elements).map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
+            let visibleTextInventory = visionTextInventory(elements)
+            let atextJson = visibleTextInventory.map { "\"\(escapeJSON($0))\"" }.joined(separator: ",")
             let controlsJson = mapControlsJSON(elements)
             print("OCQA_STATE:{\"screen\":\"\(escapedTitle)\",\"hash\":\"\(stateHash)\",\"elements\":\(elements.count),\"action\":\(actionCount),\"role\":\"\(escapeJSON(screenRole))\",\"summary\":\"\(escapeJSON(screenSummary))\",\"settled\":\(settled ? "true" : "false"),\"atext\":[\(atextJson)],\"inputs\":[\(inputJsonArray)],\"controls\":[\(controlsJson)]}")
+
+            // Signing out after a successful login is a completed auth cycle, not a navigation
+            // trap and not lost-form-state. Stop cleanly instead of probing the root login screen
+            // for an impossible back path or expecting credentials to persist after logout.
+            if authSucceeded && detectedInputs.contains(where: { $0.secure }) {
+                print("OCQA_STATE:auth_cycle_complete screen=\(escapedTitle) step=\(actionCount)")
+                break
+            }
 
             // ---- Persistence probe: on a fresh RE-ARRIVAL at a screen, fields we previously
             // typed into (and verified visible in the a11y value) should still hold their value.
@@ -1591,14 +1612,14 @@ class ExplorerTests: XCTestCase {
             // content-feed app: post detail + replies-loading spinner flagged app_hang HIGH).
             let visibleTextCount = elements.filter { isStaticTextType($0.type) && normalizeVisibleText($0.label).count >= 3 }.count
             if screenVisitCount[titleStr] ?? 0 <= 1, visibleTextCount <= 4,
-               app.activityIndicators.firstMatch.exists || app.progressIndicators.firstMatch.exists {
+               hasIndeterminateLoadingIndicator() {
                 let loadingKey = "loading:\(titleStr)"
                 if !reportedIssueKeys.contains(loadingKey) {
                     var resolved = false
                     let deadline = Date().addingTimeInterval(8.0)
                     while Date() < deadline {
                         Thread.sleep(forTimeInterval: 1.0)
-                        if !(app.activityIndicators.firstMatch.exists || app.progressIndicators.firstMatch.exists) {
+                        if !hasIndeterminateLoadingIndicator() {
                             resolved = true
                             break
                         }
@@ -1658,7 +1679,7 @@ class ExplorerTests: XCTestCase {
 
             // ---- Blank-screen detection ----
             // Distinguish between "no a11y labels / custom UI" vs genuinely empty.
-            if elements.count < 5 && interactable.count == 0 {
+            if visibleTextInventory.isEmpty && interactable.count == 0 {
                 let blankKey = "blank:\(titleStr)"
                 let blankCount = (actionCounts[blankKey] ?? 0) + 1
                 actionCounts[blankKey] = blankCount
@@ -1690,16 +1711,26 @@ class ExplorerTests: XCTestCase {
             }
 
             // ---- Navigation-loop detection ----
-            // Check if recentStateHashes has a repeating cycle of length 2 or 3
+            // A cycle must actually move across distinct states. Four identical reads satisfy the
+            // arithmetic shape A,A,A,A of the old period-2 check, which mislabeled ordinary
+            // scroll/probe recovery on a stable screen as a navigation loop.
             if recentStateHashes.count >= 6 {
                 let recent = recentStateHashes
+                // Distinct structural hashes are not enough: a list and its detail rows can share
+                // one navigation title and alternate A/B while the explorer intentionally samples
+                // different rows. Calling that a navigation loop is a false positive. Require the
+                // cycle to cross distinct user-visible screen titles as well.
                 let hasLoop2 = recent.count >= 4 &&
                     recent[recent.count - 1] == recent[recent.count - 3] &&
-                    recent[recent.count - 2] == recent[recent.count - 4]
+                    recent[recent.count - 2] == recent[recent.count - 4] &&
+                    Set(recent.suffix(2)).count == 2 &&
+                    Set(recentScreenTitles.suffix(2)).count == 2
                 let hasLoop3 = recent.count >= 6 &&
                     recent[recent.count - 1] == recent[recent.count - 4] &&
                     recent[recent.count - 2] == recent[recent.count - 5] &&
-                    recent[recent.count - 3] == recent[recent.count - 6]
+                    recent[recent.count - 3] == recent[recent.count - 6] &&
+                    Set(recent.suffix(3)).count == 3 &&
+                    Set(recentScreenTitles.suffix(3)).count == 3
                 if (hasLoop2 || hasLoop3) && !(authSucceeded && detectedInputs.contains { $0.secure }) {
                     let loopKey = "nav_loop:\(titleStr)"
                     if actionCounts[loopKey] == nil {
@@ -1711,17 +1742,10 @@ class ExplorerTests: XCTestCase {
                 }
             }
 
-            // ---- Unresponsive-element detection ----
-            // Skip when we're merely re-poking a login screen we've already passed (Sign Out → re-login
-            // churn) — that's an exploration artifact, not a frozen/broken screen.
-            if repeatedStateCount >= 5 && !(authSucceeded && detectedInputs.contains { $0.secure }) {
-                let unrespKey = "unresponsive:\(titleStr)"
-                if actionCounts[unrespKey] == nil {
-                    issues.append((type: "unresponsive_element", severity: "medium", title: "Unresponsive UI on \(titleStr)", desc: "Actions are not changing app state — possible frozen or broken screen"))
-                    print("OCQA_ISSUE:{\"type\":\"unresponsive_element\",\"severity\":\"medium\",\"title\":\"Unresponsive UI\",\"screen\":\"\(escapedTitle)\",\"repeated_state_count\":\(repeatedStateCount),\"step\":\(actionCount)}")
-                    actionCounts[unrespKey] = 1
-                }
-            }
+            // Do not infer an unresponsive app merely from an unchanged state streak: recovery
+            // gestures (scroll, carousel probe, center probe) are expected to be no-ops on many
+            // healthy screens. Labeled controls have a stronger detector below: a direct tap plus
+            // two delayed, content-signature reads. Hangs have their own time-based detector.
 
             if interactable.count < 3 {
                 print("OCQA_STATE:low_interactable screen=\(escapedTitle) total=\(elements.count) interactable=\(interactable.count) global=\(globalNavElements.count) nonGlobal=\(nonGlobalCandidates.count)")
@@ -1757,10 +1781,10 @@ class ExplorerTests: XCTestCase {
                     break
                 }
 
-                let issueTitle = "Dead end: \(titleStr)"
-                issues.append((type: "dead_end", severity: "medium", title: issueTitle, desc: "No interactable elements found"))
-                print("OCQA_ISSUE:{\"type\":\"dead_end\",\"severity\":\"medium\",\"title\":\"\(escapeJSON(issueTitle))\",\"screen\":\"\(escapedTitle)\",\"step\":\(actionCount)}")
-
+                // Exhausting Tapp's untried candidate pool is not itself a user-visible dead end:
+                // leaf screens commonly have only a working Back control that was already mapped.
+                // Recover first; only the stronger navigation-trap path below emits a finding when
+                // every real back/dismiss route fails.
                 // tryGoBack does swipe-down as its last resort (sheet dismiss)
                 let preBackTitle = titleStr
                 let backWorked = tryGoBack()
@@ -1772,6 +1796,7 @@ class ExplorerTests: XCTestCase {
                     print("OCQA_ACTION:{\"type\":\"back\",\"reason\":\"dead_end_escape\",\"from\":\"\(escapedTitle)\",\"to\":\"\(escapeJSON(postTitle))\",\"step\":\(actionCount),\"screen\":\"\(escapedTitle)\",\"narrative\":\"\(escapeJSON(recoveryNarrative("back_dead_end", screen: titleStr, to: postTitle)))\"}")
                     continue
                 }
+                if actionCount >= maxActions { break }
                 // Swipe right (back gesture) as another option
                 let swipeStart = app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
                 let swipeEnd = app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
@@ -2047,6 +2072,7 @@ class ExplorerTests: XCTestCase {
                 }
                 // Back didn't change screens — fall through to global nav
                 print("OCQA_ACTION:{\"type\":\"back\",\"reason\":\"screen_exhausted_failed\",\"screen\":\"\(escapedTitle)\",\"step\":\(actionCount),\"narrative\":\"\(escapeJSON(recoveryNarrative("back_failed", screen: titleStr)))\"}")
+                if actionCount >= maxActions { break }
                 // Stuck on this screen — use global navigation (tab bar) to reach unexplored areas
                 let globalNav = interactable
                     .filter { isLikelyGlobalNavigation($0, screenBounds: screenBounds) }
@@ -3677,6 +3703,20 @@ class ExplorerTests: XCTestCase {
     private func keyboardFrame() -> CGRect {
         let kb = app.keyboards.firstMatch
         return kb.exists ? kb.frame : .zero
+    }
+
+    /// Activity indicators are inherently indeterminate. `ProgressIndicator`, however, is also the
+    /// XCTest type for legitimate determinate progress bars (loyalty points, upload percentage,
+    /// onboarding completion). Only value-less/loading-valued progress indicators are hang signals.
+    private func hasIndeterminateLoadingIndicator() -> Bool {
+        if app.activityIndicators.allElementsBoundByIndex.contains(where: { $0.exists && $0.frame.width > 0 && $0.frame.height > 0 }) {
+            return true
+        }
+        return app.progressIndicators.allElementsBoundByIndex.contains { indicator in
+            guard indicator.exists, indicator.frame.width > 0, indicator.frame.height > 0 else { return false }
+            let value = (indicator.value as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return value.isEmpty || value == "in progress" || value == "loading"
+        }
     }
 
     /// True when the screen is in a "settled" resting state — no on-screen keyboard and no open

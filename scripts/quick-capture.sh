@@ -262,58 +262,92 @@ case "$MODE" in
     echo "Running autonomous exploration ($MAX_ACTIONS actions, timeout: ${EXPLORE_TIMEOUT}s, app: $APP_BUNDLE)..."
     ensure_harness_built "$SIM_NAME"
 
-    # Start video recording in background
-    cleanup_stale_recorders "$UDID"
-    RECORD_PID=""
-    if xcrun simctl io "$UDID" recordVideo --codec=h264 "$CAPTURE_DIR/exploration.mov" & then
-      RECORD_PID=$!
-    fi
-    sleep 0.5
-    if ! kill -0 "$RECORD_PID" 2>/dev/null; then
-      echo "WARNING: Could not start simulator video recording. Continuing without video." >&2
-      RECORD_PID=""
-    fi
-
-    # Run exploration with watchdog timeout to avoid silent hangs.
-    local_output_file="$CAPTURE_DIR/harness-output.txt"
-    run_harness_test "testAutonomousExploration" "$SIM_NAME" "$APP_BUNDLE" "$MAX_ACTIONS" "$EXPLORE_TIMEOUT" > "$local_output_file" 2>&1 &
-    HARNESS_PID=$!
-
-    START_TS=$(date +%s)
-    TIMED_OUT=0
-    while kill -0 "$HARNESS_PID" 2>/dev/null; do
-      NOW_TS=$(date +%s)
-      ELAPSED=$((NOW_TS - START_TS))
-      if [[ "$ELAPSED" -ge "$EXPLORE_TIMEOUT" ]]; then
-        TIMED_OUT=1
-        kill -TERM "$HARNESS_PID" 2>/dev/null || true
+    # XCUITest can block inside `app.launch()` until the outer watchdog when the target dies in its
+    # initializer, producing a misleading timeout after minutes. For an ordinary unconfigured
+    # launch, probe the target directly first and verify that the returned PID survives a short
+    # settle window. (Configured launch args/env skip this probe because simctl would not reproduce
+    # that launch contract.) The harness still performs its own fresh launch for healthy apps.
+    PREFLIGHT_CRASH=0
+    PREFLIGHT_OUTPUT=""
+    if [[ -z "${OCQA_APP_LAUNCH_ARGS_JSON:-}" && -z "${OCQA_APP_LAUNCH_ENV_JSON:-}" ]]; then
+      xcrun simctl terminate "$UDID" "$APP_BUNDLE" >/dev/null 2>&1 || true
+      PREFLIGHT_OUTPUT="$(xcrun simctl launch "$UDID" "$APP_BUNDLE" 2>&1 || true)"
+      PREFLIGHT_PID="$(echo "$PREFLIGHT_OUTPUT" | sed -n 's/.*: \([0-9][0-9]*\)$/\1/p' | tail -1)"
+      if [[ -n "$PREFLIGHT_PID" ]]; then
         sleep 2
-        kill -KILL "$HARNESS_PID" 2>/dev/null || true
-        break
+        if ! kill -0 "$PREFLIGHT_PID" 2>/dev/null; then PREFLIGHT_CRASH=1; fi
       fi
-      sleep 2
-    done
-
-    wait "$HARNESS_PID" 2>/dev/null || true
-    OUTPUT="$(cat "$local_output_file" 2>/dev/null || true)"
-
-    # Stop recording
-    if [[ -n "$RECORD_PID" ]]; then
-      kill -INT "$RECORD_PID" 2>/dev/null || true
-      wait "$RECORD_PID" 2>/dev/null || true
+      xcrun simctl terminate "$UDID" "$APP_BUNDLE" >/dev/null 2>&1 || true
     fi
-    sleep 1
+
+    local_output_file="$CAPTURE_DIR/harness-output.txt"
+    TIMED_OUT=0
+    RECORD_PID=""
+    if [[ "$PREFLIGHT_CRASH" -eq 1 ]]; then
+      OUTPUT="OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App crashed during launch preflight\",\"screen\":\"Launch\",\"step\":0}
+OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcome\":\"launch_crash\"}"
+      printf '%s\n%s\n' "$PREFLIGHT_OUTPUT" "$OUTPUT" > "$local_output_file"
+      echo "WARNING: Target process exited during launch preflight; recorded a crash instead of waiting for the exploration timeout." >&2
+    else
+
+      # Start video recording in background
+      cleanup_stale_recorders "$UDID"
+      if xcrun simctl io "$UDID" recordVideo --codec=h264 "$CAPTURE_DIR/exploration.mov" & then
+        RECORD_PID=$!
+      fi
+      sleep 0.5
+      if ! kill -0 "$RECORD_PID" 2>/dev/null; then
+        echo "WARNING: Could not start simulator video recording. Continuing without video." >&2
+        RECORD_PID=""
+      fi
+
+      # Run exploration with watchdog timeout to avoid silent hangs.
+      run_harness_test "testAutonomousExploration" "$SIM_NAME" "$APP_BUNDLE" "$MAX_ACTIONS" "$EXPLORE_TIMEOUT" > "$local_output_file" 2>&1 &
+      HARNESS_PID=$!
+
+      START_TS=$(date +%s)
+      while kill -0 "$HARNESS_PID" 2>/dev/null; do
+        NOW_TS=$(date +%s)
+        ELAPSED=$((NOW_TS - START_TS))
+        if [[ "$ELAPSED" -ge "$EXPLORE_TIMEOUT" ]]; then
+          TIMED_OUT=1
+          kill -TERM "$HARNESS_PID" 2>/dev/null || true
+          sleep 2
+          kill -KILL "$HARNESS_PID" 2>/dev/null || true
+          break
+        fi
+        sleep 2
+      done
+
+      wait "$HARNESS_PID" 2>/dev/null || true
+      OUTPUT="$(cat "$local_output_file" 2>/dev/null || true)"
+
+      # Stop recording
+      if [[ -n "$RECORD_PID" ]]; then
+        kill -INT "$RECORD_PID" 2>/dev/null || true
+        wait "$RECORD_PID" 2>/dev/null || true
+      fi
+      sleep 1
+    fi
 
     # Parse OCQA_ markers
     echo "$OUTPUT" | grep "^OCQA_" > "$CAPTURE_DIR/ocqa-markers.txt" || true
     if [[ "$TIMED_OUT" -eq 1 ]]; then
-      echo "OCQA_ISSUE:{\"type\":\"explore_timeout\",\"severity\":\"high\",\"title\":\"Exploration timed out\",\"timeoutSeconds\":$EXPLORE_TIMEOUT}" >> "$CAPTURE_DIR/ocqa-markers.txt"
-      echo "OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"timedOut\":true,\"timeoutSeconds\":$EXPLORE_TIMEOUT}" >> "$CAPTURE_DIR/ocqa-markers.txt"
-      echo "WARNING: Exploration hit timeout after ${EXPLORE_TIMEOUT}s" >&2
+      # The caller's wall-clock budget expiring means the evidence is partial; it is not proof that
+      # the app itself is slow or hung. Preserve observed coverage in the terminal marker and let
+      # report.js classify the run as inconclusive instead of inventing an app finding.
+      TIMED_ACTIONS="$(echo "$OUTPUT" | sed -n 's/^OCQA_PROGRESS:{"action":\([0-9][0-9]*\).*/\1/p' | tail -1)"
+      TIMED_STATES="$(echo "$OUTPUT" | sed -n 's/^OCQA_PROGRESS:.*"states":\([0-9][0-9]*\).*/\1/p' | tail -1)"
+      TIMED_ISSUES="$(echo "$OUTPUT" | grep -c '^OCQA_ISSUE:' || true)"
+      TIMED_ACTIONS="${TIMED_ACTIONS:-0}"
+      TIMED_STATES="${TIMED_STATES:-0}"
+      TIMED_ISSUES="${TIMED_ISSUES:-0}"
+      echo "OCQA_COMPLETE:{\"actions\":$TIMED_ACTIONS,\"states\":$TIMED_STATES,\"issues\":$TIMED_ISSUES,\"screens\":\"\",\"timedOut\":true,\"timeoutSeconds\":$EXPLORE_TIMEOUT}" >> "$CAPTURE_DIR/ocqa-markers.txt"
+      echo "WARNING: Exploration reached its ${EXPLORE_TIMEOUT}s time budget; evidence is partial" >&2
     fi
     echo "$OUTPUT" > "$CAPTURE_DIR/full-output.txt"
 
-    COMPLETE_LINE=$(echo "$OUTPUT" | grep "OCQA_COMPLETE" | tail -1)
+    COMPLETE_LINE=$(grep "OCQA_COMPLETE" "$CAPTURE_DIR/ocqa-markers.txt" | tail -1 || true)
     if [[ -n "$COMPLETE_LINE" ]]; then
       echo ""
       echo "Exploration complete: $COMPLETE_LINE"

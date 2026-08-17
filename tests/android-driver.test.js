@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectAndroidScreen, findAndroidElement, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
+import { detectAndroidScreen, findAndroidElement, isAndroidAppSnapshot, parseUiAutomatorXml } from "../mcp-server/src/android-driver.js";
 
 const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <hierarchy rotation="0">
@@ -25,4 +25,15 @@ test("Android selection prefers stable ids then accessibility descriptions and l
   assert.equal(findAndroidElement(elements, "io.github.aarwitz.tapp.demo:id/continue_button").text, "Continue");
   assert.equal(findAndroidElement(elements, "continue_primary").text, "Continue");
   assert.equal(findAndroidElement(elements, "continue").text, "Continue");
+});
+
+test("Android ownership rejects a stale activity paired with another app's UI tree", () => {
+  assert.equal(isAndroidAppSnapshot({
+    activity: "io.tapp.corpus.demo/.MainActivity",
+    elements: [{ package: "io.tapp.corpus.shop", text: "Order Confirmed" }],
+  }, "io.tapp.corpus.demo"), false);
+  assert.equal(isAndroidAppSnapshot({
+    activity: "io.tapp.corpus.demo/.MainActivity",
+    elements: [{ package: "io.tapp.corpus.demo", text: "Dashboard" }],
+  }, "io.tapp.corpus.demo"), true);
 });

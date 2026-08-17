@@ -30,7 +30,9 @@ test("web controls retain a semantic label when their visible text is empty", ()
 test("placeholder links are findings unless they advertise real JavaScript control semantics", () => {
   assert.deepEqual(webPlaceholderLinkFindings([
     { rawHref: "#", label: "Download on the App Store", handlerHint: false, fingerprint: "app-store" },
+    { rawHref: "", label: "Contact us", handlerHint: false, fingerprint: "contact" },
     { rawHref: "#", label: "", handlerHint: false, fingerprint: "instagram-path" },
+    { rawHref: "", label: "Open help", handlerHint: true, fingerprint: "help" },
     { rawHref: "#", label: "Join waitlist", handlerHint: true, fingerprint: "waitlist" },
     { rawHref: "#pricing", label: "Pricing", handlerHint: false, fingerprint: "pricing" },
   ]), [
@@ -39,6 +41,12 @@ test("placeholder links are findings unless they advertise real JavaScript contr
       severity: "medium",
       title: 'Link "Download on the App Store" has no destination (href="#")',
       target: "Download on the App Store",
+    },
+    {
+      type: "placeholder_link",
+      severity: "medium",
+      title: 'Link "Contact us" has no destination (href="")',
+      target: "Contact us",
     },
     {
       type: "placeholder_link",

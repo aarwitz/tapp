@@ -402,7 +402,7 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
   } else if (gate.policy === "gate") {
     lines.push("");
     lines.push("### Baseline — 🟡 not active yet");
-    lines.push("No baseline was supplied, so this run used the blocked/inconclusive fallback. Save this report as a baseline—or run the GitHub Action on the default branch—to activate new-regression gating.");
+    lines.push("No baseline was supplied. This gate still enforces absolute blockers and reviewed suite failures, but it cannot identify new regressions until a baseline is saved.");
   }
   if (prPlan) {
     lines.push("");
@@ -487,7 +487,7 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
 }
 
 const args = parseArgs(process.argv.slice(2));
-const report = buildQaReport(args.markers, { platform: args.platform || "ios" });
+const report = buildQaReport(args.markers, { platform: args.platform || "ios", target: args.label || null });
 if (!report) {
   // Required evidence could not be obtained — this is inconclusive (fails closed), not a gate FAIL
   // and not a usage error. See the outcome model in report.js (GATE_EXIT).
@@ -561,7 +561,7 @@ try {
 const decision = evaluateGate({ report, regression, flows, scenarios, contracts, prPlan, baseline, failOn: args.failOn });
 const gate = {
   ...decision,
-  target: args.targetKey || null,
+  target: args.targetKey || report.target || null,
   revision: gitRevision(args.projectDir),
   checked: report.checkedFor,
   notChecked: report.notChecked,

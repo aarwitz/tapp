@@ -49,7 +49,7 @@ function collectShots(captureDir) {
   }
 }
 
-export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
+export function writeHtmlReport(captureDir, { report, label = "", recordingWarning = "" } = {}) {
   const r = report || buildQaReport(path.join(captureDir, "ocqa-markers.txt"));
   if (!r) return null;
 
@@ -78,7 +78,16 @@ export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
 
   const videoHtml = video
     ? `<h2>Recording — the full exploration</h2>\n<video controls preload="metadata" style="width:100%;border:1px solid #d0d7de;border-radius:8px" src="${esc(video)}"></video>`
-    : "";
+    : recordingWarning
+      ? `<h2>Recording</h2>\n<p class="warning">Unavailable: ${esc(recordingWarning)}. Screenshots were still captured.</p>`
+      : "";
+
+  const scopeList = (items) => (items || []).map((item) => `<li>${esc(item)}</li>`).join("\n");
+  const scopeHtml = `<section class="scope">
+<div><h2>Checked this run</h2><ul>${scopeList(r.checkedFor) || "<li class='dim'>No automated checks completed.</li>"}</ul></div>
+<div><h2>Not checked this run</h2><ul>${scopeList(r.notChecked) || "<li class='dim'>No additional limitations recorded.</li>"}</ul></div>
+${r.conditionsNotReached?.length ? `<div><h2>Conditions not reached</h2><ul>${scopeList(r.conditionsNotReached)}</ul></div>` : ""}
+</section>`;
 
   const html = `<!doctype html>
 <html lang="en">
@@ -90,6 +99,10 @@ export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
   h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
   .meta { color: #57606a; margin-bottom: 1.2rem; }
   .headline { background: #f6f8fa; border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1rem 0; }
+  .warning { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 0.75rem 1rem; }
+  .scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.8rem 1.5rem; }
+  .scope h2 { font-size: 1.05rem; margin-bottom: 0.35rem; }
+  .scope ul { margin-top: 0; padding-left: 1.2rem; }
   .sev { color: #fff; border-radius: 4px; padding: 0.05rem 0.45rem; font-size: 0.78rem; font-weight: 600; margin-right: 0.4rem; }
   ul.findings { padding-left: 1.1rem; } ul.findings li { margin-bottom: 0.6rem; }
   .ai { color: #57606a; font-size: 0.88rem; margin: 0.15rem 0 0 0.2rem; }
@@ -105,6 +118,7 @@ export function writeHtmlReport(captureDir, { report, label = "" } = {}) {
 <div class="meta">${esc(label)} · evidence page (observation, not a release decision)</div>
 ${r.platform === "web" ? `<div class="meta">Deterministic basis: ${r.deterministicFindingCounts?.total || 0} deterministic finding(s); ${r.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.</div>` : ""}
 <div class="headline">${esc(r.headline)}</div>
+${scopeHtml}
 <h2>Findings</h2>
 <ul class="findings">
 ${findingsHtml}

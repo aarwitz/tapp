@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { exploreAndroid } from "../mcp-server/src/android-explorer.js";
+import { exploreAndroid, isAndroidAuthSubmit, isAndroidBlankSnapshot } from "../mcp-server/src/android-explorer.js";
 
 class LoginDriver {
   constructor() { this.appId = "io.tapp.login"; this.screen = "Sign In"; this.filled = new Set(); }
@@ -43,6 +43,36 @@ test("Android exploration fills each semantic field once before submitting", asy
   assert.equal(state.controls.length, 3, "shared UI Map inventory includes fields and actions");
   assert.equal(state.controls.find((control) => control.id === "password_field").secure, true);
   assert.doesNotMatch(markers, /Control did not respond: email_field/);
+  assert.match(markers, /OCQA_ACTION:.*"type":"login_submit"/);
+  assert.doesNotMatch(markers, /auth_failed/);
+});
+
+class RejectedLoginDriver extends LoginDriver {
+  async tap() { return { status: "ok" }; }
+}
+
+test("Android exploration reports a submitted sign-in that remains on the login surface", async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-auth-failed-"));
+  const result = await exploreAndroid({ appId: "io.tapp.login", maxActions: 3, timeoutSec: 30, outDir, driver: new RejectedLoginDriver() });
+  const markers = fs.readFileSync(result.markersPath, "utf8");
+  assert.match(markers, /OCQA_ISSUE:.*"type":"auth_failed".*"severity":"high"/);
+  assert.doesNotMatch(markers, /Control did not respond/);
+});
+
+test("Android blank detection ignores meaningless framework containers", () => {
+  assert.equal(isAndroidBlankSnapshot({ elements: [
+    { package: "io.tapp.blank", type: "android.widget.FrameLayout", id: "", text: "", description: "", hittable: true, clickable: false },
+    { package: "io.tapp.blank", type: "android.view.View", id: "android:id/content", text: "", description: "", hittable: true, clickable: false },
+  ] }), true);
+  assert.equal(isAndroidBlankSnapshot({ elements: [
+    { package: "io.tapp.blank", type: "android.widget.TextView", text: "Welcome", description: "", hittable: true, clickable: false },
+  ] }), false);
+});
+
+test("Android login-submit recognition handles accessibility identifiers", () => {
+  assert.equal(isAndroidAuthSubmit({ description: "sign_in_button" }), true);
+  assert.equal(isAndroidAuthSubmit({ id: "login-submit" }), true);
+  assert.equal(isAndroidAuthSubmit({ text: "Save Profile" }), false);
 });
 
 class SystemBoundaryDriver {
@@ -73,6 +103,34 @@ test("Android exploration never maps the launcher after Back leaves the app", as
   assert.doesNotMatch(markers, /Tue, Aug 4|nexuslauncher/);
   assert.doesNotMatch(markers, /"to":"Tue, Aug 4"/);
   assert.match(markers, /OCQA_COMPLETE:.*"states":1/);
+});
+
+class CrashDriver {
+  constructor() { this.appId = "io.tapp.crash"; this.crashed = false; }
+  async ensureDevice() {}
+  async launch() { return this.snapshot(); }
+  async screenshot() {}
+  async snapshot() {
+    if (this.crashed) return {
+      activity: "io.tapp.other/.MainActivity", screenTitle: "Other",
+      elements: [{ package: "io.tapp.other", type: "android.widget.TextView", text: "Other", label: "Other", hittable: true }],
+    };
+    return {
+      activity: `${this.appId}/.MainActivity`, screenTitle: "Home",
+      elements: [{ package: this.appId, type: "android.widget.Button", text: "Crash", label: "Crash", clickable: true, hittable: true, enabled: true, x: 0, y: 0, w: 100, h: 40 }],
+    };
+  }
+  async tap() { this.crashed = true; return { status: "ok" }; }
+  async settle() { return this.snapshot(); }
+  async isProcessAlive() { return !this.crashed; }
+}
+
+test("Android exploration classifies a process exit and never maps the exposed app behind it", async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-crash-"));
+  const result = await exploreAndroid({ appId: "io.tapp.crash", maxActions: 3, timeoutSec: 30, outDir, driver: new CrashDriver() });
+  const markers = fs.readFileSync(result.markersPath, "utf8");
+  assert.match(markers, /OCQA_ISSUE:.*"type":"crash".*"severity":"critical"/);
+  assert.doesNotMatch(markers, /"screen":"Other"|"to":"Other"/);
 });
 
 class TargetPathDriver {

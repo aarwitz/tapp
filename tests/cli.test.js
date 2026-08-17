@@ -2,7 +2,7 @@
 // initialize → tools/list handshake over stdio (hand-rolled client, no SDK dependency).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tappBin = path.join(root, "bin", "tapp.js");
+const cliSource = fs.readFileSync(tappBin, "utf8");
 const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 const rootPackage = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const hasSocialDemo = fs.existsSync(path.join(root, "SocialDemo"));
@@ -57,12 +58,25 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   const explore = execFileSync("node", [tappBin, "explore", "--help"], { encoding: "utf8", env });
   assert.match(explore, /command reference/);
   assert.match(explore, /tapp explore \[target\]/);
+  assert.match(explore, /--launch-env/);
+  const task = execFileSync("node", [tappBin, "task", "run", "--help"], { encoding: "utf8", env });
+  assert.match(task, /tapp task run FILE --platform PLATFORM/);
+  const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
+  assert.match(contract, /tapp contract run FILE --platform PLATFORM/);
   // The dangerous case: init --help must NOT create project artifacts...
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-help-safe-"));
   execFileSync("node", [tappBin, "init", "--help"], { cwd: dir, encoding: "utf8", env });
   assert.equal(fs.existsSync(path.join(dir, ".tapp")), false, "init --help must not write project artifacts");
   // ...and no verb's --help may create TAPP_HOME.
   assert.equal(fs.existsSync(home), false, "--help must not create TAPP_HOME");
+});
+
+test("iOS explore accepts explicit launch configuration and rejects malformed launch environments before runtime work", () => {
+  const bad = spawnSync("node", [tappBin, "explore", "com.example.app", "--launch-env", "[]"], { encoding: "utf8" });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--launch-env must be a JSON object with string values/);
+  assert.match(cliSource, /repeatedFlagValues\(argv, "launch-arg"\)/);
+  assert.match(cliSource, /args: \{ testEmail: flags\.email, testPassword: flags\.password, baselineFindings, \.\.\.launchOptions \}/);
 });
 
 test("tapp doctor keeps the package-only CLI path primary", () => {
@@ -143,12 +157,14 @@ test("web QA reports placeholder links and dead controls deterministically despi
   try {
     await new Promise((resolve) => setTimeout(resolve, 300));
     const url = `http://127.0.0.1:${port}`;
+    let firstOutput = "";
     for (const reportPath of [firstReport, secondReport]) {
-      execFileSync("node", [tappBin, "qa", url, "--platform", "web", "--actions", "4", "--timeout", "30", "--json", reportPath], {
+      const output = execFileSync("node", [tappBin, "qa", url, "--platform", "web", "--actions", "4", "--timeout", "30", "--json", reportPath], {
         cwd: root,
         encoding: "utf8",
         env: { ...process.env, TAPP_HOME: home },
       });
+      if (!firstOutput) firstOutput = output;
     }
     const first = JSON.parse(fs.readFileSync(firstReport, "utf8"));
     const second = JSON.parse(fs.readFileSync(secondReport, "utf8"));
@@ -164,6 +180,8 @@ test("web QA reports placeholder links and dead controls deterministically despi
     assert.ok(!first.findings.some((finding) => finding.target === "JavaScript Help"), "action-marked hash link is not called dead");
     assert.ok(first.findings.some((finding) => finding.type === "unresponsive_element" && finding.target === "Availability" && finding.evaluationTier === "sampled"));
     assert.ok(!first.findings.some((finding) => finding.target === "Working action"), "directly wired control is not called dead");
+    assert.doesNotMatch(firstOutput, /get this verdict/i, "exploration must not market itself as a verdict");
+    assert.match(firstOutput, /run these checks plus reviewed release contracts as a merge gate/i);
   } finally {
     server.kill();
   }

@@ -3,9 +3,11 @@
 #
 # Boots a simulator if needed, installs the app build under test, runs the autonomous exploration
 # harness, replays every committed Flow (deterministic E2E tests), diffs the findings against a
-# stored baseline, writes a GitHub Actions step summary, and exits non-zero when the gate fails
-# (new high/critical findings vs. baseline, or any failed Flow). Wrapped by ../action.yml for
-# GitHub Actions; equally usable from any other CI or locally.
+# stored baseline, writes a GitHub Actions step summary, and exits with the public outcome contract:
+# pass 0, deterministic fail 1, infrastructure/usage error 2, inconclusive evidence 3. Absolute
+# blockers and reviewed Flow/Scenario/Contract failures are enforced even without a baseline;
+# baseline comparisons additionally catch new high/critical regressions. Wrapped by ../action.yml
+# for GitHub Actions; equally usable from any other CI or locally.
 #
 # Usage:
 #   scripts/ci-gate.sh [--platform ios] --app <path/to/App.app> [--bundle-id <com.example.app>]
@@ -35,7 +37,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set -uo pipefail$/p' "$0" | sed '$d; s/^# \{0,1\}//'
 }
 
 PLATFORM="ios" APP_PATH="" BUNDLE_ID="" APK_PATH="" APP_ID="" URL="" WEB_TARGET="" TARGET_KEY="" SERIAL="" ACTIONS=40 TIMEOUT=600 FLOWS="" SCENARIOS="" CONTRACTS="" PROJECT_DIR="" BASELINE="" FAIL_ON="gate" JSON_OUT="" MD_OUT="" DEVICE="iPhone 16 Pro" PR_BASE="" PR_HEAD="HEAD" CHANGED_FILES_FILE="" PR_PLAN_OUT=""
@@ -82,7 +84,6 @@ fi
 TAPP_PROJECT_ARTIFACTS=""
 if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR/.tapp" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.tapp"
-  [[ -z "$TAPP_PROJECT_ARTIFACTS" && -d "$PROJECT_DIR/.autotap" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.autotap"
 fi
 [[ -z "$FLOWS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/flows" ]] && FLOWS="$TAPP_PROJECT_ARTIFACTS/flows/*.yml"
 [[ "$PLATFORM" == "web" && -z "$SCENARIOS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/scenarios" ]] && SCENARIOS="$TAPP_PROJECT_ARTIFACTS/scenarios/*.yml"

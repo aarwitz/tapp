@@ -8,6 +8,7 @@ import { semanticUiKey } from "./ui-map.js";
 
 const ERROR_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception|has stopped)\b/i;
 const DESTRUCTIVE_RE = /\b(delete|remove|purchase|buy now|pay now|reset|erase|unsubscribe|sign out|log out|logout)\b/i;
+const AUTH_SUBMIT_RE = /\b(sign[ -]?in|log[ -]?in|continue|submit)\b/i;
 
 function stateHash(snap) {
   return snap.elements.map((e) => `${androidElementKey(e)}:${e.text}:${e.x},${e.y}`).join("|");
@@ -40,6 +41,21 @@ function isDestructive(e) {
   return DESTRUCTIVE_RE.test(`${e.label || ""} ${e.text || ""} ${e.description || ""} ${e.id || ""}`.replace(/[_-]+/g, " "));
 }
 
+export function isAndroidAuthSubmit(element) {
+  return AUTH_SUBMIT_RE.test(`${element?.label || ""} ${element?.text || ""} ${element?.description || ""} ${element?.id || ""}`.replace(/[_-]+/g, " "));
+}
+
+export function isAndroidBlankSnapshot(snapshot) {
+  const elements = snapshot?.elements || [];
+  const meaningful = elements.some((element) =>
+    String(element.text || "").trim() ||
+    String(element.description || "").trim() ||
+    (String(element.id || "").trim() && !/^(android:)?id\/content$/i.test(String(element.id || "").trim()))
+  );
+  const interactive = elements.some((element) => element.hittable && (element.clickable || /Button|EditText|Tab|Switch|CheckBox/i.test(element.type)));
+  return !meaningful && !interactive;
+}
+
 export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", clearData = true, seedTargets = [], onProgress = () => {}, driver }) {
   const d = driver || new AndroidDriver({ appId, serial });
   d.appId = appId;
@@ -57,6 +73,18 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
   let issues = 0;
   let actions = 0;
   let snap = await d.launch({ clearData });
+  let crashReported = false;
+
+  const reportProcessExit = async (screen, step) => {
+    const alive = typeof d.isProcessAlive === "function" ? await d.isProcessAlive() : true;
+    if (alive || crashReported) return false;
+    crashReported = true;
+    emit("ISSUE", { type: "crash", severity: "critical", title: "App process exited during exploration", screen: screen || "Launch", step });
+    issues += 1;
+    return true;
+  };
+
+  if (!isAndroidAppSnapshot(snap, appId)) await reportProcessExit("Launch", 0);
 
   const normalizedTargets = (Array.isArray(seedTargets) ? seedTargets : []).filter((target) =>
     target?.platform === "android" && target?.status === "planned" && target?.navigation?.status === "replayable" &&
@@ -95,7 +123,11 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
       const before = state;
       snap = await d.settle();
       state = await recordState(snap);
-      if (!state) { failure = "The UI Map path left the application foreground"; break; }
+      if (!state) {
+        const crashed = await reportProcessExit(before.screen, actions);
+        failure = crashed ? "The application process exited while replaying the UI Map path" : "The UI Map path left the application foreground";
+        break;
+      }
       emit("TRANSITION", { from: before.screen, to: state.screen, action: selector, changed: before.hash !== state.hash });
       onProgress({ action: actions, max: maxActions, states: visited.size });
     }
@@ -113,7 +145,10 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
     // UIAutomator can still describe the launcher or a system surface after
     // Back/external navigation. Those are exploration boundaries, never nodes
     // in the application-owned UI Map.
-    if (!isAndroidAppSnapshot(snap, appId)) break;
+    if (!isAndroidAppSnapshot(snap, appId)) {
+      await reportProcessExit(visited.size ? [...visited.values()].at(-1) : "Launch", actions);
+      break;
+    }
     const recorded = await recordState(snap);
     if (!recorded) break;
     const { hash, screen, inputs } = recorded;
@@ -124,7 +159,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
       emit("ISSUE", { type: "error_surface", severity: "high", title: "Visible error surface", screen, step: actions });
       issues += 1;
     }
-    if (snap.elements.filter((e) => e.hittable).length === 0) {
+    if (isAndroidBlankSnapshot(snap)) {
       emit("ISSUE", { type: "blank_screen", severity: "high", title: "No usable controls or content", screen, step: actions });
       issues += 1;
     }
@@ -154,16 +189,24 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
     });
     if (candidate) {
       const target = controlLabel(candidate);
+      const loginSubmit = inputs.some((input) => input.secure) && isAndroidAuthSubmit(candidate);
       tried.add(`${hash}|tap|${target}`);
       const before = hash;
       const r = await d.tap(target, snap);
       actions += 1;
       snap = await d.settle();
       const after = stateHash(snap);
-      emit("ACTION", { type: "tap", target, reason: "untried_control", step: actions, screen, status: r.status });
-      if (!isAndroidAppSnapshot(snap, appId)) break;
+      emit("ACTION", { type: loginSubmit ? "login_submit" : "tap", target, reason: "untried_control", step: actions, screen, status: r.status });
+      if (!isAndroidAppSnapshot(snap, appId)) {
+        await reportProcessExit(screen, actions);
+        break;
+      }
       emit("TRANSITION", { from: screen, to: snap.screenTitle, action: target, changed: before !== after });
-      if (r.status === "ok" && before === after && candidate.clickable) {
+      const authFailed = loginSubmit && inputDescriptors(snap.elements).some((input) => input.secure);
+      if (r.status === "ok" && authFailed) {
+        emit("ISSUE", { type: "auth_failed", severity: "high", title: "Sign-in attempt remained on the login screen", screen, target, step: actions });
+        issues += 1;
+      } else if (r.status === "ok" && before === after && candidate.clickable) {
         emit("ISSUE", { type: "unresponsive_element", severity: "medium", title: `Control did not respond: ${target}`, screen, target, step: actions });
         issues += 1;
       }
@@ -179,7 +222,10 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
       actions += 1;
       const next = await d.settle();
       emit("ACTION", { type: "back", target: "system back", reason: "state_exhausted", step: actions, screen });
-      if (!isAndroidAppSnapshot(next, appId)) break;
+      if (!isAndroidAppSnapshot(next, appId)) {
+        await reportProcessExit(screen, actions);
+        break;
+      }
       emit("TRANSITION", { from: screen, to: next.screenTitle, action: "back", changed: stateHash(next) !== hash });
       if (stateHash(next) !== hash) { snap = next; continue; }
     }
@@ -187,11 +233,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
   }
 
   const timedOut = Date.now() >= deadline;
-  if (timedOut) {
-    emit("ISSUE", { type: "explore_timeout", severity: "medium", title: `Exploration timed out after ${timeoutSec}s`, screen: snap.screenTitle, step: actions });
-    issues += 1;
-  }
-  emit("COMPLETE", { actions, states: visited.size, issues, screens: [...new Set(visited.values())].join(","), outcome: timedOut ? "timeout" : "complete" });
+  emit("COMPLETE", { actions, states: visited.size, issues, screens: [...new Set(visited.values())].join(","), outcome: timedOut ? "timeout" : "complete", timedOut, ...(timedOut ? { timeoutSeconds: timeoutSec } : {}) });
   onProgress({ action: actions, max: maxActions, states: visited.size });
   return { markersPath, outDir, actions, states: visited.size, issues, timedOut, seedTargets: normalizedTargets };
 }

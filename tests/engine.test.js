@@ -30,9 +30,16 @@ test("engine is import-safe and exports the shared surface", () => {
     "explorationEnvFromArgs",
     "formatScreen",
     "qaNextSteps",
+    "recordingUnavailableReason",
   ]) {
     assert.equal(typeof engine[name], "function", `${name} exported`);
   }
+});
+
+test("native recording failures become concise actionable evidence warnings", () => {
+  assert.match(engine.recordingUnavailableReason("Host recording is already in progress — Resource busy"), /recorder is busy/);
+  assert.match(engine.recordingUnavailableReason("WARNING: Could not start simulator video recording"), /could not start/);
+  assert.match(engine.recordingUnavailableReason(""), /did not produce/);
 });
 
 test("runExploreTarget refuses to guess without an application model", async () => {

@@ -37,7 +37,10 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (key === "--json-out") args.jsonOut = value;
   else if (key === "--md-out") args.mdOut = value;
   else if (key === "--pr-plan") args.prPlan = value;
-  else throw new Error(`Unknown argument: ${key}`);
+  else {
+    console.error(`Unknown argument: ${key}`);
+    process.exit(2);
+  }
 }
 if (!["web", "android"].includes(args.platform)) throw new Error("--platform must be web|android");
 if (args.platform === "web" && !args.url && !args.projectDir) throw new Error("Web gate requires --url or --project-dir for managed build/start");
@@ -94,7 +97,7 @@ if (args.prPlan) {
 }
 
 let managedRuntime = null;
-let exitCode = 1;
+let exitCode = 2;
 try {
   if (args.platform === "web" && !args.url) {
     const started = await startManagedWebTarget({
@@ -106,7 +109,7 @@ try {
     if (started.error) {
       console.error(`❌ ${started.error}`);
       if (started.details?.remediation) console.error(`   ${started.details.remediation}`);
-      process.exitCode = 1;
+      exitCode = 2;
     } else {
       managedRuntime = started;
       args.url = started.url;
@@ -114,7 +117,7 @@ try {
     }
   }
   if (args.platform === "web" && !args.url) {
-    exitCode = 1;
+    exitCode = 2;
   } else {
     const qa = args.platform === "web"
       ? await runQaWeb({ url: args.url, maxActions: args.actions, timeout: args.timeout, testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets })
@@ -122,7 +125,7 @@ try {
           testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets });
     if (qa.error) {
       console.error(`❌ ${qa.error}`);
-      exitCode = 1;
+      exitCode = 2;
     } else {
       const captureDir = qa.structured.capture.path;
       const markers = path.join(captureDir, "ocqa-markers.txt");
@@ -177,6 +180,9 @@ try {
       exitCode = report.status ?? 1;
     }
   }
+} catch (error) {
+  console.error(`❌ ${error?.message || String(error)}`);
+  exitCode = 2;
 } finally {
   if (managedRuntime) {
     await stopManagedWebTarget(managedRuntime);

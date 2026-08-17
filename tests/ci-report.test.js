@@ -131,7 +131,8 @@ test("first run passes clean evidence but states that regression gating is not a
   assert.equal(r.status, 0, `${r.stderr}\n${JSON.stringify(r.report?.gate)}`);
   assert.equal(r.report.gate.outcome, "pass");
   assert.match(r.markdown, /Baseline — .*not active yet/);
-  assert.match(r.markdown, /blocked\/inconclusive fallback/);
+  assert.match(r.markdown, /still enforces absolute blockers and reviewed suite failures/);
+  assert.match(r.markdown, /cannot identify new regressions until a baseline is saved/);
   assert.match(r.html, /EXPLORED/); // observation badge, not a ship verdict/score
   assert.doesNotMatch(r.html, /release score/);
   assert.match(r.html, /fixture/);
@@ -145,6 +146,14 @@ test("the gate report shows its scope: target, revision, policy version, and che
   assert.match(r.markdown, /policy: gate v\d/);
   assert.match(r.markdown, /Checked:/);
   assert.match(r.markdown, /Not checked:/);
+});
+
+test("the gate preserves the concrete target when no stable target key is supplied", () => {
+  const r = runGate({ platform: "android" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.report.target, "fixture");
+  assert.equal(r.report.gate.target, "fixture");
+  assert.match(r.markdown, /target: fixture/);
 });
 
 test("exploration's regression is comparison-only — no gate/outcome/pass-fail in its JSON", () => {

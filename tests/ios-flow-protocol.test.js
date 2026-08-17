@@ -10,6 +10,7 @@ const demoSettingsPath = "DemoApp/Sources/SettingsView.swift";
 const hasDemoSettingsSource = fs.existsSync(demoSettingsPath);
 const demoSettingsSource = hasDemoSettingsSource ? fs.readFileSync(demoSettingsPath, "utf8") : "";
 const runFlowSource = fs.readFileSync("scripts/run-flow.sh", "utf8");
+const quickCaptureSource = fs.readFileSync("scripts/quick-capture.sh", "utf8");
 
 test("iOS Flow normalization ignores compiler metadata instead of executing it", () => {
   const normalizer = source.match(/private func normalizeFlowStep[\s\S]*?\n    }\n\n    private func pollUntil/)?.[0] || "";
@@ -54,6 +55,18 @@ test("iOS root normalization emits the real launch-sheet transition for map grou
   assert.match(normalization, /OCQA_TRANSITION_RESOLVED:/);
   assert.match(normalization, /from\\":\\".*preTitle/);
   assert.match(normalization, /to\\":\\".*postTitle/);
+});
+
+test("iOS exploration attaches the true launch surface before root normalization", () => {
+  const launchEvidence = source.match(/Record the TRUE initial screen[\s\S]*?navigateToRootScreen\(actionCount:/)?.[0] || "";
+  assert.match(launchEvidence, /XCTAttachment\(screenshot: initialScreenshot\)/);
+  assert.match(launchEvidence, /state_0_/);
+  assert.match(launchEvidence, /add\(initialAttachment\)/);
+});
+
+test("native progress calls structural states what they are", () => {
+  assert.match(cliSource, /structural states observed/);
+  assert.match(engineSource, /structural states observed/);
 });
 
 test("init carries successful Xcode build evidence into both CLI and MCP application models", () => {
@@ -104,4 +117,64 @@ test("iOS exploration records structural transitions even when the visible title
   assert.match(source, /if pending\.hash != stateHash/);
   assert.match(source, /fromHash.*pending\.hash.*toHash.*stateHash/);
   assert.match(source, /if pending\.hash != terminalHash/);
+});
+
+test("iOS loop detection requires a cycle across distinct structural states", () => {
+  assert.match(source, /Set\(recent\.suffix\(2\)\)\.count == 2/);
+  assert.match(source, /Set\(recent\.suffix\(3\)\)\.count == 3/);
+  assert.match(source, /Set\(recentScreenTitles\.suffix\(2\)\)\.count == 2/);
+  assert.match(source, /Set\(recentScreenTitles\.suffix\(3\)\)\.count == 3/);
+});
+
+test("iOS unresponsive findings come from confirmed control taps, not recovery streaks", () => {
+  assert.doesNotMatch(source, /title\":\"Unresponsive UI\".*repeated_state_count/);
+  assert.match(source, /Control may be unresponsive/);
+  assert.match(source, /contentSignature\(post2\) == preContentSig/);
+});
+
+test("iOS recovery does not spend a second action after exhausting the requested budget", () => {
+  const exhaustedBackRecovery = source.match(/Back didn't change screens[\s\S]*?Stuck on this screen/)?.[0] || "";
+  assert.match(exhaustedBackRecovery, /if actionCount >= maxActions \{ break \}/);
+  const deadEndRecovery = source.match(/tryGoBack does swipe-down[\s\S]*?Swipe right \(back gesture\)/)?.[0] || "";
+  assert.match(deadEndRecovery, /if actionCount >= maxActions \{ break \}/);
+});
+
+test("iOS exploration ends a successful sign-in/sign-out cycle without false persistence or trap findings", () => {
+  const authCycle = source.match(/Signing out after a successful login[\s\S]*?Persistence probe/)?.[0] || "";
+  assert.match(authCycle, /authSucceeded && detectedInputs\.contains\(where: \{ \$0\.secure \}\)/);
+  assert.match(authCycle, /OCQA_STATE:auth_cycle_complete/);
+  assert.match(authCycle, /break/);
+});
+
+test("iOS hang detection excludes determinate progress bars", () => {
+  const loadingDetector = source.match(/private func hasIndeterminateLoadingIndicator[\s\S]*?\n    \}/)?.[0] || "";
+  assert.match(loadingDetector, /activityIndicators\.allElementsBoundByIndex/);
+  assert.match(loadingDetector, /indicator\.value as\? String/);
+  assert.match(loadingDetector, /value\.isEmpty.*value == "in progress".*value == "loading"/);
+  assert.match(source, /if screenVisitCount\[titleStr\].*hasIndeterminateLoadingIndicator\(\)/s);
+});
+
+test("iOS exploration does not call an exhausted internal candidate pool a user-visible dead end", () => {
+  assert.doesNotMatch(source, /issues\.append\(\(type: "dead_end"/);
+  assert.match(source, /only the stronger navigation-trap path below emits a finding/);
+});
+
+test("iOS unconditional launch crashes are classified before the outer watchdog timeout", () => {
+  assert.match(quickCaptureSource, /simctl launch.*APP_BUNDLE/);
+  assert.match(quickCaptureSource, /kill -0.*PREFLIGHT_PID/);
+  assert.match(quickCaptureSource, /OCQA_ISSUE:.*App crashed during launch preflight/);
+  assert.match(quickCaptureSource, /severity.*critical/);
+  assert.match(quickCaptureSource, /configured launch args\/env skip this probe/i);
+});
+
+test("iOS caller time-budget exhaustion is partial evidence, not an app defect", () => {
+  assert.match(quickCaptureSource, /time budget; evidence is partial/);
+  assert.match(quickCaptureSource, /\\\"timedOut\\\":true/);
+  assert.doesNotMatch(quickCaptureSource, /OCQA_ISSUE:.*explore_timeout/);
+});
+
+test("iOS blank detection uses semantic content rather than raw container count", () => {
+  assert.match(source, /let visibleTextInventory = visionTextInventory\(elements\)/);
+  assert.match(source, /if visibleTextInventory\.isEmpty && interactable\.count == 0/);
+  assert.doesNotMatch(source, /if elements\.count < 5 && interactable\.count == 0/);
 });
