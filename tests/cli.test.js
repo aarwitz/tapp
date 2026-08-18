@@ -55,6 +55,9 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   // A fresh TAPP_HOME that does not exist yet — --help must not create it.
   const home = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tapp-help-home-")), "home");
   const env = { ...process.env, TAPP_HOME: home };
+  const root = execFileSync("node", [tappBin, "--help"], { encoding: "utf8", env });
+  assert.match(root, /tapp explore \[target\]/);
+  assert.equal(fs.existsSync(home), false, "root --help must not create TAPP_HOME");
   const explore = execFileSync("node", [tappBin, "explore", "--help"], { encoding: "utf8", env });
   assert.match(explore, /command reference/);
   assert.match(explore, /tapp explore \[target\]/);

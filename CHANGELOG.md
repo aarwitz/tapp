@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.0-rc.9
+
+**Clean-install help correction.**
+
+- Keep bare `tapp --help` and `tapp -h` side-effect free, matching the existing guarantee for
+  nested command help: they no longer create even an empty `TAPP_HOME`.
+
 ## 0.17.0-rc.8
 
 **Adversarial qualification corrections.**

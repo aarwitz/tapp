@@ -249,6 +249,12 @@ function safeCommandUsage(verb) {
 // Safe help: `--help`/`-h` on ANY verb prints the command reference and does NOTHING else — never
 // builds, launches, writes, or opens (ADR-0005 manual-testing requirement). `ci` keeps its own
 // richer `--help` (a safe usage print in ci-gate.sh); help/version don't need interception.
+// A bare `tapp --help` puts the flag in `command`, not `rest`; normalize it before the
+// per-verb interception so the root help path receives the same no-write guarantee.
+if (["--help", "-h"].includes(command)) {
+  command = "help";
+  rest = [];
+}
 const safeHelpRequested = (rest.includes("--help") || rest.includes("-h"))
   && !["help", "version", "--version", "-v"].includes(command)
   && (command !== "ci" || rest[0] === "install");
