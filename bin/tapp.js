@@ -235,6 +235,7 @@ function safeCommandUsage(verb) {
     pr: "tapp pr plan [--base REF|--changed-files FILE] [--head REF] [--platform PLATFORM] [--out FILE]\ntapp pr gate PLAN [gate target/options]\ntapp pr adopt PLAN --item ID [--project-dir DIR]",
     plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]",
     baseline: "tapp baseline create [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
+    ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]",
     actor: "tapp actor set NAME --email-env ENV --password-env ENV [--project-dir DIR]\ntapp actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
@@ -248,7 +249,10 @@ function safeCommandUsage(verb) {
 // Safe help: `--help`/`-h` on ANY verb prints the command reference and does NOTHING else — never
 // builds, launches, writes, or opens (ADR-0005 manual-testing requirement). `ci` keeps its own
 // richer `--help` (a safe usage print in ci-gate.sh); help/version don't need interception.
-if ((rest.includes("--help") || rest.includes("-h")) && !["help", "version", "--version", "-v", "ci"].includes(command)) {
+const safeHelpRequested = (rest.includes("--help") || rest.includes("-h"))
+  && !["help", "version", "--version", "-v"].includes(command)
+  && (command !== "ci" || rest[0] === "install");
+if (safeHelpRequested) {
   console.log(`Usage:\n  ${safeCommandUsage(command).replaceAll("\n", "\n  ")}\n\nℹ️  --help never builds, launches, writes, or opens. Full command reference:\n`);
   command = "help";
   rest = [];

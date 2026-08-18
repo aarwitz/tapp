@@ -26,7 +26,7 @@ def _ctx():
 
 
 SSL_CTX = _ctx()
-MODEL = os.environ.get("TAPP_VISION_MODEL") or os.environ.get("AUTOTAP_VISION_MODEL", "claude-haiku-4-5-20251001")
+MODEL = os.environ.get("TAPP_VISION_MODEL", "claude-haiku-4-5-20251001")
 SYSTEM = (
     "You are a QA test oracle. You are shown one iOS app screenshot and a CLAIM the test asserts about "
     "it. Decide if the claim is TRUE of what is actually visible. Be strict and literal — only pass if "

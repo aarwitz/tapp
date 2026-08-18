@@ -1518,6 +1518,8 @@ class ExplorerTests: XCTestCase {
                     if current.isEmpty || current == ph {
                         reportedPersistenceKeys.insert(memKey)
                         let t = "Entered value did not persist: '\(fieldKey)' on \(titleStr)"
+                        issues.append((type: "state_persistence", severity: "medium", title: t,
+                                       desc: "Typed '\(typed)' into this field earlier in the run; after navigating away and returning, the field is empty — entered state was silently lost."))
                         print("OCQA_ISSUE:{\"type\":\"state_persistence\",\"severity\":\"medium\",\"title\":\"\(escapeJSON(t))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(fieldKey))\",\"step\":\(actionCount),\"desc\":\"Typed '\(escapeJSON(typed))' into this field earlier in the run; after navigating away and returning, the field is empty — entered state was silently lost.\"}")
                     }
                 }
@@ -1679,7 +1681,13 @@ class ExplorerTests: XCTestCase {
 
             // ---- Blank-screen detection ----
             // Distinguish between "no a11y labels / custom UI" vs genuinely empty.
-            if visibleTextInventory.isEmpty && interactable.count == 0 {
+            // A system Back/Close affordance is navigation chrome, not screen content. Treat a
+            // destination whose only usable control is that chrome as blank too; otherwise an
+            // EmptyView pushed by NavigationStack looks like a healthy one-control screen.
+            let contentInteractables = interactable.filter {
+                !isNavBackButton($0) && !isLikelyGlobalNavigation($0, screenBounds: screenBounds)
+            }
+            if visibleTextInventory.isEmpty && contentInteractables.isEmpty {
                 let blankKey = "blank:\(titleStr)"
                 let blankCount = (actionCounts[blankKey] ?? 0) + 1
                 actionCounts[blankKey] = blankCount
@@ -2273,12 +2281,21 @@ class ExplorerTests: XCTestCase {
             // the crash itself goes unreported. app.state is non-throwing even when the app is dead.
             // (Found on a real app: a login submit terminated the app; the run limped on but emitted
             // no crash finding.) Try one relaunch to distinguish a hard crash from a transient exit.
-            if app.state != .runningForeground {
-                print("OCQA_STATE:app_left_foreground step=\(actionCount) state=\(app.state.rawValue)")
+            let stateAfterAction = app.state
+            if stateAfterAction != .runningForeground {
+                print("OCQA_STATE:app_left_foreground step=\(actionCount) state=\(stateAfterAction.rawValue)")
+                let crashKey = "crash:\(titleStr)|\(key)"
+                // A terminated process is already proof of an in-run crash. Relaunching it may
+                // succeed, but that must not erase the user-visible failure that just happened.
+                if stateAfterAction == .notRunning && !reportedIssueKeys.contains(crashKey) {
+                    reportedIssueKeys.insert(crashKey)
+                    issues.append((type: "crash", severity: "critical", title: "App crashed after \(actionType) on \(titleStr)",
+                                   desc: "The app process terminated after \(actionType) '\(targetName)' on '\(titleStr)'."))
+                    print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"\(escapeJSON("App crashed after \(actionType) on \(titleStr)"))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
+                }
                 app.activate()
                 Thread.sleep(forTimeInterval: 3.0)
                 if app.state != .runningForeground {
-                    let crashKey = "crash:\(titleStr)|\(key)"
                     if !reportedIssueKeys.contains(crashKey) {
                         reportedIssueKeys.insert(crashKey)
                         issues.append((type: "crash", severity: "critical", title: "App crashed after \(actionType) on \(titleStr)",
@@ -2382,16 +2399,28 @@ class ExplorerTests: XCTestCase {
 
             // ---- App left foreground / crash detection ----
             // Check both .exists and .state — external links may cause either to fail
-            let appInForeground = app.state == .runningForeground
+            let stateAfterDelayedChecks = app.state
+            let appInForeground = stateAfterDelayedChecks == .runningForeground
             if !appInForeground || !app.exists {
-                print("OCQA_STATE:app_left_foreground step=\(actionCount) state=\(app.state.rawValue)")
+                print("OCQA_STATE:app_left_foreground step=\(actionCount) state=\(stateAfterDelayedChecks.rawValue)")
+                let crashKey = "crash:\(titleStr)|\(key)"
+                if stateAfterDelayedChecks == .notRunning && !reportedIssueKeys.contains(crashKey) {
+                    reportedIssueKeys.insert(crashKey)
+                    issues.append((type: "crash", severity: "critical",
+                                   title: "App crashed after \(actionType) on \(titleStr)",
+                                   desc: "The app process terminated after: \(actionDesc)"))
+                    print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"\(escapeJSON("App crashed after \(actionType) on \(titleStr)"))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
+                }
                 app.activate()
                 Thread.sleep(forTimeInterval: 3.0)
                 if app.state != .runningForeground {
-                    issues.append((type: "crash", severity: "critical",
-                                   title: "App not recoverable",
-                                   desc: "App left foreground after: \(actionDesc)"))
-                    print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App not recoverable\",\"action\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
+                    if !reportedIssueKeys.contains(crashKey) {
+                        reportedIssueKeys.insert(crashKey)
+                        issues.append((type: "crash", severity: "critical",
+                                       title: "App not recoverable",
+                                       desc: "App left foreground after: \(actionDesc)"))
+                        print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App not recoverable\",\"action\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
+                    }
                     break
                 }
                 print("OCQA_STATE:app_reactivated step=\(actionCount)")

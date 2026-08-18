@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0-rc.8
+
+**Adversarial qualification corrections.**
+
+- Preserve and report iOS process termination before recovery can hide an in-run navigation crash.
+- Treat destinations containing only system navigation chrome as blank content surfaces.
+- Keep iOS persistence findings and completion issue counts consistent.
+- Recognize short-lived Android Activity transitions so a working control is not called dead.
+- Wait for the first Android frame to composite before retaining screenshot evidence.
+- Make nested `tapp ci install --help` side-effect free.
+- Remove the last shipped `AUTOTAP_*` runtime fallback.
+
 ## 0.17.0-rc.7
 
 **Observe/judge split (ADR-0005) — a breaking rename + gate-contract change.**

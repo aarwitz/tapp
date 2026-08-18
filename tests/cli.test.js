@@ -63,6 +63,8 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.match(task, /tapp task run FILE --platform PLATFORM/);
   const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
   assert.match(contract, /tapp contract run FILE --platform PLATFORM/);
+  const ciInstall = execFileSync("node", [tappBin, "ci", "install", "--help"], { encoding: "utf8", env });
+  assert.match(ciInstall, /tapp ci install \[repo\]/);
   // The dangerous case: init --help must NOT create project artifacts...
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-help-safe-"));
   execFileSync("node", [tappBin, "init", "--help"], { cwd: dir, encoding: "utf8", env });

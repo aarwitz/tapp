@@ -37,8 +37,10 @@ test("npm package ships only the runtime script allowlist", () => {
   );
 });
 
-test("shipped CI runtime has no retired repository-path fallback", () => {
-  assert.doesNotMatch(read("scripts/ci-gate.sh"), /\.autotap|AUTOTAP_/);
+test("shipped runtime has no retired repository-path or environment fallback", () => {
+  for (const file of pkg.files.filter((entry) => entry.startsWith("scripts/"))) {
+    assert.doesNotMatch(read(file), /\.autotap|AUTOTAP_/, file);
+  }
 });
 
 test("contract typechecking recognizes only the canonical package import", () => {

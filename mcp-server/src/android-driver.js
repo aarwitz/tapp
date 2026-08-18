@@ -282,6 +282,19 @@ export class AndroidDriver {
     return { screenTitle: detectAndroidScreen(elements, activity), elements, activity, xml };
   }
 
+  async observeActivityTransition(beforeActivity, timeoutMs = 700) {
+    const initial = String(beforeActivity || "");
+    if (!initial) return false;
+    const deadline = Date.now() + timeoutMs;
+    do {
+      const current = await this.currentActivity();
+      if (current && current !== initial) return true;
+      if (Date.now() >= deadline) break;
+      await sleep(60);
+    } while (Date.now() < deadline);
+    return false;
+  }
+
   async screenshot(filePath) {
     const r = await this.adb(["exec-out", "screencap", "-p"], { encoding: "buffer", timeout: 30_000, maxBuffer: 32 * 1024 * 1024 });
     if (r.code !== 0 || !r.stdout?.length) throw new Error("Android screenshot failed");

@@ -57,8 +57,9 @@ export function isAndroidBlankSnapshot(snapshot) {
   return !meaningful && !interactive;
 }
 
-export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", clearData = true, seedTargets = [], onProgress = () => {}, driver }) {
+export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", clearData = true, seedTargets = [], onProgress = () => {}, driver, screenshotDelayMs }) {
   const d = driver || new AndroidDriver({ appId, serial });
+  const visualSettleMs = Number.isFinite(screenshotDelayMs) ? Math.max(0, screenshotDelayMs) : (driver ? 0 : 350);
   d.appId = appId;
   await d.ensureDevice();
   if (apkPath) await d.install(apkPath);
@@ -112,6 +113,10 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
     const screen = snapshot.screenTitle;
     if (!visited.has(hash)) {
       visited.set(hash, screen);
+      // UIAutomator can expose a fully populated hierarchy a fraction before
+      // SurfaceFlinger composites the first app frame. Give real devices one
+      // bounded draw interval so retained PNG evidence matches the tree.
+      if (visualSettleMs) await sleep(visualSettleMs);
       await d.screenshot(path.join(screenshots, `${String(visited.size).padStart(2, "0")}-${screen.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`)).catch(() => {});
     }
     const inputs = inputDescriptors(snapshot.elements);
@@ -209,7 +214,14 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
       const before = hash;
       const r = await d.tap(target, snap);
       actions += 1;
-      snap = await d.settle();
+      // UIAutomator can miss a short-lived Activity that opens and cleanly
+      // returns before its next hierarchy dump. Observe the cheaper Activity
+      // signal in parallel so a real transient response is not called dead.
+      const activityEffect = r.status === "ok" && typeof d.observeActivityTransition === "function"
+        ? d.observeActivityTransition(snap.activity)
+        : Promise.resolve(false);
+      const [settledSnap, activityEffectObserved] = await Promise.all([d.settle(), activityEffect]);
+      snap = settledSnap;
       const after = stateHash(snap);
       emit("ACTION", { type: loginSubmit ? "login_submit" : "tap", target, reason: "untried_control", step: actions, screen, status: r.status });
       if (!isAndroidAppSnapshot(snap, appId)) {
@@ -221,7 +233,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
       if (r.status === "ok" && authFailed) {
         emit("ISSUE", { type: "auth_failed", severity: "high", title: "Sign-in attempt remained on the login screen", screen, target, step: actions });
         issues += 1;
-      } else if (r.status === "ok" && before === after && candidate.clickable) {
+      } else if (r.status === "ok" && before === after && candidate.clickable && !activityEffectObserved) {
         emit("ISSUE", { type: "unresponsive_element", severity: "medium", title: `Control did not respond: ${target}`, screen, target, step: actions });
         issues += 1;
       }

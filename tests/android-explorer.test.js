@@ -151,6 +151,52 @@ test("Android exploration waits through transient pid liveness before classifyin
   assert.doesNotMatch(markers, /"screen":"Other"|"to":"Other"/);
 });
 
+class TransientActivityDriver {
+  constructor() { this.appId = "io.tapp.transient"; }
+  async ensureDevice() {}
+  async launch() { return this.snapshot(); }
+  async screenshot() {}
+  async snapshot() {
+    return {
+      activity: `${this.appId}/.MainActivity`, screenTitle: "Home",
+      elements: [{
+        package: this.appId, type: "android.widget.Button", id: "continue_button",
+        text: "Continue", label: "Continue", clickable: true, hittable: true,
+        enabled: true, x: 0, y: 0, w: 100, h: 40,
+      }],
+    };
+  }
+  async tap() { return { status: "ok" }; }
+  async settle() { return this.snapshot(); }
+  async observeActivityTransition(beforeActivity) {
+    assert.equal(beforeActivity, `${this.appId}/.MainActivity`);
+    return true;
+  }
+  async back() { return { status: "ok" }; }
+}
+
+test("Android exploration does not call a control dead when a transient Activity opens and returns", async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-transient-activity-"));
+  const result = await exploreAndroid({ appId: "io.tapp.transient", maxActions: 1, timeoutSec: 30, outDir, driver: new TransientActivityDriver() });
+  const markers = fs.readFileSync(result.markersPath, "utf8");
+  assert.match(markers, /OCQA_ACTION:.*"target":"Continue"/);
+  assert.match(markers, /OCQA_TRANSITION:.*"changed":false/);
+  assert.doesNotMatch(markers, /unresponsive_element|Control did not respond/);
+});
+
+test("Android exploration lets the compositor draw before retaining a new-state screenshot", async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-screenshot-settle-"));
+  const driver = new TransientActivityDriver();
+  const started = Date.now();
+  let screenshotAt = 0;
+  driver.screenshot = async () => { screenshotAt = Date.now(); };
+  await exploreAndroid({
+    appId: driver.appId, maxActions: 1, timeoutSec: 30, outDir, driver,
+    screenshotDelayMs: 25,
+  });
+  assert.ok(screenshotAt - started >= 20, `screenshot retained too early after ${screenshotAt - started}ms`);
+});
+
 class TargetPathDriver {
   constructor() { this.appId = "io.tapp.target"; this.screen = "Home"; }
   async ensureDevice() {}

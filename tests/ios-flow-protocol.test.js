@@ -175,6 +175,30 @@ test("iOS caller time-budget exhaustion is partial evidence, not an app defect",
 
 test("iOS blank detection uses semantic content rather than raw container count", () => {
   assert.match(source, /let visibleTextInventory = visionTextInventory\(elements\)/);
-  assert.match(source, /if visibleTextInventory\.isEmpty && interactable\.count == 0/);
+  assert.match(source, /let contentInteractables = interactable\.filter/);
+  assert.match(source, /!isNavBackButton\(\$0\)/);
+  assert.match(source, /if visibleTextInventory\.isEmpty && contentInteractables\.isEmpty/);
   assert.doesNotMatch(source, /if elements\.count < 5 && interactable\.count == 0/);
+});
+
+test("iOS in-run crash detection records a terminated process even when relaunch succeeds", () => {
+  const earlyCrashCheck = source.match(/Early crash check[\s\S]*?After a submit\/login tap/)?.[0] || "";
+  assert.match(earlyCrashCheck, /let stateAfterAction = app\.state/);
+  assert.match(earlyCrashCheck, /stateAfterAction == \.notRunning/);
+  assert.match(earlyCrashCheck, /issues\.append\(\(type: "crash", severity: "critical"/);
+  assert.match(earlyCrashCheck, /app\.activate\(\)/);
+  assert.ok(
+    earlyCrashCheck.indexOf("stateAfterAction == .notRunning") < earlyCrashCheck.indexOf("app.activate()"),
+    "the original process termination must be recorded before recovery can mask it",
+  );
+});
+
+test("iOS field-persistence findings agree with the completed issue count", () => {
+  const persistenceDetector = source.match(/for \(memKey, typed\) in typedFieldMemory[\s\S]*?Keyboard occlusion/)?.[0] || "";
+  assert.match(persistenceDetector, /issues\.append\(\(type: "state_persistence", severity: "medium"/);
+  assert.match(persistenceDetector, /OCQA_ISSUE:.*state_persistence/);
+  assert.ok(
+    persistenceDetector.indexOf('issues.append((type: "state_persistence"') < persistenceDetector.indexOf("OCQA_ISSUE:"),
+    "the completion counter must be updated before the public issue marker is emitted",
+  );
 });
