@@ -439,6 +439,7 @@ test("tapp init --explore safely refreshes existing artifacts through shared sem
 
 test("tapp init --explore starts and stops a detected owned web target when URL is omitted", { skip: skipRealBrowser }, async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-managed-web-"));
+  fs.mkdirSync(path.join(project, "Product.xcodeproj"));
   fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({ name: "managed-web", scripts: { start: "node server.js" } }));
   fs.writeFileSync(path.join(project, "index.html"), "<main><h1>Home</h1><a href='/checkout'>Checkout</a></main>");
   fs.writeFileSync(path.join(project, "server.js"), `import http from "node:http";
@@ -454,12 +455,19 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
   const home = path.join(project, "tapp-home");
   const output = execFileSync("node", [tappBin, "init", project, "--explore", "--platform", "web", "--actions", "6", "--timeout", "60", "--json-out", outPath], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
   assert.match(output, /managed web runtime/i);
+  assert.match(output, /0 blocking requirement\(s\) for web:managed-web/);
+  assert.match(output, /ℹ️ Unselected ios:Product setup gap: Confirm a shared build scheme/);
+  assert.doesNotMatch(output, /❌ Confirm a shared build scheme/);
   const result = JSON.parse(fs.readFileSync(outPath, "utf8"));
   assert.equal(result.exploration.managedRuntime, true);
+  assert.equal(result.selectedTarget.platform, "web");
+  assert.equal(result.requirementScope.active.some((item) => item.targetPlatform === "ios"), false);
+  assert.equal(result.requirementScope.deferred.some((item) => item.targetPlatform === "ios"), true);
   assert.match(result.exploration.target, /^http:\/\/127\.0\.0\.1:\d+$/);
-  assert.equal(result.model.targets[0].runtime.ownedUrl, null, "an ephemeral managed localhost URL must never become durable CI configuration");
-  assert.equal(result.model.targets[0].runtime.management, "tapp-managed");
-  assert.equal(result.model.targets[0].build.install, null);
+  const web = result.model.targets.find((target) => target.platform === "web");
+  assert.equal(web.runtime.ownedUrl, null, "an ephemeral managed localhost URL must never become durable CI configuration");
+  assert.equal(web.runtime.management, "tapp-managed");
+  assert.equal(web.build.install, null);
   await assert.rejects(fetch(result.exploration.target), /fetch failed|ECONNREFUSED/i, "managed runtime is torn down after evidence capture");
 });
 

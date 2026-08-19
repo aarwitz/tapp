@@ -387,17 +387,29 @@ switch (command) {
     if (typeof flags["json-out"] === "string") {
       const out = path.resolve(flags["json-out"]);
       fs.mkdirSync(path.dirname(out), { recursive: true });
-      fs.writeFileSync(out, JSON.stringify({ model: built.model, plan: written?.plan || built.plan, ...(exploration ? { exploration } : {}) }, null, 2) + "\n");
+      fs.writeFileSync(out, JSON.stringify({
+        model: built.model,
+        plan: written?.plan || built.plan,
+        ...(exploration ? { exploration } : {}),
+        ...(result.selectedTarget ? { selectedTarget: result.selectedTarget } : {}),
+        requirementScope: result.requirementScope,
+      }, null, 2) + "\n");
     }
-    const blocking = built.model.requirements.filter((item) => item.severity === "blocking");
+    const activeRequirements = result.requirementScope?.active || built.model.requirements;
+    const deferredRequirements = result.requirementScope?.deferred || [];
+    const blocking = activeRequirements.filter((item) => item.severity === "blocking");
+    const deferredBlocking = deferredRequirements.filter((item) => item.severity === "blocking");
     const pending = (written?.plan || built.plan).items.filter((item) => item.decision === "pending");
     console.log(`🧭 Tapp init — ${built.model.application.name}`);
     console.log(`   targets: ${built.model.targets.length ? built.model.targets.map((target) => `${target.platform}:${target.name}`).join(", ") : "none"}`);
     console.log(`   UI Map: ${built.model.uiMap.status} · ${built.model.uiMap.nodeCount} states · ${built.model.uiMap.edgeCount} transitions`);
     if (exploration) console.log(`   Exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""} · ${exploration.uiMap.nodeCount} states · evidence: ${exploration.reportHtml || exploration.capture?.path || "capture recorded"}`);
     if (exploration?.managedRuntime) console.log(`   Managed web runtime: built/started ${exploration.target} for exploration and stopped it afterward · log: ${exploration.runtime.logPath}`);
-    console.log(`   release plan: ${(written?.plan || built.plan).items.length} item(s) · ${pending.length} pending review · ${blocking.length} blocking requirement(s)`);
-    for (const requirement of built.model.requirements) console.log(`   ${requirement.severity === "blocking" ? "❌" : "⚠️"} ${requirement.message} Next: ${requirement.remediation}`);
+    const selectedLabel = result.selectedTarget ? ` for ${result.selectedTarget.platform}:${result.selectedTarget.name}` : "";
+    const deferredLabel = deferredBlocking.length ? ` · ${deferredBlocking.length} setup gap(s) on unselected target(s)` : "";
+    console.log(`   release plan: ${(written?.plan || built.plan).items.length} item(s) · ${pending.length} pending review · ${blocking.length} blocking requirement(s)${selectedLabel}${deferredLabel}`);
+    for (const requirement of activeRequirements) console.log(`   ${requirement.severity === "blocking" ? "❌" : "⚠️"} ${requirement.message} Next: ${requirement.remediation}`);
+    for (const requirement of deferredRequirements) console.log(`   ℹ️ Unselected ${requirement.targetPlatform}:${requirement.targetName} setup gap: ${requirement.message} Next: ${requirement.remediation}`);
     if (written) console.log(`   model: ${written.modelPath}\n   plan: ${written.planPath}`);
     else console.log("   dry run: repository files were not changed");
     break;

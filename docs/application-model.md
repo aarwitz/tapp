@@ -16,12 +16,14 @@ resolution actually builds and installs the detected Xcode container, the model 
 scheme as runtime-observed validation and removes the corresponding confirmation blocker. Merely
 supplying a bundle id or prebuilt `.app` does not prove repository build configuration.
 
-A fresh repository with more than one detected application target is never resolved by detection
-order. Bare `tapp init . --explore` prompts in a human TTY; non-interactive CLI/MCP callers receive
+A repository with more than one detected application target is never resolved by detection order
+during explicit initialization, even when a prior default exists. Bare `tapp init . --explore`
+prompts in a human TTY; non-interactive CLI/MCP callers receive
 exact `--platform`/`--target` commands before any build or write, and MCP also carries them as
 structured `target-selection-required` choices. The selected run records that target as the default
-for later bare exploration, but the application model retains the repository's other detected targets
-and their unmet coverage.
+for later bare `tapp explore`, but the application model retains the repository's other detected
+targets and their unmet coverage. The selected init run reports other-target setup gaps as deferred
+information rather than presenting them as failures of the target that was actually explored.
 
 ## First inspection
 

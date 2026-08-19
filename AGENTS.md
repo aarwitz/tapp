@@ -22,8 +22,10 @@ npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml  # committed, keyless E2E re
 ```
 
 If repository onboarding detects multiple application targets, target detection is deterministic but
-the choice is the user's. In a human TTY, Tapp displays a numbered selector and continues in the same
-command. A non-interactive CLI prints the exact choices and exits before building. MCP returns
+the choice is the user's. Explicit `init --explore` asks even when the model has a saved default; a
+later bare `explore` may consume that default. In a human TTY, Tapp displays a numbered selector and
+continues in the same command. A non-interactive CLI prints the exact choices and exits before
+building. MCP returns
 `reason: "target-selection-required"` with structured `choices[]` (`platform`, `name`, `sourcePath`,
 `selector`, and exact `command`). **Do not pick one yourself.** Present those choices to the user
 with the client's native multiple-choice question UI when available, then rerun using the selected

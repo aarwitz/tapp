@@ -3067,11 +3067,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           server.notification({ method: "notifications/progress", params: { progressToken, progress: progress.action || 0, total: progress.max || budget, message: `Import exploration · ${progress.states} state(s) reached` } }).catch(() => {});
         },
       });
-      const { model, plan, written, exploration } = result;
-      const blocking = model.requirements.filter((item) => item.severity === "blocking");
+      const { model, plan, written, exploration, selectedTarget, requirementScope } = result;
+      const blocking = (requirementScope?.active || model.requirements).filter((item) => item.severity === "blocking");
+      const deferredBlocking = (requirementScope?.deferred || []).filter((item) => item.severity === "blocking");
       const pending = plan.items.filter((item) => item.decision === "pending");
-      const summary = `🧭 Tapp init — ${model.application.name} · ${model.targets.length} target(s) · UI Map ${model.uiMap.status} (${model.uiMap.nodeCount} states/${model.uiMap.edgeCount} transitions) · ${plan.items.length} plan item(s), ${pending.length} pending · ${blocking.length} blocking requirement(s)${exploration ? ` · real ${exploration.platform} exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""}` : ""}`;
-      return richResult(summary, { model, plan, written: written ? { modelPath: written.modelPath, planPath: written.planPath } : null, exploration });
+      const selectedLabel = selectedTarget ? ` for ${selectedTarget.platform}:${selectedTarget.name}` : "";
+      const deferredLabel = deferredBlocking.length ? ` · ${deferredBlocking.length} setup gap(s) on unselected target(s)` : "";
+      const summary = `🧭 Tapp init — ${model.application.name} · ${model.targets.length} target(s) · UI Map ${model.uiMap.status} (${model.uiMap.nodeCount} states/${model.uiMap.edgeCount} transitions) · ${plan.items.length} plan item(s), ${pending.length} pending · ${blocking.length} blocking requirement(s)${selectedLabel}${deferredLabel}${exploration ? ` · real ${exploration.platform} exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""}` : ""}`;
+      return richResult(summary, { model, plan, selectedTarget, requirementScope, written: written ? { modelPath: written.modelPath, planPath: written.planPath } : null, exploration });
     } catch (error) {
       const detail = error.message || String(error);
       const message = error.details?.reason === "target-selection-required"

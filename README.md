@@ -80,11 +80,14 @@ npx -y @aarwitz/tapp baseline create . --platform web
 npx -y @aarwitz/tapp ci install .
 ```
 
-On a fresh repository containing multiple apps (for example, iOS plus web), bare
-`tapp init . --explore` does not guess from detection order. A human terminal gets a numbered
+In a repository containing multiple apps (for example, iOS plus web),
+`tapp init . --explore` without an explicit target does not guess from detection order—even when a
+prior choice is recorded. A human terminal gets a numbered
 selector; a non-interactive CLI prints exact target-selection commands, while MCP also returns
 structured choices. Neither builds or writes before the choice. After you choose one, the model
-retains every detected target and records the choice as the default for the next bare `tapp explore`.
+retains every detected target and records the choice as the default for the next bare `tapp explore`;
+explicit `init --explore` continues to ask because it is the onboarding/refresh operation. Setup gaps
+belonging only to unselected targets are shown as informational, not as failures of the selected run.
 
 The baseline command writes only after exploration and every selected deterministic suite pass
 conclusively. It stores `.tapp/baselines/<platform>/<target-id>.json`; the generated workflow

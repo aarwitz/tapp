@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0-rc.11
+
+**Multi-target selection and selected-run scope correction.**
+
+- Ask which application target to initialize whenever explicit `init --explore` sees several
+  plausible targets, even when `.tapp/` contains a saved default from an earlier run. A later bare
+  `tapp explore` still uses that saved default.
+- Scope the init summary to the target actually selected. Setup gaps belonging only to other retained
+  targets are shown as informational instead of red failures of a successful selected-target run.
+- Return the selected target and active/deferred requirement scope through shared CLI and MCP product
+  operations so every client presents the same semantics.
+
 ## 0.17.0-rc.10
 
 **Honest mixed-repository onboarding and first-run diagnostics.**

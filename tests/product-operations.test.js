@@ -219,6 +219,34 @@ test("explicit first-run target becomes the default without erasing other detect
   const web = result.model.targets.find((target) => target.platform === "web");
   assert.equal(result.model.application.defaultTargetId, web.id, "the explicit choice powers the next bare explore");
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".tapp", "application-model.json"), "utf8")).targets.length, 2);
+  const ios = result.model.targets.find((target) => target.platform === "ios");
+  assert.equal(result.requirementScope.active.some((item) => item.targetId === ios.id), false, "the selected web run is not failed by iOS setup");
+  assert.equal(result.requirementScope.deferred.some((item) => item.targetId === ios.id && item.id.endsWith(":scheme")), true);
+});
+
+test("explicit init exploration asks again even when a prior target default exists", async () => {
+  const root = mixedIosWebRepository();
+  await initializeProductProject({
+    projectDir: root,
+    mode: "explore",
+    platform: "web",
+    target: "website",
+    runExploration: async () => ({ platform: "web", target: "http://127.0.0.1:4173", findings: [], inconclusive: false }),
+  });
+  const prior = JSON.parse(fs.readFileSync(path.join(root, ".tapp", "application-model.json"), "utf8"));
+  assert.ok(prior.application.defaultTargetId, "the first explicit selection records a default for bare explore");
+  let explored = false;
+  await assert.rejects(
+    initializeProductProject({
+      projectDir: root,
+      mode: "explore",
+      runExploration: async () => { explored = true; return {}; },
+    }),
+    (error) => error.code === "TAPP_TARGET_SELECTION_REQUIRED" && error.details?.choices?.length === 2
+  );
+  assert.equal(explored, false, "init asks before any repeated build or exploration");
+  const persisted = JSON.parse(fs.readFileSync(path.join(root, ".tapp", "application-model.json"), "utf8"));
+  assert.equal(persisted.application.defaultTargetId, prior.application.defaultTargetId, "asking does not rewrite the prior selection");
 });
 
 test("CLI baseline is a thin adapter over shared gate and baseline operations", () => {

@@ -88,7 +88,6 @@ function selectInitExplorationTarget(model, {
   platform = "",
   target = "",
   appId = "",
-  priorDefaultTargetId = "",
 } = {}) {
   const selectedPlatform = String(platform || "").trim().toLowerCase();
   if (selectedPlatform && !["ios", "android", "web"].includes(selectedPlatform)) throw new Error("platform must be ios|android|web");
@@ -97,15 +96,13 @@ function selectInitExplorationTarget(model, {
     const androidMatch = (model.targets || []).find((candidate) => candidate.platform === "android" && candidate.runtime?.applicationId === appId);
     if (androidMatch) requested = androidMatch.id;
   }
-  const defaultTargetId = (model.targets || []).some((candidate) => candidate.id === priorDefaultTargetId)
-    ? priorDefaultTargetId
-    : model.application?.defaultTargetId || "";
-  const resolutionModel = { ...model, application: { ...(model.application || {}), defaultTargetId } };
   try {
-    return selectApplicationTarget(resolutionModel, {
+    return selectApplicationTarget(model, {
       platform: selectedPlatform,
       target: requested,
-      useDefault: !selectedPlatform && !requested && !!defaultTargetId,
+      // `init --explore` is the explicit onboarding/refresh operation: it asks whenever several
+      // targets are plausible. Only a later bare `tapp explore` consumes the recorded default.
+      useDefault: false,
     });
   } catch (error) {
     const choices = initTargetChoices(model, selectedPlatform);
@@ -131,6 +128,24 @@ function selectInitExplorationTarget(model, {
     }
     throw error;
   }
+}
+
+export function scopeProductRequirements(model, { selectedTargetId = "" } = {}) {
+  const targets = Array.isArray(model?.targets) ? model.targets : [];
+  const requirements = Array.isArray(model?.requirements) ? model.requirements : [];
+  const selected = String(selectedTargetId || "").trim();
+  const enriched = requirements.map((requirement) => {
+    const target = targets.find((candidate) => requirement.targetId === candidate.id || String(requirement.id || "").startsWith(`${candidate.id}:`));
+    return target
+      ? { ...requirement, targetId: target.id, targetPlatform: target.platform, targetName: target.name }
+      : { ...requirement };
+  });
+  if (!selected) return { selectedTargetId: "", active: enriched, deferred: [] };
+  return {
+    selectedTargetId: selected,
+    active: enriched.filter((requirement) => !requirement.targetId || requirement.targetId === selected),
+    deferred: enriched.filter((requirement) => requirement.targetId && requirement.targetId !== selected),
+  };
 }
 
 function productRunRoot(root) {
@@ -374,7 +389,6 @@ export async function initializeProductProject({
       platform: selectedPlatform,
       target,
       appId,
-      priorDefaultTargetId: priorModel?.application?.defaultTargetId || "",
     });
     const sourceTarget = selectedTarget.sourcePath === "." ? root : path.resolve(root, selectedTarget.sourcePath);
     exploration = await runExploration({
@@ -406,7 +420,8 @@ export async function initializeProductProject({
       invalidateValidation: mode === "explore",
     });
   }
-  return { operation: "initialize", mode, model: built.model, plan: written?.plan || built.plan, exploration, written, project: readProductProject({ projectDir: root, outDir }) };
+  const requirementScope = scopeProductRequirements(built.model, { selectedTargetId: selectedTarget?.id || "" });
+  return { operation: "initialize", mode, model: built.model, plan: written?.plan || built.plan, exploration, selectedTarget, requirementScope, written, project: readProductProject({ projectDir: root, outDir }) };
 }
 
 function resolvePlan(root, outDir, planPath = "") {
