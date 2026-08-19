@@ -41,6 +41,10 @@ test("npm and the Claude plugin ship the same current skill and MCP server", () 
   assert.ok(pkg.files.includes(".claude-plugin/"));
   assert.equal(plugin.version, pkg.version);
   assert.equal(server.version, pkg.version);
+  assert.ok(server.description.length <= 100, "MCP Registry description respects its public limit");
+  assert.doesNotMatch(server.description, /ship\/no-ship|SHIP-READY/i);
+  assert.equal(server.packages[0].identifier, "@aarwitz/tapp");
+  assert.equal(server.packages[0].version, pkg.version);
   assert.deepEqual(plugin.mcpServers.tapp, {
     command: "npx",
     args: ["-y", `@aarwitz/tapp@${pkg.version}`, "mcp"],

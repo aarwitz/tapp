@@ -12,6 +12,8 @@
 - Launch the Claude plugin's MCP through an exact-version `npx` package spec. Claude's npm plugin
   cache copies package contents without hydrating dependencies, so directly executing the cached
   `bin/tapp.js` could not load the MCP SDK; the same-version registry invocation is self-contained.
+- Replace the stale public MCP Registry metadata (`tapp-mcp`, iOS+web, ship/no-ship) with the scoped
+  package and current iOS/Android/web observe-and-gate contract.
 
 ## 0.17.0-rc.12
 
