@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tapp"
+  short_description: "Test real iOS, Android, and web apps"
+  default_prompt: "Use $tapp to test this app on its real UI surface and report evidence-backed findings."

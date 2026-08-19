@@ -12,6 +12,7 @@ bundle id, or (web) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
 npx -y @aarwitz/tapp explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
+npx -y @aarwitz/tapp explore https://your-app.example --watch  # web: visibly follow the same exploration
 npx -y @aarwitz/tapp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
 npx -y @aarwitz/tapp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
 npx -y @aarwitz/tapp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
@@ -43,7 +44,9 @@ that IS the screen. If you cannot (Cursor, VS Code Copilot), connect the MCP ser
 instead: its tool results carry the screenshot inline. Screen *recordings* are for the
 human: on **iOS**, `tapp explore` records the full exploration and embeds it in the report.html
 evidence page (Android does not currently record video) — tell the user the report path so they can
-watch it.
+watch it. On **web**, explicit `--watch` opens the isolated Playwright Chromium window and overlays
+Tapp's current action and pointer; the overlay is omitted from evidence screenshots. It does not
+drive the person's existing/default browser profile.
 
 The interactive session/record loop is MCP-only (it needs a long-lived process). Flow replay is
 also available in the CLI. The rest of this playbook assumes the `tapp_*` MCP tools are connected. With

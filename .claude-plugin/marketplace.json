@@ -1,5 +1,6 @@
 {
   "name": "tapp",
+  "description": "The official Tapp plugin: one agent skill and MCP tools for testing iOS, Android, and web apps on real surfaces.",
   "owner": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"
@@ -7,9 +8,11 @@
   "plugins": [
     {
       "name": "tapp",
-      "source": "./",
-      "description": "Autonomous QA for iOS, Android, and web. Give coding agents hands, eyes, and deterministic release evidence; record replayable Flows without test code.",
-      "version": "0.16.5",
+      "source": {
+        "source": "npm",
+        "package": "@aarwitz/tapp"
+      },
+      "description": "Test real iOS, Android, and web apps with Tapp. Includes the Tapp agent skill plus MCP hands, eyes, exploration, replayable Flows, and deterministic release evidence.",
       "author": {
         "name": "Aaron Horowitz",
         "url": "https://github.com/aarwitz"
@@ -22,7 +25,9 @@
         "testing",
         "qa",
         "xcuitest",
-        "mcp"
+        "mcp",
+        "agent-skill",
+        "copilot"
       ]
     }
   ]

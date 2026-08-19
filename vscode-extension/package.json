@@ -1,0 +1,271 @@
+{
+  "name": "tapp",
+  "displayName": "Tapp",
+  "description": "The Tapp Agent Skill for iOS, Android, and web, plus native Copilot tools and a live simulator panel for iOS testing.",
+  "version": "0.3.0",
+  "publisher": "lidi-solutions",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "AI",
+    "Testing"
+  ],
+  "keywords": [
+    "ios",
+    "android",
+    "web",
+    "simulator",
+    "copilot",
+    "agent",
+    "testing",
+    "qa",
+    "xcuitest",
+    "tapp",
+    "agent-skill",
+    "mcp"
+  ],
+  "homepage": "https://github.com/aarwitz/tapp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aarwitz/tapp.git"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguageModelTool:tapp_open_ios_app",
+    "onLanguageModelTool:tapp_ios_login",
+    "onLanguageModelTool:tapp_ios_fill_field",
+    "onLanguageModelTool:tapp_read_ios_screen",
+    "onLanguageModelTool:tapp_ios_screenshot",
+    "onLanguageModelTool:tapp_ios_tap",
+    "onLanguageModelTool:tapp_ios_type",
+    "onLanguageModelTool:tapp_explore_ios",
+    "onLanguageModelTool:tapp_build_ios_app"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "tapp.showSimulator",
+        "title": "Tapp: Show iOS Simulator Panel"
+      },
+      {
+        "command": "tapp.forgetSaved",
+        "title": "Tapp: Forget saved values for an app"
+      }
+    ],
+    "chatSkills": [
+      {
+        "path": "./skills/tapp/SKILL.md"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "tapp_open_ios_app",
+        "displayName": "Open iOS app",
+        "toolReferenceName": "openIosApp",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(device-mobile)",
+        "userDescription": "Build (if needed) and open the iOS app on the simulator",
+        "modelDescription": "Open an iOS app on the simulator and return the current screen as a structured accessibility summary. `target` is optional: omit it to auto-detect and build the Xcode project in the workspace (first build can take minutes), or pass a bundle id (com.example.app), a path to a simulator .app build, or a project directory. Starts an interactive session — after this, use tapp_ios_tap / tapp_ios_type to drive the app and tapp_read_ios_screen / tapp_ios_screenshot to inspect it.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Optional: bundle id, path to .app, or project directory. Omit to auto-detect the workspace's Xcode project."
+            }
+          }
+        }
+      },
+      {
+        "name": "tapp_ios_login",
+        "displayName": "Sign in to iOS app",
+        "toolReferenceName": "iosLogin",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(key)",
+        "userDescription": "Sign in — prompts you for credentials if the agent doesn't have them",
+        "modelDescription": "Sign in to the open iOS app IN ONE CALL: finds the email + password fields, fills both, submits, and verifies — with all keyboard/secure-field handling done internally. ALWAYS use this for login instead of type/tap sequences (iOS wipes secure fields when editing re-begins). `email`/`password` are OPTIONAL: omit them when you don't know the credentials and tapp will prompt the user directly in VS Code — the values go straight to the app and are never shown to you. Requires tapp_open_ios_app first. On failure, the result includes the on-screen error text.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "description": "Email/username to sign in with"
+            },
+            "password": {
+              "type": "string",
+              "description": "Password to sign in with"
+            }
+          },
+          "required": []
+        }
+      },
+      {
+        "name": "tapp_ios_fill_field",
+        "displayName": "Ask the user for a field value",
+        "toolReferenceName": "iosFillField",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(comment-discussion)",
+        "userDescription": "Prompts you for a value and types it into the app",
+        "modelDescription": "Fill a field in the open iOS app with a value provided BY THE USER: VS Code prompts them directly, waits for their answer, and types it into the field — the value never passes through you. Use this whenever the app shows a field whose real value only the user knows (verification codes, search terms, personal data, any credential-like input). `id` is the field's accessibility id, label, or placeholder from the tree; `prompt` is what to ask the user; set `secure` for passwords/codes (masked input). Requires tapp_open_ios_app first.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Field to fill (accessibility id / label / placeholder)"
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Question shown to the user, e.g. 'Enter the SMS verification code'"
+            },
+            "secure": {
+              "type": "boolean",
+              "description": "Mask the user's input (passwords, codes)"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "tapp_read_ios_screen",
+        "displayName": "Read iOS screen",
+        "toolReferenceName": "readIosScreen",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-tree)",
+        "userDescription": "Structured accessibility snapshot of the current screen",
+        "modelDescription": "Best default for inspecting the iOS app: returns a structured accessibility snapshot of what is actually rendered on the simulator screen (screen title, elements, controls, hittability). Requires an app opened with tapp_open_ios_app. The iOS equivalent of read_page.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "tapp_ios_screenshot",
+        "displayName": "Screenshot iOS app",
+        "toolReferenceName": "iosScreenshot",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(device-camera)",
+        "userDescription": "Screenshot the simulator screen",
+        "modelDescription": "Visual capture of the current iOS simulator screen, for when layout or appearance matters. Returns the screenshot image and refreshes the Tapp simulator panel.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "tapp_ios_tap",
+        "displayName": "Tap in iOS app",
+        "toolReferenceName": "iosTap",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(hand-pointing)",
+        "userDescription": "Tap a control in the open iOS app",
+        "modelDescription": "Tap an element in the open iOS app by accessibility id or visible label (case-insensitive contains match as fallback), and get the resulting screen back. Read the previous result's elements before tapping — never tap from memory. Requires tapp_open_ios_app first.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Accessibility id or visible label of the element to tap"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "tapp_ios_type",
+        "displayName": "Type in iOS app",
+        "toolReferenceName": "iosType",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(keyboard)",
+        "userDescription": "Type text into the focused field",
+        "modelDescription": "Type text into the currently focused field of the open iOS app (tap the field first with tapp_ios_tap). Pass `id` to tap a specific field before typing. Requires tapp_open_ios_app first.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Text to type"
+            },
+            "id": {
+              "type": "string",
+              "description": "Optional: accessibility id/label of the field to focus first"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      },
+      {
+        "name": "tapp_explore_ios",
+        "displayName": "Explore iOS app",
+        "toolReferenceName": "exploreIosApp",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(beaker)",
+        "userDescription": "Autonomous iOS exploration → findings, coverage, and evidence",
+        "modelDescription": "Explore the iOS app like a user with no authored test and return an observation: deterministic/advisory findings, coverage, an evidence page, screenshots, and a full exploration recording. Takes a few minutes. `target` is optional (same resolution as tapp_open_ios_app). Exploration is not a release gate and returns no score or ship verdict. Report inconclusive coverage and the checked/not-checked scope honestly; use the Tapp CI gate for a merge decision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Optional: bundle id, .app path, or project dir. Omit to auto-detect."
+            },
+            "maxActions": {
+              "type": "integer",
+              "description": "Exploration budget (default 40)"
+            }
+          }
+        }
+      },
+      {
+        "name": "tapp_build_ios_app",
+        "displayName": "Build iOS app",
+        "toolReferenceName": "buildIosApp",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(tools)",
+        "userDescription": "Build the workspace's iOS app for the simulator and install it",
+        "modelDescription": "Build the iOS app from the Xcode project/workspace in the given directory (default: the workspace folder; container and scheme auto-detected), install it on the booted simulator, and return the bundle id. Use when the app is not installed yet or after code changes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectDir": {
+              "type": "string",
+              "description": "Directory to search for the Xcode project (default: workspace folder)"
+            },
+            "scheme": {
+              "type": "string",
+              "description": "Optional scheme override"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "scripts": {
+    "skill:sync": "node ./sync-skill.js",
+    "build": "npm run skill:sync && esbuild extension.js --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js",
+    "test": "node --test test/*.test.js",
+    "vscode:prepublish": "npm run build && node ./check-clientsafe.js",
+    "clientsafe": "node ./check-clientsafe.js",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "publish:ovsx": "ovsx publish"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.28.1"
+  }
+}

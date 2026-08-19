@@ -1,7 +1,7 @@
 {
   "name": "tapp",
-  "description": "Autonomous QA for iOS, Android, and web. Give coding agents hands, eyes, and deterministic release evidence; record replayable Flows without test code.",
-  "version": "0.16.5",
+  "description": "Test real iOS, Android, and web apps with Tapp. Includes the Tapp agent skill plus MCP hands, eyes, exploration, replayable Flows, and deterministic release evidence.",
+  "version": "0.17.0-rc.12",
   "author": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"
@@ -15,16 +15,18 @@
     "testing",
     "qa",
     "xcuitest",
-    "mcp"
+    "mcp",
+    "agent-skill",
+    "copilot"
   ],
   "mcpServers": {
     "tapp": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "@aarwitz/tapp",
+        "${CLAUDE_PLUGIN_ROOT}/bin/tapp.js",
         "mcp"
-      ]
+      ],
+      "cwd": "${CLAUDE_PROJECT_DIR}"
     }
   }
 }

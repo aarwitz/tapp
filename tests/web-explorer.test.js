@@ -80,6 +80,7 @@ test("a terse or visual web page is not mislabeled as blank", () => {
 
 test("web login submits a semantic SPA button even when it is outside a form", async () => {
   let clicked = false;
+  let previewed = false;
   const hidden = { first() { return this; }, async isVisible() { return false; } };
   const semantic = {
     first() { return this; },
@@ -94,7 +95,11 @@ test("web login submits a semantic SPA button even when it is outside a form", a
       return semantic;
     },
   };
-  assert.equal(await submitWebLogin(page), true);
+  assert.equal(await submitWebLogin(page, async (locator) => {
+    assert.equal(locator, semantic);
+    previewed = true;
+  }), true);
+  assert.equal(previewed, true);
   assert.equal(clicked, true);
 });
 
@@ -139,6 +144,15 @@ test("hosted web exploration fails closed without its public-egress proxy", () =
   assert.equal(options.proxy.server, "http://127.0.0.1:43210");
   assert.ok(options.args.includes("--disable-quic"));
   assert.ok(options.args.some((argument) => argument.includes("disable_non_proxied_udp")));
+});
+
+test("web watch mode changes only the controlled browser presentation", () => {
+  assert.deepEqual(webBrowserLaunchOptions({}), { headless: true, args: [] });
+  assert.deepEqual(webBrowserLaunchOptions({}, { watch: true }), {
+    headless: false,
+    slowMo: 200,
+    args: [],
+  });
 });
 
 test("PR seed routes are same-origin, bounded, deduplicated, and exclude the start page", () => {

@@ -9,6 +9,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
@@ -17,7 +19,15 @@ import { existingProjectArtifactPath, projectArtifactDirectory } from "./project
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+// `repoRoot` is the installed Tapp package root: scripts and bundled harness assets live here.
+// Repository-facing MCP operations must use `workspaceRoot` instead. In an npm/Claude-plugin
+// installation those are different directories, even though source-repo tests historically made
+// them look identical.
 const repoRoot = path.resolve(__dirname, "../..");
+const workspaceRoot = (() => {
+  try { return fs.realpathSync(process.cwd()); }
+  catch { return path.resolve(process.cwd()); }
+})();
 const scriptsDir = path.join(repoRoot, "scripts");
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
 // The old alias remains a read-only fallback; unset repository development stays local.
@@ -1463,7 +1473,7 @@ export function formatScreen(screenTitle, elements) {
 // `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
 // the surfaces can't drift.)
 
-export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], surface = "mcp", onProgress = () => {} }) {
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {} }) {
   const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
@@ -1480,6 +1490,7 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
       testPassword: isNonEmptyString(testPassword) ? testPassword.trim() : "",
       seedRoutes,
       seedTargets,
+      watch: watch === true,
       onProgress,
     });
   } catch (err) {
@@ -1640,6 +1651,7 @@ export async function runInitExploration({
   timeout,
   testEmail,
   testPassword,
+  watch = false,
   onProgress = () => {},
   onStatus = () => {},
 } = {}) {
@@ -1655,17 +1667,18 @@ export async function runInitExploration({
   let targetResolution = null;
   let qa;
   let managedRuntime = null;
+  if (watch && selected !== "web") return { error: "Watch mode is currently available for web exploration only." };
   if (selected === "web") {
     if (/^https?:\/\//i.test(String(url))) {
       resolvedTarget = String(url).trim();
-      qa = await runQaWeb({ url: resolvedTarget, maxActions, timeout, testEmail, testPassword, onProgress });
+      qa = await runQaWeb({ url: resolvedTarget, maxActions, timeout, testEmail, testPassword, watch, onProgress });
     } else {
       const started = await startManagedWebTarget({ root, requestedTarget: target, timeout, onStatus });
       if (started.error) return started;
       managedRuntime = started;
       resolvedTarget = started.url;
       try {
-        qa = await runQaWeb({ url: resolvedTarget, maxActions, timeout, testEmail, testPassword, onProgress });
+        qa = await runQaWeb({ url: resolvedTarget, maxActions, timeout, testEmail, testPassword, watch, onProgress });
       } finally {
         await stopManagedWebTarget(started);
       }
@@ -1777,6 +1790,7 @@ export async function runExploreTarget({
   appLaunchArgs,
   appLaunchEnv,
   baselineFindings,
+  watch = false,
   surface = "cli",
   onProgress = () => {},
   onStatus = () => {},
@@ -1799,6 +1813,8 @@ export async function runExploreTarget({
   catch (error) { return { error: error.message || String(error) }; }
   const selectedPlatform = selected.platform;
 
+  if (watch && selectedPlatform !== "web") return { error: "Watch mode is currently available for web exploration only." };
+
   if (selectedPlatform !== "ios" && ((Array.isArray(appLaunchArgs) && appLaunchArgs.length) || (appLaunchEnv && Object.keys(appLaunchEnv).length))) {
     return { error: "appLaunchArgs/appLaunchEnv apply only to iOS targets." };
   }
@@ -1807,14 +1823,14 @@ export async function runExploreTarget({
     const ownedUrl = String(selected.runtime?.ownedUrl || "").trim();
     if (/^https?:\/\//i.test(ownedUrl)) {
       onStatus(`Exploring the owned URL from the application model: ${ownedUrl}`);
-      return runQaWeb({ url: ownedUrl, maxActions, timeout, testEmail, testPassword, baselineFindings, surface, onProgress });
+      return runQaWeb({ url: ownedUrl, maxActions, timeout, testEmail, testPassword, baselineFindings, watch, surface, onProgress });
     }
     // Tapp-managed: build/start the repo's web target, wait for readiness, and ALWAYS stop it.
     onStatus(`Preparing the managed web runtime for ${selected.name}…`);
     const started = await startManagedWebTarget({ root, requestedTarget: selected.sourcePath || selected.name || "", timeout, onStatus });
     if (started.error) return started;
     try {
-      return await runQaWeb({ url: started.url, maxActions, timeout, testEmail, testPassword, baselineFindings, surface, onProgress });
+      return await runQaWeb({ url: started.url, maxActions, timeout, testEmail, testPassword, baselineFindings, watch, surface, onProgress });
     } finally {
       await stopManagedWebTarget(started);
       onStatus("Stopped the managed web runtime.");
@@ -2037,10 +2053,60 @@ const server = new Server(
   },
   {
     capabilities: {
+      prompts: {},
       tools: {},
     },
   }
 );
+
+const testAppPrompt = {
+  name: "test-app",
+  title: "Test this app with Tapp",
+  description: "Use Tapp's real app surfaces to inspect, drive, or explore this repository and report evidence honestly.",
+  arguments: [
+    {
+      name: "goal",
+      description: "What to verify, such as finding bugs or exercising checkout",
+      required: false,
+    },
+    {
+      name: "target",
+      description: "Optional repo target, bundle/app id, APK path, or owned URL",
+      required: false,
+    },
+  ],
+};
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: [testAppPrompt] }));
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  if (request.params.name !== testAppPrompt.name) {
+    throw new Error(`Unknown prompt: ${request.params.name}`);
+  }
+  const goal = isNonEmptyString(request.params.arguments?.goal)
+    ? request.params.arguments.goal.trim()
+    : "Test the app and find important bugs";
+  const target = isNonEmptyString(request.params.arguments?.target)
+    ? ` Use this target: ${request.params.arguments.target.trim()}.`
+    : "";
+  return {
+    description: testAppPrompt.description,
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text:
+            `${goal}.${target} Use the connected Tapp tools on the real UI surface. ` +
+            "Use the smallest operation that satisfies the request; initialize/explore the source repo only for a general repository test. " +
+            "If Tapp returns multiple target choices, ask me to select one instead of guessing. " +
+            "Read visual evidence before describing it. Report findings, coverage, authority, inconclusive state, and checked/not-checked scope; " +
+            "never turn exploration into a score or ship verdict. Do not edit the app unless I ask for a fix.",
+        },
+      },
+    ],
+  };
+});
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -2213,6 +2279,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           androidSerial: { type: "string", description: "Android: optional adb device serial; defaults to the first authorized device." },
           clearData: { type: "boolean", default: true, description: "Android: clear app data before launch for a repeatable starting state." },
           url: { type: "string", description: "Web (beta): URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
+          watch: { type: "boolean", default: false, description: "Web only: open Tapp's controlled Chromium window and show a cursor/HUD for each exploration action. Evidence screenshots exclude the overlay." },
           maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
           timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
           testEmail: { type: "string", description: "Email for the login preamble, if the app has a sign-in" },
@@ -2283,6 +2350,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600 },
           testEmail: { type: "string", description: "Explore: actor/login email; never persisted in the model" },
           testPassword: { type: "string", description: "Explore: actor/login password; never persisted in the model" },
+          watch: { type: "boolean", default: false, description: "Web explore only: show the controlled browser and Tapp's actions" },
           maxContracts: { type: "integer", minimum: 1, maximum: 50, default: 15 },
           outDir: { type: "string", description: "Repo-relative artifact directory; default .tapp" },
         },
@@ -2736,45 +2804,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
 
   if (name === "tapp_health") {
-    const checks = [];
-
-    checks.push({
-      check: "repoRoot",
-      ok: fs.existsSync(path.join(repoRoot, "Tapp.xcodeproj")),
-      value: repoRoot,
+    const coreChecks = [];
+    coreChecks.push({
+      check: "workspace",
+      ok: fs.existsSync(workspaceRoot) && fs.statSync(workspaceRoot).isDirectory(),
+      value: workspaceRoot,
+      required: true,
     });
 
     const nodeVersion = await runCommand("node", ["-v"]);
-    checks.push({
+    coreChecks.push({
       check: "node",
       ok: nodeVersion.code === 0,
       value: nodeVersion.stdout.trim() || nodeVersion.stderr.trim(),
+      required: true,
     });
 
     const xcodebuildVersion = await runCommand("xcodebuild", ["-version"]);
-    checks.push({
-      check: "xcodebuild",
-      ok: xcodebuildVersion.code === 0,
-      value: (xcodebuildVersion.stdout || xcodebuildVersion.stderr).trim().split("\n")[0] || "not found",
-    });
-
-    const simctl = await runCommand("xcrun", ["simctl", "list", "devices", "booted"]);
-    checks.push({
-      check: "bootedSimulator",
-      ok: simctl.code === 0,
-      value: (simctl.stdout || simctl.stderr).trim(),
-    });
-
-    const allOk = checks.every((c) => c.ok);
+    const simctl = xcodebuildVersion.code === 0
+      ? await runCommand("xcrun", ["simctl", "list", "devices", "booted"])
+      : { code: 1, stdout: "", stderr: "Xcode not found" };
     const bootedLine = (simctl.stdout || "").split("\n").find((l) => /\(Booted\)/.test(l));
     const bootedName = bootedLine ? bootedLine.trim().replace(/\s*\(.*$/, "") : null;
-    const L = [`### ${allOk ? "🩺 Tapp ready" : "⚠️ Tapp not fully ready"}`, ""];
+    const adb = await runCommand("adb", ["devices"]);
+    const androidDevice = adb.code === 0
+      ? (adb.stdout || "").split("\n").find((line) => /\tdevice\s*$/.test(line))
+      : null;
+    let web = { ok: false, value: "Playwright or Chromium not installed" };
+    try {
+      const { chromium } = await import("playwright");
+      const executable = chromium.executablePath();
+      web = { ok: fs.existsSync(executable), value: fs.existsSync(executable) ? executable : "Chromium not installed" };
+    } catch { /* optional dependency may be intentionally absent */ }
+    const platformChecks = [
+      {
+        check: "iOS",
+        ok: xcodebuildVersion.code === 0 && !!bootedName,
+        value: bootedName ? `${bootedName} booted` : xcodebuildVersion.code === 0 ? "Xcode available; no simulator booted" : "Xcode not found",
+        required: false,
+      },
+      {
+        check: "Android",
+        ok: !!androidDevice,
+        value: androidDevice ? `${androidDevice.split("\t")[0]} connected` : adb.code === 0 ? "adb available; no authorized device" : "adb not found",
+        required: false,
+      },
+      { check: "web", ok: web.ok, value: web.value, required: false },
+    ];
+    const checks = [...coreChecks, ...platformChecks];
+    const ready = coreChecks.every((check) => check.ok) && platformChecks.some((check) => check.ok);
+    const L = [`### ${ready ? "🩺 Tapp ready" : "⚠️ Tapp needs a platform runtime"}`, ""];
     for (const c of checks) {
-      L.push(`- ${c.ok ? "✅" : "❌"} **${c.check}** — ${String(c.value).split("\n")[0] || "—"}`);
+      const icon = c.ok ? "✅" : c.required ? "❌" : "⚪️";
+      L.push(`- ${icon} **${c.check}** — ${String(c.value).split("\n")[0] || "—"}`);
     }
-    L.push("");
-    L.push(bootedName ? `📱 Simulator booted: **${bootedName}**` : "📱 No simulator booted — run `tapp_boot_simulator` first.");
-    return richResult(L.join("\n"), { ok: allOk, checks });
+    if (!ready) L.push("", "Run `tapp doctor` in the application repository for exact remediation.");
+    return richResult(L.join("\n"), { ok: ready, workspaceRoot, checks, platforms: Object.fromEntries(platformChecks.map((check) => [check.check.toLowerCase(), check.ok])) });
   }
 
   if (name === "tapp_build") {
@@ -2971,6 +3056,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (targets !== 1) {
       return errorResult("Provide exactly one of appBundleId (iOS), androidAppId (Android), or url (web beta)");
     }
+    if (args.watch === true && !wantsWeb) return errorResult("watch is currently available for web exploration only");
 
     // Both branches call the shared engine (runQaWeb/runQaIos) — the handler only adds
     // MCP concerns: auth, arg validation, and progress notifications.
@@ -2992,6 +3078,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         testEmail: args.testEmail,
         testPassword: args.testPassword,
         baselineFindings: args.baselineFindings,
+        watch: args.watch === true,
         onProgress: notifyProgress("pages reached"),
       });
       if (r.error) return errorResult(r.error, r.details || {});
@@ -3036,8 +3123,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "inspect").toLowerCase();
     if (!["inspect", "write", "refresh", "explore"].includes(operation)) return errorResult("operation must be inspect|write|refresh|explore");
-    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-    if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the repo");
+    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+    if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the workspace");
     const maxContracts = asInteger(args.maxContracts, 15);
     if (maxContracts < 1 || maxContracts > 50) return errorResult("maxContracts must be between 1 and 50");
     const { initializeProductProject } = await import("./product-operations.js");
@@ -3061,6 +3148,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         serial: isNonEmptyString(args.androidSerial) ? args.androidSerial.trim() : undefined,
         maxActions: args.maxActions, timeout: args.timeout, maxContracts,
         testEmail: args.testEmail, testPassword: args.testPassword,
+        watch: args.watch === true,
         runExploration: runInitExploration,
         onProgress: (progress) => {
           if (progressToken === undefined) return;
@@ -3092,8 +3180,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const allowedArguments = new Set(["authToken", "operation", "projectDir", "name", "role", "session", "provisioning", "credentialBindings", "replace"]);
     const unexpectedArguments = Object.keys(args).filter((key) => !allowedArguments.has(key));
     if (unexpectedArguments.length) return errorResult("Unsupported actor configuration fields; credential values are never accepted", { fields: unexpectedArguments });
-    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-    if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the repo");
+    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+    if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
     const { configureActor, readProjectConfig } = await import("./project-config.js");
     if (operation === "read") {
       const loaded = readProjectConfig(projectDir);
@@ -3122,8 +3210,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "read").toLowerCase();
     if (!["read", "review", "generate", "validate", "promote"].includes(operation)) return errorResult("operation must be read|review|generate|validate|promote");
-    const planPath = isNonEmptyString(args.planPath) ? path.resolve(repoRoot, args.planPath.trim()) : existingProjectArtifactPath(repoRoot, "release-plan.json");
-    if (!isInsideDir(repoRoot, planPath)) return errorResult("planPath must be inside the repo");
+    const planPath = isNonEmptyString(args.planPath) ? path.resolve(workspaceRoot, args.planPath.trim()) : existingProjectArtifactPath(workspaceRoot, "release-plan.json");
+    if (!isInsideDir(workspaceRoot, planPath)) return errorResult("planPath must be inside the workspace");
     if (!fs.existsSync(planPath)) return errorResult("Release plan not found", { planPath });
     let plan;
     try { plan = JSON.parse(fs.readFileSync(planPath, "utf8")); }
@@ -3133,11 +3221,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (![...decisions.approve, ...decisions.reject, ...decisions.defer].length) return errorResult("review requires at least one approve, reject, or defer item");
       const { reviewProductPlan } = await import("./product-operations.js");
       try {
-        plan = reviewProductPlan({ projectDir: repoRoot, planPath, ...decisions }).plan;
+        plan = reviewProductPlan({ projectDir: workspaceRoot, planPath, ...decisions }).plan;
       } catch (error) { return errorResult("Could not review release plan", { detail: error.message || String(error) }); }
     } else if (operation === "generate") {
-      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-      if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the repo");
+      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+      if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the workspace");
       const { generateProductPlan } = await import("./product-operations.js");
       try {
         const result = await generateProductPlan({ projectDir, planPath });
@@ -3145,8 +3233,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return richResult(`🧩 Proposal drafts — ${result.generatedTasks.length} UI-Map-grounded Task(s) · ${result.generated.length} compile-checked/untrusted contract(s) · ${result.blocked.length} blocked; deterministic real-surface replay remains required`, { plan, planPath, generatedTasks: result.generatedTasks, generated: result.generated, blocked: result.blocked });
       } catch (error) { return errorResult("Could not generate contract drafts", { detail: error.message || String(error) }); }
     } else if (operation === "validate") {
-      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-      if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the repo");
+      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+      if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the workspace");
       let apkPath = "";
       if (isNonEmptyString(args.apkPath)) {
         apkPath = path.resolve(projectDir, args.apkPath.trim());
@@ -3178,8 +3266,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return richResult(`🔎 Generated contract validation passed — ${result.results.length}/${result.results.length} on ${result.platform}`, { ...result, planPath });
       } catch (error) { return errorResult("Generated contract validation failed", { detail: error.message || String(error), plan, planPath }); }
     } else if (operation === "promote") {
-      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-      if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the repo");
+      const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+      if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir)) return errorResult("projectDir must be an existing directory inside the workspace");
       const { promoteProductPlan } = await import("./product-operations.js");
       try {
         const result = await promoteProductPlan({ projectDir, planPath, items: Array.isArray(args.items) ? args.items : [] });
@@ -3195,9 +3283,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "inspect").toLowerCase();
     if (!["inspect", "install", "baseline"].includes(operation)) return errorResult("operation must be inspect|install|baseline");
-    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-    if (!isInsideDir(repoRoot, projectDir) || !fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the repo");
-    const modelPath = isNonEmptyString(args.modelPath) ? path.resolve(repoRoot, args.modelPath.trim()) : existingProjectArtifactPath(projectDir, "application-model.json");
+    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+    if (!isInsideDir(workspaceRoot, projectDir) || !fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
+    const modelPath = isNonEmptyString(args.modelPath) ? path.resolve(workspaceRoot, args.modelPath.trim()) : existingProjectArtifactPath(projectDir, "application-model.json");
     if (!isInsideDir(projectDir, modelPath) || !fs.existsSync(modelPath)) return errorResult("Application model not found inside projectDir; run tapp_init first", { modelPath });
     let model;
     try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
@@ -3205,8 +3293,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { createProductBaseline, installProductCi, prepareProductCi } = await import("./product-operations.js");
     if (operation === "baseline") {
       if (!isNonEmptyString(args.reportPath)) return errorResult("baseline requires reportPath from a successful portable gate");
-      const reportPath = path.resolve(repoRoot, args.reportPath.trim());
-      if (!isInsideDir(repoRoot, reportPath) || !fs.existsSync(reportPath)) return errorResult("reportPath must be an existing JSON file inside the repo");
+      const reportPath = path.resolve(workspaceRoot, args.reportPath.trim());
+      if (!isInsideDir(workspaceRoot, reportPath) || !fs.existsSync(reportPath)) return errorResult("reportPath must be an existing JSON file inside the workspace");
       let report;
       try { report = JSON.parse(fs.readFileSync(reportPath, "utf8")); }
       catch (error) { return errorResult("Gate report is invalid JSON", { detail: error.message || String(error) }); }
@@ -3231,8 +3319,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "read").toLowerCase();
     const resolveRepoFile = (value, fallback = "") => {
-      const resolved = path.resolve(repoRoot, isNonEmptyString(value) ? value.trim() : fallback);
-      return isInsideDir(repoRoot, resolved) ? resolved : null;
+      const resolved = path.resolve(workspaceRoot, isNonEmptyString(value) ? value.trim() : fallback);
+      return isInsideDir(workspaceRoot, resolved) ? resolved : null;
     };
     const capture = isNonEmptyString(args.captureId) ? listCaptureRuns(200).find((run) => run.id === args.captureId.trim()) : null;
     if (isNonEmptyString(args.captureId) && !capture) return errorResult("Capture not found", { captureId: args.captureId });
@@ -3252,18 +3340,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const markersPath = capture ? path.join(capture.path, "ocqa-markers.txt") : resolveRepoFile(args.markersPath);
       if (!markersPath) return errorResult("markersPath must be inside the repo, or provide captureId");
       if (!fs.existsSync(markersPath)) return errorResult("OCQA markers not found", { markersPath });
-      const outPath = isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(repoRoot, "ui-map.json");
+      const outPath = isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(workspaceRoot, "ui-map.json");
       if (!outPath) return errorResult("mapPath must be inside the repo");
       try {
         const observed = buildUiMapFromMarkers({ markersPath, platform: args.platform || "ios", target: args.target || "", runId: capture?.id || "" });
         const map = fs.existsSync(outPath) && args.replace !== true ? mergeUiMaps(JSON.parse(fs.readFileSync(outPath, "utf8")), observed) : observed;
         writeUiMap(outPath, map);
         const controls = map.nodes.reduce((total, node) => total + node.controls.length, 0);
-        return richResult(`🗺️ UI Map updated — ${map.nodes.length} states · ${map.edges.length} transitions · ${controls} semantic controls\n${path.relative(repoRoot, outPath)}`, { map, path: outPath });
+        return richResult(`🗺️ UI Map updated — ${map.nodes.length} states · ${map.edges.length} transitions · ${controls} semantic controls\n${path.relative(workspaceRoot, outPath)}`, { map, path: outPath });
       } catch (error) { return errorResult("Could not build UI Map", { detail: error.message || String(error) }); }
     }
     if (operation !== "read") return errorResult("operation must be read|build|diff");
-    const mapPath = capture ? path.join(capture.path, "ui-map.json") : isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(repoRoot, "ui-map.json");
+    const mapPath = capture ? path.join(capture.path, "ui-map.json") : isNonEmptyString(args.mapPath) ? resolveRepoFile(args.mapPath) : existingProjectArtifactPath(workspaceRoot, "ui-map.json");
     if (!mapPath) return errorResult("mapPath must be inside the repo");
     if (!fs.existsSync(mapPath)) return errorResult("UI Map not found; run QA or operation=build first", { mapPath });
     try {
@@ -3280,8 +3368,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "validate").toLowerCase();
     if (!["read", "validate", "compile"].includes(operation)) return errorResult("operation must be read|validate|compile");
-    const taskPath = isNonEmptyString(args.taskPath) ? path.resolve(repoRoot, args.taskPath.trim()) : null;
-    if (!taskPath || !isInsideDir(repoRoot, taskPath)) return errorResult("taskPath must be inside the repo");
+    const taskPath = isNonEmptyString(args.taskPath) ? path.resolve(workspaceRoot, args.taskPath.trim()) : null;
+    if (!taskPath || !isInsideDir(workspaceRoot, taskPath)) return errorResult("taskPath must be inside the workspace");
     if (!fs.existsSync(taskPath)) return errorResult("Task file not found", { taskPath: args.taskPath });
     const { applyTaskCoverage, compileTaskSteps, loadTaskFile, loadTaskRegistry, validateTaskAgainstUiMap } = await import("./task-runtime.js");
     let task;
@@ -3292,8 +3380,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let groundingMap = null;
     let groundingMapPath = null;
     if (isNonEmptyString(args.mapPath)) {
-      const mapPath = path.resolve(repoRoot, args.mapPath.trim());
-      if (!isInsideDir(repoRoot, mapPath)) return errorResult("mapPath must be inside the repo");
+      const mapPath = path.resolve(workspaceRoot, args.mapPath.trim());
+      if (!isInsideDir(workspaceRoot, mapPath)) return errorResult("mapPath must be inside the workspace");
       if (!fs.existsSync(mapPath)) return errorResult("UI Map not found", { mapPath: args.mapPath });
       groundingMapPath = mapPath;
       try {
@@ -3323,12 +3411,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const flow = { name: `Task: ${task.name}`, kind: "flow", platform: args.platform || "", vars: compiled.vars, steps: compiled.steps, taskPlan: compiled.plan };
     let outPath = null;
     if (isNonEmptyString(args.outPath)) {
-      outPath = path.resolve(repoRoot, args.outPath.trim());
-      if (!isInsideDir(repoRoot, outPath)) return errorResult("outPath must be inside the repo");
+      outPath = path.resolve(workspaceRoot, args.outPath.trim());
+      if (!isInsideDir(workspaceRoot, outPath)) return errorResult("outPath must be inside the workspace");
       fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, JSON.stringify(flow, null, 2) + "\n");
     }
-    return richResult(`🧩 Compiled ${task.name} into ${flow.steps.length} deterministic Flow steps${outPath ? `\n${path.relative(repoRoot, outPath)}` : ""}`, { flow, grounding, path: outPath });
+    return richResult(`🧩 Compiled ${task.name} into ${flow.steps.length} deterministic Flow steps${outPath ? `\n${path.relative(workspaceRoot, outPath)}` : ""}`, { flow, grounding, path: outPath });
   }
 
   if (name === "tapp_release_contract") {
@@ -3336,8 +3424,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = String(args.operation || "validate").toLowerCase();
     if (!["read", "validate", "compile", "run"].includes(operation)) return errorResult("operation must be read|validate|compile|run");
-    const contractPath = isNonEmptyString(args.contractPath) ? path.resolve(repoRoot, args.contractPath.trim()) : null;
-    if (!contractPath || !isInsideDir(repoRoot, contractPath)) return errorResult("contractPath must be inside the repo");
+    const contractPath = isNonEmptyString(args.contractPath) ? path.resolve(workspaceRoot, args.contractPath.trim()) : null;
+    if (!contractPath || !isInsideDir(workspaceRoot, contractPath)) return errorResult("contractPath must be inside the workspace");
     const {
       applyReleaseContractCoverage,
       compileReleaseContract,
@@ -3352,8 +3440,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     let groundingMap = null;
     let groundingMapPath = null;
     if (isNonEmptyString(args.mapPath)) {
-      groundingMapPath = path.resolve(repoRoot, args.mapPath.trim());
-      if (!isInsideDir(repoRoot, groundingMapPath)) return errorResult("mapPath must be inside the repo");
+      groundingMapPath = path.resolve(workspaceRoot, args.mapPath.trim());
+      if (!isInsideDir(workspaceRoot, groundingMapPath)) return errorResult("mapPath must be inside the workspace");
       if (!fs.existsSync(groundingMapPath)) return errorResult("UI Map not found", { mapPath: args.mapPath });
       try {
         groundingMap = JSON.parse(fs.readFileSync(groundingMapPath, "utf8"));
@@ -3374,8 +3462,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     catch (error) { return errorResult("Could not compile Release Contract", { detail: error.message || String(error) }); }
     let outPath = null;
     if (isNonEmptyString(args.outPath)) {
-      outPath = path.resolve(repoRoot, args.outPath.trim());
-      if (!isInsideDir(repoRoot, outPath)) return errorResult("outPath must be inside the repo");
+      outPath = path.resolve(workspaceRoot, args.outPath.trim());
+      if (!isInsideDir(workspaceRoot, outPath)) return errorResult("outPath must be inside the workspace");
       fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, JSON.stringify(execution, null, 2) + "\n");
     }
@@ -3422,12 +3510,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const operation = isNonEmptyString(args.operation) ? args.operation.trim().toLowerCase() : "plan";
     if (!['plan', 'adopt'].includes(operation)) return errorResult("operation must be plan|adopt");
-    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(repoRoot, args.projectDir.trim()) : repoRoot;
-    if (!isInsideDir(repoRoot, projectDir)) return errorResult("projectDir must be inside the repo");
+    const projectDir = isNonEmptyString(args.projectDir) ? path.resolve(workspaceRoot, args.projectDir.trim()) : workspaceRoot;
+    if (!isInsideDir(workspaceRoot, projectDir)) return errorResult("projectDir must be inside the workspace");
     if (operation === "adopt") {
       if (!isNonEmptyString(args.prPlanPath) || !isNonEmptyString(args.item)) return errorResult("adopt requires prPlanPath and item");
       const prPlanPath = path.resolve(projectDir, args.prPlanPath.trim());
-      if (!isInsideDir(repoRoot, prPlanPath)) return errorResult("prPlanPath must be inside the repo");
+      if (!isInsideDir(workspaceRoot, prPlanPath)) return errorResult("prPlanPath must be inside the workspace");
       const { adoptPrCoverageProposal } = await import("./pr-selection.js");
       try {
         const adopted = adoptPrCoverageProposal({
@@ -3471,8 +3559,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       fs.writeFileSync(flowFile, JSON.stringify(args.flow));
       parsedFlow = args.flow;
     } else if (isNonEmptyString(args.flowPath)) {
-      const p = path.resolve(repoRoot, args.flowPath.trim());
-      if (!isInsideDir(repoRoot, p)) return errorResult("flowPath must be inside the repo");
+      const p = path.resolve(workspaceRoot, args.flowPath.trim());
+      if (!isInsideDir(workspaceRoot, p)) return errorResult("flowPath must be inside the workspace");
       if (!fs.existsSync(p)) return errorResult("Flow file not found", { flowPath: args.flowPath });
       flowFile = p;
     } else {
@@ -3554,8 +3642,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (args.scenario && typeof args.scenario === "object") {
       scenario = args.scenario;
     } else if (isNonEmptyString(args.scenarioPath)) {
-      const scenarioFile = path.resolve(repoRoot, args.scenarioPath.trim());
-      if (!isInsideDir(repoRoot, scenarioFile)) return errorResult("scenarioPath must be inside the repo");
+      const scenarioFile = path.resolve(workspaceRoot, args.scenarioPath.trim());
+      if (!isInsideDir(workspaceRoot, scenarioFile)) return errorResult("scenarioPath must be inside the workspace");
       if (!fs.existsSync(scenarioFile)) return errorResult("Scenario file not found", { scenarioPath: args.scenarioPath });
       try {
         const { loadScenarioFile } = await import("./scenario-runtime.js");
@@ -3625,7 +3713,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const ungrounded = ungroundedScreens(parsed.steps, grounding);
     const flow = { name: args.name || parsed.name, app: bundleId, steps: parsed.steps };
     const slug = flow.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "generated-flow";
-    const dir = path.join(repoRoot, ".tapp", "proposals", "flows");
+    const dir = path.join(workspaceRoot, ".tapp", "proposals", "flows");
     fs.mkdirSync(dir, { recursive: true });
     const outPath = path.join(dir, `${slug}.yml`);
     const promotedPath = path.join(".tapp", "flows", `${slug}.yml`);
@@ -3633,7 +3721,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const yaml = (yamlRes.stdout || "").trim();
     if (!yaml) return errorResult("Failed to render flow YAML", { stderr: yamlRes.stderr });
     fs.writeFileSync(outPath, yaml + "\n");
-    const rel = path.relative(repoRoot, outPath);
+    const rel = path.relative(workspaceRoot, outPath);
 
     const L = [`🤖 Generated a flow **proposal** **${flow.name}** from your goal → \`${rel}\``];
     L.push(`⚠️ This is an **untrusted draft**, not a committed test. Grounded in ${grounding.screens.length} observed screen(s). ${ungrounded.length ? `⚠️ references unobserved: ${ungrounded.join(", ")} — review before relying on it.` : "All referenced screens were observed."}`);
@@ -3888,7 +3976,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const unauthorized = ensureAuthorized(args);
     if (unauthorized) return unauthorized;
     try {
-      const saved = await saveInteractiveSessionFlow({ projectDir:repoRoot, name:args.name, addFinalAssertion:args.addFinalAssertion !== false, replace:args.replace === true });
+      const saved = await saveInteractiveSessionFlow({ projectDir:workspaceRoot, name:args.name, addFinalAssertion:args.addFinalAssertion !== false, replace:args.replace === true });
       const text = `💾 Saved flow **${saved.flow.name}** → \`${saved.path}\` (${saved.flow.steps.length} steps)\n\n\`\`\`yaml\n${saved.yaml}\n\`\`\`\n\nReplay it anytime: \`tapp_flow_run\` with \`flowPath: "${saved.path}"\`.`;
       return richResult(text, { path:saved.path, flow:saved.flow });
     } catch (error) {

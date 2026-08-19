@@ -240,8 +240,8 @@ async function resolveTargetOrExit(engine, input) {
 
 function safeCommandUsage(verb) {
   const usage = {
-    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
-    init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--dry-run]",
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
     open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]",
     tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]",
     shot: "tapp shot [--out FILE]",
@@ -346,6 +346,7 @@ switch (command) {
       timeout,
       testEmail: typeof flags.email === "string" ? flags.email : undefined,
       testPassword: typeof flags.password === "string" ? flags.password : undefined,
+      watch: flags.watch === true,
       runExploration: engine?.runInitExploration,
       onProgress: (progress) => {
         const activePlatform = progress.platform || platform;
@@ -557,6 +558,7 @@ switch (command) {
           testPassword: flags.password,
           ...launchOptions,
           baselineFindings,
+          watch: flags.watch === true,
           surface: "cli",
           onProgress,
           onStatus: (t) => console.error(`ℹ️  ${t}`),
@@ -577,6 +579,10 @@ switch (command) {
       process.exit(2);
     }
     if (platform === "ios") requireMacFor("iOS testing");
+    if (flags.watch === true && platform !== "web") {
+      console.error("❌ --watch is currently available for web exploration only");
+      process.exit(2);
+    }
     if (platform !== "ios" && Object.keys(launchOptions).length) {
       console.error("❌ --launch-arg and --launch-env apply only to iOS targets");
       process.exit(2);
@@ -598,6 +604,7 @@ switch (command) {
           testEmail: flags.email,
           testPassword: flags.password,
           baselineFindings,
+          watch: flags.watch === true,
           surface: "cli",
           onProgress,
         })
@@ -1569,7 +1576,7 @@ switch (command) {
 Core — explore, prove, gate (agents and humans can just run these — no server, no setup):
   tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
                            release decision — run 'tapp ci' to gate a merge)
-                           (--platform ios|android|web · --app-id ID · --apk FILE · --actions N)
+                           (web: --watch · all: --platform ios|android|web · --actions N)
   tapp contract run FILE   Replay a business-level release contract — the guarantees that must hold
   tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive
                            (see: tapp ci --help)
@@ -1628,6 +1635,11 @@ Setup:
   tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)
   tapp doctor     Check Xcode / simulators / toolchain
   tapp mcp        Start the MCP server on stdio (adds inline screenshots + interactive sessions)
+
+Agent Skill (optional — so a short “Use Tapp to test this app” prompt is enough):
+  Any supported agent: npx -y skills add aarwitz/tapp --skill tapp
+  Claude skill + MCP:  claude plugin marketplace add aarwitz/tapp
+                       claude plugin install tapp@tapp
 
 MCP hookup (optional — for inline screenshots and the tap/type/inspect session loop):
   Claude Code:   claude mcp add tapp -- npx -y @aarwitz/tapp mcp

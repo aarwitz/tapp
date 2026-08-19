@@ -363,6 +363,7 @@ export async function initializeProductProject({
   maxContracts = 15,
   testEmail,
   testPassword,
+  watch = false,
   runExploration,
   onProgress = () => {},
   onStatus = () => {},
@@ -394,7 +395,7 @@ export async function initializeProductProject({
     exploration = await runExploration({
       projectDir: root, platform: selectedTarget.platform, outDir, url: ownedUrl, target: sourceTarget,
       bundleId, appId: appId || selectedTarget.runtime?.applicationId || "", apkPath, serial, scheme, configuration, maxActions: Number(maxActions), timeout: Number(timeout),
-      testEmail, testPassword, onProgress: (progress) => onProgress({ ...progress, platform: selectedTarget.platform }), onStatus,
+      testEmail, testPassword, watch, onProgress: (progress) => onProgress({ ...progress, platform: selectedTarget.platform }), onStatus,
     });
     if (exploration?.error) throw Object.assign(new Error(exploration.error), { details: exploration.details || {} });
   }

@@ -23,6 +23,7 @@ import { execFileSync } from "child_process";
 const CLICK_SETTLE_MS = 700;
 const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
+const WATCH_ACTION_DELAY_MS = 350;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 const STANDALONE_ERROR_TEXT_RE = /^(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)(?:[.!:]|\s|$)/i;
 
@@ -249,13 +250,14 @@ export async function loadPlaywright() {
   );
 }
 
-export async function submitWebLogin(page) {
+export async function submitWebLogin(page, beforeClick = null) {
   const candidates = [
     page.locator("button[type=submit], input[type=submit], form button").first(),
     page.getByRole("button", { name: /sign ?in|log ?in|continue/i }).first(),
   ];
   for (const candidate of candidates) {
     if (await candidate.isVisible().catch(() => false)) {
+      if (beforeClick) await beforeClick(candidate);
       await candidate.click({ timeout: 3000 });
       return true;
     }
@@ -279,13 +281,14 @@ export function webTransitionOrigin(pendingNavigation, currentScreen) {
   return pendingNavigation?.fromScreen || currentScreen || null;
 }
 
-export function webBrowserLaunchOptions(environment = process.env) {
+export function webBrowserLaunchOptions(environment = process.env, { watch = false } = {}) {
   const browserProxy = String(environment.TAPP_BROWSER_PROXY_SERVER || "").trim();
   if (environment.TAPP_ENFORCE_PUBLIC_EGRESS === "1" && !/^http:\/\/127\.0\.0\.1:\d+$/.test(browserProxy)) {
     throw new Error("public egress policy proxy is required");
   }
   return {
-    headless: true,
+    headless: !watch,
+    ...(watch ? { slowMo: 200 } : {}),
     ...(browserProxy ? { proxy: { server: browserProxy, bypass: "<-loopback>" } } : {}),
     args: browserProxy ? [
       "--disable-quic",
@@ -294,6 +297,102 @@ export function webBrowserLaunchOptions(environment = process.env) {
       "--proxy-bypass-list=<-loopback>",
     ] : [],
   };
+}
+
+// A headed Playwright browser does not move the host OS pointer when locator.click() runs. In
+// explicit watch mode, draw a pointer inside the controlled page so a human can follow Tapp's
+// real actions. The UI lives in a closed shadow root, ignores pointer events, and is hidden from
+// evidence screenshots; it therefore cannot become an app control or alter detector input.
+async function installWebWatchUi(context) {
+  await context.addInitScript(() => {
+    const stateKey = Symbol.for("tapp.watchUi");
+    const ensure = () => {
+      if (window[stateKey]?.host?.isConnected) return window[stateKey];
+      const host = document.createElement("div");
+      host.setAttribute("data-tapp-watch-ui", "");
+      host.setAttribute("aria-hidden", "true");
+      Object.assign(host.style, {
+        position: "fixed",
+        inset: "0",
+        zIndex: "2147483647",
+        pointerEvents: "none",
+      });
+      const shadow = host.attachShadow({ mode: "closed" });
+      const style = document.createElement("style");
+      style.textContent = `
+        .cursor { position: fixed; left: 24px; top: 72px; width: 22px; height: 28px;
+          filter: drop-shadow(0 2px 2px rgba(0,0,0,.45)); transition: left 260ms ease, top 260ms ease;
+          transform: rotate(-8deg); }
+        .cursor::before { content: ""; display: block; width: 100%; height: 100%; background: #111827;
+          clip-path: polygon(0 0, 0 88%, 25% 67%, 39% 100%, 53% 93%, 39% 61%, 70% 61%); }
+        .cursor::after { content: ""; position: absolute; inset: 2px 3px 4px 2px; background: white;
+          clip-path: polygon(0 0, 0 79%, 25% 59%, 40% 91%, 46% 88%, 32% 55%, 60% 55%); }
+        .hud { position: fixed; top: 14px; right: 14px; max-width: min(420px, calc(100vw - 28px));
+          box-sizing: border-box; padding: 9px 12px; border-radius: 10px; color: white;
+          background: rgba(17,24,39,.92); box-shadow: 0 5px 18px rgba(0,0,0,.24);
+          font: 600 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .brand { color: #93c5fd; margin-right: 6px; }
+      `;
+      const cursor = document.createElement("div");
+      cursor.className = "cursor";
+      const hud = document.createElement("div");
+      hud.className = "hud";
+      shadow.append(style, cursor, hud);
+      (document.documentElement || document).appendChild(host);
+      const state = { host, cursor, hud };
+      Object.defineProperty(window, stateKey, { value: state, configurable: true });
+      return state;
+    };
+    Object.defineProperty(window, "__tappShowWatchAction", {
+      configurable: true,
+      value: ({ x, y, action, target }) => {
+        const state = ensure();
+        state.host.style.display = "block";
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          state.cursor.style.left = `${Math.max(4, Math.min(window.innerWidth - 26, x))}px`;
+          state.cursor.style.top = `${Math.max(4, Math.min(window.innerHeight - 32, y))}px`;
+        }
+        state.hud.replaceChildren();
+        const brand = document.createElement("span");
+        brand.className = "brand";
+        brand.textContent = "Tapp";
+        state.hud.append(brand, document.createTextNode(`${action}${target ? ` · ${target}` : ""}`));
+      },
+    });
+    Object.defineProperty(window, "__tappSetWatchUiVisible", {
+      configurable: true,
+      value: (visible) => {
+        if (window[stateKey]?.host) window[stateKey].host.style.display = visible ? "block" : "none";
+      },
+    });
+  });
+}
+
+async function showWebWatchAction(page, { locator = null, action = "Exploring", target = "" } = {}) {
+  let x = 28;
+  let y = 76;
+  if (locator) {
+    await locator.scrollIntoViewIfNeeded().catch(() => {});
+    const box = await locator.boundingBox().catch(() => null);
+    if (box) {
+      x = box.x + box.width / 2;
+      y = box.y + box.height / 2;
+    }
+  }
+  await page.evaluate(({ x, y, action, target }) => {
+    window.__tappShowWatchAction?.({ x, y, action, target });
+  }, { x, y, action, target }).catch(() => {});
+  await page.waitForTimeout(WATCH_ACTION_DELAY_MS).catch(() => {});
+}
+
+async function screenshotWithoutWebWatchUi(page, options, watch) {
+  if (!watch) return page.screenshot(options);
+  await page.evaluate(() => window.__tappSetWatchUiVisible?.(false)).catch(() => {});
+  try {
+    return await page.screenshot(options);
+  } finally {
+    await page.evaluate(() => window.__tappSetWatchUiVisible?.(true)).catch(() => {});
+  }
 }
 
 // Focused one-screen inspection for the agent-facing `tapp open <url>` and `tapp tree <url>`
@@ -425,7 +524,7 @@ export function normalizeWebSeedTargets(seedTargets = [], limit = 5) {
   return result;
 }
 
-export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], onProgress }) {
+export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], watch = false, onProgress }) {
   const start = new URL(url);
   if (!/^https?:$/.test(start.protocol)) throw new Error("url must be http(s)");
   fs.mkdirSync(outDir, { recursive: true });
@@ -434,9 +533,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   const emit = (kind, payload) => fs.writeSync(markersFd, `OCQA_${kind}:${JSON.stringify(payload)}\n`);
 
   const { chromium } = await loadPlaywright();
-  const browser = await chromium.launch(webBrowserLaunchOptions());
+  const browser = await chromium.launch(webBrowserLaunchOptions(process.env, { watch }));
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await installWebListenerTracking(context);
+  if (watch) await installWebWatchUi(context);
   const page = await context.newPage();
   page.setDefaultTimeout(NAV_TIMEOUT_MS);
 
@@ -604,7 +704,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       if (existingKey && existingKey !== evidenceKey) screenshotFor.delete(existingKey);
       screenshotFor.set(evidenceKey, { path: screenshotPath, busy: info.busy, route: key });
       screenCount = screenshotFor.size;
-      await page.screenshot({ path: screenshotPath }).catch(() => {});
+      await screenshotWithoutWebWatchUi(page, { path: screenshotPath }, watch).catch(() => {});
       // Deterministic per-page detectors run once per distinct screen.
       if (webPageAppearsBlank(info)) issue("blank_screen", "high", "Page rendered no visible content", screen);
       else {
@@ -628,12 +728,19 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     if (!(await pw.isVisible().catch(() => false))) return null;
     loginTried = true;
     const emailSel = "input[type=email], input[name*=mail i], input[name*=user i], input[id*=mail i], input[id*=user i]";
-    if (testEmail) await page.locator(emailSel).first().fill(testEmail).catch(() => {});
+    if (testEmail) {
+      const email = page.locator(emailSel).first();
+      if (watch) await showWebWatchAction(page, { locator: email, action: "Type", target: "Email" });
+      await email.fill(testEmail).catch(() => {});
+    }
+    if (watch) await showWebWatchAction(page, { locator: pw, action: "Type", target: "Password" });
     await pw.fill(testPassword).catch(() => {});
     lastActionTarget = "Sign in";
     emit("ACTION", { type: "login", target: "Sign in", screen, narrative: "Filled and submitted the sign-in form with the provided test credentials" });
     actions += 1;
-    await submitWebLogin(page).catch(() => false);
+    await submitWebLogin(page, watch
+      ? (locator) => showWebWatchAction(page, { locator, action: "Click", target: "Sign in" })
+      : null).catch(() => false);
     await waitForWebStability(page, { timeoutMs: Math.min(5_000, CLICK_SETTLE_MS * 6) });
     // Still on the login form after a submit = the sign-in failed — full stop. (A quiet
     // credential rejection often shows NO other symptom, so this must not be coupled to
@@ -688,6 +795,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         progress();
         continue;
       }
+      if (watch) await showWebWatchAction(page, { action: "Open", target });
       await waitForWebStability(page);
       if (nav && typeof nav.status === "function" && nav.status() === 404) {
         issue("broken_link", "medium", `Broken link: ${target} → 404`, target);
@@ -708,6 +816,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           emit("ACTION", { type: action.type, target: action.target, screen: beforeScreen, reason: "pr_ui_map_path", narrative: `Following observed UI Map path: ${action.type} ${action.target}` });
           let acted = false;
           if (action.type === "back") {
+            if (watch) await showWebWatchAction(page, { action: "Back", target: beforeScreen });
             await page.goBack({ waitUntil: "domcontentloaded", timeout: step.wait?.timeoutMs || NAV_TIMEOUT_MS }).catch(() => {});
             acted = true;
           } else {
@@ -721,6 +830,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
               else continue;
               if (await locator.isVisible().catch(() => false)) {
                 try {
+                  if (watch) await showWebWatchAction(page, { locator, action: "Click", target: action.target });
                   await locator.click({ timeout: Math.min(step.wait?.timeoutMs || NAV_TIMEOUT_MS, NAV_TIMEOUT_MS) });
                   acted = true;
                   break;
@@ -785,6 +895,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         emit("ACTION", { type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
         let clickSucceeded = false;
         try {
+          if (watch) await showWebWatchAction(page, { locator: b, action: "Click", target: label });
           await b.click({ timeout: 3000 });
           clickSucceeded = true;
         } catch {}
@@ -795,6 +906,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         await waitForWebStability(page);
         if (page.url() !== beforeState.url) {
           await observe();
+          if (watch) await showWebWatchAction(page, { action: "Back", target: ob.screen });
           await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
           await waitForWebStability(page);
         } else {

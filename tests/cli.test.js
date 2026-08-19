@@ -45,10 +45,13 @@ test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   assert.match(out, /tapp pr plan --base REF/);
   assert.match(out, /tapp init \[repo\]/);
   assert.match(out, /--explore/);
+  assert.match(out, /web: --watch/);
   assert.match(out, /tapp plan review \[FILE\]/);
   assert.match(out, /tapp plan promote \[FILE\]/);
   assert.match(out, /tapp baseline create \[repo\]/);
   assert.match(out, /tapp actor set NAME/);
+  assert.match(out, /npx -y skills add aarwitz\/tapp --skill tapp/);
+  assert.match(out, /claude plugin install tapp@tapp/);
 });
 
 test("--help is safe on every verb — shows the reference, writes NOTHING (not even TAPP_HOME)", () => {
@@ -62,6 +65,7 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.match(explore, /command reference/);
   assert.match(explore, /tapp explore \[target\]/);
   assert.match(explore, /--launch-env/);
+  assert.match(explore, /--watch/);
   const task = execFileSync("node", [tappBin, "task", "run", "--help"], { encoding: "utf8", env });
   assert.match(task, /tapp task run FILE --platform PLATFORM/);
   const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
@@ -82,6 +86,12 @@ test("iOS explore accepts explicit launch configuration and rejects malformed la
   assert.match(bad.stderr, /--launch-env must be a JSON object with string values/);
   assert.match(cliSource, /repeatedFlagValues\(argv, "launch-arg"\)/);
   assert.match(cliSource, /args: \{ testEmail: flags\.email, testPassword: flags\.password, baselineFindings, \.\.\.launchOptions \}/);
+});
+
+test("watch mode fails clearly before native runtime work", () => {
+  const result = spawnSync("node", [tappBin, "explore", "com.example.app", "--platform", "android", "--watch"], { encoding: "utf8" });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--watch is currently available for web exploration only/);
 });
 
 test("tapp doctor keeps the package-only CLI path primary", () => {
@@ -793,11 +803,12 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     assert.ok(!names.includes("tapp_run_qa"), "the run_qa name is renamed to tapp_explore (alias still dispatches)");
     const qa = tools.result.tools.find((t) => t.name === "tapp_explore");
     assert.ok(qa.inputSchema.properties.androidAppId, "Android exploration target is public");
+    assert.ok(qa.inputSchema.properties.watch, "web watch mode is public");
     const flow = tools.result.tools.find((t) => t.name === "tapp_flow_run");
     assert.ok(flow.inputSchema.properties.androidAppId, "Android Flow override is public");
     const initTool = tools.result.tools.find((t) => t.name === "tapp_init");
     assert.ok(initTool.inputSchema.properties.operation.enum.includes("explore"), "init exposes the shared real-surface exploration operation");
-    for (const input of ["target", "appBundleId", "androidAppId", "apkPath", "maxActions", "timeout"]) {
+    for (const input of ["target", "appBundleId", "androidAppId", "apkPath", "maxActions", "timeout", "watch"]) {
       assert.ok(initTool.inputSchema.properties[input], `init explore exposes ${input}`);
     }
     const releasePlanTool = tools.result.tools.find((t) => t.name === "tapp_release_plan");
@@ -813,6 +824,17 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     const prPlanTool = tools.result.tools.find((t) => t.name === "tapp_pr_plan");
     assert.deepEqual(prPlanTool.inputSchema.properties.operation.enum, ["plan", "adopt"]);
     assert.ok(prPlanTool.inputSchema.properties.prPlanPath, "PR evidence adoption is explicit in MCP");
+    send({ jsonrpc: "2.0", id: 20, method: "prompts/list", params: {} });
+    const prompts = await waitFor(20);
+    assert.deepEqual(prompts.result.prompts.map((prompt) => prompt.name), ["test-app"]);
+    assert.match(prompts.result.prompts[0].description, /real app surfaces/i);
+    send({ jsonrpc: "2.0", id: 21, method: "prompts/get", params: { name: "test-app", arguments: { goal: "Verify checkout", target: "website" } } });
+    const prompt = await waitFor(21);
+    const promptText = prompt.result.messages[0].content.text;
+    assert.match(promptText, /Verify checkout/);
+    assert.match(promptText, /website/);
+    assert.match(promptText, /multiple target choices/);
+    assert.match(promptText, /never turn exploration into a score or ship verdict/);
     if (hasWebDemo && hasSocialDemo) {
       send({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "tapp_init", arguments: { operation: "inspect", projectDir: "WebDemo", platform: "web", url: "http://127.0.0.1:4173" } } });
       const initialized = await waitFor(3);

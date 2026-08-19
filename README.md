@@ -4,8 +4,10 @@
 [![npm](https://img.shields.io/npm/v/%40aarwitz%2Ftapp?color=cb3837&label=npm)](https://www.npmjs.com/package/@aarwitz/tapp)
 [![npm downloads](https://img.shields.io/npm/dw/%40aarwitz%2Ftapp?label=downloads)](https://www.npmjs.com/package/@aarwitz/tapp)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-install-6b5cff)](https://skills.sh/aarwitz/tapp)
+[![VS Code extension](https://img.shields.io/badge/VS_Code-extension-0098FF)](https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp)
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHAiLCJtY3AiXX0=)
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%22%2C%22mcp%22%5D%7D)
+[![VS Code MCP](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%22%2C%22mcp%22%5D%7D)
 
 **Tapp is the release-contract and evidence layer for teams shipping agent-authored applications.**
 It turns a repository and real product into an observed UI Map, a compact reviewed deterministic
@@ -31,6 +33,47 @@ Three platforms, one observe-and-gate engine:
   autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
   dead buttons, broken links, placeholder `href="#"` links, error pages), and the same gate.
 
+## Give Tapp to your coding agent
+
+After setup, the whole user prompt is:
+
+> Use Tapp to test this app.
+
+The official skill teaches the agent to choose the smallest useful operation, handle repositories
+with multiple app targets, inspect visual evidence, and keep exploration observations separate from
+release judgment.
+
+**Claude Code — skill and MCP tools together:**
+
+```bash
+claude plugin marketplace add aarwitz/tapp
+claude plugin install tapp@tapp
+```
+
+Restart Claude Code after installation, open the application repository, and use the short prompt
+above. The plugin bundles both the `tapp` Agent Skill and the local stdio MCP server; no additional
+prompt block or bundle id is required.
+
+**Claude, Codex, Cursor, Copilot, and other Agent Skills clients — skill only:**
+
+```bash
+npx -y skills add aarwitz/tapp --skill tapp
+```
+
+This installs the open Agent Skills version of the same instructions into the current project and
+lets the agent fall back to the npm CLI when MCP is not connected. Add `-g` for a user-wide install,
+or `--agent claude-code`, `--agent codex`, and similar selectors to constrain the clients.
+
+**No agent integration:** run the npm package directly from an app repository:
+
+```bash
+npx -y @aarwitz/tapp init . --explore
+```
+
+**VS Code:** install [Tapp from the Marketplace](https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp).
+It contributes the same cross-platform Agent Skill to Copilot plus focused iOS simulator tools and a
+live simulator panel. Android and web remain available through the skill's CLI/MCP workflow.
+
 ```
 you:    "Add a logout button to the settings screen"
 agent:  *writes the Swift*
@@ -38,7 +81,7 @@ agent:  *tapp: builds, opens the app, navigates to Settings, screenshots it*
 agent:  "Done — and here it is working on the simulator: [screenshot]"
 ```
 
-## Quickstart for coding agents
+## npm CLI quickstart
 
 Requirements: **Node ≥ 18**. iOS needs **macOS + Xcode**; Android needs `adb` plus a connected
 emulator/device; web needs Playwright + Chromium.
@@ -109,7 +152,9 @@ npx -y @aarwitz/tapp build [dir]     # just build + install (scheme auto-detecte
 ```
 
 Web (beta): `npx -y @aarwitz/tapp explore http://localhost:3000` *(one-time setup:
-`npm i -g playwright && npx playwright install chromium`)*
+`npm i -g playwright && npx playwright install chromium`)*. Add `--watch` to open Tapp's controlled,
+isolated Chromium window and follow its clicks with an on-page pointer/action label. Tapp hides that
+watch UI from saved evidence screenshots and does not automate your personal/default browser profile.
 
 Focused web inspection waits briefly for loading states to settle. If a consent or location modal
 blocks the screen, dismiss it and wait for the content you care about in the same package-only call:
@@ -194,7 +239,9 @@ Then ask your agent:
 | 📱 | `tapp_list_simulators` / `boot_simulator` / `install_app` | Simulator + app management. |
 | 🩺 | `tapp_health`, `tapp_capture*`, `tapp_parse_markers` | Diagnostics and capture history. |
 
-Full agent playbook: [AGENTS.md](./AGENTS.md) — ships inside the package so agents can read it too.
+Canonical installable skill: [`skills/tapp/SKILL.md`](skills/tapp/SKILL.md). Full low-level tool
+reference: [AGENTS.md](./AGENTS.md). Both ship inside the npm package; installing the Claude plugin
+or Agent Skill is what makes the workflow discoverable without pasting instructions.
 Application-model and import contract: [`docs/application-model.md`](docs/application-model.md).
 The desktop Coverage view reads the same `.tapp/application-model.json`,
 `.tapp/release-plan.json`, and `.tapp/ui-map.json`, including explicit proposal review; it

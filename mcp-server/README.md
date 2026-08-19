@@ -40,6 +40,10 @@ Example MCP client configuration:
 For source development in this repository, use `node mcp-server/src/index.js` from the repository
 root after `npm install`.
 
+Clients that support MCP prompts also receive `test-app`. It turns a short request such as “test
+this app” into the same honest operation-selection and reporting workflow as the official Tapp Agent
+Skill. MCP prompts are a convenience; every tool remains directly callable.
+
 ## Pick the right operation
 
 - `tapp_open_app`: launch and inspect one screen quickly.

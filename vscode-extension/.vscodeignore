@@ -1,0 +1,9 @@
+smoke.js
+check-clientsafe.js
+sync-skill.js
+**/*.vsix
+extension.js
+bridge.js
+test/**
+package-lock.json
+node_modules/**

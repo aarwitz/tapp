@@ -43,6 +43,7 @@ __pycache__/
 *.pyc
 backend/proxy/usage.jsonl
 node_modules/
+vscode-extension/skills/
 
 # Android / Gradle
 .gradle/

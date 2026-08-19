@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.0-rc.12
+
+**Agent Skill distribution and installed-workspace correctness.**
+
+- Ship one canonical `tapp` Agent Skill in the npm artifact and public repository, discoverable by
+  the open `skills` installer and bundled into the official Claude plugin and VS Code extension.
+- Make the Claude marketplace install the small versioned npm artifact, with its exact bundled MCP
+  server, so “Use Tapp to test this app” needs no pasted playbook or separate MCP configuration.
+- Add an MCP `test-app` prompt and keep its operation selection, ambiguous-target behavior, visual
+  evidence rules, and observe-versus-gate language aligned with the skill.
+- Resolve repository-facing MCP paths against the client application workspace rather than Tapp's
+  installed package cache; lock the installed-package case with an external-workspace protocol test.
+- Report MCP readiness per iOS, Android, and web capability instead of requiring an iOS simulator
+  for every platform.
+- Add web `--watch` presentation mode: an isolated controlled Chromium window shows the current
+  action and pointer without contaminating evidence screenshots.
+- Prepare VS Code extension 0.3.0 with the same skill, current observation contract, renamed
+  `tapp_explore_ios` tool, current engine pin, zero production dependency advisories, and a public
+  VSIX packaging workflow.
+
 ## 0.17.0-rc.11
 
 **Multi-target selection and selected-run scope correction.**

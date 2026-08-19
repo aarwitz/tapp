@@ -208,6 +208,7 @@ test("explicit first-run target becomes the default without erasing other detect
     mode: "explore",
     platform: "web",
     target: "website",
+    watch: true,
     runExploration: async (value) => {
       request = value;
       return { platform: "web", target: "http://127.0.0.1:4173", findings: [], inconclusive: false };
@@ -215,6 +216,7 @@ test("explicit first-run target becomes the default without erasing other detect
   });
   assert.equal(request.platform, "web");
   assert.equal(request.target, path.join(fs.realpathSync(root), "website"));
+  assert.equal(request.watch, true);
   assert.deepEqual(result.model.targets.map((target) => target.platform).sort(), ["ios", "web"]);
   const web = result.model.targets.find((target) => target.platform === "web");
   assert.equal(result.model.application.defaultTargetId, web.id, "the explicit choice powers the next bare explore");
