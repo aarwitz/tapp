@@ -155,7 +155,7 @@ const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "i
 
 function requireMacFor(what) {
   if (process.platform === "darwin") return;
-  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: tapp explore https://localhost:3000`);
+  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: npx -y @aarwitz/tapp@latest explore https://localhost:3000`);
   process.exit(1);
 }
 
@@ -840,7 +840,7 @@ switch (command) {
       process.exit(1);
     }
     console.log(`🔨 Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installed as ${inst.bundleId}`);
-    console.log(`\nNext: tapp explore ${inst.bundleId}`);
+    console.log(`\nNext: npx -y @aarwitz/tapp@latest explore ${inst.bundleId}`);
     break;
   }
 
@@ -1054,7 +1054,7 @@ switch (command) {
       try {
         const adopted = adoptPrCoverageProposal({ projectDir, prPlanPath, item: flags.item, releasePlanPath: typeof flags["release-plan"] === "string" ? flags["release-plan"] : undefined });
         console.log(`📥 ${adopted.mode === "reconciled-existing" ? "Reconciled PR evidence into" : "Adopted"} ${adopted.item.name}${adopted.mode === "reconciled-existing" ? ` while preserving decision '${adopted.item.decision}'` : " as a pending release-plan item"}; no Task or contract was generated or trusted`);
-        console.log(`   plan: ${adopted.path}\n   next: tapp plan review ${adopted.path} --approve ${adopted.item.id}`);
+        console.log(`   plan: ${adopted.path}\n   next: npx -y @aarwitz/tapp@latest plan review ${adopted.path} --approve ${adopted.item.id}`);
       } catch (error) { console.error(`❌ Could not adopt PR coverage proposal: ${error.message || String(error)}`); process.exit(2); }
       break;
     }
@@ -1223,7 +1223,7 @@ switch (command) {
         const booted = bootedSims();
         ok("iOS", `${ver || "Xcode"}; ${booted.length ? `${booted[0].name} booted` : "no simulator booted yet"}`);
         const xctestrun = harnessXctestrun();
-        xctestrun ? ok("iOS harness cache", xctestrun) : console.log("  ⬜ iOS harness cache — builds on first use (or: tapp install)");
+        xctestrun ? ok("iOS harness cache", xctestrun) : console.log("  ⬜ iOS harness cache — builds on first use (or: npx -y @aarwitz/tapp@latest install)");
       } else {
         console.log("  ⬜ iOS — unavailable (install Xcode + simulator runtime)");
       }
@@ -1257,7 +1257,7 @@ switch (command) {
     console.log(`\n  Home: ${tappHome}`);
     console.log(healthy
       ? "\nReady. Start with:\n  npx -y @aarwitz/tapp@latest open [target]\n  npx -y @aarwitz/tapp@latest explore [target]"
-      : "\nFix the ❌ items above, then re-run: tapp doctor");
+      : "\nFix the ❌ items above, then re-run: npx -y @aarwitz/tapp@latest doctor");
     process.exit(healthy ? 0 : 1);
   }
 
@@ -1332,7 +1332,7 @@ switch (command) {
       console.log(`✅ Actor '${name}' configured — ${result.actor.session} session · ${result.actor.provisioning} provisioning`);
       console.log(`   ${result.path}`);
       console.log(`   bindings: ${Object.entries(result.actor.credentials).map(([key, binding]) => `${key}=$${binding.env}`).join(", ") || "none"}`);
-      console.log("   No credential values were accepted or written. Rerun tapp init --refresh to update the application model.");
+      console.log("   No credential values were accepted or written. Rerun npx -y @aarwitz/tapp@latest init --refresh to update the application model.");
     } catch (error) { console.error(`❌ Actor not configured: ${error.message || String(error)}`); process.exit(2); }
     break;
   }
@@ -1347,7 +1347,7 @@ switch (command) {
     const projectDir = fs.realpathSync(path.resolve(positionals[1] || (typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd())));
     const modelPath = typeof flags.model === "string" ? path.resolve(projectDir, flags.model) : existingProjectArtifactPath(projectDir, "application-model.json");
     if (!modelPath.startsWith(projectDir + path.sep) || !fs.existsSync(modelPath)) {
-      console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run tapp init --explore, review/generate/validate/promote the plan, then create the baseline.`);
+      console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run npx -y @aarwitz/tapp@latest init --explore, review/generate/validate/promote the plan, then create the baseline.`);
       process.exit(2);
     }
     let model;
@@ -1454,7 +1454,7 @@ switch (command) {
       catch { console.error(`❌ Repository directory not found: ${positionals[0] || flags["project-dir"] || process.cwd()}`); process.exit(2); }
       const modelPath = typeof flags.model === "string" ? path.resolve(projectDir, flags.model) : existingProjectArtifactPath(projectDir, "application-model.json");
       if (!modelPath.startsWith(projectDir + path.sep) || !fs.existsSync(modelPath)) {
-        console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run tapp init --explore first.`);
+        console.error(`❌ Application model not found inside the repository: ${modelPath}\n   Run npx -y @aarwitz/tapp@latest init --explore first.`);
         process.exit(2);
       }
       const actionRef = typeof flags["action-ref"] === "string" ? flags["action-ref"] : `aarwitz/tapp@v${pkg.version}`;
@@ -1575,7 +1575,7 @@ switch (command) {
 
 Core — explore, prove, gate (agents and humans can just run these — no server, no setup):
   tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
-                           release decision — run 'tapp ci' to gate a merge)
+                           release decision — run 'npx -y @aarwitz/tapp@latest ci' to gate a merge)
                            (web: --watch · all: --platform ios|android|web · --actions N)
   tapp contract run FILE   Replay a business-level release contract — the guarantees that must hold
   tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive

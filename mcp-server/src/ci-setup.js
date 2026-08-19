@@ -17,7 +17,7 @@ export function targetSlug(value) {
 
 export function selectApplicationTarget(model, { platform = "", target = "", useDefault = false } = {}) {
   if (model?.kind !== "tapp-application-model" || !Array.isArray(model.targets)) {
-    throw new Error("Expected a Tapp application model; run tapp init first");
+    throw new Error("Expected a Tapp application model; run npx -y @aarwitz/tapp@latest init first");
   }
   const selectedPlatform = String(platform || "").toLowerCase();
   let candidates = model.targets.filter((item) => !selectedPlatform || item.platform === selectedPlatform);
@@ -215,7 +215,7 @@ function credentialConfiguration(model, targetContracts = []) {
     if (requirements.has("email")) bindings.add("TAPP_TEST_EMAIL");
     if (requirements.has("password")) bindings.add("TAPP_TEST_PASSWORD");
   }
-  for (const name of bindings) if (!/^[A-Z_][A-Z0-9_]{0,127}$/.test(String(name))) throw new Error(`Actor credential binding '${name}' is not a safe environment-variable name; rerun tapp init from valid .tapp/project.json`);
+  for (const name of bindings) if (!/^[A-Z_][A-Z0-9_]{0,127}$/.test(String(name))) throw new Error(`Actor credential binding '${name}' is not a safe environment-variable name; rerun npx -y @aarwitz/tapp@latest init from valid .tapp/project.json`);
   const inputs = {};
   const primaryEmail = primary.credentialBindings?.email || (!primary.credentialBindings && requirements.has("email") ? "TAPP_TEST_EMAIL" : "");
   const primaryPassword = primary.credentialBindings?.password || (!primary.credentialBindings && requirements.has("password") ? "TAPP_TEST_PASSWORD" : "");
@@ -241,7 +241,7 @@ function targetInputs(root, model, target) {
     const androidProjectPath = path.resolve(root, androidProject);
     const androidProjectRelative = path.relative(root, androidProjectPath);
     if (path.isAbsolute(androidProjectRelative) || androidProjectRelative === ".." || androidProjectRelative.startsWith(`..${path.sep}`)) unresolved.push("Android Gradle project resolves outside the repository");
-    else if (!fs.existsSync(path.join(androidProjectPath, "gradlew"))) unresolved.push(`Gradle wrapper is missing from ${androidProject}; commit gradlew or rerun tapp init from the Gradle repository root`);
+    else if (!fs.existsSync(path.join(androidProjectPath, "gradlew"))) unresolved.push(`Gradle wrapper is missing from ${androidProject}; commit gradlew or rerun npx -y @aarwitz/tapp@latest init from the Gradle repository root`);
     inputs["android-project"] = androidProject;
     inputs["android-task"] = target.build?.task || "assembleDebug";
     if (target.runtime?.applicationId) inputs["android-app-id"] = target.runtime.applicationId;
@@ -282,7 +282,7 @@ export function renderGithubWorkflow({ projectDir, model, actionRef, defaultBran
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$/.test(String(actionRef || ""))) throw new Error("--action-ref must be owner/repository@release-tag-or-sha");
   if (!/^[A-Za-z0-9._\/-]+$/.test(defaultBranch) || defaultBranch.startsWith("/")) throw new Error("--default-branch contains unsupported characters");
-  if (model?.kind !== "tapp-application-model" || !Array.isArray(model.targets) || !model.targets.length) throw new Error("Application model has no targets; run tapp init first");
+  if (model?.kind !== "tapp-application-model" || !Array.isArray(model.targets) || !model.targets.length) throw new Error("Application model has no targets; run npx -y @aarwitz/tapp@latest init first");
   const occupied = new Set();
   const jobs = [];
   const manifestTargets = [];

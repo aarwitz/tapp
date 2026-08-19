@@ -541,10 +541,10 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
   const requirements = [];
   if (!targets.length) requirements.push({ id: "target", severity: "blocking", status: "missing", message: "No iOS application project, Android application module, or browser application target was detected.", remediation: "Pass the representative target explicitly or add its unavoidable build/runtime configuration." });
   for (const target of targets) {
-    if (target.platform === "ios" && target.status !== "configured") requirements.push({ id: `${target.id}:scheme`, severity: "blocking", status: "needs-confirmation", message: `Confirm a shared build scheme for ${target.name}.`, remediation: `Run tapp build ${target.sourcePath} or provide the scheme during init/build.` });
+    if (target.platform === "ios" && target.status !== "configured") requirements.push({ id: `${target.id}:scheme`, severity: "blocking", status: "needs-confirmation", message: `Confirm a shared build scheme for ${target.name}.`, remediation: `Run npx -y @aarwitz/tapp@latest build ${target.sourcePath} or provide the scheme during init/build.` });
     if (target.platform === "android" && !target.runtime.applicationId) requirements.push({ id: `${target.id}:application-id`, severity: "blocking", status: "missing", message: `Android application id was not statically detected for ${target.name}.`, remediation: "Provide --app-id or expose applicationId in the application module." });
-    if (target.platform === "web" && !target.runtime.ownedUrl && target.runtime.management !== "tapp-managed") requirements.push({ id: `${target.id}:owned-url`, severity: "blocking", status: "missing", message: `No safe managed runtime or owned URL is available for ${target.name}.`, remediation: "Add a deterministic start/static target or start the app and rerun tapp init with --url http://127.0.0.1:<port>." });
-    if (target.platform === "web" && target.build.dependencyStatus === "missing-lockfile") requirements.push({ id: `${target.id}:dependency-lock`, severity: "blocking", status: "missing", message: `${target.name} declares browser dependencies without an observed dependency lockfile.`, remediation: "Commit the package-manager lockfile so Tapp can install dependencies reproducibly, then rerun tapp init." });
+    if (target.platform === "web" && !target.runtime.ownedUrl && target.runtime.management !== "tapp-managed") requirements.push({ id: `${target.id}:owned-url`, severity: "blocking", status: "missing", message: `No safe managed runtime or owned URL is available for ${target.name}.`, remediation: "Add a deterministic start/static target or start the app and rerun npx -y @aarwitz/tapp@latest init with --url http://127.0.0.1:<port>." });
+    if (target.platform === "web" && target.build.dependencyStatus === "missing-lockfile") requirements.push({ id: `${target.id}:dependency-lock`, severity: "blocking", status: "missing", message: `${target.name} declares browser dependencies without an observed dependency lockfile.`, remediation: "Commit the package-manager lockfile so Tapp can install dependencies reproducibly, then rerun npx -y @aarwitz/tapp@latest init." });
   }
   const incompleteMaps = uiMaps.filter((record) => record.summary.status !== "observed");
   for (const record of incompleteMaps.length ? incompleteMaps : (!targets.length && uiMap.status !== "observed" ? [{ summary: uiMap }] : [])) {
@@ -553,7 +553,7 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
     requirements.push({
       id: targets.length <= 1 ? "ui-map" : `${target.id}:ui-map`, severity: "blocking", status: summary.status === "inconclusive" ? "inconclusive" : "missing",
       message: target ? (summary.status === "inconclusive" ? `The UI Map for ${target.name} is inconclusive.` : `No grounded UI Map exists for ${target.name}.`) : "No repository UI Map has been grounded in a real run.",
-      remediation: target ? `Build/launch ${target.name}, explore the real target, and retain its map at ${summary.expectedPath || summary.path}.` : "Build/launch the target and run tapp init --explore so real exploration evidence is merged into .tapp/ui-map.json.",
+      remediation: target ? `Build/launch ${target.name}, explore the real target, and retain its map at ${summary.expectedPath || summary.path}.` : "Build/launch the target and run npx -y @aarwitz/tapp@latest init --explore so real exploration evidence is merged into .tapp/ui-map.json.",
     });
   }
   if (!contracts.length) requirements.push({ id: "contracts", severity: "warning", status: "missing", message: "No reviewed release contracts exist yet.", remediation: "Review the proposed release plan, then generate and validate a compact set of contracts." });
@@ -561,7 +561,7 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
   for (const error of projectConfiguration.errors) requirements.push({ id: stableId("project-config-error", error), severity: "blocking", status: "invalid", message: error, remediation: `Fix ${projectConfiguration.relativePath}; actor configuration must contain environment-variable bindings, never credential values.` });
   for (const actor of actors) {
     const missingBindings = actor.credentialRequirements.filter((credential) => !actor.credentialBindings[credential]);
-    if (missingBindings.length) requirements.push({ id: `actor:${actor.name}:credential-bindings`, severity: "blocking", status: "missing", message: `Actor '${actor.name}' has unbound credential requirements: ${missingBindings.join(", ")}.`, remediation: `Run tapp actor set ${actor.name} --credential <name>=<ENV_NAME> for each credential, then replace any literal contract credentials with $ENV_NAME placeholders.` });
+    if (missingBindings.length) requirements.push({ id: `actor:${actor.name}:credential-bindings`, severity: "blocking", status: "missing", message: `Actor '${actor.name}' has unbound credential requirements: ${missingBindings.join(", ")}.`, remediation: `Run npx -y @aarwitz/tapp@latest actor set ${actor.name} --credential <name>=<ENV_NAME> for each credential, then replace any literal contract credentials with $ENV_NAME placeholders.` });
     if (actor.bindingConflicts.length) requirements.push({ id: `actor:${actor.name}:credential-conflicts`, severity: "blocking", status: "conflict", message: `Actor '${actor.name}' has conflicting credential environment bindings.`, remediation: `Align ${projectConfiguration.relativePath} and reviewed contracts; Tapp will not guess which secret binding is correct.` });
   }
   for (const error of taskErrors) requirements.push({ id: stableId("task-error", error.path), severity: "blocking", status: "invalid", message: error.error, remediation: `Fix ${error.path} before generation.` });
@@ -997,7 +997,7 @@ function edgeSupportsPlatform(edge, nodes, platform) {
 function shortestObservedPath(map, platform, targetId, { startNodeId } = {}) {
   const nodes = new Map((map.nodes || []).map((node) => [node.id, node]));
   const entryId = startNodeId || map.app?.navigationRoots?.[platform] || map.app?.entryNodes?.[platform];
-  if (!entryId || !nodes.has(entryId)) throw new Error(`UI Map has no observed ${platform} navigation root; rerun tapp init --refresh --explore before generating Tasks`);
+  if (!entryId || !nodes.has(entryId)) throw new Error(`UI Map has no observed ${platform} navigation root; rerun npx -y @aarwitz/tapp@latest init --refresh --explore before generating Tasks`);
   if (!nodes.has(targetId)) throw new Error(`UI Map proposal target '${targetId}' is no longer present`);
   if (entryId === targetId) return [];
   const outgoing = new Map();

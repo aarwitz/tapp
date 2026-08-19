@@ -262,7 +262,7 @@ test("PR proposal adoption explains how to recover from a stale persistent UI Ma
   const before = fs.readFileSync(releasePlanPath, "utf8");
   assert.throws(
     () => adoptPrCoverageProposal({ projectDir: root, prPlanPath, item: "explore_dashboard" }),
-    /tapp init --explore --refresh.*tapp pr gate.*tapp pr adopt/,
+    /@aarwitz\/tapp@latest init --explore --refresh.*@aarwitz\/tapp@latest pr gate.*@aarwitz\/tapp@latest pr adopt/,
   );
   assert.equal(fs.readFileSync(releasePlanPath, "utf8"), before);
 });

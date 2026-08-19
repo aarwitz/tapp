@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.0-rc.14
+
+**Fresh-machine-safe recovery guidance across every agent surface.**
+
+- Make every actionable follow-up emitted by the CLI and MCP use
+  `npx -y @aarwitz/tapp@latest`, including doctor, target selection, initialization, report,
+  replay, baseline, and gate remediation. A user never needs a global `tapp` executable.
+- Teach the skill to prefer `tapp_health` when MCP is connected and otherwise run the explicit
+  npm doctor command.
+- Lock the no-global-command rule across the user-facing runtime sources and ship the same updated
+  skill in Claude, npm, the MCP Registry, and VS Code 0.3.1.
+
 ## 0.17.0-rc.13
 
 **Stale-global-safe one-line invocation.**

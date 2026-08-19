@@ -92,9 +92,9 @@ test("runExploreTarget requires a confirmed Android application id before buildi
 
 test("QA next steps match the package-only surface without leaking MCP calls", () => {
   const next = engine.qaNextSteps({ findings: [{ type: "missing_asset" }] }, "cli");
-  assert.match(next.join(" "), /tapp report latest/);
+  assert.match(next.join(" "), /npx -y @aarwitz\/tapp@latest report latest/);
   assert.match(next.join(" "), /--baseline <report\.json>/);
-  assert.match(next.join(" "), /tapp flow run <file>/);
+  assert.match(next.join(" "), /npx -y @aarwitz\/tapp@latest flow run <file>/);
   assert.doesNotMatch(next.join(" "), /tapp_open_app|baselineFindings|tapp_session_start/);
 });
 

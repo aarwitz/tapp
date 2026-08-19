@@ -79,7 +79,7 @@ function initTargetChoices(model, platform = "") {
   const candidates = (model.targets || []).filter((target) => !platform || target.platform === platform);
   return candidates.map((target) => ({
     target,
-    command: `tapp init . --explore --platform ${target.platform} --target ${target.sourcePath === "." ? JSON.stringify(target.name) : JSON.stringify(target.sourcePath)}`,
+    command: `npx -y @aarwitz/tapp@latest init . --explore --platform ${target.platform} --target ${target.sourcePath === "." ? JSON.stringify(target.name) : JSON.stringify(target.sourcePath)}`,
   }));
 }
 

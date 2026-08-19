@@ -855,7 +855,7 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
       for (const choice of targetChoice.result.structuredContent.choices) {
         assert.ok(["ios", "android", "web"].includes(choice.platform));
         assert.equal(typeof choice.selector, "string");
-        assert.match(choice.command, /tapp init \. --explore --platform/);
+        assert.match(choice.command, /npx -y @aarwitz\/tapp@latest init \. --explore --platform/);
       }
     }
   } finally {

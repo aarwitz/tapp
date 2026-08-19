@@ -33,8 +33,9 @@ When the user asks for a general first test of a repository:
 3. If Tapp returns `target-selection-required`, present its actual choices and ask the user to pick.
    Never guess among multiple targets. Re-run with the selected platform/target exactly as Tapp
    instructs.
-4. If a prerequisite is missing, run `tapp doctor`, apply only the stated remediation that is in
-   scope, and retry once.
+4. If a prerequisite is missing, call `tapp_health` when MCP is connected or run
+   `npx -y @aarwitz/tapp@latest doctor`, apply only the stated remediation that is in scope, and
+   retry once.
 
 For a focused request, use the requested target directly rather than forcing repository onboarding.
 Targets may be a repository path, Xcode container, `.app`, iOS bundle id, APK plus Android app id,

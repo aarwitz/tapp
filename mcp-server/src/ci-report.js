@@ -422,10 +422,10 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
         ? ` at \`${target.navigation.route}\``
         : target.navigation?.mode === "ui-map-path" ? ` through ${(target.navigation.steps || []).length} observed map edge(s)` : "";
       lines.push(`- ${icon} PR exploration **${target.node?.name || target.id}** — ${target.execution?.status || target.status}${navigation}`);
-      if (target.coverageProposal?.status === "awaiting-explicit-adoption") lines.push(`  - Reviewable coverage proposal ready; never auto-applied. Next: \`tapp pr adopt <pr-plan.json> --item ${target.id} --project-dir .\``);
+      if (target.coverageProposal?.status === "awaiting-explicit-adoption") lines.push(`  - Reviewable coverage proposal ready; never auto-applied. Next: \`npx -y @aarwitz/tapp@latest pr adopt <pr-plan.json> --item ${target.id} --project-dir .\``);
       if (target.existingReleasePlanItem) {
         lines.push(`  - Existing release-plan item \`${target.existingReleasePlanItem.name}\` remains ${target.existingReleasePlanItem.decision}; no duplicate or decision change was made.`);
-        lines.push(`  - Optional explicit evidence reconciliation: \`tapp pr adopt <pr-plan.json> --item ${target.id} --project-dir .\``);
+        lines.push(`  - Optional explicit evidence reconciliation: \`npx -y @aarwitz/tapp@latest pr adopt <pr-plan.json> --item ${target.id} --project-dir .\``);
       }
     }
     for (const candidate of prPlan.maintenanceCandidates || []) {

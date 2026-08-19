@@ -27,6 +27,7 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   assert.doesNotMatch(skill, /\bTODO\b|SHIP-READY|ship\/no-ship/i);
   assert.match(skill, /Never guess among multiple targets/);
   assert.match(skill, /exploration never decides this/i);
+  assert.match(skill, /npx -y @aarwitz\/tapp@latest doctor/);
   assert.ok(skill.split("\n").length < 100, "SKILL.md stays compact enough for agent context");
   assert.match(read("skills/tapp/references/commands.md"), /npx -y @aarwitz\/tapp@latest init \. --explore/);
   for (const relative of ["skills/tapp/SKILL.md", "skills/tapp/references/commands.md", "README.md", "AGENTS.md"]) {
@@ -34,6 +35,21 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   }
   assert.doesNotMatch(read("README.md"), /"@aarwitz\/tapp",\s*"mcp"/, "copyable MCP config uses the explicit latest tag");
   assert.match(read("README.md"), /"@aarwitz\/tapp@latest",\s*"mcp"/);
+  for (const relative of [
+    "bin/tapp.js",
+    "mcp-server/src/application-model.js",
+    "mcp-server/src/ci-report.js",
+    "mcp-server/src/ci-setup.js",
+    "mcp-server/src/index.js",
+    "mcp-server/src/pr-selection.js",
+    "mcp-server/src/product-operations.js",
+  ]) {
+    assert.doesNotMatch(
+      read(relative),
+      /(?:Run|run|rerun|Rerun|Next:|next:)\s+`?tapp\s/,
+      `${relative} does not give a fresh user an unusable global-only follow-up command`,
+    );
+  }
 });
 
 test("npm and the Claude plugin ship the same current skill and MCP server", () => {

@@ -1335,9 +1335,9 @@ function fmtDuration(ms) {
 export function qaNextSteps(report, surface = "mcp") {
   if (surface === "cli") {
     const next = [];
-    if (report?.findings?.length) next.push("inspect the evidence with `tapp report latest`");
-    next.push("re-run with `--baseline <report.json>` to compare a fix (then `tapp ci` to gate it)");
-    next.push("replay a committed journey with `tapp flow run <file>`");
+    if (report?.findings?.length) next.push("inspect the evidence with `npx -y @aarwitz/tapp@latest report latest`");
+    next.push("re-run with `--baseline <report.json>` to compare a fix (then `npx -y @aarwitz/tapp@latest ci` to gate it)");
+    next.push("replay a committed journey with `npx -y @aarwitz/tapp@latest flow run <file>`");
     return next;
   }
   const next = [];
@@ -1390,7 +1390,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     // The merge decision is the gate's job (tapp ci), not exploration's (ADR-0005).
     L.push("");
     L.push(
-      `**Since last run** — +${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved (comparison only — run \`tapp ci\` to gate)`
+      `**Since last run** — +${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved (comparison only — run \`npx -y @aarwitz/tapp@latest ci\` to gate)`
     );
   }
   if (inputHint) {
@@ -1801,7 +1801,7 @@ export async function runExploreTarget({
 
   const modelPath = existingProjectArtifactPath(root, "application-model.json");
   if (!fs.existsSync(modelPath)) {
-    return { error: "No application model found — run `tapp init` first, or pass an explicit target (a bundle id, a path/to/App.app, a repo dir, --app-id/--apk, or an http(s) URL)." };
+    return { error: "No application model found — call `tapp_init` or run `npx -y @aarwitz/tapp@latest init` first, or pass an explicit target (a bundle id, a path/to/App.app, a repo dir, --app-id/--apk, or an http(s) URL)." };
   }
   let model;
   try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
@@ -1839,7 +1839,7 @@ export async function runExploreTarget({
 
   if (selectedPlatform === "android") {
     const appId = String(selected.runtime?.applicationId || "").trim();
-    if (!appId) return { error: `The Android target '${selected.name}' has no confirmed application id — confirm it and rerun \`tapp init\`, or pass --app-id.` };
+    if (!appId) return { error: `The Android target '${selected.name}' has no confirmed application id — confirm it and call \`tapp_init\` or rerun \`npx -y @aarwitz/tapp@latest init\`, or pass --app-id.` };
     const task = selected.build?.task || "assembleDebug";
     onStatus(`Building the Android APK (${task})…`);
     const built = await buildAndroidApp({
@@ -2322,7 +2322,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               "Findings from a previous run (pass back the `findings` array a prior tapp_explore returned). " +
               "When provided, the result adds a `regression` COMPARISON {counts:{new,persisting,resolved}, " +
               "newFindings, resolved} vs. that baseline — an observation, not a gate signal. To gate a merge, " +
-              "run `tapp ci` (or the GitHub Action): it applies the deterministic policy and returns the " +
+              "run `npx -y @aarwitz/tapp@latest ci` (or the GitHub Action): it applies the deterministic policy and returns the " +
               "pass/fail/inconclusive outcome.",
           },
         },
@@ -2858,7 +2858,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const icon = c.ok ? "✅" : c.required ? "❌" : "⚪️";
       L.push(`- ${icon} **${c.check}** — ${String(c.value).split("\n")[0] || "—"}`);
     }
-    if (!ready) L.push("", "Run `tapp doctor` in the application repository for exact remediation.");
+    if (!ready) L.push("", "Run `npx -y @aarwitz/tapp@latest doctor` in the application repository for exact remediation.");
     return richResult(L.join("\n"), { ok: ready, workspaceRoot, checks, platforms: Object.fromEntries(platformChecks.map((check) => [check.check.toLowerCase(), check.ok])) });
   }
 

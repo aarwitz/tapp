@@ -410,7 +410,7 @@ export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releaseP
   if (!prPlanPath || !fs.existsSync(source)) throw new Error(`PR plan not found: ${source || "(missing path)"}`);
   const targetPath = releasePlanPath === ".tapp/release-plan.json" ? existingProjectArtifactPath(root, "release-plan.json") : path.resolve(root, releasePlanPath);
   if (!inside(root, targetPath)) throw new Error("Release plan path must stay inside the project directory");
-  if (!fs.existsSync(targetPath)) throw new Error(`Release plan not found: ${targetPath}; run tapp init first`);
+  if (!fs.existsSync(targetPath)) throw new Error(`Release plan not found: ${targetPath}; run npx -y @aarwitz/tapp@latest init first`);
   const prPlan = JSON.parse(fs.readFileSync(source, "utf8"));
   if (prPlan?.schemaVersion !== 1 || !Array.isArray(prPlan.explorationTargets)) throw new Error("PR plan must be an executed Tapp PR plan v1");
   const matches = prPlan.explorationTargets.filter((target) => target.id === item);
@@ -428,7 +428,7 @@ export function adoptPrCoverageProposal({ projectDir, prPlanPath, item, releaseP
   if (!ground || !fs.existsSync(mapPath)) throw new Error("Coverage proposal requires the repository's persistent UI Map");
   const map = JSON.parse(fs.readFileSync(mapPath, "utf8"));
   const node = (map.nodes || []).find((candidate) => candidate.id === ground.id && candidate.status !== "proposed");
-  const refreshAdvice = "refresh the persistent UI Map with `tapp init --explore --refresh`, rerun `tapp pr gate`, then retry `tapp pr adopt`";
+  const refreshAdvice = "refresh the persistent UI Map with `npx -y @aarwitz/tapp@latest init --explore --refresh`, rerun `npx -y @aarwitz/tapp@latest pr gate`, then retry `npx -y @aarwitz/tapp@latest pr adopt`";
   if (!node) throw new Error(`Coverage proposal UI Map node is stale or missing: ${ground.id}; ${refreshAdvice}`);
   if (target.navigation?.route && !(node.routes || []).some((route) => route.platform === target.platform && route.path === target.navigation.route && route.replayable === true)) {
     throw new Error(`Coverage proposal route is stale in the persistent UI Map: ${target.navigation.route}; ${refreshAdvice}`);
