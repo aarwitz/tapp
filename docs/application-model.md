@@ -16,6 +16,13 @@ resolution actually builds and installs the detected Xcode container, the model 
 scheme as runtime-observed validation and removes the corresponding confirmation blocker. Merely
 supplying a bundle id or prebuilt `.app` does not prove repository build configuration.
 
+A fresh repository with more than one detected application target is never resolved by detection
+order. Bare `tapp init . --explore` prompts in a human TTY; non-interactive CLI/MCP callers receive
+exact `--platform`/`--target` commands before any build or write, and MCP also carries them as
+structured `target-selection-required` choices. The selected run records that target as the default
+for later bare exploration, but the application model retains the repository's other detected targets
+and their unmet coverage.
+
 ## First inspection
 
 ```bash
@@ -49,8 +56,8 @@ tapp init . --refresh --explore --platform web --url http://127.0.0.1:3000
 
 MCP clients use `tapp_init` with `operation: inspect|write|refresh|explore`. `inspect` is the safe
 default. `explore` writes real evidence, so the CLI rejects `--explore --dry-run`; the CLI also
-requires `--refresh --explore` once model/plan artifacts exist. Credentials are passed only to the
-runtime and are never written into the model, map, or plan.
+refreshes existing model/plan artifacts through the same decision-preserving semantics. Credentials
+are passed only to the runtime and are never written into the model, map, or plan.
 
 Successful repository-driven iOS build validation is portable and durable. The application model
 stores the repository-relative container, scheme, configuration, bundle id, and a

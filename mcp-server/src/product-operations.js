@@ -64,6 +64,75 @@ function artifactPaths(root, outDir = ".tapp") {
   };
 }
 
+function normalizedInitTarget(root, target) {
+  const requested = String(target || "").trim();
+  if (!requested) return "";
+  let absolute;
+  try { absolute = fs.realpathSync(path.resolve(root, requested)); }
+  catch { absolute = path.resolve(root, requested); }
+  if (absolute === root) return "";
+  if (inside(root, absolute)) return path.relative(root, absolute).replaceAll(path.sep, "/");
+  return requested;
+}
+
+function initTargetChoices(model, platform = "") {
+  const candidates = (model.targets || []).filter((target) => !platform || target.platform === platform);
+  return candidates.map((target) => ({
+    target,
+    command: `tapp init . --explore --platform ${target.platform} --target ${target.sourcePath === "." ? JSON.stringify(target.name) : JSON.stringify(target.sourcePath)}`,
+  }));
+}
+
+function selectInitExplorationTarget(model, {
+  root,
+  platform = "",
+  target = "",
+  appId = "",
+  priorDefaultTargetId = "",
+} = {}) {
+  const selectedPlatform = String(platform || "").trim().toLowerCase();
+  if (selectedPlatform && !["ios", "android", "web"].includes(selectedPlatform)) throw new Error("platform must be ios|android|web");
+  let requested = normalizedInitTarget(root, target);
+  if (!requested && appId) {
+    const androidMatch = (model.targets || []).find((candidate) => candidate.platform === "android" && candidate.runtime?.applicationId === appId);
+    if (androidMatch) requested = androidMatch.id;
+  }
+  const defaultTargetId = (model.targets || []).some((candidate) => candidate.id === priorDefaultTargetId)
+    ? priorDefaultTargetId
+    : model.application?.defaultTargetId || "";
+  const resolutionModel = { ...model, application: { ...(model.application || {}), defaultTargetId } };
+  try {
+    return selectApplicationTarget(resolutionModel, {
+      platform: selectedPlatform,
+      target: requested,
+      useDefault: !selectedPlatform && !requested && !!defaultTargetId,
+    });
+  } catch (error) {
+    const choices = initTargetChoices(model, selectedPlatform);
+    if (choices.length > 1 && !requested) {
+      const selection = new Error(
+        `Multiple application targets were detected; Tapp will not guess which one you mean:\n` +
+        choices.map(({ target: choice }) => `  - ${choice.platform}:${choice.name} (${choice.sourcePath})`).join("\n") +
+        `\nRerun with one of:\n` + choices.map(({ command }) => `  ${command}`).join("\n")
+      );
+      selection.code = "TAPP_TARGET_SELECTION_REQUIRED";
+      selection.details = {
+        reason: "target-selection-required",
+        choices: choices.map(({ target: choice, command }) => ({
+          id: choice.id,
+          platform: choice.platform,
+          name: choice.name,
+          sourcePath: choice.sourcePath,
+          selector: choice.sourcePath === "." ? choice.name : choice.sourcePath,
+          command,
+        })),
+      };
+      throw selection;
+    }
+    throw error;
+  }
+}
+
 function productRunRoot(root) {
   const home = process.env.TAPP_HOME || path.join(os.homedir(), ".tapp");
   const identity = crypto.createHash("sha256").update(root).digest("hex").slice(0, 16);
@@ -287,22 +356,42 @@ export async function initializeProductProject({
   if (!["inspect", "write", "refresh", "explore"].includes(mode)) throw new Error("mode must be inspect|write|refresh|explore");
   if (!Number.isInteger(Number(maxContracts)) || Number(maxContracts) < 1 || Number(maxContracts) > 50) throw new Error("maxContracts must be between 1 and 50");
   const paths = artifactPaths(root, outDir);
+  const priorModel = readJson(paths.model);
   let exploration = null;
+  let selectedTarget = null;
   if (mode === "explore") {
     if (typeof runExploration !== "function") throw new Error("The selected adapter did not provide a platform exploration capability");
-    const selectedPlatform = String(platform || (ownedUrl ? "web" : appId || apkPath ? "android" : "ios")).toLowerCase();
+    const selectedPlatform = String(platform || (ownedUrl ? "web" : appId || apkPath ? "android" : "")).toLowerCase();
+    const inspected = await buildInitArtifacts({
+      projectDir: root,
+      ownedUrl,
+      outDir,
+      maxContracts: Number(maxContracts),
+      defaultTargetId: priorModel?.application?.defaultTargetId || "",
+    });
+    selectedTarget = selectInitExplorationTarget(inspected.model, {
+      root,
+      platform: selectedPlatform,
+      target,
+      appId,
+      priorDefaultTargetId: priorModel?.application?.defaultTargetId || "",
+    });
+    const sourceTarget = selectedTarget.sourcePath === "." ? root : path.resolve(root, selectedTarget.sourcePath);
     exploration = await runExploration({
-      projectDir: root, platform: selectedPlatform, outDir, url: ownedUrl, target: target || root,
-      bundleId, appId, apkPath, serial, scheme, configuration, maxActions: Number(maxActions), timeout: Number(timeout),
-      testEmail, testPassword, onProgress, onStatus,
+      projectDir: root, platform: selectedTarget.platform, outDir, url: ownedUrl, target: sourceTarget,
+      bundleId, appId: appId || selectedTarget.runtime?.applicationId || "", apkPath, serial, scheme, configuration, maxActions: Number(maxActions), timeout: Number(timeout),
+      testEmail, testPassword, onProgress: (progress) => onProgress({ ...progress, platform: selectedTarget.platform }), onStatus,
     });
     if (exploration?.error) throw Object.assign(new Error(exploration.error), { details: exploration.details || {} });
   }
   const built = await buildInitArtifacts({
     projectDir: root,
     ownedUrl: ownedUrl || (exploration?.platform === "web" && !exploration.managedRuntime ? exploration.target : ""),
-    platform: String(platform || "").toLowerCase(),
+    // Exploration chooses one runnable surface, but the repository model must retain every detected
+    // application target. Otherwise selecting web would silently erase the native app (and vice versa).
+    platform: mode === "explore" ? "" : String(platform || "").toLowerCase(),
     targetValidation: exploration?.targetValidation || null,
+    defaultTargetId: selectedTarget?.id || priorModel?.application?.defaultTargetId || "",
     outDir,
     maxContracts: Number(maxContracts),
   });

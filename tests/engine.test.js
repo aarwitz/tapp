@@ -2,6 +2,7 @@
 // exports both surfaces (CLI verbs, MCP tools) build on — plus target-resolution behavior.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -95,6 +96,34 @@ test("QA next steps match the package-only surface without leaking MCP calls", (
   assert.match(next.join(" "), /--baseline <report\.json>/);
   assert.match(next.join(" "), /tapp flow run <file>/);
   assert.doesNotMatch(next.join(" "), /tapp_open_app|baselineFindings|tapp_session_start/);
+});
+
+test("long Xcode output retains the final actionable compiler error", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-xcode-tail-"));
+  const bin = path.join(dir, "bin");
+  const project = path.join(dir, "Product.xcodeproj");
+  fs.mkdirSync(bin);
+  fs.mkdirSync(project);
+  const fakeXcodebuild = path.join(bin, "xcodebuild");
+  fs.writeFileSync(fakeXcodebuild, `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.writeSync(1, "build noise\\n".repeat(8000));
+fs.writeSync(1, "/fixture/Product.swift:1:1: error: The file update.sample could not be opened\\n");
+process.exit(65);
+`);
+  fs.chmodSync(fakeXcodebuild, 0o755);
+  const moduleUrl = new URL("../mcp-server/src/index.js", import.meta.url).href;
+  const script = `
+    const engine = await import(${JSON.stringify(moduleUrl)});
+    const result = await engine.buildAppForSim({ container:${JSON.stringify(project)}, scheme:"Product" });
+    process.stdout.write(JSON.stringify(result));
+  `;
+  const result = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH || ""}`, TAPP_HOME: path.join(dir, "home") },
+  }));
+  assert.match(result.error, /Build failed \(scheme Product\)/);
+  assert.match(result.details.errors.join("\n"), /update\.sample/);
 });
 
 test("findXcodeContainer prefers a workspace, skips Pods, accepts a container path directly", () => {

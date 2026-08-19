@@ -28,8 +28,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 
-// Redirect all writable output away from the (possibly read-only) package dir.
-// The old environment alias remains a read-only fallback for older integrations.
+// Redirect all writable output away from the (possibly read-only) package dir. TAPP_HOME and
+// ~/.tapp are the only current runtime locations; retired environment/path aliases are ignored.
 const tappHome = (process.env.TAPP_HOME || path.join(os.homedir(), ".tapp")).trim();
 process.env.TAPP_HOME = tappHome;
 // TAPP_HOME is created lazily (just before the switch) so `--help`, `help`, and `version` never
@@ -206,6 +206,26 @@ function printEngineError(r) {
   }
 }
 
+async function promptForInitTarget(details) {
+  const choices = Array.isArray(details?.choices) ? details.choices : [];
+  if (!choices.length || !process.stdin.isTTY || !process.stderr.isTTY || process.env.CI) return null;
+  const { createInterface } = await import("node:readline/promises");
+  const terminal = createInterface({ input: process.stdin, output: process.stderr });
+  console.error("\nTapp found multiple application targets. Which one should it explore?");
+  choices.forEach((choice, index) => console.error(`  ${index + 1}) ${choice.platform} · ${choice.name} (${choice.sourcePath})`));
+  try {
+    while (true) {
+      const answer = String(await terminal.question(`Select 1-${choices.length} (or q to cancel): `)).trim();
+      if (/^(?:q|quit|cancel)$/i.test(answer)) return null;
+      const selected = Number(answer);
+      if (Number.isInteger(selected) && selected >= 1 && selected <= choices.length) return choices[selected - 1];
+      console.error(`Enter a number from 1 to ${choices.length}, or q to cancel.`);
+    }
+  } finally {
+    terminal.close();
+  }
+}
+
 // Turn whatever the user gave us (nothing / repo dir / .app / bundle id) into an installed
 // bundle id, narrating build/install progress on stderr.
 async function resolveTargetOrExit(engine, input) {
@@ -302,7 +322,7 @@ switch (command) {
     }
     const platform = typeof flags.platform === "string" ? flags.platform.toLowerCase()
       : typeof flags.url === "string" ? "web"
-      : typeof flags["app-id"] === "string" || typeof flags.apk === "string" ? "android" : "ios";
+      : typeof flags["app-id"] === "string" || typeof flags.apk === "string" ? "android" : "";
     if (explore && platform === "ios") requireMacFor("iOS init exploration");
     const actions = flags.actions === undefined ? 40 : Number(flags.actions);
     const timeout = flags.timeout === undefined ? 600 : Number(flags.timeout);
@@ -312,31 +332,52 @@ switch (command) {
     }
     const engine = explore ? await engineImport() : null;
     const { initializeProductProject } = await import(path.join(packageRoot, "mcp-server", "src", "product-operations.js"));
+    const initOptions = {
+      projectDir,
+      mode: flags["dry-run"] === true ? "inspect" : explore ? "explore" : flags.refresh === true ? "refresh" : "write",
+      ownedUrl: typeof flags.url === "string" ? flags.url : "",
+      platform: typeof flags.platform === "string" ? flags.platform.toLowerCase() : explore ? platform : "",
+      target: typeof flags.target === "string" ? flags.target : "",
+      bundleId: typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : "",
+      appId: typeof flags["app-id"] === "string" ? flags["app-id"] : "",
+      apkPath: typeof flags.apk === "string" ? path.resolve(flags.apk) : undefined,
+      serial: typeof flags.serial === "string" ? flags.serial : undefined,
+      maxActions: actions,
+      timeout,
+      testEmail: typeof flags.email === "string" ? flags.email : undefined,
+      testPassword: typeof flags.password === "string" ? flags.password : undefined,
+      runExploration: engine?.runInitExploration,
+      onProgress: (progress) => {
+        const activePlatform = progress.platform || platform;
+        process.stderr.write(`\r🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${activePlatform === "web" ? "pages reached" : activePlatform === "ios" ? "structural states observed" : "screens reached"}   `);
+      },
+      onStatus: (status) => console.error(`⏳ ${status}`),
+      outDir,
+      maxContracts,
+    };
     let result;
+    let failure = null;
     try {
-      result = await initializeProductProject({
-        projectDir,
-        mode: flags["dry-run"] === true ? "inspect" : explore ? "explore" : flags.refresh === true ? "refresh" : "write",
-        ownedUrl: typeof flags.url === "string" ? flags.url : "",
-        platform: typeof flags.platform === "string" ? flags.platform.toLowerCase() : explore ? platform : "",
-        target: typeof flags.target === "string" ? flags.target : projectDir,
-        bundleId: typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : "",
-        appId: typeof flags["app-id"] === "string" ? flags["app-id"] : "",
-        apkPath: typeof flags.apk === "string" ? path.resolve(flags.apk) : undefined,
-        serial: typeof flags.serial === "string" ? flags.serial : undefined,
-        maxActions: actions,
-        timeout,
-        testEmail: typeof flags.email === "string" ? flags.email : undefined,
-        testPassword: typeof flags.password === "string" ? flags.password : undefined,
-        runExploration: engine?.runInitExploration,
-        onProgress: (progress) => process.stderr.write(`\r🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached"}   `),
-        onStatus: (status) => console.error(`⏳ ${status}`),
-        outDir,
-        maxContracts,
-      });
+      result = await initializeProductProject(initOptions);
     } catch (error) {
+      failure = error;
+      const choice = explore && error.details?.reason === "target-selection-required"
+        ? await promptForInitTarget(error.details)
+        : null;
+      if (choice) {
+        if (choice.platform === "ios") requireMacFor("iOS init exploration");
+        console.error(`🎯 Exploring ${choice.platform}:${choice.name} (${choice.sourcePath})`);
+        try {
+          result = await initializeProductProject({ ...initOptions, platform: choice.platform, target: choice.selector });
+          failure = null;
+        } catch (retryError) {
+          failure = retryError;
+        }
+      }
+    }
+    if (failure) {
       if (explore) process.stderr.write("\n");
-      console.error(`❌ Could not initialize repository: ${error.message || String(error)}`);
+      printEngineError({ error: `Could not initialize repository: ${failure.message || String(failure)}`, details: failure.details || {} });
       process.exit(2);
     }
     if (explore) process.stderr.write("\n");
@@ -411,7 +452,10 @@ switch (command) {
           testPassword: typeof flags.password === "string" ? flags.password : undefined,
           startWebTarget: engine.startManagedWebTarget,
           stopWebTarget: engine.stopManagedWebTarget,
-          onProgress: (entry) => { if (entry.text) console.error(`⏳ ${entry.text}`); },
+          // Contract execution is emitted in full on stdout below. Keep build/runtime/replay
+          // status live on stderr, but do not echo the execution transcript there as well — an
+          // interactive terminal merges the streams and would otherwise show every result twice.
+          onProgress: (entry) => { if (entry.text && entry.phase !== "execute") console.error(`⏳ ${entry.text}`); },
         });
       } catch (error) {
         console.error(`❌ Could not validate contract drafts: ${error.message || String(error)}`);
@@ -1179,8 +1223,14 @@ switch (command) {
     }
 
     try {
-      await import("playwright");
-      ok("Web", "Playwright installed");
+      const { chromium } = await import("playwright");
+      let executable = "";
+      try { executable = chromium.executablePath(); } catch { /* report the missing browser below */ }
+      if (executable && fs.existsSync(executable)) {
+        ok("Web", `Playwright + Chromium (${executable})`);
+      } else {
+        console.log("  ⬜ Web — Playwright installed; Chromium browser missing (run: npx playwright install chromium)");
+      }
     } catch {
       console.log("  ⬜ Web — install Playwright in the app workspace: npm install -D playwright && npx playwright install chromium");
     }

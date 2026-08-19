@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.17.0-rc.10
+
+**Honest mixed-repository onboarding and first-run diagnostics.**
+
+- Detect every plausible application target before source-connected exploration instead of silently
+  choosing the first target in a repository containing multiple apps.
+- Ask a human terminal user to choose from a deterministic numbered list, return structured target
+  choices to MCP clients, and stop non-interactive callers safely with exact retry commands.
+- Retain every detected target in the application model while recording the user's selection as the
+  default for later bare exploration.
+- Preserve actionable Xcode compiler errors when build output is long.
+- Make `doctor` verify that Chromium is installed, and avoid duplicating contract-validation output
+  when a terminal combines stdout and stderr.
+
 ## 0.17.0-rc.9
 
 **Clean-install help correction.**

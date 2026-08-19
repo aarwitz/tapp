@@ -44,3 +44,10 @@ commit.
   outcome; a shallow run is `inconclusive`, never a pass; no LLM in the decision loop; typed secrets never appear
   in transcripts, logs, or tool results.
 - Exploration is adaptive; don't write tests that assume a fixed traversal path.
+
+## Workspace hygiene
+
+Use temporary Git worktrees only while isolated work is active. Once its commits are pushed and no
+unique changes remain, remove the worktree and its local branch. Keep runtime evidence under
+`TAPP_HOME` (normally `~/.tapp/`) rather than a repository-root `captures/` directory; generated
+build products and dependency trees are disposable and must not become handoff artifacts.

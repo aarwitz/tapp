@@ -163,6 +163,64 @@ test("shared target preparation keeps iOS, Android, and web build semantics out 
   await assert.rejects(prepareProductTarget({ projectDir:root }), /Multiple targets match/);
 });
 
+function mixedIosWebRepository() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-mixed-init-"));
+  fs.mkdirSync(path.join(root, "Product.xcodeproj"), { recursive: true });
+  fs.mkdirSync(path.join(root, "website"), { recursive: true });
+  fs.writeFileSync(path.join(root, "website", "package.json"), JSON.stringify({ name: "product-web" }));
+  fs.writeFileSync(path.join(root, "website", "index.html"), "<main>Product web</main>");
+  return root;
+}
+
+test("fresh source-connected exploration refuses to guess among mixed repository targets", async () => {
+  const root = mixedIosWebRepository();
+  let explored = false;
+  await assert.rejects(
+    initializeProductProject({
+      projectDir: root,
+      mode: "explore",
+      runExploration: async () => { explored = true; return {}; },
+    }),
+    (error) => {
+      assert.match(error.message, /Multiple application targets were detected; Tapp will not guess/);
+      assert.match(error.message, /ios:Product \(Product\.xcodeproj\)/);
+      assert.match(error.message, /web:product-web \(website\)/);
+      assert.match(error.message, /--platform ios --target "Product\.xcodeproj"/);
+      assert.match(error.message, /--platform web --target "website"/);
+      assert.equal(error.code, "TAPP_TARGET_SELECTION_REQUIRED");
+      assert.equal(error.details.reason, "target-selection-required");
+      assert.deepEqual(error.details.choices.map((choice) => ({ platform: choice.platform, selector: choice.selector })), [
+        { platform: "ios", selector: "Product.xcodeproj" },
+        { platform: "web", selector: "website" },
+      ]);
+      return true;
+    }
+  );
+  assert.equal(explored, false, "ambiguity is resolved before any build, launch, or exploration");
+  assert.equal(fs.existsSync(path.join(root, ".tapp")), false, "an ambiguous first run does not write repository artifacts");
+});
+
+test("explicit first-run target becomes the default without erasing other detected platforms", async () => {
+  const root = mixedIosWebRepository();
+  let request;
+  const result = await initializeProductProject({
+    projectDir: root,
+    mode: "explore",
+    platform: "web",
+    target: "website",
+    runExploration: async (value) => {
+      request = value;
+      return { platform: "web", target: "http://127.0.0.1:4173", findings: [], inconclusive: false };
+    },
+  });
+  assert.equal(request.platform, "web");
+  assert.equal(request.target, path.join(fs.realpathSync(root), "website"));
+  assert.deepEqual(result.model.targets.map((target) => target.platform).sort(), ["ios", "web"]);
+  const web = result.model.targets.find((target) => target.platform === "web");
+  assert.equal(result.model.application.defaultTargetId, web.id, "the explicit choice powers the next bare explore");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".tapp", "application-model.json"), "utf8")).targets.length, 2);
+});
+
 test("CLI baseline is a thin adapter over shared gate and baseline operations", () => {
   const source = fs.readFileSync("bin/tapp.js", "utf8");
   const baseline = source.match(/case "baseline":[\s\S]*?case "ci":/)?.[0] || "";

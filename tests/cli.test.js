@@ -92,6 +92,19 @@ test("tapp doctor keeps the package-only CLI path primary", () => {
   assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
 });
 
+test("tapp doctor does not call web ready when Playwright exists but Chromium is absent", () => {
+  const browsers = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-empty-browsers-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-doctor-home-"));
+  const run = spawnSync("node", [tappBin, "doctor"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers, TAPP_HOME: home },
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  assert.match(run.stdout, /Playwright installed; Chromium browser missing/);
+  assert.doesNotMatch(run.stdout, /✅ Web/);
+});
+
 test("tapp report latest picks the newest capture WITH exploration markers, skipping flow/scenario dirs", () => {
   // The captures directory fills with flow-*/scenario-* evidence dirs that have no ocqa-markers.txt.
   // `report` (latest) must resolve to the newest capture that actually has exploration markers, or it
@@ -394,6 +407,26 @@ test("tapp init --explore rejects dry-run before browser work", () => {
   assert.match(String(dryRunFailure?.stderr || ""), /cannot be combined with --dry-run/);
 });
 
+test("tapp init --explore lists mixed targets before attempting a build", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-mixed-targets-"));
+  fs.mkdirSync(path.join(project, "Product.xcodeproj"));
+  fs.mkdirSync(path.join(project, "website"));
+  fs.writeFileSync(path.join(project, "website", "package.json"), JSON.stringify({ name: "product-web" }));
+  fs.writeFileSync(path.join(project, "website", "index.html"), "<main>Product web</main>");
+  const home = path.join(project, "tapp-home");
+  const result = spawnSync("node", [tappBin, "init", project, "--explore"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, TAPP_HOME: home },
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Multiple application targets were detected; Tapp will not guess/);
+  assert.match(result.stderr, /--platform ios --target "Product\.xcodeproj"/);
+  assert.match(result.stderr, /--platform web --target "website"/);
+  assert.doesNotMatch(result.stderr, /Building for the simulator/);
+  assert.equal(fs.existsSync(path.join(project, ".tapp")), false);
+});
+
 test("tapp init --explore safely refreshes existing artifacts through shared semantics", { skip: skipRealBrowser }, () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-init-explore-refresh-"));
   fs.writeFileSync(path.join(project, "index.html"), "<main>fixture</main>");
@@ -674,9 +707,12 @@ test("tapp plan generate stays untrusted until tapp plan validate replays the dr
   const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
   try {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    const validated = execFileSync("node", [tappBin, "plan", "validate", planPath, "--project-dir", project, "--platform", "web", "--url", `http://127.0.0.1:${port}`], { cwd: root, encoding: "utf8" });
+    const validationRun = spawnSync("node", [tappBin, "plan", "validate", planPath, "--project-dir", project, "--platform", "web", "--url", `http://127.0.0.1:${port}`], { cwd: root, encoding: "utf8" });
+    assert.equal(validationRun.status, 0, validationRun.stderr || validationRun.stdout);
+    const validated = validationRun.stdout;
     assert.match(validated, /RELEASE CONTRACT PASSED/);
     assert.match(validated, /1 passed · 0 failed on web/);
+    assert.doesNotMatch(validationRun.stderr, /RELEASE CONTRACT PASSED/, "interactive validation must not duplicate the execution transcript across stdout and stderr");
     const validatedPlan = JSON.parse(fs.readFileSync(planPath, "utf8"));
     assert.equal(validatedPlan.items.find((item) => item.name === "openHomeWorks").generation.status, "validated-draft");
     assert.equal(validatedPlan.items.find((item) => item.name === "openHomeWorks").generation.trusted, true);
@@ -780,6 +816,17 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
       assert.equal(actors.result.structuredContent.actors.alice.credentials.email.env, "ALICE_EMAIL");
       assert.equal(actors.result.structuredContent.actors.bob.session, "isolated");
       assert.doesNotMatch(JSON.stringify(actors.result.structuredContent), /alice@example\.test|"demo"/);
+      send({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "tapp_init", arguments: { operation: "explore", projectDir: ".", maxActions: 1, timeout: 1 } } });
+      const targetChoice = await waitFor(5);
+      assert.equal(targetChoice.result.isError, true);
+      assert.match(targetChoice.result.content[0].text, /Multiple application targets were detected/);
+      assert.equal(targetChoice.result.structuredContent.reason, "target-selection-required");
+      assert.ok(targetChoice.result.structuredContent.choices.length > 1);
+      for (const choice of targetChoice.result.structuredContent.choices) {
+        assert.ok(["ios", "android", "web"].includes(choice.platform));
+        assert.equal(typeof choice.selector, "string");
+        assert.match(choice.command, /tapp init \. --explore --platform/);
+      }
     }
   } finally {
     proc.kill();

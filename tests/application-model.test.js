@@ -230,6 +230,7 @@ test("a multi-target workspace uses the repository name instead of the first mod
   write(path.join(root, "alpha/.tapp/contracts/auth.contract.ts"), `import { defineContract } from "@aarwitz/tapp/contracts"; export default defineContract({name:"alphaAuthWorks",title:"Alpha authentication",businessValue:"Alpha users enter",criticality:"high",platforms:["android"],actors:{customer:{}},steps:[{actor:"customer",task:"signIn"}]});`);
   const { model } = await buildInitArtifacts({ projectDir: root });
   assert.equal(model.application.name, "MobileSuite");
+  assert.equal(model.application.defaultTargetId, "", "detection order must not silently become user intent in a multi-target repository");
   assert.deepEqual(model.artifacts.contracts.map((contract) => contract.name), ["alphaAuthWorks"]);
   assert.deepEqual(model.artifacts.contracts[0].actors, [{ name: "customer", session: "default", credentialRequirements: [], credentialBindings: {} }]);
   assert.equal(model.artifacts.tasks[0].path, "alpha/.tapp/tasks/sign-in.json");

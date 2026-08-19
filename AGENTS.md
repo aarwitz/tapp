@@ -21,6 +21,15 @@ npx -y @aarwitz/tapp explore app.apk --platform android --app-id com.acme.app
 npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
+If repository onboarding detects multiple application targets, target detection is deterministic but
+the choice is the user's. In a human TTY, Tapp displays a numbered selector and continues in the same
+command. A non-interactive CLI prints the exact choices and exits before building. MCP returns
+`reason: "target-selection-required"` with structured `choices[]` (`platform`, `name`, `sourcePath`,
+`selector`, and exact `command`). **Do not pick one yourself.** Present those choices to the user
+with the client's native multiple-choice question UI when available, then rerun using the selected
+`--platform` and `--target`. Plain chat can list the same choices when the client has no question
+widget.
+
 For focused web evidence, `open` and `tree` accept one semantic interaction plus an async content
 wait: `tapp open https://example.com --tap "Not now" --wait-for "Dashboard"`. Tapp waits for the
 page to stabilize before capturing it and warns honestly if the bounded wait ends while it is still

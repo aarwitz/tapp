@@ -35,8 +35,13 @@ function clampOutput(value, maxChars = MAX_OUTPUT_CHARS) {
     return value;
   }
 
-  const dropped = value.length - maxChars;
-  return `${value.slice(0, maxChars)}\n...[truncated ${dropped} chars]`;
+  // Compiler/build diagnostics are normally emitted at the end. Preserve both ends so a long
+  // dependency build cannot truncate away the one actionable error the user needs.
+  const marker = "\n...[output truncated]...\n";
+  const retained = Math.max(0, maxChars - marker.length);
+  const head = Math.ceil(retained / 2);
+  const tail = Math.floor(retained / 2);
+  return `${value.slice(0, head)}${marker}${value.slice(value.length - tail)}`;
 }
 
 function asBoolean(value, fallback = false) {
@@ -3042,14 +3047,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!isInsideDir(projectDir, resolvedOut)) return errorResult("outDir must be inside projectDir");
       const selectedPlatform = isNonEmptyString(args.platform) ? args.platform.trim().toLowerCase()
         : isNonEmptyString(args.url) ? "web"
-        : isNonEmptyString(args.androidAppId) || isNonEmptyString(args.apkPath) ? "android" : "ios";
+        : isNonEmptyString(args.androidAppId) || isNonEmptyString(args.apkPath) ? "android" : "";
       const progressToken = request.params && request.params._meta ? request.params._meta.progressToken : undefined;
       const budget = Math.max(1, Math.min(1000, asInteger(args.maxActions, 40)));
       const result = await initializeProductProject({
         projectDir, mode: operation, outDir,
         ownedUrl: isNonEmptyString(args.url) ? args.url.trim() : "",
         platform: isNonEmptyString(args.platform) ? args.platform.trim().toLowerCase() : operation === "explore" ? selectedPlatform : "",
-        target: isNonEmptyString(args.target) ? args.target.trim() : projectDir,
+        target: isNonEmptyString(args.target) ? args.target.trim() : "",
         bundleId: isNonEmptyString(args.appBundleId) ? args.appBundleId.trim() : "",
         appId: isNonEmptyString(args.androidAppId) ? args.androidAppId.trim() : "",
         apkPath: isNonEmptyString(args.apkPath) ? path.resolve(projectDir, args.apkPath.trim()) : undefined,
@@ -3067,7 +3072,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const pending = plan.items.filter((item) => item.decision === "pending");
       const summary = `🧭 Tapp init — ${model.application.name} · ${model.targets.length} target(s) · UI Map ${model.uiMap.status} (${model.uiMap.nodeCount} states/${model.uiMap.edgeCount} transitions) · ${plan.items.length} plan item(s), ${pending.length} pending · ${blocking.length} blocking requirement(s)${exploration ? ` · real ${exploration.platform} exploration: ${(exploration.findings || []).length} finding(s)${exploration.inconclusive ? " (inconclusive)" : ""}` : ""}`;
       return richResult(summary, { model, plan, written: written ? { modelPath: written.modelPath, planPath: written.planPath } : null, exploration });
-    } catch (error) { return errorResult("Could not initialize Tapp repository artifacts", { detail: error.message || String(error) }); }
+    } catch (error) {
+      const detail = error.message || String(error);
+      const message = error.details?.reason === "target-selection-required"
+        ? detail
+        : "Could not initialize Tapp repository artifacts";
+      return errorResult(message, { detail, ...(error.details || {}) });
+    }
   }
 
   if (name === "tapp_actor_config") {

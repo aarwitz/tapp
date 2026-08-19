@@ -424,7 +424,7 @@ function applicationName(root, targets) {
   return pkg?.name || (targets.length === 1 ? targets[0].name : path.basename(root));
 }
 
-export async function inspectApplicationRepository({ projectDir, ownedUrl = "", platform = "", targetValidation = null, outDir = ".tapp" } = {}) {
+export async function inspectApplicationRepository({ projectDir, ownedUrl = "", platform = "", targetValidation = null, defaultTargetId = "", outDir = ".tapp" } = {}) {
   const root = fs.realpathSync(path.resolve(projectDir || process.cwd()));
   const inventory = walk(root);
   let targets = [
@@ -567,11 +567,14 @@ export async function inspectApplicationRepository({ projectDir, ownedUrl = "", 
   for (const error of taskErrors) requirements.push({ id: stableId("task-error", error.path), severity: "blocking", status: "invalid", message: error.error, remediation: `Fix ${error.path} before generation.` });
   for (const error of contractErrors) requirements.push({ id: stableId("contract-error", error.path), severity: "blocking", status: "invalid", message: error.error, remediation: `Fix ${error.path} before trusting the release plan.` });
 
+  const recordedDefaultTargetId = targets.some((target) => target.id === defaultTargetId)
+    ? defaultTargetId
+    : targets.length === 1 ? targets[0].id : "";
   const model = {
     schemaVersion: 1, kind: "tapp-application-model",
-    // defaultTargetId: which target a bare `tapp explore` prepares when the repo has several (ADR-0005
-    // §5 resolution ladder). First detected; an explicit --target/--platform always overrides it.
-    application: { name: applicationName(root, targets), repositoryRoot: ".", platforms: [...new Set(targets.map((target) => target.platform))].sort(), targetIds: targets.map((target) => target.id), defaultTargetId: targets[0]?.id || "" },
+    // defaultTargetId is recorded only when selection is unambiguous or the user explicitly chose
+    // a target during source-connected exploration. Detection order is not user intent.
+    application: { name: applicationName(root, targets), repositoryRoot: ".", platforms: [...new Set(targets.map((target) => target.platform))].sort(), targetIds: targets.map((target) => target.id), defaultTargetId: recordedDefaultTargetId },
     targets,
     actors,
     entities,
