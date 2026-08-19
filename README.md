@@ -51,8 +51,8 @@ claude plugin install tapp@tapp
 ```
 
 Restart Claude Code after installation, open the application repository, and use the short prompt
-above. The plugin bundles both the `tapp` Agent Skill and the local stdio MCP server; no additional
-prompt block or bundle id is required.
+above. The plugin installs the `tapp` Agent Skill and launches the matching version of Tapp's stdio
+MCP server through npm; no additional prompt block, MCP configuration, or bundle id is required.
 
 **Claude, Codex, Cursor, Copilot, and other Agent Skills clients — skill only:**
 

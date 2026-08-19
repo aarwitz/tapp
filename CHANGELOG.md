@@ -9,6 +9,9 @@
   when an older globally installed `tapp` binary is already on `PATH`.
 - Lock that invariant in the agent-surface suite so the short agent and human journeys cannot drift
   back to npm's ambiguous unversioned shorthand.
+- Launch the Claude plugin's MCP through an exact-version `npx` package spec. Claude's npm plugin
+  cache copies package contents without hydrating dependencies, so directly executing the cached
+  `bin/tapp.js` could not load the MCP SDK; the same-version registry invocation is self-contained.
 
 ## 0.17.0-rc.12
 

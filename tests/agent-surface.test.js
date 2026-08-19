@@ -42,8 +42,8 @@ test("npm and the Claude plugin ship the same current skill and MCP server", () 
   assert.equal(plugin.version, pkg.version);
   assert.equal(server.version, pkg.version);
   assert.deepEqual(plugin.mcpServers.tapp, {
-    command: "node",
-    args: ["${CLAUDE_PLUGIN_ROOT}/bin/tapp.js", "mcp"],
+    command: "npx",
+    args: ["-y", `@aarwitz/tapp@${pkg.version}`, "mcp"],
     cwd: "${CLAUDE_PROJECT_DIR}",
   });
   assert.match(marketplace.description, /official Tapp plugin/i);

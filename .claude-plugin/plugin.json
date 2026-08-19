@@ -21,9 +21,10 @@
   ],
   "mcpServers": {
     "tapp": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/bin/tapp.js",
+        "-y",
+        "@aarwitz/tapp@0.17.0-rc.13",
         "mcp"
       ],
       "cwd": "${CLAUDE_PROJECT_DIR}"
