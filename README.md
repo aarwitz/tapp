@@ -6,8 +6,8 @@
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![Agent Skill](https://img.shields.io/badge/Agent_Skill-install-6b5cff)](https://skills.sh/aarwitz/tapp)
 [![VS Code extension](https://img.shields.io/badge/VS_Code-extension-0098FF)](https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp)
-[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHAiLCJtY3AiXX0=)
-[![VS Code MCP](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%22%2C%22mcp%22%5D%7D)
+[![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHBAbGF0ZXN0IiwibWNwIl19)
+[![VS Code MCP](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%40latest%22%2C%22mcp%22%5D%7D)
 
 **Tapp is the release-contract and evidence layer for teams shipping agent-authored applications.**
 It turns a repository and real product into an observed UI Map, a compact reviewed deterministic
@@ -67,7 +67,7 @@ or `--agent claude-code`, `--agent codex`, and similar selectors to constrain th
 **No agent integration:** run the npm package directly from an app repository:
 
 ```bash
-npx -y @aarwitz/tapp init . --explore
+npx -y @aarwitz/tapp@latest init . --explore
 ```
 
 **VS Code:** install [Tapp from the Marketplace](https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp).
@@ -89,8 +89,8 @@ emulator/device; web needs Playwright + Chromium.
 From the app repository, let the agent see the current screen and then explore it:
 
 ```bash
-npx -y @aarwitz/tapp open   # builds/launches as needed; prints a screenshot path + screen summary
-npx -y @aarwitz/tapp explore     # explores the real app; prints findings + evidence (an observation, not a gate)
+npx -y @aarwitz/tapp@latest open   # builds/launches as needed; prints a screenshot path + screen summary
+npx -y @aarwitz/tapp@latest explore     # explores the real app; prints findings + evidence (an observation, not a gate)
 ```
 
 Claude Code can read the saved image with its file-reading tool; Codex can open it with
@@ -105,22 +105,22 @@ To bootstrap maintained release infrastructure, preview the repository model and
 before Tapp writes anything:
 
 ```bash
-npx -y @aarwitz/tapp init . --dry-run --json-out /tmp/tapp-init.json
+npx -y @aarwitz/tapp@latest init . --dry-run --json-out /tmp/tapp-init.json
 # Build/start the detected web target, ground the first UI Map, then stop it.
-npx -y @aarwitz/tapp init . --explore --platform web
+npx -y @aarwitz/tapp@latest init . --explore --platform web
 # Or build/install the detected Xcode target, ground the map, and persist the validated scheme.
-npx -y @aarwitz/tapp init . --explore --platform ios --target .
+npx -y @aarwitz/tapp@latest init . --explore --platform ios --target .
 # Or connect to an already-running owned URL:
-npx -y @aarwitz/tapp init . --explore --platform web --url http://127.0.0.1:4173
+npx -y @aarwitz/tapp@latest init . --explore --platform web --url http://127.0.0.1:4173
 # If the app has roles/accounts, bind names once; values stay in local/CI secrets.
-npx -y @aarwitz/tapp actor set alice . --role member --session isolated \
+npx -y @aarwitz/tapp@latest actor set alice . --role member --session isolated \
   --credential email=ALICE_EMAIL --credential password=ALICE_PASSWORD
 # Review-only path: tapp init . → tapp plan show → tapp plan review --approve ...
 
 # After approved drafts replay and are promoted, establish the selected target's baseline
 # through the ordinary full gate, then generate the reviewable GitHub workflow.
-npx -y @aarwitz/tapp baseline create . --platform web
-npx -y @aarwitz/tapp ci install .
+npx -y @aarwitz/tapp@latest baseline create . --platform web
+npx -y @aarwitz/tapp@latest ci install .
 ```
 
 In a repository containing multiple apps (for example, iOS plus web),
@@ -144,14 +144,14 @@ Every verb takes whatever you have: nothing (auto-detects the repo you're in, or
 already on the simulator), a repo directory, a `path/to/App.app`, or a bundle id:
 
 ```bash
-npx -y @aarwitz/tapp open [target]   # launch the app → screen summary + screenshot file
-npx -y @aarwitz/tapp tree [target]   # accessibility tree of the current screen
-npx -y @aarwitz/tapp shot            # screenshot the booted simulator
-npx -y @aarwitz/tapp apps            # what's installed on the simulator (names + bundle ids)
-npx -y @aarwitz/tapp build [dir]     # just build + install (scheme auto-detected)
+npx -y @aarwitz/tapp@latest open [target]   # launch the app → screen summary + screenshot file
+npx -y @aarwitz/tapp@latest tree [target]   # accessibility tree of the current screen
+npx -y @aarwitz/tapp@latest shot            # screenshot the booted simulator
+npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator (names + bundle ids)
+npx -y @aarwitz/tapp@latest build [dir]     # just build + install (scheme auto-detected)
 ```
 
-Web (beta): `npx -y @aarwitz/tapp explore http://localhost:3000` *(one-time setup:
+Web (beta): `npx -y @aarwitz/tapp@latest explore http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*. Add `--watch` to open Tapp's controlled,
 isolated Chromium window and follow its clicks with an on-page pointer/action label. Tapp hides that
 watch UI from saved evidence screenshots and does not automate your personal/default browser profile.
@@ -160,26 +160,26 @@ Focused web inspection waits briefly for loading states to settle. If a consent 
 blocks the screen, dismiss it and wait for the content you care about in the same package-only call:
 
 ```bash
-npx -y @aarwitz/tapp open https://example.com --tap "Not now" --wait-for "Dashboard"
-npx -y @aarwitz/tapp tree https://example.com --tap "Not now" --wait-for "Dashboard" --json
+npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for "Dashboard"
+npx -y @aarwitz/tapp@latest tree https://example.com --tap "Not now" --wait-for "Dashboard" --json
 ```
 
 Android:
 
 ```bash
-npx -y @aarwitz/tapp explore path/to/app-debug.apk --platform android --app-id com.acme.app
-npx -y @aarwitz/tapp open com.acme.app --platform android
+npx -y @aarwitz/tapp@latest explore path/to/app-debug.apk --platform android --app-id com.acme.app
+npx -y @aarwitz/tapp@latest open com.acme.app --platform android
 ```
 
 Optional but recommended (prebuilds the test harness so the first run is fast):
 ```bash
-npx -y @aarwitz/tapp install    # ~2 min, one time
-npx -y @aarwitz/tapp doctor     # verify Xcode / simulators / toolchain
+npx -y @aarwitz/tapp@latest install    # ~2 min, one time
+npx -y @aarwitz/tapp@latest doctor     # verify Xcode / simulators / toolchain
 ```
 
 ### Optional browser workspace
 
-`npx -y @aarwitz/tapp app .` opens a local Release Studio for people who want visual repository
+`npx -y @aarwitz/tapp@latest app .` opens a local Release Studio for people who want visual repository
 onboarding, release-plan review, and CI preparation. It is not required for the coding-agent
 `open`/`explore` workflow.
 
@@ -191,14 +191,14 @@ context** (the model literally sees the screen) and the **interactive session lo
 
 **Claude Code:**
 ```bash
-claude mcp add tapp -- npx -y @aarwitz/tapp mcp
+claude mcp add tapp -- npx -y @aarwitz/tapp@latest mcp
 ```
 
 **Cursor / VS Code (Copilot)** — add to `~/.cursor/mcp.json` (Cursor) or `.vscode/mcp.json` (VS Code):
 ```json
 {
   "servers": {
-    "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp", "mcp"] }
+    "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp@latest", "mcp"] }
   }
 }
 ```
@@ -207,10 +207,10 @@ claude mcp add tapp -- npx -y @aarwitz/tapp mcp
 ```toml
 [mcp_servers.tapp]
 command = "npx"
-args = ["-y", "@aarwitz/tapp", "mcp"]
+args = ["-y", "@aarwitz/tapp@latest", "mcp"]
 ```
 
-**Any other MCP client:** stdio command `npx -y @aarwitz/tapp mcp`.
+**Any other MCP client:** stdio command `npx -y @aarwitz/tapp@latest mcp`.
 
 Then ask your agent:
 > "Explore my app and show me what breaks."
@@ -353,7 +353,7 @@ accepts that `.app`, detects its bundle id, writes report artifacts, and exits n
 gate fails:
 
 ```bash
-npx -y @aarwitz/tapp ci --app path/to/MyApp.app \
+npx -y @aarwitz/tapp@latest ci --app path/to/MyApp.app \
   --project-dir . --pr-base origin/main --pr-head HEAD \
   --target-key target_ios_myapp \
   --pr-plan-out tapp-pr-plan.json \
@@ -401,9 +401,9 @@ your agent proves its UI work instead of claiming it:
 ```markdown
 ## Verifying UI changes
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
-(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp open` from the
+(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp@latest open` from the
 repo root (it finds and builds the Xcode project itself) and look at the screenshot it saves as
-proof. Before declaring a feature done, run `npx -y @aarwitz/tapp explore` (or `explore <url>` for web)
+proof. Before declaring a feature done, run `npx -y @aarwitz/tapp@latest explore` (or `explore <url>` for web)
 and report the findings + evidence. A change is not "done" until it has been seen working.
 (If the tapp MCP server is connected, the tapp_* tools do the same with inline screenshots —
 tapp_build builds + installs the app and returns the bundle id for tapp_explore.)

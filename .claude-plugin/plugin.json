@@ -1,7 +1,7 @@
 {
   "name": "tapp",
   "description": "Test real iOS, Android, and web apps with Tapp. Includes the Tapp agent skill plus MCP hands, eyes, exploration, replayable Flows, and deterministic release evidence.",
-  "version": "0.17.0-rc.12",
+  "version": "0.17.0-rc.13",
   "author": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"

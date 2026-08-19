@@ -16,7 +16,7 @@ Each module contains committed `.tapp/flows/*.yml` files. Run one with:
 
 ```bash
 adb install -r demoapp/build/outputs/apk/debug/demoapp-debug.apk
-npx -y @aarwitz/tapp flow run demoapp/.tapp/flows/smoke.yml \
+npx -y @aarwitz/tapp@latest flow run demoapp/.tapp/flows/smoke.yml \
   --platform android --app-id io.tapp.corpus.demo \
   --apk demoapp/build/outputs/apk/debug/demoapp-debug.apk
 ```

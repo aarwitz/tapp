@@ -20,15 +20,15 @@ screen or journey works from source inspection alone.
 | Decide whether a merge passes policy | `ci`; exploration never decides this |
 
 Prefer connected `tapp_*` MCP tools when available: they keep interactive sessions alive and return
-screenshots inline. Otherwise run `npx -y @aarwitz/tapp` from the app repository. Do not require MCP,
+screenshots inline. Otherwise run `npx -y @aarwitz/tapp@latest` from the app repository. Do not require MCP,
 an account, an API key, or a global install for the core workflow.
 
 ## Start source-connected
 
 When the user asks for a general first test of a repository:
 
-1. If `.tapp/application-model.json` exists, run `npx -y @aarwitz/tapp explore`.
-2. Otherwise run `npx -y @aarwitz/tapp init . --explore` or call `tapp_init` with
+1. If `.tapp/application-model.json` exists, run `npx -y @aarwitz/tapp@latest explore`.
+2. Otherwise run `npx -y @aarwitz/tapp@latest init . --explore` or call `tapp_init` with
    `{operation:"explore", projectDir:"."}`.
 3. If Tapp returns `target-selection-required`, present its actual choices and ask the user to pick.
    Never guess among multiple targets. Re-run with the selected platform/target exactly as Tapp

@@ -19,8 +19,8 @@ Requirements:
 Run directly from npm:
 
 ```bash
-npx -y @aarwitz/tapp doctor
-npx -y @aarwitz/tapp mcp
+npx -y @aarwitz/tapp@latest doctor
+npx -y @aarwitz/tapp@latest mcp
 ```
 
 Example MCP client configuration:
@@ -31,7 +31,7 @@ Example MCP client configuration:
     "tapp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@aarwitz/tapp", "mcp"]
+      "args": ["-y", "@aarwitz/tapp@latest", "mcp"]
     }
   }
 }

@@ -11,15 +11,15 @@ the app already on the simulator); it also accepts a repo dir, a `path/to/App.ap
 bundle id, or (web) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
-npx -y @aarwitz/tapp explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
-npx -y @aarwitz/tapp explore https://your-app.example --watch  # web: visibly follow the same exploration
-npx -y @aarwitz/tapp open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
-npx -y @aarwitz/tapp tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
-npx -y @aarwitz/tapp shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
-npx -y @aarwitz/tapp apps            # what's installed on the simulator, with bundle ids
-npx -y @aarwitz/tapp build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
-npx -y @aarwitz/tapp explore app.apk --platform android --app-id com.acme.app
-npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
+npx -y @aarwitz/tapp@latest explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
+npx -y @aarwitz/tapp@latest explore https://your-app.example --watch  # web: visibly follow the same exploration
+npx -y @aarwitz/tapp@latest open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
+npx -y @aarwitz/tapp@latest tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
+npx -y @aarwitz/tapp@latest shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
+npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator, with bundle ids
+npx -y @aarwitz/tapp@latest build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
+npx -y @aarwitz/tapp@latest explore app.apk --platform android --app-id com.acme.app
+npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
 If repository onboarding detects multiple application targets, target detection is deterministic but

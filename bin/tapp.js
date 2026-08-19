@@ -1256,7 +1256,7 @@ switch (command) {
 
     console.log(`\n  Home: ${tappHome}`);
     console.log(healthy
-      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp open [target]\n  npx -y @aarwitz/tapp explore [target]"
+      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp@latest open [target]\n  npx -y @aarwitz/tapp@latest explore [target]"
       : "\nFix the ❌ items above, then re-run: tapp doctor");
     process.exit(healthy ? 0 : 1);
   }
@@ -1642,9 +1642,9 @@ Agent Skill (optional — so a short “Use Tapp to test this app” prompt is e
                        claude plugin install tapp@tapp
 
 MCP hookup (optional — for inline screenshots and the tap/type/inspect session loop):
-  Claude Code:   claude mcp add tapp -- npx -y @aarwitz/tapp mcp
+  Claude Code:   claude mcp add tapp -- npx -y @aarwitz/tapp@latest mcp
   Cursor/VS Code (mcp.json):
-    { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp", "mcp"] } } }
+    { "servers": { "tapp": { "type": "stdio", "command": "npx", "args": ["-y", "@aarwitz/tapp@latest", "mcp"] } } }
 
 Then ask your agent things like:
   "Explore com.mycompany.app and show me what breaks"

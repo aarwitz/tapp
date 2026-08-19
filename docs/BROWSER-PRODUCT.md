@@ -12,7 +12,7 @@ in [`PRODUCT-ENGINE.md`](PRODUCT-ENGINE.md).
 ## Start locally
 
 ```bash
-npx -y @aarwitz/tapp app
+npx -y @aarwitz/tapp@latest app
 ```
 
 Tapp prints an authenticated one-time launch URL and opens it in the default browser. Use

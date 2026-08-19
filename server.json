@@ -6,13 +6,13 @@
     "url": "https://github.com/aarwitz/tapp",
     "source": "github"
   },
-  "version": "0.17.0-rc.12",
+  "version": "0.17.0-rc.13",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@aarwitz/tapp",
-      "version": "0.17.0-rc.12",
+      "version": "0.17.0-rc.13",
       "transport": {
         "type": "stdio"
       },

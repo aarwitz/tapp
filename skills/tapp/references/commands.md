@@ -6,34 +6,34 @@ Run from the application repository. `[target]` is optional when Tapp can read t
 or detect one unambiguous target.
 
 ```bash
-npx -y @aarwitz/tapp init . --explore
-npx -y @aarwitz/tapp explore [target]
-npx -y @aarwitz/tapp open [target]
-npx -y @aarwitz/tapp tree [target] --json
-npx -y @aarwitz/tapp shot
-npx -y @aarwitz/tapp report latest
-npx -y @aarwitz/tapp doctor
+npx -y @aarwitz/tapp@latest init . --explore
+npx -y @aarwitz/tapp@latest explore [target]
+npx -y @aarwitz/tapp@latest open [target]
+npx -y @aarwitz/tapp@latest tree [target] --json
+npx -y @aarwitz/tapp@latest shot
+npx -y @aarwitz/tapp@latest report latest
+npx -y @aarwitz/tapp@latest doctor
 ```
 
 Platform examples:
 
 ```bash
 # Web: Tapp may build/start/stop a source target; --watch is human-visible.
-npx -y @aarwitz/tapp explore --platform web --target website --watch
-npx -y @aarwitz/tapp explore https://staging.example.com
+npx -y @aarwitz/tapp@latest explore --platform web --target website --watch
+npx -y @aarwitz/tapp@latest explore https://staging.example.com
 
 # iOS: source repo, .app, or bundle id.
-npx -y @aarwitz/tapp explore MyApp.xcodeproj --platform ios
-npx -y @aarwitz/tapp open com.example.MyApp --platform ios
+npx -y @aarwitz/tapp@latest explore MyApp.xcodeproj --platform ios
+npx -y @aarwitz/tapp@latest open com.example.MyApp --platform ios
 
 # Android: app id is required; APK is optional if already installed.
-npx -y @aarwitz/tapp explore app-debug.apk --platform android --app-id com.example.app
+npx -y @aarwitz/tapp@latest explore app-debug.apk --platform android --app-id com.example.app
 ```
 
 Focused web evidence can perform one semantic interaction and wait for async content:
 
 ```bash
-npx -y @aarwitz/tapp open https://example.com --tap "Not now" --wait-for "Dashboard"
+npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for "Dashboard"
 ```
 
 ## MCP mapping
@@ -84,8 +84,8 @@ ask the user rather than pretending the explored surface was complete.
 Flow YAML belongs under `.tapp/flows/` and can replay without a model or API key:
 
 ```bash
-npx -y @aarwitz/tapp flow run .tapp/flows/smoke.yml
-npx -y @aarwitz/tapp ci
+npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
+npx -y @aarwitz/tapp@latest ci
 ```
 
 `tapp explore` observes. `tapp ci` applies versioned deterministic policy to evidence, selected

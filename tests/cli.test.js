@@ -97,8 +97,8 @@ test("watch mode fails clearly before native runtime work", () => {
 test("tapp doctor keeps the package-only CLI path primary", () => {
   const out = execFileSync("node", [tappBin, "doctor"], { cwd: root, encoding: "utf8" });
   assert.match(out, /Ready\. Start with:/);
-  assert.match(out, /@aarwitz\/tapp open \[target\]/);
-  assert.match(out, /@aarwitz\/tapp explore \[target\]/);
+  assert.match(out, /@aarwitz\/tapp@latest open \[target\]/);
+  assert.match(out, /@aarwitz\/tapp@latest explore \[target\]/);
   assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
 });
 

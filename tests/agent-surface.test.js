@@ -28,7 +28,12 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   assert.match(skill, /Never guess among multiple targets/);
   assert.match(skill, /exploration never decides this/i);
   assert.ok(skill.split("\n").length < 100, "SKILL.md stays compact enough for agent context");
-  assert.match(read("skills/tapp/references/commands.md"), /npx -y @aarwitz\/tapp init \. --explore/);
+  assert.match(read("skills/tapp/references/commands.md"), /npx -y @aarwitz\/tapp@latest init \. --explore/);
+  for (const relative of ["skills/tapp/SKILL.md", "skills/tapp/references/commands.md", "README.md", "AGENTS.md"]) {
+    assert.doesNotMatch(read(relative), /npx -y @aarwitz\/tapp(?!@)/, `${relative} does not let npx reuse a stale global Tapp`);
+  }
+  assert.doesNotMatch(read("README.md"), /"@aarwitz\/tapp",\s*"mcp"/, "copyable MCP config uses the explicit latest tag");
+  assert.match(read("README.md"), /"@aarwitz\/tapp@latest",\s*"mcp"/);
 });
 
 test("npm and the Claude plugin ship the same current skill and MCP server", () => {

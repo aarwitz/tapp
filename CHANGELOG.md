@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0-rc.13
+
+**Stale-global-safe one-line invocation.**
+
+- Use `npx -y @aarwitz/tapp@latest` throughout the Agent Skill, agent playbook, CLI guidance, and
+  current public documentation. The explicit tag makes npm run the selected registry package even
+  when an older globally installed `tapp` binary is already on `PATH`.
+- Lock that invariant in the agent-surface suite so the short agent and human journeys cannot drift
+  back to npm's ambiguous unversioned shorthand.
+
 ## 0.17.0-rc.12
 
 **Agent Skill distribution and installed-workspace correctness.**
