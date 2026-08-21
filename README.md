@@ -43,26 +43,28 @@ The official skill teaches the agent to choose the smallest useful operation, ha
 with multiple app targets, inspect visual evidence, and keep exploration observations separate from
 release judgment.
 
-**Claude Code — skill and MCP tools together:**
+**Claude Code, Codex, Cursor, Copilot, and other Agent Skills clients — skill only (recommended):**
+
+```bash
+npx -y skills add aarwitz/tapp --skill tapp
+```
+
+This installs the open Agent Skills workflow into the current project and lets the agent run the npm
+CLI directly; no MCP server, plugin, account, API key, global Tapp install, or pasted prompt block is
+required. Add `-g` for a user-wide install, or `--agent claude-code`, `--agent codex`, and similar
+selectors to constrain the clients. Start or restart the agent from the application repository and
+use the short prompt above.
+
+**Claude Code — optional enhanced skill and MCP tools:**
 
 ```bash
 claude plugin marketplace add aarwitz/tapp
 claude plugin install tapp@tapp
 ```
 
-Restart Claude Code after installation, open the application repository, and use the short prompt
-above. The plugin installs the `tapp` Agent Skill and launches the matching version of Tapp's stdio
-MCP server through npm; no additional prompt block, MCP configuration, or bundle id is required.
-
-**Claude, Codex, Cursor, Copilot, and other Agent Skills clients — skill only:**
-
-```bash
-npx -y skills add aarwitz/tapp --skill tapp
-```
-
-This installs the open Agent Skills version of the same instructions into the current project and
-lets the agent fall back to the npm CLI when MCP is not connected. Add `-g` for a user-wide install,
-or `--agent claude-code`, `--agent codex`, and similar selectors to constrain the clients.
+The plugin bundles the same `tapp` Agent Skill with the matching npm-backed MCP server. Use it when
+you want inline screenshot tool results and a persistent interactive tap/read/type session; it is
+not required for the core skill-to-CLI workflow.
 
 **No agent integration:** run the npm package directly from an app repository:
 
