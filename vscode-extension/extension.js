@@ -113,17 +113,10 @@ function registerTool(ctx, name, handler, prepare) {
         try {
           const msg = prepare ? prepare(options.input || {}) : null;
           if (!msg) return undefined;
-          const past = msg
-            .replace(/^📱 Opening/, "📱 Opened")
-            .replace(/^🌳 Reading/, "🌳 Read")
-            .replace(/^📸 Screenshotting/, "📸 Screenshotted")
-            .replace(/^👆 Tapping/, "👆 Tapped")
-            .replace(/^⌨️ Typing/, "⌨️ Typed")
-            .replace(/^🔐 Signing in/, "🔐 Signed in")
-            .replace(/^🧪 Running/, "🧪 Ran")
-            .replace(/^🔨 Building/, "🔨 Built")
-            .replace(/^🙋 Asking/, "🙋 Asked");
-          return { invocationMessage: msg, pastTenseMessage: past };
+          // `pastTenseMessage` is still behind VS Code's private
+          // `chatParticipantPrivate` proposal. Marketplace extensions cannot use
+          // that API, so keep tool preparation on the stable contract.
+          return { invocationMessage: msg };
         } catch {
           return undefined;
         }

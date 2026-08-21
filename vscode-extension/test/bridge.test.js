@@ -90,3 +90,11 @@ test("exploration forwards the action budget and saved inputs to the current MCP
     },
   }]);
 });
+
+test("tool preparation stays on the stable VS Code API", () => {
+  const extensionSource = fs.readFileSync(path.join(__dirname, "..", "extension.js"), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+
+  assert.doesNotMatch(extensionSource, /\bpastTenseMessage\s*:/);
+  assert.deepEqual(manifest.enabledApiProposals || [], []);
+});

@@ -1,5 +1,14 @@
 # Changelog
 
+## VS Code 0.3.2
+
+- Keep language-model tool preparation on VS Code's stable API. Extension 0.3.1 returned the
+  proposed `pastTenseMessage` field, so a real Marketplace install activated and listed its tools
+  but VS Code rejected every invocation before Tapp's npm engine ran.
+- Add a regression test that forbids the private preparation field. Verify the packaged extension
+  in a real VS Code Extension Host by building and opening DemoApp, reading its accessibility tree,
+  and returning a screenshot through the registered Tapp tools.
+
 ## 0.17.0-rc.14
 
 **Fresh-machine-safe recovery guidance across every agent surface.**
