@@ -2,7 +2,7 @@
   "name": "tapp",
   "displayName": "Tapp",
   "description": "The Tapp Agent Skill for iOS, Android, and web, plus Copilot tools and an auto-refreshing iOS simulator preview.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "lidi-solutions",
   "license": "MIT",
   "engines": {
@@ -102,7 +102,9 @@
               "description": "Requested screen, control, or focused UI task"
             }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       },
       {

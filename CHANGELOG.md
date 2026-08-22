@@ -15,6 +15,14 @@
 - Make invalid CLI verbs fail as usage errors, clarify Skill/CLI versus MCP capabilities, and align
   the package, Agent Skill, Action examples, website, and internal product map on one contract.
 
+## VS Code 0.3.5
+
+- Add the source-connected `tapp_ios_focus` tool and let app startup accept a focused goal, so
+  Copilot can reach an observed screen or control without wandering through the app.
+- Wait for the rebuilt app to be foregrounded and visually settled before the simulator preview
+  begins refreshing, keeping installation and SpringBoard setup out of the evidence surface.
+- Bundle the updated canonical Tapp Agent Skill and pin the extension engine to Tapp 0.17.1.
+
 ## VS Code 0.3.4
 
 - Bundle the stable Tapp Agent Skill and pin the extension engine to Tapp 0.17.0.
