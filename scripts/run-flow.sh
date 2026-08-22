@@ -40,6 +40,14 @@ TOKEN="$(date +%s)"
 CFG="/tmp/ocqa-flow-$TOKEN.json"
 AI_RESP="/tmp/ocqa-flow-ai-$TOKEN.json"
 AI_DIR="/tmp/ocqa-flow-ai-$TOKEN"
+EVIDENCE_DIR="${TAPP_FLOW_EVIDENCE_DIR:-/tmp/tapp-flow-ios-$TOKEN}"
+RESULT_BUNDLE="$EVIDENCE_DIR/result.xcresult"
+mkdir -p "$EVIDENCE_DIR"
+case "$FLOW" in
+  *.json) FLOW_EVIDENCE_SOURCE="$EVIDENCE_DIR/flow-source.json" ;;
+  *) FLOW_EVIDENCE_SOURCE="$EVIDENCE_DIR/flow-source.yml" ;;
+esac
+cp "$FLOW" "$FLOW_EVIDENCE_SOURCE"
 python3 - "$CFG" "$APP" "$FLOW_JSON" "$AI_RESP" "$AI_DIR" <<'PY'
 import json, os, sys
 cfg, app, flow_json, ai_resp, ai_dir = sys.argv[1:6]
@@ -82,9 +90,12 @@ fi
 
 TEST_RUNNER_OCQA_CONFIG_PATH="$CFG" xcodebuild test-without-building \
   -xctestrun "$XCTR" -destination "platform=iOS Simulator,id=$UDID" \
-  -only-testing:"OCQAHarnessUITests/ExplorerTests/testReplayFlow" > "$LOG" 2>&1
+  -only-testing:"OCQAHarnessUITests/ExplorerTests/testReplayFlow" \
+  -resultBundlePath "$RESULT_BUNDLE" > "$LOG" 2>&1
 [ -n "$RESPONDER_PID" ] && { kill "$RESPONDER_PID" 2>/dev/null; wait "$RESPONDER_PID" 2>/dev/null; }
 
+cp "$LOG" "$EVIDENCE_DIR/flow.log"
+python3 "$ROOT/scripts/flow_lib.py" report --json "$LOG" > "$EVIDENCE_DIR/flow-report.json"
 echo ""
 python3 "$ROOT/scripts/flow_lib.py" report "$LOG"
 exit $?

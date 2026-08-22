@@ -8,6 +8,7 @@ preview beside the editor. It is a preview, not an embedded Simulator or video s
 |---|---|
 | Decide how to test the current app | bundled Tapp Agent Skill |
 | Open/read/screenshot an iOS screen | `tapp_open_ios_app`, `tapp_read_ios_screen`, `tapp_ios_screenshot` |
+| Reach a named iOS screen/control quickly | `tapp_ios_focus` — source + shortest observed UI Map route |
 | Tap, type, or sign in on iOS | `tapp_ios_tap`, `tapp_ios_type`, `tapp_ios_login` |
 | Find iOS bugs autonomously | `tapp_explore_ios` — findings, coverage, evidence, and recording |
 | Test Android or web | the skill uses the bundled Tapp CLI/MCP workflow |
@@ -24,7 +25,11 @@ Open an application repository in VS Code and ask Copilot in agent mode:
 
 For a focused task, say what you need:
 
-> Use Tapp to open the iOS app, navigate to Settings, and show me a screenshot.
+> Use Tapp to make sure Save storefront settings is visible above the keyboard.
+
+For that focused request, Copilot passes the goal to Tapp's source-connected fast path. Tapp locates
+the surface in the open repository and follows the shortest runtime-observed UI Map route in one
+call. If no route has been observed, it returns the exact source evidence instead of wandering.
 
 > Use Tapp to explore this web app and report evidence-backed findings. Let me watch the browser.
 

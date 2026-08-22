@@ -92,12 +92,12 @@ function replayStepForEdge(edge, nodes, platform) {
 // root to one UI Map node. This is execution infrastructure, not a claim that
 // every observed edge is safely replayable: actor/precondition-dependent,
 // dynamic, proposed, and unsupported actions are excluded before BFS.
-export function replayableUiMapNavigation(map, targetNodeId, platform, { maxSteps = 8 } = {}) {
+export function replayableUiMapNavigation(map, targetNodeId, platform, { maxSteps = 8, startNodeId = "" } = {}) {
   const limit = Math.max(0, Math.min(12, Number(maxSteps) || 0));
   const nodes = new Map((map?.nodes || []).map((node) => [node.id, node]));
   const target = nodes.get(targetNodeId);
   if (!target) return { status: "blocked", reason: `UI Map target node is missing: ${targetNodeId}` };
-  const rootId = map?.app?.navigationRoots?.[platform] || map?.app?.entryNodes?.[platform] || "";
+  const rootId = startNodeId || map?.app?.navigationRoots?.[platform] || map?.app?.entryNodes?.[platform] || "";
   if (!rootId || !nodes.has(rootId)) return { status: "blocked", reason: `No observed ${platform} navigation root exists in the UI Map` };
   if (rootId === targetNodeId) return {
     status: "replayable", mode: "ui-map-path", provenance: "observed-ui-map",

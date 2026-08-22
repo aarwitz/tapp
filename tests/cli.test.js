@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildUiMapFromMarkers } from "../mcp-server/src/ui-map.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tappBin = path.join(root, "bin", "tapp.js");
@@ -27,6 +28,12 @@ test("tapp version prints the package version", () => {
   assert.equal(out, rootPackage.version);
 });
 
+test("Flow CLI only advertises evidence after a runner writes artifacts", () => {
+  const flowCommand = cliSource.match(/case "flow":[\s\S]*?case "contract":/)?.[0] || "";
+  assert.match(flowCommand, /const evidenceWritten = fs\.existsSync\(evidenceDir\)/);
+  assert.match(flowCommand, /Evidence unavailable — the platform runner did not write any artifacts/);
+});
+
 test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
   // Core leads with the user journey while keeping contract replay and the gate visible.
@@ -34,6 +41,7 @@ test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   assert.match(out, /Core — inspect, explore, gate/);
   assert.match(out, /no Tapp account or server required/);
   assert.match(out, /tapp explore \[target\]/);
+  assert.match(out, /tapp focus "goal" \[target\]/);
   assert.match(out, /tapp contract run FILE/);
   assert.match(out, /tapp ci \.\.\./);
   assert.doesNotMatch(out, /tapp qa \[target\]/); // renamed to explore (qa is a hidden alias)
@@ -70,6 +78,8 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.match(explore, /--launch-env/);
   assert.match(explore, /--watch/);
   assert.doesNotMatch(explore, /Core — explore, prove, gate/, "verb help must not repeat the entire root reference");
+  const focus = execFileSync("node", [tappBin, "focus", "--help"], { encoding:"utf8", env });
+  assert.match(focus, /tapp focus "SCREEN OR CONTROL"/);
   const task = execFileSync("node", [tappBin, "task", "run", "--help"], { encoding: "utf8", env });
   assert.match(task, /tapp task run FILE --platform PLATFORM/);
   const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
@@ -82,6 +92,17 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.equal(fs.existsSync(path.join(dir, ".tapp")), false, "init --help must not write project artifacts");
   // ...and no verb's --help may create TAPP_HOME.
   assert.equal(fs.existsSync(home), false, "--help must not create TAPP_HOME");
+});
+
+test("unknown commands fail as usage errors without writing TAPP_HOME", () => {
+  const home = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tapp-unknown-home-")), "home");
+  const env = { ...process.env, TAPP_HOME: home };
+  const result = spawnSync("node", [tappBin, "definitely-not-a-command"], { encoding: "utf8", env });
+  assert.equal(result.status, 2);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /Unknown command: definitely-not-a-command/);
+  assert.match(result.stderr, /npx -y @aarwitz\/tapp@latest --help/);
+  assert.equal(fs.existsSync(home), false, "an invalid command must not create TAPP_HOME");
 });
 
 test("iOS explore accepts explicit launch configuration and rejects malformed launch environments before runtime work", () => {
@@ -167,6 +188,8 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
       });
     </script>
   `);
+  fs.writeFileSync(path.join(project, "settings.html"), '<main><h1>Storefront Settings</h1><button id="save">Save storefront settings</button></main>');
+  fs.writeFileSync(path.join(project, "StorefrontSettings.tsx"), 'export const StorefrontSettings = () => <button>Save storefront settings</button>;\n');
   const port = 49000 + (process.pid % 1000);
   const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: project, stdio: "ignore" });
   try {
@@ -189,6 +212,22 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
     assert.match(interacted, /Tapped `Not now`/);
     assert.match(interacted, /Found `Coach Ready`/);
     assert.doesNotMatch(interacted, /still showed a loading state/);
+
+    const markersPath = path.join(project, "markers.txt");
+    fs.writeFileSync(markersPath, [
+      `OCQA_STATE:{"screen":"Agent Home","url":"${url}/","controls":[{"kind":"link","label":"Storefront"}]}`,
+      'OCQA_ACTION:{"type":"tap","target":"Storefront","screen":"Agent Home"}',
+      'OCQA_TRANSITION:{"from":"Agent Home","to":"Storefront Settings","action":"Storefront","changed":true}',
+      `OCQA_STATE:{"screen":"Storefront Settings","url":"${url}/settings.html","controls":[{"kind":"button","label":"Save storefront settings","cssId":"save"}]}`,
+    ].join("\n") + "\n");
+    fs.mkdirSync(path.join(project, ".tapp"));
+    fs.writeFileSync(path.join(project, ".tapp", "ui-map.json"), JSON.stringify(buildUiMapFromMarkers({ markersPath, platform:"web", target:url, runId:"cli-focus" })));
+    const focusedShot = path.join(project, "focused.png");
+    const focused = execFileSync("node", [tappBin, "focus", "Save storefront settings", url, "--platform", "web", "--project-dir", project, "--out", focusedShot], { cwd:root, encoding:"utf8", env:{ ...process.env, TAPP_HOME:home } });
+    assert.match(focused, /Focused route ready/);
+    assert.match(focused, /Reached in 1 route action/);
+    assert.match(focused, /Read screen \*\*Storefront Settings\*\*/);
+    assert.ok(fs.statSync(focusedShot).size > 1000);
   } finally {
     server.kill();
   }

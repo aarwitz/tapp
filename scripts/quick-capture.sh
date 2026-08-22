@@ -163,13 +163,28 @@ run_harness_test() {
   \"OCQA_PR_TARGET\": ${OCQA_PR_TARGET_JSON}"
   fi
 
+  # Visual evidence must begin at the first settled target-app frame, never while Xcode is
+  # installing/launching the test runner or SpringBoard is selecting the app. The harness writes
+  # the ready file after the target is foregrounded + stable, then briefly waits for the host's
+  # recording-start acknowledgement so the first autonomous action cannot race ahead of video.
+  local visual_ready_line=""
+  if [[ -n "${OCQA_VISUAL_READY_PATH:-}" ]]; then
+    visual_ready_line=",
+  \"OCQA_VISUAL_READY_PATH\": \"${OCQA_VISUAL_READY_PATH}\""
+  fi
+  local recording_started_line=""
+  if [[ -n "${OCQA_RECORDING_STARTED_PATH:-}" ]]; then
+    recording_started_line=",
+  \"OCQA_RECORDING_STARTED_PATH\": \"${OCQA_RECORDING_STARTED_PATH}\""
+  fi
+
   cat > /tmp/ocqa-run-config.json << CONF
 {
   "OCQA_BUNDLE_ID": "$bundle_id",
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line$visual_ready_line$recording_started_line
 }
 CONF
 
@@ -290,23 +305,38 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
       echo "WARNING: Target process exited during launch preflight; recorded a crash instead of waiting for the exploration timeout." >&2
     else
 
-      # Start video recording in background
+      # Prepare the foreground/settled handshake before starting the harness. Recording begins
+      # only after that handshake; this excludes build/install/SpringBoard footage without using a
+      # brittle fixed trim duration. A caller such as VS Code may provide its own ready path to
+      # reveal a preview at the same authoritative boundary.
       cleanup_stale_recorders "$UDID"
-      if xcrun simctl io "$UDID" recordVideo --codec=h264 "$CAPTURE_DIR/exploration.mov" & then
-        RECORD_PID=$!
-      fi
-      sleep 0.5
-      if ! kill -0 "$RECORD_PID" 2>/dev/null; then
-        echo "WARNING: Could not start simulator video recording. Continuing without video." >&2
-        RECORD_PID=""
-      fi
+      VISUAL_READY_PATH="${OCQA_VISUAL_READY_PATH:-$CAPTURE_DIR/visual-ready}"
+      RECORDING_STARTED_PATH="$CAPTURE_DIR/recording-started"
+      rm -f "$VISUAL_READY_PATH" "$RECORDING_STARTED_PATH"
+      export OCQA_VISUAL_READY_PATH="$VISUAL_READY_PATH"
+      export OCQA_RECORDING_STARTED_PATH="$RECORDING_STARTED_PATH"
 
       # Run exploration with watchdog timeout to avoid silent hangs.
       run_harness_test "testAutonomousExploration" "$SIM_NAME" "$APP_BUNDLE" "$MAX_ACTIONS" "$EXPLORE_TIMEOUT" > "$local_output_file" 2>&1 &
       HARNESS_PID=$!
 
       START_TS=$(date +%s)
+      RECORDING_ATTEMPTED=0
       while kill -0 "$HARNESS_PID" 2>/dev/null; do
+        if [[ "$RECORDING_ATTEMPTED" -eq 0 && -f "$VISUAL_READY_PATH" ]]; then
+          RECORDING_ATTEMPTED=1
+          if xcrun simctl io "$UDID" recordVideo --codec=h264 "$CAPTURE_DIR/exploration.mov" & then
+            RECORD_PID=$!
+          fi
+          sleep 0.25
+          if [[ -z "$RECORD_PID" ]] || ! kill -0 "$RECORD_PID" 2>/dev/null; then
+            echo "WARNING: Could not start simulator video recording. Continuing without video." >&2
+            RECORD_PID=""
+          fi
+          # Always release the bounded harness wait. The missing video remains explicit in the
+          # report; exploration itself must not hang merely because recording was unavailable.
+          : > "$RECORDING_STARTED_PATH"
+        fi
         NOW_TS=$(date +%s)
         ELAPSED=$((NOW_TS - START_TS))
         if [[ "$ELAPSED" -ge "$EXPLORE_TIMEOUT" ]]; then
@@ -316,7 +346,7 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
           kill -KILL "$HARNESS_PID" 2>/dev/null || true
           break
         fi
-        sleep 2
+        if [[ "$RECORDING_ATTEMPTED" -eq 0 ]]; then sleep 0.1; else sleep 1; fi
       done
 
       wait "$HARNESS_PID" 2>/dev/null || true
@@ -327,6 +357,7 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
         kill -INT "$RECORD_PID" 2>/dev/null || true
         wait "$RECORD_PID" 2>/dev/null || true
       fi
+      rm -f "$RECORDING_STARTED_PATH"
       sleep 1
     fi
 

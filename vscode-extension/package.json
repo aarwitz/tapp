@@ -37,6 +37,7 @@
   "main": "./dist/extension.js",
   "activationEvents": [
     "onLanguageModelTool:tapp_open_ios_app",
+    "onLanguageModelTool:tapp_ios_focus",
     "onLanguageModelTool:tapp_ios_login",
     "onLanguageModelTool:tapp_ios_fill_field",
     "onLanguageModelTool:tapp_read_ios_screen",
@@ -70,15 +71,38 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(device-mobile)",
         "userDescription": "Build (if needed) and open the iOS app on the simulator",
-        "modelDescription": "Open an iOS app on the simulator and return the current screen as a structured accessibility summary. `target` is optional: omit it to auto-detect and build the Xcode project in the workspace (first build can take minutes), or pass a bundle id (com.example.app), a path to a simulator .app build, or a project directory. Starts an interactive session — after this, use tapp_ios_tap / tapp_ios_type to drive the app and tapp_read_ios_screen / tapp_ios_screenshot to inspect it.",
+        "modelDescription": "Open an iOS app on the simulator and return the current screen as a structured accessibility summary. `target` is optional: omit it to auto-detect and build the Xcode project in the workspace (first build can take minutes), or pass a bundle id (com.example.app), a path to a simulator .app build, or a project directory. For a focused request, ALWAYS pass the user's named destination/control/task in `focus`: Tapp locates it from source and follows the shortest observed UI Map route before returning. Starts an interactive session.",
         "inputSchema": {
           "type": "object",
           "properties": {
             "target": {
               "type": "string",
               "description": "Optional: bundle id, path to .app, or project directory. Omit to auto-detect the workspace's Xcode project."
+            },
+            "focus": {
+              "type": "string",
+              "description": "Focused screen/control/task to source-locate and reach before returning, e.g. 'Save storefront settings visible above keyboard'"
             }
           }
+        }
+      },
+      {
+        "name": "tapp_ios_focus",
+        "displayName": "Reach iOS screen from source",
+        "toolReferenceName": "focusIosApp",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(target)",
+        "userDescription": "Find a named UI surface in source and take the shortest observed route",
+        "modelDescription": "FAST PATH for a focused UI task after tapp_open_ios_app. Pass the user's exact requested screen/control/task. Tapp searches the open repository's source, reconciles it with the runtime-observed UI Map, and executes the shortest trusted route in one call. Use this before step-by-step taps; if no observed route exists it returns exact source evidence and does not wander or invent navigation.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Requested screen, control, or focused UI task"
+            }
+          },
+          "required": ["query"]
         }
       },
       {

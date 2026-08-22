@@ -557,7 +557,57 @@ function treeSnapshot() {
     screenTitle: t ? t.screenTitle ?? null : null,
     elementCount: t ? (t.elements || []).length : 0,
     elements: t ? t.elements || [] : [],
+    ...(t?.url ? { url:t.url } : {}),
   };
+}
+
+/** Keep the semantic/actionable accessibility surface an agent needs, without sending hundreds
+ * of empty native hierarchy containers on every turn. The complete tree remains in the active
+ * session for selector resolution; this is only the public MCP projection. */
+export function agentFacingElements(elements, limit = 160) {
+  const result = [];
+  const seen = new Set();
+  for (const element of elements || []) {
+    const semanticValues = [
+      element?.id, element?.identifier, element?.label, element?.text,
+      element?.description, element?.placeholder, element?.value,
+    ].map((value) => String(value ?? "").trim()).filter(Boolean);
+    const roleAndType = `${element?.role || ""} ${element?.type || ""}`.toLowerCase();
+    // Unlabelled input/button controls are still actionable by coordinate. Empty windows,
+    // applications, groups, images and generic containers are implementation noise.
+    const actionableWithoutText = /button|link|textfield|securetext|textarea|edittext|switch|checkbox/.test(roleAndType);
+    if (!semanticValues.length && !actionableWithoutText) continue;
+    const frame = element?.frame || {};
+    const key = JSON.stringify([
+      roleAndType, ...semanticValues,
+      element?.x ?? frame.x ?? null, element?.y ?? frame.y ?? null,
+      element?.w ?? frame.width ?? null, element?.h ?? frame.height ?? null,
+    ]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(element);
+    if (result.length >= Math.max(1, limit)) break;
+  }
+  return result;
+}
+
+function agentScreenProjection(screen) {
+  const all = screen?.elements || [];
+  const elements = agentFacingElements(all);
+  return {
+    screenTitle:screen?.screenTitle ?? null,
+    elementCount:elements.length,
+    totalElementCount:all.length,
+    elementsOmitted:Math.max(0, all.length - elements.length),
+    elements,
+    ...(screen?.url ? { url:screen.url } : {}),
+  };
+}
+
+function focusMetadata(result) {
+  if (!result) return null;
+  const { elements:_elements, elementCount:_elementCount, screenTitle:_screenTitle, url:_url, ...metadata } = result;
+  return metadata;
 }
 
 async function startSession(bundleId, extraEnv = {}) {
@@ -578,7 +628,7 @@ async function startSession(bundleId, extraEnv = {}) {
     env: { ...process.env, ...extraEnv, OCQA_SESSION_CMD_PATH: cmdPath, OCQA_SESSION_RESULT_PATH: resultPath, OCQA_SESSION_TIMEOUT: "7200" },
   });
   activeSession = {
-    proc, bundleId, seq: 0, cmdPath, resultPath, latestTree: null, treeVersion: 0, buffer: "", ready: false, ended: false,
+    platform:"ios", proc, bundleId, seq: 0, cmdPath, resultPath, latestTree: null, treeVersion: 0, buffer: "", ready: false, ended: false,
     // Always-on recorder: each act appends a Flow step; tapp_flow_save snapshots it to a file.
     recording: [],
     creds: { email: extraEnv.OCQA_TEST_EMAIL || "", password: extraEnv.OCQA_TEST_PASSWORD || "" },
@@ -636,24 +686,26 @@ async function webSessionSnapshot(page) {
       const rect = element.getBoundingClientRect();
       return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
     };
-    const controls = [...document.querySelectorAll("button,a[href],input,textarea,select,[role=button],[role=tab],[role=checkbox],[role=switch]")]
+    const controls = [...document.querySelectorAll("button,a[href],input,textarea,select,[role=button],[role=tab],[role=checkbox],[role=switch],[role=status],[role=alert],h2,h3,p,li")]
       .filter((element) => element instanceof HTMLElement && visible(element))
       .slice(0, 250)
       .map((element) => {
         const rect = element.getBoundingClientRect();
         const label = String(element.getAttribute("aria-label") || element.labels?.[0]?.textContent || element.textContent || element.getAttribute("placeholder") || element.getAttribute("name") || element.id || "").replace(/\s+/g, " ").trim().slice(0, 160);
+        const interactive = element.matches("button,a[href],input,textarea,select,[role=button],[role=tab],[role=checkbox],[role=switch]");
         return {
           id: element.getAttribute("data-testid") || element.id || element.getAttribute("name") || "",
           label,
           type: element.getAttribute("role") || element.tagName.toLowerCase(),
-          role: element.getAttribute("role") || (element.matches("button,[role=button]") ? "button" : element.matches("a") ? "link" : element.matches("input,textarea,select") ? "input" : "other"),
+          role: element.getAttribute("role") || (element.matches("button,[role=button]") ? "button" : element.matches("a") ? "link" : element.matches("input,textarea,select") ? "input" : "text"),
           enabled: !(element.disabled || element.getAttribute("aria-disabled") === "true"),
-          hittable: true,
+          hittable: interactive,
           clickable: element.matches("button,a,[role=button],[role=tab],[role=checkbox],[role=switch]") && !(element.disabled || element.getAttribute("aria-disabled") === "true"),
           secure: element instanceof HTMLInputElement && element.type === "password",
           frame: { x:Math.round(rect.x), y:Math.round(rect.y), width:Math.round(rect.width), height:Math.round(rect.height) },
         };
-      });
+      })
+      .filter((element) => element.label);
     const heading = document.querySelector("h1,[role=heading]")?.textContent?.replace(/\s+/g, " ").trim();
     return { screenTitle:heading || document.title || location.pathname || "Web application", elements:controls, url:location.href };
   });
@@ -858,6 +910,7 @@ async function sessionAct(cmd) {
   }
   if (activeSession.platform === "android") {
     const s = activeSession;
+    const beforeAction = s.latestTree;
     let status = "ok";
     let detail = null;
     let typedInto = null;
@@ -889,21 +942,21 @@ async function sessionAct(cmd) {
           status = "not_found"; detail = "Could not identify email and password fields";
         } else {
           const er = await s.driver.type(emailField.id || emailField.label, cmd.email || s.creds.email || "", s.latestTree);
-          s.latestTree = await s.driver.settle();
+          s.latestTree = await s.driver.settle(2200, s.latestTree);
           const pr = await s.driver.type(passwordField.id || passwordField.label, cmd.password || s.creds.password || "", s.latestTree);
-          s.latestTree = await s.driver.settle();
+          s.latestTree = await s.driver.settle(2200, s.latestTree);
           const submit = s.latestTree.elements.find((e) => e.clickable && /sign in|log in|login|continue/i.test(`${e.text} ${e.label} ${e.id}`));
           if (er.status !== "ok" || pr.status !== "ok" || !submit) {
             status = "not_found"; detail = "Could not fill or submit the login form";
           } else {
             const before = s.latestTree.screenTitle;
             await s.driver.tap(submit.id || submit.description || submit.text, s.latestTree);
-            s.latestTree = await s.driver.settle();
+            s.latestTree = await s.driver.settle(2200, s.latestTree);
             if (s.latestTree.screenTitle === before) { status = "still_on_login"; detail = "Submit left the app on the login screen"; }
           }
         }
       }
-      if (!["wait", "tree", "screenshot", "login"].includes(cmd.action)) s.latestTree = await s.driver.settle();
+      if (!["wait", "tree", "screenshot", "login"].includes(cmd.action)) s.latestTree = await s.driver.settle(2200, beforeAction);
     } catch (error) {
       status = "error"; detail = error.message || String(error);
     }
@@ -1025,6 +1078,79 @@ export {
   sessionAct as actInteractiveSession,
   endSession as endInteractiveSession,
 };
+
+function elementMatchesSemanticTarget(element, value) {
+  const target = String(value || "").trim().toLowerCase();
+  if (!target) return false;
+  return [element?.id, element?.identifier, element?.label, element?.text, element?.description]
+    .map((item) => String(item || "").trim().toLowerCase())
+    .some((item) => item === target || item.includes(target) || target.includes(item));
+}
+
+/** Locate a requested surface from owned source, reconcile it with the runtime-observed UI Map,
+ * and execute the shortest replayable route in the active session. Source may identify intent but
+ * never authorizes a tap: only observed/validated map edges are executed. */
+export async function focusInteractiveSession({ projectDir = process.cwd(), query, platform = "", mapPath = "" } = {}) {
+  const { locateFocusedTarget } = await import("./focused-navigation.js");
+  const sessionPlatform = activeSession?.platform || platform || "";
+  const location = locateFocusedTarget({
+    projectDir, query, platform:sessionPlatform || platform, mapPath,
+    currentScreen:activeSession?.latestTree?.screenTitle || "",
+  });
+  if (!activeSession || activeSession.ended) return { ...location, executed:false, execution:{ status:"not-started", reason:"No active session; start the target app, then focus it." } };
+  if (location.navigation?.status !== "replayable") return { ...location, executed:false, execution:{ status:"blocked", reason:location.navigation?.reason || "No observed route" }, ...treeSnapshot() };
+
+  const executedSteps = [];
+  if (location.navigation.mode === "direct-web-route") {
+    if (activeSession.platform !== "web") return { ...location, executed:false, execution:{ status:"blocked", reason:"A web route cannot be used in a native session" }, ...treeSnapshot() };
+    try {
+      const current = new URL(activeSession.page.url());
+      const destination = new URL(location.navigation.route, current.origin);
+      if (destination.origin !== current.origin) throw new Error("Observed route left the active app origin");
+      await activeSession.page.goto(destination.href, { waitUntil:"domcontentloaded", timeout:15_000 });
+      await activeSession.page.waitForLoadState("networkidle", { timeout:3_000 }).catch(() => {});
+      activeSession.latestTree = await webSessionSnapshot(activeSession.page);
+      activeSession.treeVersion += 1;
+      executedSteps.push({ action:"open", target:location.navigation.route, status:"ok", screenTitle:activeSession.latestTree.screenTitle });
+    } catch (error) {
+      return { ...location, executed:true, execution:{ status:"failed", steps:executedSteps, reason:error.message || String(error) }, ...treeSnapshot() };
+    }
+  } else {
+    for (const step of location.navigation.steps || []) {
+      const action = step.action?.type === "back" ? "back" : "tap";
+      const candidates = [
+        ...(step.action?.selectors || [])
+          .sort((left, right) => {
+            const order = ["testId", "accessibilityId", "resourceId", "cssId", "label"];
+            const rank = (kind) => { const index = order.indexOf(kind); return index < 0 ? order.length : index; };
+            return rank(left.kind) - rank(right.kind);
+          })
+          .map((selector) => selector.value),
+        step.action?.target,
+      ].filter(Boolean);
+      const target = candidates.find((candidate) => (activeSession.latestTree?.elements || []).some((element) => elementMatchesSemanticTarget(element, candidate))) || candidates[0] || "";
+      const result = await sessionAct(action === "back" ? { action } : { action, id:target });
+      executedSteps.push({ action, target, status:result.status, screenTitle:result.screenTitle, durationMs:result.durationMs });
+      if (result.error || result.status !== "ok") return {
+        ...location, executed:true,
+        execution:{ status:"failed", steps:executedSteps, reason:result.error || result.detail || `Observed route step '${target}' did not succeed` },
+        ...treeSnapshot(),
+      };
+    }
+  }
+  const targetControls = location.target?.matchedControls || [];
+  const reachedByTitle = location.target?.name && String(treeSnapshot().screenTitle || "").toLowerCase() === String(location.target.name).toLowerCase();
+  const reachedByControl = targetControls.some((control) => (activeSession.latestTree?.elements || []).some((element) =>
+    [control.id, control.label, control.semanticKey, ...(control.selectors || []).map((selector) => selector.value)].some((value) => elementMatchesSemanticTarget(element, value))
+  ));
+  const reached = reachedByTitle || reachedByControl;
+  return {
+    ...location, executed:true,
+    execution:{ status:reached ? "reached" : "route-completed-unconfirmed", steps:executedSteps,
+      ...(!reached ? { reason:"The observed route completed, but the requested title/control was not visible in the final tree." } : {}) },
+    ...treeSnapshot(),
+  };
+}
 
 export async function captureInteractiveSessionFrame(maxWidth = 900) {
   if (!activeSession || activeSession.ended) return { error:"No active interactive session" };
@@ -1332,6 +1458,14 @@ export function explorationEnvFromArgs(args) {
   }
   if (args.prExplorationTarget && typeof args.prExplorationTarget === "object" && !Array.isArray(args.prExplorationTarget)) {
     env.OCQA_PR_TARGET_JSON = JSON.stringify(args.prExplorationTarget);
+  }
+  // Local visual clients can reveal their preview at the same foreground/settled boundary used by
+  // native recording. Keep this host handshake in the OS temp directory; it is not app evidence or
+  // a caller-directed repository write.
+  if (isNonEmptyString(args.visualReadyPath)) {
+    const readyPath = path.resolve(args.visualReadyPath.trim());
+    const tempRoot = path.resolve(os.tmpdir());
+    if (readyPath.startsWith(`${tempRoot}${path.sep}`)) env.OCQA_VISUAL_READY_PATH = readyPath;
   }
   // Explicit login replay: a recorded sequence run before exploration, for custom login UIs the
   // heuristic preamble can't parse — the #1 reason a real app stays invisible. Steps are
@@ -2193,6 +2327,7 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
           text:
             `${goal}.${target} Use the connected Tapp tools on the real UI surface. ` +
             "Use the smallest operation that satisfies the request; initialize/explore the source repo only for a general repository test. " +
+            "For a named screen/control, pass the exact request as session focus or call tapp_focus so Tapp uses source + its observed UI Map instead of wandering. " +
             "If Tapp returns multiple target choices, ask me to select one instead of guessing. " +
             "Read visual evidence before describing it. Report findings, coverage, authority, inconclusive state, and checked/not-checked scope; " +
             "never turn exploration into a score or ship verdict. Do not edit the app unless I ask for a fix.",
@@ -2380,6 +2515,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           testPassword: { type: "string", description: "Password for the login preamble" },
           interactive: { type: "boolean", description: "Host-with-a-human only (e.g. the VS Code extension): pause at input screens and wait for values via interactiveResponsePath. Plain agents: omit." },
           interactiveResponsePath: { type: "string", description: "File path the prompting host answers on (requests appear at <path>.request)" },
+          visualReadyPath: { type: "string", description: "Local-client temp path written once the iOS target is foregrounded and settled, so previews exclude build/install footage" },
           inputOverrides: {
             type: "object",
             additionalProperties: { type: "string" },
@@ -2828,10 +2964,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_session_start",
       title: "Start interactive session",
       description:
-        "Start a PERSISTENT interactive session against an installed iOS or Android app. The app " +
+        "Start a PERSISTENT interactive session against an installed iOS/Android app or a web URL. The app " +
         "launches once and stays up, so you can drive a Playwright-style tap → inspect loop without a cold " +
         "launch per action. Returns the initial screen {screenTitle, elements[]}. Drive it with " +
-        "tapp_session_act and finish with tapp_session_end. Only one session at a time. Starts from a " +
+        "tapp_focus for any named destination (source + shortest observed route), then tapp_session_act only for remaining actions; finish with tapp_session_end. " +
+        "For a focused user request, ALWAYS pass it in `focus` so the session reaches that surface before returning. Only one session at a time. Starts from a " +
         "fresh launch. Use appLaunchArgs/appLaunchEnv for apps that need a backend override or login bypass. " +
         "When you reach a screen with input fields and don't have values for them, ASK THE USER what to type " +
         "(offer defaults/skip) before typing — the session does not prompt on its own.",
@@ -2841,6 +2978,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "Bundle id of the installed app to drive" },
           androidAppId: { type: "string", description: "Android application id to drive (alternative to appBundleId)" },
+          url: { type: "string", description: "Owned http(s) web app URL to drive (alternative to appBundleId/androidAppId)" },
           apkPath: { type: "string", description: "Android APK to install before starting" },
           androidSerial: { type: "string", description: "Android adb device serial" },
           clearData: { type: "boolean", default: true, description: "Android: clear app data before launch" },
@@ -2848,6 +2986,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           testPassword: { type: "string", description: "Password available to the app/harness" },
           appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch arguments, e.g. [\"--uitesting\"]" },
           appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch environment, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
+          focus: { type: "string", description: "Exact focused UI goal/control/screen to locate from repository source and reach through the shortest observed UI Map route before returning" },
+          projectDir: { type: "string", description: "Repository root for source-connected focus; defaults to the MCP workspace" },
+          mapPath: { type: "string", description: "Optional repository-relative UI Map for focus; defaults to .tapp/ui-map.json" },
+        },
+      },
+    },
+    {
+      name: "tapp_focus",
+      title: "Locate and reach a requested UI surface",
+      description:
+        "The FAST source-connected path for focused tasks. Locate a requested screen/control from owned repository source, reconcile it with Tapp's runtime-observed UI Map, and—when a session is active—execute the shortest replayable route in one call. Use before step-by-step tapping when the user names a destination such as 'Save storefront settings'. Source identifies intent; Tapp never invents navigation from source, and only observed/validated UI Map edges are executed. Without an active session this returns the grounded location/route plan without acting.",
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
+          query: { type: "string", description: "User's requested screen, control, or focused UI task" },
+          projectDir: { type: "string", description: "Repository root; defaults to the MCP workspace" },
+          platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional without an active session; an active session is authoritative" },
+          mapPath: { type: "string", description: "Optional repository-relative UI Map; defaults to .tapp/ui-map.json" },
         },
       },
     },
@@ -3691,15 +3849,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         (args.url || parsedFlow.url || /^https?:\/\//i.test(parsedFlow.app || "")) ? "web" : "ios")
     ).toLowerCase();
 
-    const flowLog = path.join(os.tmpdir(), `mcp-flow-${Date.now()}.log`);
-    const runEnv = { ...process.env, FLOW_LOG: flowLog };
+    const flowToken = Date.now();
+    const flowLog = path.join(os.tmpdir(), `mcp-flow-${flowToken}.log`);
+    const evidenceDir = path.join(capturesDir, `flow-${platform}-${flowToken}`);
+    const runEnv = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (isNonEmptyString(args.testEmail)) runEnv.OCQA_TEST_EMAIL = args.testEmail.trim();
     if (isNonEmptyString(args.testPassword)) runEnv.OCQA_TEST_PASSWORD = args.testPassword.trim();
     let run = { stdout: "", stderr: "", code: 0 };
     if (platform === "web") {
       try {
         const { runWebFlow } = await import("./web-flow.js");
-        const evidenceDir = path.join(capturesDir, `flow-web-${Date.now()}`);
         const result = await runWebFlow({
           flow: parsedFlow,
           url: isNonEmptyString(args.url) ? args.url.trim() : undefined,
@@ -3714,10 +3873,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cmdArgs = [path.join(scriptsDir, "run-flow.sh"), flowFile];
       if (isNonEmptyString(args.appBundleId)) cmdArgs.push(args.appBundleId.trim());
       run = await runCommand("bash", cmdArgs, { cwd: repoRoot, timeoutMs: 10 * 60 * 1000, env: runEnv });
+      if (fs.existsSync(evidenceDir) && fs.readdirSync(evidenceDir).length > 0) run.evidenceDir = evidenceDir;
     } else if (platform === "android") {
       try {
         const { runAndroidFlow } = await import("./android-flow.js");
-        const evidenceDir = path.join(capturesDir, `flow-android-${Date.now()}`);
         const result = await runAndroidFlow({
           flow: parsedFlow,
           appId: isNonEmptyString(args.androidAppId)
@@ -3744,7 +3903,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try { structured = JSON.parse(jsonRes.stdout.trim()); } catch { /* fall through */ }
     const textRes = await runCommand("python3", [path.join(scriptsDir, "flow_lib.py"), "report", flowLog], { cwd: repoRoot });
     const text = (textRes.stdout || "").trim() || run.stdout;
-    return richResult(text, { ...(structured || { raw: run.stdout }), platform, evidenceDir: run.evidenceDir });
+    const retainedEvidence = run.evidenceDir && fs.existsSync(run.evidenceDir) && fs.readdirSync(run.evidenceDir).length > 0
+      ? run.evidenceDir
+      : undefined;
+    const evidenceText = retainedEvidence
+      ? `\n\nEvidence: \`${retainedEvidence}\``
+      : "\n\n⚠️ Evidence unavailable — the platform runner did not write any artifacts for this Flow run.";
+    return richResult(text + evidenceText, { ...(structured || { raw: run.stdout }), platform, ...(retainedEvidence ? { evidenceDir: retainedEvidence } : {}) });
   }
 
   if (name === "tapp_scenario_run") {
@@ -4035,17 +4200,66 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const ios = isNonEmptyString(args.appBundleId);
     const android = isNonEmptyString(args.androidAppId);
-    if (ios === android) return errorResult("Provide exactly one of appBundleId or androidAppId");
-    const target = ios ? args.appBundleId.trim() : args.androidAppId.trim();
+    const web = isNonEmptyString(args.url);
+    if ([ios, android, web].filter(Boolean).length !== 1) return errorResult("Provide exactly one of appBundleId, androidAppId, or url");
+    const target = ios ? args.appBundleId.trim() : android ? args.androidAppId.trim() : args.url.trim();
+    let focusProjectDir = workspaceRoot;
+    if (isNonEmptyString(args.focus)) {
+      try { focusProjectDir = fs.realpathSync(path.resolve(workspaceRoot, isNonEmptyString(args.projectDir) ? args.projectDir.trim() : ".")); }
+      catch { return errorResult("projectDir must be an existing directory inside the workspace"); }
+      if (!isInsideDir(workspaceRoot, focusProjectDir) || !fs.statSync(focusProjectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
+    }
     const r = ios
       ? await startSession(target, explorationEnvFromArgs(args))
-      : await startAndroidSession(target, { serial: args.androidSerial, apkPath: args.apkPath, clearData: args.clearData !== false, testEmail: args.testEmail, testPassword: args.testPassword });
+      : android
+        ? await startAndroidSession(target, { serial: args.androidSerial, apkPath: args.apkPath, clearData: args.clearData !== false, testEmail: args.testEmail, testPassword: args.testPassword })
+        : await startWebSession(target, { testEmail:args.testEmail, testPassword:args.testPassword });
     if (r.error) return errorResult(r.error);
-    return richResult(
-      `🎬 Session started — \`${target}\` (${ios ? "iOS" : "Android"})\n\n` + formatScreen(r.screenTitle, r.elements) +
-        `\n\nDrive it with \`tapp_session_act\` (tap · type · swipe · back · wait · tree · screenshot).`,
-      r
-    );
+    let focused = null;
+    if (isNonEmptyString(args.focus)) {
+      try {
+        focused = await focusInteractiveSession({ projectDir:focusProjectDir, query:args.focus.trim(), platform:ios ? "ios" : android ? "android" : "web", mapPath:isNonEmptyString(args.mapPath) ? args.mapPath.trim() : "" });
+      } catch (error) {
+        await endSession();
+        return errorResult("Could not focus the requested UI surface", { detail:error.message || String(error) });
+      }
+    }
+    const platformLabel = ios ? "iOS" : android ? "Android" : "web";
+    const screen = agentScreenProjection(focused || r);
+    const text = focused
+      ? `🎬 Session started — \`${target}\` (${platformLabel})\n\n${(await import("./focused-navigation.js")).focusedTargetSummary(focused)}\n\n${formatScreen(screen.screenTitle, screen.elements)}`
+      : `🎬 Session started — \`${target}\` (${platformLabel})\n\n${formatScreen(screen.screenTitle, screen.elements)}\n\nDrive it with \`tapp_focus\` for a named destination, or \`tapp_session_act\` for one action.`;
+    // Return the final focused screen once. Previously this duplicated the complete native tree
+    // inside `focus` and at top level, and retained the pre-focus web URL at top level.
+    const structured = focused
+      ? { ok:true, platform:ios ? "ios" : android ? "android" : "web", ...screen, focus:focusMetadata(focused) }
+      : { ...r, ...screen };
+    const result = richResult(text, structured);
+    if (focused?.execution?.status === "failed") result.isError = true;
+    return result;
+  }
+
+  if (name === "tapp_focus") {
+    const unauthorized = ensureAuthorized(args);
+    if (unauthorized) return unauthorized;
+    if (!isNonEmptyString(args.query)) return errorResult("query is required");
+    let projectDir;
+    try { projectDir = fs.realpathSync(path.resolve(workspaceRoot, isNonEmptyString(args.projectDir) ? args.projectDir.trim() : ".")); }
+    catch { return errorResult("projectDir must be an existing directory inside the workspace"); }
+    if (!isInsideDir(workspaceRoot, projectDir) || !fs.statSync(projectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
+    try {
+      const result = await focusInteractiveSession({
+        projectDir, query:args.query.trim(), platform:isNonEmptyString(args.platform) ? args.platform.trim() : "",
+        mapPath:isNonEmptyString(args.mapPath) ? args.mapPath.trim() : "",
+      });
+      const { focusedTargetSummary } = await import("./focused-navigation.js");
+      const execution = result.execution?.status === "reached"
+        ? `\n\n⚡ Reached in ${(result.execution.steps || []).length} route action(s).\n\n${formatScreen(result.screenTitle, agentFacingElements(result.elements))}`
+        : result.execution?.status === "failed" ? `\n\n⚠️ Route execution stopped: ${result.execution.reason}` : "";
+      const response = richResult(focusedTargetSummary(result) + execution, { ...result, ...agentScreenProjection(result) });
+      if (result.execution?.status === "failed") response.isError = true;
+      return response;
+    } catch (error) { return errorResult("Could not focus the requested UI surface", { detail:error.message || String(error) }); }
   }
 
   if (name === "tapp_session_act") {
@@ -4081,7 +4295,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
-    const result = richResult(head + "\n\n" + formatScreen(r.screenTitle, r.elements) + rec, r);
+    const screen = agentScreenProjection(r);
+    const result = richResult(head + "\n\n" + formatScreen(screen.screenTitle, screen.elements) + rec, { ...r, ...screen });
     if (!ok) result.isError = true;
     return result;
   }

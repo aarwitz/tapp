@@ -254,6 +254,7 @@ async function resolveTargetOrExit(engine, input) {
 function safeCommandUsage(verb) {
   const usage = {
     explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
     open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]",
     tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]",
@@ -287,6 +288,16 @@ function safeCommandUsage(verb) {
 if (["--help", "-h"].includes(command)) {
   command = "help";
   rest = [];
+}
+const knownCommands = new Set([
+  "help", "version", "--version", "-v", "mcp", "init", "focus", "explore", "qa", "open",
+  "tree", "shot", "screenshot", "apps", "build", "flow", "task", "contract", "scenario", "map",
+  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install",
+]);
+if (!knownCommands.has(command)) {
+  console.error(`❌ Unknown command: ${command}`);
+  console.error("Run `npx -y @aarwitz/tapp@latest --help` for the command reference.");
+  process.exit(2);
 }
 const safeHelpRequested = (rest.includes("--help") || rest.includes("-h"))
   && !["help", "version", "--version", "-v"].includes(command)
@@ -528,6 +539,63 @@ switch (command) {
 
   // ---- Zero-config verbs: the same engine the MCP tools use (exported by index.js),
   // invokable by any agent or human with no server setup at all.
+
+  case "focus": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const query = positionals[0] || "";
+    if (!query) {
+      console.error('usage: tapp focus "SCREEN OR CONTROL" [target] [--platform ios|android|web] [--project-dir REPO] [--map FILE] [--out FILE]');
+      process.exit(2);
+    }
+    let projectDir;
+    try { projectDir = fs.realpathSync(path.resolve(typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd())); }
+    catch { console.error("❌ --project-dir must be an existing repository directory"); process.exit(2); }
+    const target = positionals[1] || (typeof flags.url === "string" ? flags.url : "");
+    const platform = requestedPlatform(flags, target);
+    if (!["ios", "android", "web"].includes(platform)) { console.error("❌ --platform must be ios|android|web"); process.exit(2); }
+    const engine = await engineImport();
+    let started = null;
+    try {
+      if (platform === "ios") {
+        requireMacFor("iOS focused navigation");
+        const sim = await engine.ensureBootedSim({ autoBoot:true });
+        if (sim.error) throw new Error(sim.error);
+        const bundleId = await resolveTargetOrExit(engine, target || projectDir);
+        const launch = iosLaunchOptions(flags, rest);
+        started = await engine.startIosInteractiveSession(bundleId, engine.explorationEnvFromArgs({ testEmail:flags.email, testPassword:flags.password, ...launch }));
+      } else if (platform === "android") {
+        const android = androidTarget(flags, target);
+        started = await engine.startAndroidInteractiveSession(android.appId, { serial:android.serial, apkPath:android.apkPath, clearData:flags["keep-data"] !== true });
+      } else {
+        if (!/^https?:\/\//i.test(target)) { console.error("❌ Web focus needs an http(s) target URL"); process.exit(2); }
+        started = await engine.startWebInteractiveSession(target);
+      }
+      if (started.error) throw new Error(started.error);
+      const focused = await engine.focusInteractiveSession({ projectDir, query, platform, mapPath:typeof flags.map === "string" ? flags.map : "" });
+      const { focusedTargetSummary } = await import(path.join(packageRoot, "mcp-server", "src", "focused-navigation.js"));
+      console.log(focusedTargetSummary(focused));
+      if (focused.execution?.status === "reached") {
+        console.log(`\n⚡ Reached in ${(focused.execution.steps || []).length} route action(s).\n`);
+        console.log(engine.formatScreen(focused.screenTitle, focused.elements));
+        const frame = await engine.captureInteractiveSessionFrame(Number(flags.width) || 900);
+        if (!frame.error) {
+          const out = saveShot(frame, typeof flags.out === "string" ? path.resolve(flags.out) : null, `focus-${Date.now()}.${frame.mimeType === "image/png" ? "png" : "jpg"}`);
+          console.log(`\n📸 Screenshot: ${out}`);
+        }
+      } else if (focused.execution?.status === "failed") {
+        console.error(`\n❌ Observed route stopped: ${focused.execution.reason}`);
+        process.exitCode = 1;
+      } else {
+        console.error("\nℹ️  Tapp located the source but did not drive an unobserved route. Ground the UI Map with `npx -y @aarwitz/tapp@latest init . --explore`.");
+      }
+    } catch (error) {
+      console.error(`❌ ${error.message || String(error)}`);
+      process.exitCode = 1;
+    } finally {
+      if (started) await engine.endInteractiveSession();
+    }
+    break;
+  }
 
   case "explore":
   case "qa": {
@@ -1003,7 +1071,9 @@ switch (command) {
       invocation = ["bash", [path.join(packageRoot, "scripts", "run-flow.sh"), absolute, typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : flow.app || ""]];
     }
     const result = spawnSync(invocation[0], invocation[1], { stdio: "inherit", env });
-    console.log(`\nEvidence: ${evidenceDir}`);
+    const evidenceWritten = fs.existsSync(evidenceDir) && fs.readdirSync(evidenceDir).length > 0;
+    if (evidenceWritten) console.log(`\nEvidence: ${evidenceDir}`);
+    else console.error("\n⚠️ Evidence unavailable — the platform runner did not write any artifacts for this Flow run.");
     process.exit(result.status ?? 1);
   }
 
@@ -1620,6 +1690,7 @@ Core — inspect, explore, gate (no Tapp account or server required):
   tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
                            release decision — run 'npx -y @aarwitz/tapp@latest ci' to gate a merge)
                            (web: --watch · all: --platform ios|android|web · --actions N)
+  tapp focus "goal" [target] Source-locate a named screen/control and take the shortest observed route
   tapp contract run FILE   Replay a business-level release contract — the guarantees that must hold
   tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive
                            (see: tapp ci --help)

@@ -8,6 +8,7 @@ or detect one unambiguous target.
 ```bash
 npx -y @aarwitz/tapp@latest init . --explore
 npx -y @aarwitz/tapp@latest explore [target]
+npx -y @aarwitz/tapp@latest focus "Save storefront settings visible above keyboard" [target]
 npx -y @aarwitz/tapp@latest open [target]
 npx -y @aarwitz/tapp@latest tree [target] --json
 npx -y @aarwitz/tapp@latest shot
@@ -41,6 +42,7 @@ npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for 
 - `tapp_init`: inspect or initialize a source repository; `operation:"explore"` prepares and explores.
 - `tapp_build`: build and install an iOS app without needing its bundle id first.
 - `tapp_open_app`: launch and return a screen summary plus inline screenshot.
+- `tapp_focus`: source-locate a named screen/control and execute the shortest observed route in the active session.
 - `tapp_ui_tree` / `tapp_screenshot`: inspect the current real surface.
 - `tapp_session_start` → `tapp_session_act` → `tapp_session_end`: drive one persistent journey.
 - `tapp_explore`: autonomous iOS, Android, or web exploration; observation only.
@@ -55,7 +57,8 @@ source-connected `tapp_init`.
 ## Interactive session loop
 
 ```text
-tapp_session_start {appBundleId:"com.example.app"}
+tapp_session_start {appBundleId:"com.example.app", focus:"Save storefront settings visible above keyboard", projectDir:"."}
+tapp_focus         {query:"Save storefront settings visible above keyboard"}
 tapp_session_act   {action:"tap", id:"Email"}
 tapp_session_act   {action:"type", text:"qa@example.com"}
 tapp_session_act   {action:"tap", id:"Password"}

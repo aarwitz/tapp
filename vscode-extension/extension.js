@@ -65,9 +65,9 @@ class SimulatorPanel {
 
   constructor(panel) {
     this.panel = panel;
-    this.panel.webview.html = `<!DOCTYPE html><html><body style="margin:0;background:#111;display:flex;align-items:flex-start;justify-content:center;min-height:100vh">
-<img id="s" style="max-width:100%;max-height:100vh;object-fit:contain" alt="Waiting for the simulator…"/>
-<script>window.addEventListener("message", (e) => { if (e.data && e.data.type === "frame") document.getElementById("s").src = e.data.src; });</script>
+    this.panel.webview.html = `<!DOCTYPE html><html><body style="margin:0;background:#111;color:#ddd;display:flex;align-items:center;justify-content:center;min-height:100vh;font:13px system-ui">
+<div id="status">Waiting for the app…</div><img id="s" style="display:none;max-width:100%;max-height:100vh;object-fit:contain" alt="Settled app preview"/>
+<script>window.addEventListener("message",(e)=>{const d=e.data||{},s=document.getElementById("s"),status=document.getElementById("status");if(d.type==="frame"){s.src=d.src;s.style.display="block";status.style.display="none";}if(d.type==="pause"){s.style.display="none";status.textContent=d.message||"Preparing the app…";status.style.display="block";}});</script>
 </body></html>`;
     this.timer = setInterval(() => this.refresh(), 1500);
     this.busy = false;
@@ -78,15 +78,28 @@ class SimulatorPanel {
     this.refresh();
   }
 
+  static pause(message = "Building, installing, and opening the app…") {
+    if (!SimulatorPanel.current) return;
+    SimulatorPanel.current.paused = true;
+    SimulatorPanel.current.panel.webview.postMessage({ type: "pause", message });
+  }
+
+  static resume() {
+    if (!SimulatorPanel.current) SimulatorPanel.show();
+    if (!SimulatorPanel.current) return;
+    SimulatorPanel.current.paused = false;
+    SimulatorPanel.current.refresh();
+  }
+
   async refresh() {
-    if (this.busy || !this.panel.visible) return;
+    if (this.paused || this.busy || !this.panel.visible) return;
     this.busy = true;
     try {
       const stamp = Date.now().toString(36);
       const png = path.join(os.tmpdir(), `tapp-panel-${stamp}.png`);
       const jpg = path.join(os.tmpdir(), `tapp-panel-${stamp}.jpg`);
       const shot = await exec("xcrun", ["simctl", "io", "booted", "screenshot", png], 15_000);
-      if (shot.code === 0 && fs.existsSync(png)) {
+      if (!this.paused && shot.code === 0 && fs.existsSync(png)) {
         await exec("sips", ["-Z", "520", "-s", "format", "jpeg", "-s", "formatOptions", "70", png, "--out", jpg], 15_000);
         const file = fs.existsSync(jpg) ? jpg : png;
         const mime = file === jpg ? "image/jpeg" : "image/png";
@@ -256,11 +269,19 @@ function activate(ctx) {
   registerTool(ctx, "tapp_open_ios_app", async (input) => {
     const ws = wsDir();
     if (!ws && !input.target) return textResult(`❌ ${NO_WORKSPACE}`);
-    const r = await getBridge().openTarget(input.target, ws || process.cwd());
-    if (r.error) return textResult(`❌ ${r.error}`);
     SimulatorPanel.show();
+    SimulatorPanel.pause("Building, installing, and opening the app…");
+    const r = await getBridge().openTarget(input.target, ws || process.cwd(), input.focus);
+    if (r.error) return textResult(`❌ ${r.error}`);
+    SimulatorPanel.resume();
     return textResult(r.text);
   }, (input) => `📱 Opening ${input.target || "the iOS app"} on the simulator`);
+
+  registerTool(ctx, "tapp_ios_focus", async (input) => {
+    if (!input.query) return textResult("❌ `query` is required — name the screen, control, or focused UI task.");
+    const r = await getBridge().focus(input.query, wsDir() || process.cwd());
+    return textResult(r.error ? `❌ ${r.error}` : r.text);
+  }, (input) => `⚡ Navigating directly to “${input.query || "the requested screen"}”`);
 
   registerTool(ctx, "tapp_read_ios_screen", async () => {
     const r = await getBridge().readScreen();
@@ -366,6 +387,7 @@ function activate(ctx) {
     const ws = wsDir();
     if (!ws && !input.target) return textResult(`❌ ${NO_WORKSPACE}`);
     SimulatorPanel.show();
+    SimulatorPanel.pause("Building and opening the app for exploration…");
     const b = getBridge();
     // Interactive QA: saved values flow in silently (no pause), and when the app asks for
     // something new the run pauses and VS Code prompts — the desktop app's mid-run input,
@@ -378,6 +400,7 @@ function activate(ctx) {
       testEmail: preSaved.email,
       testPassword: preSaved.password,
       inputOverrides: preSaved.overrides,
+      onVisualReady: () => SimulatorPanel.resume(),
       onAwaitInput: async (req, bundleId) => {
         // Re-check saved values at pause time (the bundle id is definitely known here).
         const saved = await getSaved(bundleId);
@@ -400,6 +423,7 @@ function activate(ctx) {
     const ws = wsDir();
     if (!ws && !input.projectDir) return textResult(`❌ ${NO_WORKSPACE}`);
     const dir = input.projectDir ? path.resolve(ws || process.cwd(), String(input.projectDir)) : ws;
+    SimulatorPanel.pause("Building and installing the app…");
     const r = await getBridge().build(dir, input.scheme ? String(input.scheme) : undefined);
     return textResult(r.error ? `❌ ${r.error}` : r.text);
   }, () => "🔨 Building the iOS app for the simulator");

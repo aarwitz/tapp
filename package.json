@@ -1,8 +1,8 @@
 {
   "name": "@aarwitz/tapp",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "mcpName": "io.github.aarwitz/tapp",
-  "description": "Agent-driven app testing for iOS, Android, and web—real screens, replayable flows, and deterministic CI gates.",
+  "description": "Let coding agents verify UI changes on real iOS, Android, and web surfaces, then enforce reviewed proof in deterministic CI.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -89,7 +89,7 @@
     "mobile"
   ],
   "scripts": {
-    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/android-primitives-protocol.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/cloud-runner.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/mcp-workspace.test.js tests/action.test.js tests/package-surface.test.js tests/agent-surface.test.js tests/presentation-contract.test.js tests/landing-brand.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js vscode-extension/test/bridge.test.js",
+    "test": "node --test tests/report.test.js tests/regression.test.js tests/engine.test.js tests/project-config.test.js tests/application-model.test.js tests/ui-map.test.js tests/focused-navigation.test.js tests/task-runtime.test.js tests/release-contract.test.js tests/pr-selection.test.js tests/flow-runtime.test.js tests/web-explorer.test.js tests/web-session.test.js tests/web-flow.test.js tests/scenario-runtime.test.js tests/android-driver.test.js tests/android-explorer.test.js tests/android-flow.test.js tests/android-primitives-protocol.test.js tests/managed-web.test.js tests/product-operations.test.js tests/browser-product.test.js tests/browser-onboarding.test.js tests/managed-operation.test.js tests/cloud-runner.test.js tests/ci-setup.test.js tests/ci-install.test.js tests/cli.test.js tests/mcp-workspace.test.js tests/action.test.js tests/package-surface.test.js tests/agent-surface.test.js tests/presentation-contract.test.js tests/landing-brand.test.js tests/ci-gate.test.js tests/ci-report.test.js tests/desktop-protocol.test.js tests/ios-flow-protocol.test.js vscode-extension/test/bridge.test.js",
     "test:browser-journey": "node --test tests/browser-journey.test.js",
     "test:browser-native": "TAPP_RUN_NATIVE_BROWSER=1 node --test tests/browser-native-journey.test.js"
   }

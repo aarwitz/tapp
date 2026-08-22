@@ -47,6 +47,7 @@ Skill. MCP prompts are a convenience; every tool remains directly callable.
 ## Pick the right operation
 
 - `tapp_open_app`: launch and inspect one screen quickly.
+- `tapp_focus`: locate a named surface from source and follow its shortest previously observed UI Map route.
 - `tapp_ui_tree` / `tapp_screenshot`: inspect the current surface.
 - `tapp_session_start` → `tapp_session_act` → `tapp_session_end`: drive a persistent session.
 - `tapp_explore`: autonomous multi-minute exploration → an observation (findings + evidence), not a ship verdict.
@@ -56,7 +57,9 @@ Skill. MCP prompts are a convenience; every tool remains directly callable.
 - `tapp_ci_setup`: create/review target-specific baseline and portable CI setup.
 - platform diagnostics and management: health, simulators, app build/install, captures.
 
-The full, versioned agent playbook is [`../AGENTS.md`](../AGENTS.md). Read the `elements[]` returned
+Run one grounding exploration before expecting `tapp_focus` to replay a route; source can locate an
+unobserved surface, but it never authorizes unobserved taps. The full, versioned agent playbook is
+[`../AGENTS.md`](../AGENTS.md). Read the `elements[]` returned
 after every action, tap fields before typing, and wait explicitly after navigation/network work.
 
 ## Typical session

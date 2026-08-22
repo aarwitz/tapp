@@ -1,7 +1,7 @@
 {
   "name": "tapp",
   "description": "Give Claude hands and eyes on iOS, Android, and web apps, with exploration, replayable flows, evidence, and deterministic CI gates.",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "author": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"
@@ -24,7 +24,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@aarwitz/tapp@0.17.0",
+        "@aarwitz/tapp@0.17.1",
         "mcp"
       ],
       "cwd": "${CLAUDE_PROJECT_DIR}"

@@ -90,3 +90,27 @@ test("Android launch dismisses a stale system crash surface before accepting own
   assert.equal(calls, 3);
   assert.equal(isAndroidAppSnapshot(snapshot, driver.appId), true);
 });
+
+test("Android settle accepts the first idle snapshot when it proves the screen changed", async () => {
+  const driver = Object.create(AndroidDriver.prototype);
+  let calls = 0;
+  driver.snapshot = async () => {
+    calls += 1;
+    return { screenTitle:"About", elements:[{ id:"done_button", text:"Done", x:10, y:20 }] };
+  };
+  const settled = await driver.settle(1_000, {
+    screenTitle:"Settings", elements:[{ id:"about_button", text:"About", x:10, y:20 }],
+  });
+  assert.equal(settled.screenTitle, "About");
+  assert.equal(calls, 1);
+});
+
+test("Android settle still requires stability when the first snapshot did not change", async () => {
+  const driver = Object.create(AndroidDriver.prototype);
+  let calls = 0;
+  const unchanged = { screenTitle:"Settings", elements:[{ id:"save_button", text:"Save", x:10, y:20 }] };
+  driver.snapshot = async () => { calls += 1; return unchanged; };
+  const settled = await driver.settle(1_000, unchanged);
+  assert.equal(settled.screenTitle, "Settings");
+  assert.equal(calls, 2);
+});

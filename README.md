@@ -9,9 +9,9 @@
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHBAbGF0ZXN0IiwibWNwIl19)
 [![VS Code MCP](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%40latest%22%2C%22mcp%22%5D%7D)
 
-**Tapp gives coding agents hands and eyes on real iOS, Android, and web apps.** It can inspect and
-drive screens, explore for technical failures, save journeys as deterministic tests, and gate
-reviewed behavior in CI.
+**Tapp lets coding agents verify UI changes on real iOS, Android, and web surfaces, then turns
+reviewed proof into deterministic CI checks.** It can inspect and drive screens, explore for
+technical failures, and save important journeys as replayable tests.
 
 Exploration reports findings, coverage, evidence, and limits. Only the repository-connected gate
 returns `pass`, `fail`, or `inconclusive`. Tapp does not turn an autonomous crawl into a subjective
@@ -45,10 +45,11 @@ npx -y skills add aarwitz/tapp --skill tapp
 ```
 
 This installs the open Agent Skills workflow into the current project and lets the agent run the npm
-CLI directly; no MCP server, plugin, account, API key, global Tapp install, or pasted prompt block is
-required. Add `-g` for a user-wide install, or `--agent claude-code`, `--agent codex`, and similar
-selectors to constrain the clients. Start or restart the agent from the application repository and
-use the short prompt above.
+CLI directly. Inspecting, focused evidence, autonomous exploration, deterministic replay, and gating
+need no MCP server, plugin, account, API key, global Tapp install, or pasted prompt block. Add `-g`
+for a user-wide install, or `--agent claude-code`, `--agent codex`, and similar selectors to constrain
+the clients. Start or restart the agent from the application repository and use the short prompt
+above.
 
 **Claude Code — optional enhanced skill and MCP tools:**
 
@@ -57,9 +58,10 @@ claude plugin marketplace add aarwitz/tapp
 claude plugin install tapp@tapp
 ```
 
-The plugin bundles the same `tapp` Agent Skill with the matching npm-backed MCP server. Use it when
-you want inline screenshot tool results and a persistent interactive tap/read/type session; it is
-not required for the core skill-to-CLI workflow.
+The plugin bundles the same `tapp` Agent Skill with the matching npm-backed MCP server. Add it when
+you want inline screenshot results or when the agent must interactively tap, type, and record an
+arbitrary multi-step journey in one persistent session. It is not required for the core
+skill-to-CLI workflow.
 
 **No agent integration:** run the npm package directly from an app repository in one line:
 
@@ -75,7 +77,7 @@ Android and web remain available through the skill's CLI/MCP workflow.
 ```
 you:    "Add a logout button to the settings screen"
 agent:  *writes the Swift*
-agent:  *tapp: builds, opens the app, navigates to Settings, screenshots it*
+agent:  *tapp: finds Settings in source, follows its previously observed route, screenshots it*
 agent:  "Done — and here it is working on the simulator: [screenshot]"
 ```
 
@@ -84,12 +86,18 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 Requirements: **Node ≥ 18**. iOS needs **macOS + Xcode**; Android needs `adb` plus a connected
 emulator/device; web needs Playwright + Chromium.
 
-From the app repository, let the agent see the current screen and then explore it:
+From the app repository, ground Tapp once, then use the smallest operation for later checks:
 
 ```bash
-npx -y @aarwitz/tapp@latest open   # builds/launches as needed; prints a screenshot path + screen summary
-npx -y @aarwitz/tapp@latest explore     # explores the real app; prints findings + evidence (an observation, not a gate)
+npx -y @aarwitz/tapp@latest init . --explore # first run: detect/build, explore, and ground .tapp/ui-map.json
+npx -y @aarwitz/tapp@latest open            # one current screen + screenshot
+npx -y @aarwitz/tapp@latest focus "Save storefront settings visible above keyboard" # source + observed-route fast path
+npx -y @aarwitz/tapp@latest explore         # later broad exploration (observation, not a gate)
 ```
+
+Source tells `focus` where the requested UI likely lives; only a route already observed in
+`.tapp/ui-map.json` authorizes navigation. If a fresh repository has no such route yet, Tapp returns
+the source evidence instead of guessing through the app.
 
 Claude Code can read the saved image with its file-reading tool; Codex can open it with
 `view_image`. The agent should report what the screenshot proves, relay the exploration findings
@@ -122,6 +130,9 @@ npx -y @aarwitz/tapp@latest actor set alice . --role member --session isolated \
 npx -y @aarwitz/tapp@latest baseline create . --platform web
 npx -y @aarwitz/tapp@latest ci install .
 ```
+
+Actor setup refuses to overwrite an existing actor. Repeat `actor set` with `--replace` only when
+you intend to replace that actor's reviewed role, session, provisioning, or credential bindings.
 
 In a repository containing multiple apps (for example, iOS plus web),
 `tapp init . --explore` without an explicit target does not guess from detection order—even when a
@@ -326,7 +337,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@main # pin to the newest release tag for production
+      - uses: aarwitz/tapp@v0.17.1 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -376,7 +387,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@main
+- uses: aarwitz/tapp@v0.17.1 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app

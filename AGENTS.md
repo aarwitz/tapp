@@ -14,6 +14,7 @@ bundle id, or (web) an http(s) URL. You never need to know a bundle id up front.
 
 ```bash
 npx -y @aarwitz/tapp@latest explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
+npx -y @aarwitz/tapp@latest focus "SCREEN OR CONTROL" [target] # source-locate + shortest observed route + screenshot
 npx -y @aarwitz/tapp@latest explore https://your-app.example --watch  # web: visibly follow the same exploration
 npx -y @aarwitz/tapp@latest open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
 npx -y @aarwitz/tapp@latest tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
@@ -60,6 +61,7 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 | The user wants… | Use | NOT |
 |---|---|---|
 | "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_explore` (a full multi-minute exploration) |
+| "Find/reach this named screen or control" | `tapp_session_start` with `focus`, or `tapp_focus`; plain CLI: `tapp focus` | screenshot-by-screenshot wandering |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
 | "Is my app broken? Find bugs" | `tapp_explore` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps; returns an observation (findings + evidence), not a ship verdict — gate a merge with the CI gate (`tapp ci` CLI / the GitHub Action) + a contract | a manual session (exploration is autonomous) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
@@ -67,8 +69,15 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 
 ## Session driving (the Playwright loop)
 
+After an initial grounding exploration, use the source-connected fast path for any named
+destination. Tapp searches the repository, matches the requested surface to `.tapp/ui-map.json`, and executes only the shortest
+runtime-observed route. Source tells Tapp where intent lives; observed UI evidence authorizes taps.
+If it returns source evidence without a route, inspect the cited file/navigation source—do not
+wander blindly or invent a route. URL-only targets correctly have no source advantage.
+
 ```
-tapp_session_start { appBundleId: "com.acme.app" }     → fresh launch + initial tree
+tapp_session_start { appBundleId: "com.acme.app", focus: "Save storefront settings visible above keyboard", projectDir: "." }
+tapp_focus         { query: "Save storefront settings visible above keyboard" } → one-call shortest observed route
 tapp_session_act   { action: "login", email: "qa@x.com", password: "…" } → atomic fill + submit + verify
 tapp_session_act   { action: "tap",  id: "Email" }      → tap by a11y id OR visible label
 tapp_session_act   { action: "type", text: "qa@x.com" } → types into the focused field

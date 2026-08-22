@@ -19,7 +19,7 @@ function exec(cmd, args, timeoutMs = 60_000) {
 // caches tag-resolved installs (`@latest` can serve a stale engine forever), and the
 // tool contract (tapp_build shape, target resolution) must match what the bridge expects.
 // Bump together with the extension version. TAPP_ENGINE_SPEC overrides for development.
-const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.0";
+const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.1";
 
 class TappBridge {
   constructor({ cwd, command, args } = {}) {
@@ -108,14 +108,19 @@ class TappBridge {
     return { bundleId, buildText: text };
   }
 
-  async openTarget(target, workspaceDir) {
+  async openTarget(target, workspaceDir, focus) {
     const r = await this.resolveBundleId(target, workspaceDir);
     if (r.error) return { error: r.error };
     if (this.sessionActive) {
       try { await this.call("tapp_session_end", {}, 60_000); } catch { /* stale session */ }
       this.sessionActive = false;
     }
-    const s = await this.call("tapp_session_start", { appBundleId: r.bundleId }, 5 * 60 * 1000);
+    const sessionArgs = { appBundleId: r.bundleId };
+    if (focus) {
+      sessionArgs.focus = String(focus);
+      sessionArgs.projectDir = workspaceDir;
+    }
+    const s = await this.call("tapp_session_start", sessionArgs, 5 * 60 * 1000);
     if (this.isError(s)) return { error: this.textOf(s) };
     this.sessionActive = true;
     this.bundleId = r.bundleId;
@@ -127,6 +132,13 @@ class TappBridge {
     const res = await this.call("tapp_session_act", cmd, 2 * 60 * 1000);
     if (this.isError(res)) return { error: this.textOf(res) };
     return { text: this.textOf(res) };
+  }
+
+  async focus(query, workspaceDir) {
+    if (!this.sessionActive) return { error: "No app is open — call tapp_open_ios_app first." };
+    const res = await this.call("tapp_focus", { query:String(query || ""), projectDir:workspaceDir }, 3 * 60 * 1000);
+    if (this.isError(res)) return { error:this.textOf(res) };
+    return { text:this.textOf(res) };
   }
 
   async readScreen() {
@@ -159,6 +171,21 @@ class TappBridge {
     if (opts.testEmail) args.testEmail = opts.testEmail;
     if (opts.testPassword) args.testPassword = opts.testPassword;
     if (opts.inputOverrides && Object.keys(opts.inputOverrides).length) args.inputOverrides = opts.inputOverrides;
+
+    // Reveal visual clients only once the native harness reports that the target app is
+    // foregrounded and its first frame is stable. This is the same boundary used by recording.
+    const visualReadyPath = path.join(os.tmpdir(), `tapp-visual-ready-${Date.now().toString(36)}.signal`);
+    try { fs.rmSync(visualReadyPath, { force: true }); } catch { /* fresh handshake */ }
+    args.visualReadyPath = visualReadyPath;
+    let visualPoller = null;
+    let visualReady = false;
+    if (typeof opts.onVisualReady === "function") {
+      visualPoller = setInterval(() => {
+        if (visualReady || !fs.existsSync(visualReadyPath)) return;
+        visualReady = true;
+        try { opts.onVisualReady(); } catch { /* preview is advisory */ }
+      }, 100);
+    }
 
     let poller = null;
     let responsePath = null;
@@ -196,6 +223,11 @@ class TappBridge {
       return { text: this.textOf(res) };
     } finally {
       if (poller) clearInterval(poller);
+      if (visualPoller) clearInterval(visualPoller);
+      if (!visualReady && fs.existsSync(visualReadyPath) && typeof opts.onVisualReady === "function") {
+        try { opts.onVisualReady(); } catch { /* preview is advisory */ }
+      }
+      try { fs.rmSync(visualReadyPath, { force: true }); } catch { /* tmp cleanup */ }
       if (responsePath) {
         for (const p of [responsePath, responsePath + ".request"]) {
           try { fs.rmSync(p, { force: true }); } catch { /* tmp cleanup */ }

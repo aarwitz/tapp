@@ -82,6 +82,31 @@ class ExplorerTests: XCTestCase {
         return fallback
     }
 
+    /// Opens the visual-evidence boundary only after the target app is foregrounded and its first
+    /// UI has settled. The host starts simulator recording (and clients may reveal a live preview)
+    /// at this point, then acknowledges it. The wait is deliberately bounded: video/preview
+    /// failure must never prevent the actual exploration from running.
+    private func signalSettledVisualReady() {
+        let readyPath = resolve("OCQA_VISUAL_READY_PATH")
+        guard !readyPath.isEmpty else { return }
+        let readyURL = URL(fileURLWithPath: readyPath)
+        try? FileManager.default.createDirectory(at: readyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data("ready\n".utf8).write(to: readyURL, options: .atomic)
+        print("OCQA_STATE:visual_ready")
+
+        let startedPath = resolve("OCQA_RECORDING_STARTED_PATH")
+        guard !startedPath.isEmpty else { return }
+        let deadline = Date().addingTimeInterval(5.0)
+        while Date() < deadline && !FileManager.default.fileExists(atPath: startedPath) {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if FileManager.default.fileExists(atPath: startedPath) {
+            print("OCQA_STATE:visual_capture_started")
+        } else {
+            print("OCQA_STATE:visual_capture_ack_timeout")
+        }
+    }
+
     private func loadConfig() {
         // OCQA_CONFIG_PATH (forwarded from the host via TEST_RUNNER_OCQA_CONFIG_PATH) is
         // authoritative and per-run — checked FIRST so each device reads its own config and
@@ -585,14 +610,34 @@ class ExplorerTests: XCTestCase {
     /// the password it just typed.
     private func sessionLogin(email: String, password: String) -> (status: String, detail: String) {
         waitForUIStability(timeout: 2.0)
-        let textFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
-        let secureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
-        let emailField = textFields.first { f in
-            let hint = (f.identifier + " " + (f.placeholderValue ?? "") + " " + f.label).lowercased()
-            return hint.contains("email") || hint.contains("e-mail") || hint.contains("user")
-        } ?? (secureFields.isEmpty ? nil : textFields.first)
+        // A recorded Flow invokes login immediately after a cold launch, while a human-driven
+        // session naturally invokes it after inspecting the first tree. Poll the SAME finder for
+        // a bounded interval so those two entry paths behave identically when login fields appear
+        // after an asynchronous launch transition.
+        var textFields: [XCUIElement] = []
+        var secureFields: [XCUIElement] = []
+        var emailField: XCUIElement?
+        var passwordField: XCUIElement?
+        let fieldsDeadline = Date().addingTimeInterval(8.0)
+        repeat {
+            textFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+            secureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+            let plainPasswordIndex = textFields.firstIndex { f in
+                let hint = (f.identifier + " " + (f.placeholderValue ?? "") + " " + f.label).lowercased()
+                return hint.contains("password") || hint.contains("passcode")
+            }
+            passwordField = secureFields.first ?? plainPasswordIndex.map { textFields[$0] }
+            emailField = textFields.first { f in
+                let hint = (f.identifier + " " + (f.placeholderValue ?? "") + " " + f.label).lowercased()
+                return hint.contains("email") || hint.contains("e-mail") || hint.contains("user")
+            } ?? textFields.enumerated().first(where: { index, _ in
+                passwordField != nil && (plainPasswordIndex.map { index != $0 } ?? true)
+            })?.element
+            if emailField != nil && passwordField != nil { break }
+            Thread.sleep(forTimeInterval: 0.25)
+        } while Date() < fieldsDeadline
         guard let emailF = emailField else { return ("no_login_form", "no email/username field visible") }
-        guard let passF = secureFields.first else { return ("no_login_form", "no password (secure) field visible") }
+        guard let passF = passwordField else { return ("no_login_form", "no password field visible") }
 
         replaceText(on: emailF, with: email)
         replaceText(on: passF, with: password)
@@ -1030,6 +1075,8 @@ class ExplorerTests: XCTestCase {
         // reliably lands after the presentation animation finishes.
         _ = app.descendants(matching: .any).firstMatch.waitForExistence(timeout: 3)
         _ = waitForUIStability(timeout: 2.0)
+
+        signalSettledVisualReady()
 
         print("OCQA_STATE:exploration_started max_actions=\(maxActions)")
 

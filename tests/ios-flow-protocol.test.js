@@ -28,6 +28,22 @@ test("iOS Flow replay refreshes a stale harness cache before execution", () => {
   assert.match(flowCommand, /ensureIOSHarness\(\)/);
 });
 
+test("iOS session and Flow login share one cold-launch-tolerant field finder", () => {
+  const login = source.match(/private func sessionLogin[\s\S]*?\n    }\n\n    private func sessionBack/)?.[0] || "";
+  assert.match(login, /fieldsDeadline = Date\(\)\.addingTimeInterval\(8\.0\)/);
+  assert.match(login, /passwordField = secureFields\.first/);
+  assert.match(login, /passwordField != nil && \(plainPasswordIndex\.map \{ index != \$0 \} \?\? true\)/);
+  assert.match(source, /case "login":[\s\S]*?sessionLogin\(email: email, password: password\)/);
+  assert.match(source, /func testReplayFlow[\s\S]*?case "login":[\s\S]*?sessionLogin\(email: email, password: password\)/);
+});
+
+test("iOS Flow replay retains an inspectable result bundle, log, source, and JSON report", () => {
+  assert.match(runFlowSource, /TAPP_FLOW_EVIDENCE_DIR/);
+  assert.match(runFlowSource, /-resultBundlePath "\$RESULT_BUNDLE"/);
+  assert.match(runFlowSource, /cp "\$LOG" "\$EVIDENCE_DIR\/flow\.log"/);
+  assert.match(runFlowSource, /flow-report\.json/);
+});
+
 test("iOS evidence preserves compiled release-contract identity and criticality", () => {
   assert.match(source, /flow\["releaseContract"\]/);
   assert.match(source, /"release-contract"/);
@@ -62,6 +78,20 @@ test("iOS exploration attaches the true launch surface before root normalization
   assert.match(launchEvidence, /XCTAttachment\(screenshot: initialScreenshot\)/);
   assert.match(launchEvidence, /state_0_/);
   assert.match(launchEvidence, /add\(initialAttachment\)/);
+});
+
+test("iOS exploration opens video and preview only at the settled foreground boundary", () => {
+  assert.match(source, /private func signalSettledVisualReady/);
+  assert.match(source, /OCQA_STATE:visual_ready/);
+  assert.match(source, /addingTimeInterval\(5\.0\)/);
+  const launchBoundary = source.match(/waitForUIStability\(timeout: 2\.0\)[\s\S]*?OCQA_STATE:exploration_started/)?.[0] || "";
+  assert.match(launchBoundary, /signalSettledVisualReady\(\)/);
+  const exploreScript = quickCaptureSource.match(/  explore\)[\s\S]*?  tree\)/)?.[0] || "";
+  assert.match(exploreScript, /run_harness_test .* &/);
+  assert.match(exploreScript, /-f "\$VISUAL_READY_PATH"/);
+  assert.match(exploreScript, /recordVideo --codec=h264/);
+  assert.ok(exploreScript.indexOf('-f "$VISUAL_READY_PATH"') < exploreScript.indexOf('recordVideo --codec=h264'));
+  assert.doesNotMatch(exploreScript, /Start video recording in background/);
 });
 
 test("native progress calls structural states what they are", () => {

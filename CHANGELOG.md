@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.1
+
+**Faster source-connected agent navigation and cleaner evidence.**
+
+- Add `tapp focus` / `tapp_focus`: source locates the requested screen or control, the previously
+  observed UI Map authorizes the shortest route, and the real target supplies the final evidence.
+- Let web, iOS, and Android MCP sessions accept a focused goal during startup, reducing known-screen
+  navigation to one tool call before the requested final interaction.
+- Start iOS recordings and VS Code preview frames only after the rebuilt app is foregrounded and
+  settled, excluding installation and SpringBoard setup from application evidence.
+- Share the proven native sign-in field finder with deterministic Flow replay and retain real
+  failure evidence instead of printing paths that were never written.
+- Make invalid CLI verbs fail as usage errors, clarify Skill/CLI versus MCP capabilities, and align
+  the package, Agent Skill, Action examples, website, and internal product map on one contract.
+
 ## VS Code 0.3.4
 
 - Bundle the stable Tapp Agent Skill and pin the extension engine to Tapp 0.17.0.

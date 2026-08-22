@@ -305,14 +305,25 @@ export class AndroidDriver {
     return r.stdout;
   }
 
-  async settle(timeoutMs = 2200) {
+  async settle(timeoutMs = 2200, previousSnapshot = null) {
     const deadline = Date.now() + timeoutMs;
+    const fingerprintOf = (snapshot) => (snapshot?.elements || [])
+      .map((e) => `${androidElementKey(e)}:${e.text}:${e.x},${e.y}`).join("|");
+    const previousScreen = String(previousSnapshot?.screenTitle || "");
+    const previousFingerprint = fingerprintOf(previousSnapshot);
     let previous = "";
     let stable = 0;
     let latest;
     while (Date.now() < deadline) {
       latest = await this.snapshot();
-      const fingerprint = latest.elements.map((e) => `${androidElementKey(e)}:${e.text}:${e.x},${e.y}`).join("|");
+      const fingerprint = fingerprintOf(latest);
+      // UIAutomator's dump command itself waits for the UI to become idle. If its first complete
+      // snapshot proves that the requested interaction changed the screen, a second identical
+      // dump adds roughly two seconds without adding evidence. Preserve the two-snapshot stability
+      // requirement when nothing changed (including delayed navigation and no-op controls).
+      if (previousSnapshot && fingerprint && (
+        String(latest.screenTitle || "") !== previousScreen || fingerprint !== previousFingerprint
+      )) return latest;
       if (fingerprint === previous) stable += 1; else stable = 0;
       if (stable >= 1) return latest;
       previous = fingerprint;

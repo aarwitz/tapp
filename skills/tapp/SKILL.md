@@ -14,7 +14,8 @@ screen or journey works from source inspection alone.
 |---|---|
 | See or screenshot one screen | `open` / `tapp_open_app` |
 | Inspect controls on the current screen | `tree` / `tapp_ui_tree` |
-| Drive a specific journey | MCP session start → act → end |
+| Reach a named screen/control | `focus` / `tapp_focus` (source + observed UI Map fast path) |
+| Drive a specific journey | MCP session start → focus or act → end |
 | Find bugs autonomously | `explore` / `tapp_explore` |
 | Preserve a journey | record and save a Flow; replay it deterministically |
 | Decide whether a merge passes policy | `ci`; exploration never decides this |
@@ -42,6 +43,25 @@ Targets may be a repository path, Xcode container, `.app`, iOS bundle id, APK pl
 or owned HTTP(S) URL. Never explore a third-party web property without authorization: exploration
 clicks and types.
 
+## Navigate like a source-connected expert
+
+When the user names a screen, control, or UI condition, do not discover the app one screenshot at a
+time. Start from the repository source, then use Tapp's observed navigation evidence:
+
+1. With MCP, pass the exact request as `focus` to `tapp_session_start`, or call `tapp_focus` in an
+   active session. Without MCP, run `npx -y @aarwitz/tapp@latest focus "<exact request>" [target]`.
+2. Tapp searches owned source, reconciles the likely surface with `.tapp/ui-map.json`, and executes
+   the shortest runtime-observed route in one call. Read its final tree before visual assertions.
+3. If Tapp returns source evidence but no replayable route, inspect the cited file/line and relevant
+   router/navigation source. Do not wander blindly or invent a path; ground the map or drive only a
+   route supported by that source evidence.
+
+A fresh repository needs one grounding exploration before `focus` can replay a route. Source can
+locate an unobserved surface, but it never authorizes unobserved taps.
+
+Source establishes intent and location; the real UI establishes behavior. A URL-only target has no
+source advantage and correctly falls back to runtime observation.
+
 ## Observe honestly
 
 Exploration returns findings, coverage, evidence, and `inconclusive`; it does not return a score or
@@ -64,7 +84,7 @@ point the human to the report's exploration recording when available.
 
 ## Drive safely
 
-For an interactive MCP session, read returned `elements[]` before every action, target accessibility
+After the focused fast path, read returned `elements[]` before any remaining action, target accessibility
 ids or visible labels, check `hittable`, tap a field before typing, and wait for navigation or async
 content. Use coordinates only as a last resort. End the session when finished.
 

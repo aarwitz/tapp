@@ -9,7 +9,7 @@ const readLanding = (relative) => read(`${landingRoot}/${relative}`);
 const hasPrivatePublicationTool = fs.existsSync(new URL("../tools/sync-public.sh", import.meta.url));
 
 const shortDescription =
-  "Agent-driven app testing for iOS, Android, and web—real screens, replayable flows, and deterministic CI gates.";
+  "Let coding agents verify UI changes on real iOS, Android, and web surfaces, then enforce reviewed proof in deterministic CI.";
 
 test("public package surfaces describe one Tapp product", () => {
   const pkg = json("package.json");
@@ -18,7 +18,7 @@ test("public package surfaces describe one Tapp product", () => {
 
   assert.equal(pkg.description, shortDescription);
   assert.match(readme, /^# Tapp$/m);
-  assert.match(readme, /Tapp gives coding agents hands and eyes on real iOS, Android, and web apps/);
+  assert.match(readme, /Tapp lets coding agents verify UI changes on real iOS, Android, and web surfaces/);
   assert.match(readme, /Only the repository-connected gate[\s\S]*`pass`, `fail`, or `inconclusive`/);
   assert.match(landing, /Let your coding agent test the app it changed/);
 
@@ -57,6 +57,18 @@ test("public onboarding leads with the skill and keeps one-line CLI fallback", (
   }
   assert.doesNotMatch(landing, /npx -y @aarwitz\/tapp(?!@)/);
   assert.doesNotMatch(landing, /@aarwitz\/tapp app \.|#quickstart/);
+  assert.match(readme, /Inspecting, focused evidence, autonomous exploration, deterministic replay, and gating[\s\S]*need no MCP server/);
+  assert.match(readme, /interactively tap, type, and record an[\s\S]*multi-step journey[\s\S]*persistent session/);
+  assert.match(readme, /only a route already observed in[\s\S]*\.tapp\/ui-map\.json[\s\S]*authorizes navigation/);
+});
+
+test("public Action examples use a release tag instead of a moving branch", () => {
+  for (const relative of ["README.md", "docs/scenarios.md"]) {
+    const source = read(relative);
+    assert.doesNotMatch(source, /uses:\s*aarwitz\/tapp@main/, `${relative} does not recommend a moving Action branch`);
+    assert.match(source, /uses:\s*aarwitz\/tapp@v\d+\.\d+\.\d+/, `${relative} recommends a release tag`);
+    assert.match(source, /reviewed release commit SHA/, `${relative} names the stronger immutable option`);
+  }
 });
 
 test("platform claims name the exact current target boundary", () => {

@@ -55,9 +55,22 @@ test("engine is import-safe and exports the shared surface", () => {
     "formatScreen",
     "qaNextSteps",
     "recordingUnavailableReason",
+    "focusInteractiveSession",
+    "agentFacingElements",
   ]) {
     assert.equal(typeof engine[name], "function", `${name} exported`);
   }
+});
+
+test("agent-facing trees omit empty native hierarchy containers but retain actionable controls", () => {
+  const elements = engine.agentFacingElements([
+    { type:"XCUIElementTypeApplication", role:"other", label:"", id:"", frame:{ x:0, y:0, width:390, height:844 } },
+    { type:"XCUIElementTypeOther", role:"other", label:"", id:"", frame:{ x:0, y:0, width:390, height:844 } },
+    { type:"XCUIElementTypeStaticText", role:"text", label:"Update Profile", frame:{ x:20, y:80, width:160, height:30 } },
+    { type:"XCUIElementTypeButton", role:"button", label:"Save Changes", id:"save-profile", frame:{ x:20, y:500, width:350, height:44 } },
+    { type:"XCUIElementTypeTextField", role:"textField", label:"", id:"", frame:{ x:20, y:200, width:350, height:44 } },
+  ]);
+  assert.deepEqual(elements.map((element) => element.role), ["text", "button", "textField"]);
 });
 
 test("native recording failures become concise actionable evidence warnings", () => {

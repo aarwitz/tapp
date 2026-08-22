@@ -27,6 +27,8 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   assert.doesNotMatch(skill, /\bTODO\b|SHIP-READY|ship\/no-ship/i);
   assert.match(skill, /Never guess among multiple targets/);
   assert.match(skill, /exploration never decides this/i);
+  assert.match(skill, /fresh repository needs one grounding exploration/i);
+  assert.match(skill, /MCP session start → focus or act → end/);
   assert.match(skill, /npx -y @aarwitz\/tapp@latest doctor/);
   assert.ok(skill.split("\n").length < 100, "SKILL.md stays compact enough for agent context");
   assert.match(read("skills/tapp/references/commands.md"), /npx -y @aarwitz\/tapp@latest init \. --explore/);
@@ -77,6 +79,7 @@ test("VS Code contributes the Tapp skill and the current observation contract", 
   assert.deepEqual(extension.contributes.chatSkills, [{ path: "./skills/tapp/SKILL.md" }]);
   const names = extension.contributes.languageModelTools.map((tool) => tool.name);
   assert.ok(names.includes("tapp_explore_ios"));
+  assert.ok(names.includes("tapp_ios_focus"));
   assert.ok(!names.includes("tapp_run_ios_qa"));
   const explorer = extension.contributes.languageModelTools.find((tool) => tool.name === "tapp_explore_ios");
   assert.match(explorer.modelDescription, /observation/);
@@ -86,6 +89,7 @@ test("VS Code contributes the Tapp skill and the current observation contract", 
   const bridge = read("vscode-extension/bridge.js");
   assert.match(bridge, new RegExp(`@aarwitz/tapp@${pkg.version.replaceAll(".", "\\.")}`));
   assert.match(bridge, /this\.call\("tapp_explore"/);
+  assert.match(bridge, /this\.call\("tapp_focus"/);
   assert.doesNotMatch(bridge, /tapp_run_qa/);
 });
 
