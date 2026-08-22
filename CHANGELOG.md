@@ -1,5 +1,22 @@
 # Changelog
 
+## VS Code 0.3.4
+
+- Bundle the stable Tapp Agent Skill and pin the extension engine to Tapp 0.17.0.
+
+## 0.17.0
+
+**A repository-connected agent testing product for iOS, Android, and web.**
+
+- Let coding agents install one concise Tapp skill, discover repository targets, operate real app
+  surfaces, save visual evidence, and turn reviewed behavior into replayable Flows and contracts.
+- Keep autonomous exploration observational and scoreless; reserve `pass | fail | inconclusive`
+  for the deterministic, repository-connected gate with explicit checked/not-checked scope.
+- Support source-preparing web, iOS simulator, and Android emulator/device targets, including
+  multi-target selection, managed web runtimes, stable target-scoped baselines, and CI installation.
+- Harden fresh-machine, package, report-provenance, login, runtime-lifecycle, and agent-surface
+  behavior through the rc.1–rc.16 qualification campaign and three-platform hosted matrix.
+
 ## 0.17.0-rc.16
 
 - Preserve the selected repository target identity when the plain `tapp ci` command derives one

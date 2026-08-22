@@ -236,7 +236,7 @@ tapp baseline create . --platform web
 tapp baseline create . --platform web --from /path/to/tapp-report.json
 
 # Generate one target-aware job per model target plus a machine-readable manifest.
-tapp ci install . --action-ref aarwitz/tapp@v0.13.1
+tapp ci install . --action-ref aarwitz/tapp@v0.17.0
 ```
 
 Baseline creation rejects non-gate JSON, missing or mismatched target identity, platform mismatch,
