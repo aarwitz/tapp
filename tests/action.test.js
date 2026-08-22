@@ -111,6 +111,7 @@ test("repository CI exercises the public composite Action on every supported pla
   assert.match(ciWorkflow, /name: Exercise the published iOS Action path[\s\S]*?uses: \.\/[\s\S]*?platform: ios/);
   assert.match(ciWorkflow, /name: Exercise the published web Action path[\s\S]*?uses: \.\/[\s\S]*?platform: web/);
   assert.match(ciWorkflow, /name: Exercise the published web Action path[\s\S]*?web-target: SocialDemo/);
+  assert.match(ciWorkflow, /name: Exercise source-connected focused web navigation[\s\S]*?focused session reaches a source-located web surface/);
   assert.doesNotMatch(ciWorkflow, /Start the owned SocialDemo target/);
   assert.match(ciWorkflow, /name: Exercise the published Android Action path[\s\S]*?uses: \.\/[\s\S]*?platform: android/);
   assert.match(ciWorkflow, /name: Exercise the published Android Action path[\s\S]*?android-project: AndroidCorpus[\s\S]*?android-task: ":logindemo:assembleDebug"/);

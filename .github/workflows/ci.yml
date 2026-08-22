@@ -95,6 +95,8 @@ jobs:
         run: node --test --test-name-pattern='tapp init --explore (grounds|starts and stops)' tests/cli.test.js
       - name: Assert repeat-run web determinism
         run: node --test --test-name-pattern='placeholder links and dead controls deterministically' tests/cli.test.js
+      - name: Exercise source-connected focused web navigation
+        run: node --test --test-name-pattern='focused session reaches a source-located web surface' tests/web-session.test.js
 
   android-corpus:
     name: Android driver + committed Flows

@@ -10,6 +10,7 @@ import { buildUiMapFromMarkers } from "../mcp-server/src/ui-map.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tappBin = path.join(packageRoot, "bin", "tapp.js");
+const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 
 function startMcp(cwd) {
   const proc = spawn("node", [tappBin, "mcp"], {
@@ -108,32 +109,34 @@ test("installed MCP repository tools are rooted in the client workspace, not the
     assert.ok(sessionStart.inputSchema.properties.url, "the source-connected session contract must include web URLs");
     assert.match(sessionStart.description, /iOS\/Android app or a web URL/);
 
-    const markersPath = path.join(workspace, "focus-markers.txt");
-    fs.writeFileSync(markersPath, [
-      `OCQA_STATE:{"screen":"Home","url":"${url}/","controls":[{"kind":"link","label":"Settings"}]}`,
-      'OCQA_ACTION:{"type":"tap","target":"Settings","screen":"Home"}',
-      'OCQA_TRANSITION:{"from":"Home","to":"Settings","action":"Settings","changed":true}',
-      `OCQA_STATE:{"screen":"Settings","url":"${url}/settings","controls":[{"kind":"button","label":"Save settings","cssId":"save"}]}`,
-    ].join("\n") + "\n");
-    fs.writeFileSync(path.join(workspace, ".tapp", "ui-map.json"), JSON.stringify(buildUiMapFromMarkers({
-      markersPath, platform:"web", target:url, runId:"mcp-workspace-focus",
-    })));
+    if (!skipRealBrowser) {
+      const markersPath = path.join(workspace, "focus-markers.txt");
+      fs.writeFileSync(markersPath, [
+        `OCQA_STATE:{"screen":"Home","url":"${url}/","controls":[{"kind":"link","label":"Settings"}]}`,
+        'OCQA_ACTION:{"type":"tap","target":"Settings","screen":"Home"}',
+        'OCQA_TRANSITION:{"from":"Home","to":"Settings","action":"Settings","changed":true}',
+        `OCQA_STATE:{"screen":"Settings","url":"${url}/settings","controls":[{"kind":"button","label":"Save settings","cssId":"save"}]}`,
+      ].join("\n") + "\n");
+      fs.writeFileSync(path.join(workspace, ".tapp", "ui-map.json"), JSON.stringify(buildUiMapFromMarkers({
+        markersPath, platform:"web", target:url, runId:"mcp-workspace-focus",
+      })));
 
-    send({ jsonrpc:"2.0", id:8, method:"tools/call", params:{ name:"tapp_session_start", arguments:{ url, focus:"Settings page" } } });
-    const started = await waitFor(8);
-    assert.notEqual(started.result.isError, true, started.result.content?.[0]?.text);
-    assert.equal(started.result.structuredContent.screenTitle, "Settings");
-    assert.equal(started.result.structuredContent.url, `${url}/settings`);
-    assert.equal(started.result.structuredContent.focus.execution.status, "reached");
-    assert.equal(started.result.structuredContent.focus.elements, undefined, "the focused tree is returned only once");
+      send({ jsonrpc:"2.0", id:8, method:"tools/call", params:{ name:"tapp_session_start", arguments:{ url, focus:"Settings page" } } });
+      const started = await waitFor(8);
+      assert.notEqual(started.result.isError, true, started.result.content?.[0]?.text);
+      assert.equal(started.result.structuredContent.screenTitle, "Settings");
+      assert.equal(started.result.structuredContent.url, `${url}/settings`);
+      assert.equal(started.result.structuredContent.focus.execution.status, "reached");
+      assert.equal(started.result.structuredContent.focus.elements, undefined, "the focused tree is returned only once");
 
-    send({ jsonrpc:"2.0", id:9, method:"tools/call", params:{ name:"tapp_session_act", arguments:{ action:"tap", id:"Save settings" } } });
-    const acted = await waitFor(9);
-    assert.equal(acted.result.structuredContent.status, "ok");
-    assert.equal(acted.result.structuredContent.elements.some((element) => element.label === "Saved"), true);
+      send({ jsonrpc:"2.0", id:9, method:"tools/call", params:{ name:"tapp_session_act", arguments:{ action:"tap", id:"Save settings" } } });
+      const acted = await waitFor(9);
+      assert.equal(acted.result.structuredContent.status, "ok");
+      assert.equal(acted.result.structuredContent.elements.some((element) => element.label === "Saved"), true);
 
-    send({ jsonrpc:"2.0", id:10, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
-    await waitFor(10);
+      send({ jsonrpc:"2.0", id:10, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
+      await waitFor(10);
+    }
   } finally {
     try {
       send({ jsonrpc:"2.0", id:99, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
