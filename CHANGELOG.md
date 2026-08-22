@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0-rc.16
+
+- Preserve the selected repository target identity when the plain `tapp ci` command derives one
+  conclusive platform target from `.tapp/application-model.json`, so its first successful report
+  can be saved directly as a target-scoped baseline.
+- Refuse to guess when a repository contains multiple matching targets; callers must select a
+  stable target explicitly. The GitHub Action's explicit target identity remains authoritative.
+
 ## VS Code 0.3.3
 
 - Describe the simulator panel accurately as an auto-refreshing screenshot preview, not a live

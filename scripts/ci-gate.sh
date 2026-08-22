@@ -86,6 +86,48 @@ TAPP_PROJECT_ARTIFACTS=""
 if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR/.tapp" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.tapp"
 fi
+
+# A repository-connected gate must retain the stable application-model target identity in its
+# report. Otherwise its first passing report cannot become a target-scoped baseline, even though
+# Tapp already knows exactly which application it built and exercised. Explicit --target-key still
+# wins (the composite Action supplies one); the CLI derives it only when the repository model makes
+# the selection conclusive. Multi-target repositories remain strict and print the available ids.
+if [[ -z "$TARGET_KEY" && -n "$TAPP_PROJECT_ARTIFACTS" && -f "$TAPP_PROJECT_ARTIFACTS/application-model.json" ]]; then
+  if ! TARGET_KEY="$(node - "$TAPP_PROJECT_ARTIFACTS/application-model.json" "$PLATFORM" "$WEB_TARGET" "$APP_ID" "$BUNDLE_ID" <<'NODE'
+const fs = require("fs");
+const [modelPath, platform, webTarget, appId, bundleId] = process.argv.slice(2);
+let model;
+try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
+catch (error) { console.error(`❌ Could not read application model ${modelPath}: ${error.message}`); process.exit(2); }
+if (model?.kind !== "tapp-application-model" || !Array.isArray(model.targets)) {
+  console.error("❌ Expected .tapp/application-model.json to contain a Tapp application model");
+  process.exit(2);
+}
+let candidates = model.targets.filter((target) => target.platform === platform);
+const requested = platform === "web" ? webTarget : platform === "android" ? appId : bundleId;
+if (requested) {
+  const normalized = requested.replaceAll("\\", "/").replace(/^\.\//, "");
+  candidates = candidates.filter((target) => {
+    const identities = [target.id, target.name, target.sourcePath];
+    if (platform === "android") identities.push(target.runtime?.applicationId);
+    if (platform === "ios") identities.push(target.runtime?.bundleId);
+    return identities.some((value) => String(value || "").replaceAll("\\", "/") === normalized);
+  });
+}
+if (candidates.length !== 1) {
+  const available = model.targets.filter((target) => target.platform === platform);
+  console.error(candidates.length
+    ? `❌ Multiple ${platform} targets match. Pass --target-key explicitly: ${candidates.map((target) => target.id).join(", ")}`
+    : `❌ Could not resolve one ${platform} target from the application model.${available.length ? ` Available target ids: ${available.map((target) => target.id).join(", ")}` : ""}`);
+  process.exit(2);
+}
+process.stdout.write(String(candidates[0].id));
+NODE
+  )"; then
+    exit 2
+  fi
+  echo "Target identity: $PLATFORM:$TARGET_KEY (from .tapp/application-model.json)"
+fi
 [[ -z "$FLOWS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/flows" ]] && FLOWS="$TAPP_PROJECT_ARTIFACTS/flows/*.yml"
 [[ "$PLATFORM" == "web" && -z "$SCENARIOS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/scenarios" ]] && SCENARIOS="$TAPP_PROJECT_ARTIFACTS/scenarios/*.yml"
 [[ -z "$CONTRACTS" && -n "$TAPP_PROJECT_ARTIFACTS" && -d "$TAPP_PROJECT_ARTIFACTS/contracts" ]] && CONTRACTS="$TAPP_PROJECT_ARTIFACTS/contracts/*.contract.ts"

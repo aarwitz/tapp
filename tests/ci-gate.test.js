@@ -85,6 +85,39 @@ test("default discovery safely ignores another platform's entire Flow suite", ()
   assert.doesNotMatch(r.stderr, /unbound variable|None of the supplied Flows/);
 });
 
+test("repo-connected gate derives the stable target key before runtime work", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-target-key-"));
+  fs.mkdirSync(path.join(dir, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), JSON.stringify({
+    kind: "tapp-application-model",
+    targets: [{ id: "target_web_site", platform: "web", name: "site", sourcePath: "." }],
+  }));
+  const r = spawnSync("bash", [gate,
+    "--platform", "web", "--project-dir", dir, "--flows", "/definitely/missing/*.yml",
+  ], { encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /Target identity: web:target_web_site/);
+  assert.match(r.stderr, /--flows matched no files/);
+});
+
+test("repo-connected gate refuses to guess a target identity in a same-platform monorepo", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-target-ambiguous-"));
+  fs.mkdirSync(path.join(dir, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), JSON.stringify({
+    kind: "tapp-application-model",
+    targets: [
+      { id: "target_web_store", platform: "web", name: "store", sourcePath: "store" },
+      { id: "target_web_admin", platform: "web", name: "admin", sourcePath: "admin" },
+    ],
+  }));
+  const r = spawnSync("bash", [gate, "--platform", "web", "--project-dir", dir], { encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /Multiple web targets match/);
+  assert.match(r.stderr, /target_web_store/);
+  assert.match(r.stderr, /target_web_admin/);
+  assert.doesNotMatch(r.stderr + r.stdout, /Managed web target|Exploring/);
+});
+
 test("managed web build/start failure is an infrastructure error (exit 2)", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-managed-failure-"));
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({
