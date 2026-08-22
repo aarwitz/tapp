@@ -6,8 +6,31 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { storagePreflight } from "../mcp-server/src/environment-preflight.js";
 
 const engine = await import("../mcp-server/src/index.js");
+
+test("storage preflight blocks a full evidence volume before it can become a false app crash", () => {
+  const result = storagePreflight(process.cwd(), { statfs: () => ({ bavail: 10, bsize: 4096 }) });
+  assert.equal(result.ok, false);
+  assert.equal(result.level, "blocked");
+  assert.match(result.message, /run was not started.*no app-crash finding/i);
+});
+
+test("storage preflight warns while preserving a usable volume", () => {
+  const result = storagePreflight(process.cwd(), { statfs: () => ({ bavail: 500_000, bsize: 4096 }) });
+  assert.equal(result.ok, true);
+  assert.equal(result.level, "warning");
+  assert.match(result.message, /iOS builds can require several GiB/);
+});
+
+test("coordinate session taps resolve to the smallest semantic element under the point", () => {
+  const target = engine.semanticTargetAtPoint([
+    { id:"container", hittable:true, frame:{ x:0, y:0, width:300, height:300 } },
+    { id:"settings-tab", label:"Settings", hittable:true, frame:{ x:220, y:250, width:70, height:40 } },
+  ], 250, 270);
+  assert.equal(target, "settings-tab");
+});
 
 test("engine is import-safe and exports the shared surface", () => {
   for (const name of [
@@ -154,6 +177,7 @@ test("explorationEnvFromArgs maps creds, overrides, and the interactive channel"
   });
   assert.equal(env.OCQA_TEST_EMAIL, "qa@example.com");
   assert.equal(env.OCQA_TEST_PASSWORD, "secret");
+  assert.equal(env.OCQA_CREDENTIALS_EXPLICIT, "1");
   assert.equal(env.OCQA_INTERACTIVE_INPUT, "1");
   assert.equal(env.OCQA_INPUT_RESPONSE_PATH, "/tmp/resp.json");
   const overrides = JSON.parse(env.OCQA_INPUT_OVERRIDES_JSON);

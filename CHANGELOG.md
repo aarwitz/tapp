@@ -1,5 +1,30 @@
 # Changelog
 
+## VS Code 0.3.3
+
+- Describe the simulator panel accurately as an auto-refreshing screenshot preview, not a live
+  embedded Simulator or video stream.
+- Keep the bundled Agent Skill and npm engine aligned with Tapp 0.17.0-rc.15.
+
+## 0.17.0-rc.15
+
+**One product story across every public surface, plus the field-test fixes held after rc.14.**
+
+- Present Tapp consistently as agent-driven app testing for iOS simulators, Android
+  emulators/devices, and browser apps: real screens, replayable Flows, and deterministic CI gates.
+  Lead with the open Agent Skill, keep the direct npm journey to one line, and state the unsupported
+  Windows desktop boundary explicitly.
+- Keep exploration honest: it reports findings, coverage, evidence, and limits; only the
+  repository-connected gate returns `pass`, `fail`, or `inconclusive`.
+- Add portable presentation-contract tests covering the README, website, package, CLI help, Claude
+  plugin, MCP Registry, GitHub Action, and VS Code metadata. The staged-public guard verifies the
+  same identity from a clean tarball install.
+- Add atomic, secret-templated login recording/replay across iOS, Android, and web; a complete
+  `tapp flow example`; disk-space preflight; non-TTY-safe progress; accurate auth-coverage metadata;
+  and automatic Application Model refresh after successful builds or actor updates.
+- Improve report provenance and checked/not-checked recovery, managed-web lifecycle diagnostics,
+  and first-user failure guidance without requiring a global executable.
+
 ## VS Code 0.3.2
 
 - Keep language-model tool preparation on VS Code's stable API. Extension 0.3.1 returned the

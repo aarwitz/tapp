@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aarwitz/tapp",
-  "description": "Explore iOS, Android, and web apps; get findings, evidence, and deterministic release gates.",
+  "description": "Test iOS, Android, and web apps with agent exploration, replayable flows, and CI gates.",
   "repository": {
     "url": "https://github.com/aarwitz/tapp",
     "source": "github"
   },
-  "version": "0.17.0-rc.14",
+  "version": "0.17.0-rc.15",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@aarwitz/tapp",
-      "version": "0.17.0-rc.14",
+      "version": "0.17.0-rc.15",
       "transport": {
         "type": "stdio"
       },

@@ -1,12 +1,12 @@
 {
   "name": "tapp",
-  "description": "Test real iOS, Android, and web apps with Tapp. Includes the Tapp agent skill plus MCP hands, eyes, exploration, replayable Flows, and deterministic release evidence.",
-  "version": "0.17.0-rc.14",
+  "description": "Give Claude hands and eyes on iOS, Android, and web apps, with exploration, replayable flows, evidence, and deterministic CI gates.",
+  "version": "0.17.0-rc.15",
   "author": {
     "name": "Aaron Horowitz",
     "url": "https://github.com/aarwitz"
   },
-  "homepage": "https://github.com/aarwitz/tapp",
+  "homepage": "https://runtapp.com/",
   "repository": "https://github.com/aarwitz/tapp",
   "license": "MIT",
   "keywords": [
@@ -24,7 +24,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@aarwitz/tapp@0.17.0-rc.14",
+        "@aarwitz/tapp@0.17.0-rc.15",
         "mcp"
       ],
       "cwd": "${CLAUDE_PROJECT_DIR}"

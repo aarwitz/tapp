@@ -765,6 +765,12 @@ class ExplorerTests: XCTestCase {
             case "type":
                 status = sessionType(value, id: target.isEmpty ? nil : target) ? "pass" : "fail"
                 if status == "fail" { detail = "no field ‘\(target)’ to type into" }
+            case "login":
+                let email = subst((step["email"] as? String) ?? "$TEST_EMAIL")
+                let password = subst((step["password"] as? String) ?? "$TEST_PASSWORD")
+                let result = sessionLogin(email: email, password: password)
+                status = result.status == "ok" ? "pass" : "fail"
+                if status == "fail" { detail = result.detail.isEmpty ? result.status : result.detail }
             case "swipe":
                 switch target.lowercased() { case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp() }
             case "back":
@@ -1029,6 +1035,11 @@ class ExplorerTests: XCTestCase {
 
         let testEmail = resolve("OCQA_TEST_EMAIL")
         let testPassword = resolve("OCQA_TEST_PASSWORD")
+        if resolve("OCQA_CREDENTIALS_EXPLICIT") == "1" {
+            // Presence only: never print, persist, or expose credential values. Report rebuilding
+            // needs this durable marker to distinguish "not supplied" from "supplied but unused".
+            print("OCQA_STATE:credentials_supplied")
+        }
 
         // --- Explicit login replay (config-driven): a recorded type/tap/wait sequence for custom
         // login UIs the heuristic preamble below can't parse. When configured it takes precedence. ---

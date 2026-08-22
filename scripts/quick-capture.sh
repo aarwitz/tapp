@@ -23,9 +23,9 @@ TAPP_RUNTIME_HOME="${TAPP_HOME:-}"
 if [[ -n "${TAPP_CAPTURE_DIR:-}" ]]; then
   CAPTURE_DIR="$TAPP_CAPTURE_DIR"
 elif [[ -n "$TAPP_RUNTIME_HOME" ]]; then
-  CAPTURE_DIR="$TAPP_RUNTIME_HOME/captures/$(date +%Y%m%d-%H%M%S)"
+  CAPTURE_DIR="$TAPP_RUNTIME_HOME/captures/ios-$(date +%Y%m%d-%H%M%S)"
 else
-  CAPTURE_DIR="$PROJECT_ROOT/captures/$(date +%Y%m%d-%H%M%S)"
+  CAPTURE_DIR="$PROJECT_ROOT/captures/ios-$(date +%Y%m%d-%H%M%S)"
 fi
 if [[ -n "$TAPP_RUNTIME_HOME" ]]; then
   HARNESS_DERIVED="$TAPP_RUNTIME_HOME/harness-derived"

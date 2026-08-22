@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tapp CLI — ship with proof.
+// Tapp CLI — agent-driven app testing on real app surfaces.
 //
 //   Zero-config verbs (the same engine the MCP tools use, exported by mcp-server/src/index.js):
 //   tapp explore <bundleId|appId|url> Autonomous exploration → findings + evidence (observation)
@@ -51,6 +51,19 @@ function ok(label, detail = "") {
 }
 function bad(label, detail = "") {
   console.log(`  ❌ ${label}${detail ? ` — ${detail}` : ""}`);
+}
+
+let lastProgressLine = "";
+function writeProgress(line) {
+  const text = String(line || "").trimEnd();
+  if (process.stderr.isTTY) process.stderr.write(`\r${text}   `);
+  else if (text && text !== lastProgressLine) console.error(text);
+  lastProgressLine = text;
+}
+
+function finishProgress() {
+  if (process.stderr.isTTY && lastProgressLine) process.stderr.write("\n");
+  lastProgressLine = "";
 }
 
 function bootedSims() {
@@ -247,7 +260,7 @@ function safeCommandUsage(verb) {
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--email VALUE] [--password VALUE]",
+    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--email VALUE] [--password VALUE]",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]",
     scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]",
@@ -279,9 +292,8 @@ const safeHelpRequested = (rest.includes("--help") || rest.includes("-h"))
   && !["help", "version", "--version", "-v"].includes(command)
   && (command !== "ci" || rest[0] === "install");
 if (safeHelpRequested) {
-  console.log(`Usage:\n  ${safeCommandUsage(command).replaceAll("\n", "\n  ")}\n\nℹ️  --help never builds, launches, writes, or opens. Full command reference:\n`);
-  command = "help";
-  rest = [];
+  console.log(`Usage:\n  ${safeCommandUsage(command).replaceAll("\n", "\n  ")}\n\nℹ️  --help never builds, launches, writes, or opens. Run \`tapp --help\` for the full command reference.`);
+  process.exit(0);
 }
 
 // Create TAPP_HOME only for commands that actually use it — never for help/version/--help.
@@ -350,7 +362,7 @@ switch (command) {
       runExploration: engine?.runInitExploration,
       onProgress: (progress) => {
         const activePlatform = progress.platform || platform;
-        process.stderr.write(`\r🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${activePlatform === "web" ? "pages reached" : activePlatform === "ios" ? "structural states observed" : "screens reached"}   `);
+        writeProgress(`🔍 Import exploration… ${progress.action}/${progress.max || actions} actions · ${progress.states} ${activePlatform === "web" ? "pages reached" : activePlatform === "ios" ? "structural states observed" : "screens reached"}`);
       },
       onStatus: (status) => console.error(`⏳ ${status}`),
       outDir,
@@ -377,11 +389,11 @@ switch (command) {
       }
     }
     if (failure) {
-      if (explore) process.stderr.write("\n");
+      if (explore) finishProgress();
       printEngineError({ error: `Could not initialize repository: ${failure.message || String(failure)}`, details: failure.details || {} });
       process.exit(2);
     }
-    if (explore) process.stderr.write("\n");
+    if (explore) finishProgress();
     const built = { model: result.model, plan: result.plan };
     const written = result.written;
     const exploration = result.exploration;
@@ -547,7 +559,7 @@ switch (command) {
         const modelPlatform = typeof flags.platform === "string" ? flags.platform.toLowerCase() : "";
         if (modelPlatform === "ios") requireMacFor("iOS testing");
         const onProgress = (p) =>
-          process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} states observed   `);
+          writeProgress(`🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} states observed`);
         const r = await engine.runExploreTarget({
           projectDir: process.cwd(),
           platform: modelPlatform,
@@ -563,7 +575,7 @@ switch (command) {
           onProgress,
           onStatus: (t) => console.error(`ℹ️  ${t}`),
         });
-        process.stderr.write("\n");
+        finishProgress();
         if (r.error) { printEngineError(r); process.exit(1); }
         console.log(r.text);
         if (flags.json && typeof flags.json === "string") {
@@ -588,14 +600,14 @@ switch (command) {
       process.exit(2);
     }
     if (platform === "web" && !/^https?:\/\//i.test(target)) {
-      console.error("❌ Web QA needs an http(s) URL");
+      console.error("❌ Web exploration needs an http(s) URL");
       process.exit(2);
     }
     const bundleId = platform === "ios" ? await resolveTargetOrExit(engine, target) : null;
     const android = platform === "android" ? androidTarget(flags, target) : null;
     const progressMetric = platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached";
     const onProgress = (p) =>
-      process.stderr.write(`\r🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${progressMetric}   `);
+      writeProgress(`🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${progressMetric}`);
     const r = platform === "web"
       ? await engine.runQaWeb({
           url: target,
@@ -628,7 +640,7 @@ switch (command) {
           surface: "cli",
           onProgress,
         });
-    process.stderr.write("\n");
+    finishProgress();
     if (r.error) {
       printEngineError(r);
       process.exit(1);
@@ -839,7 +851,21 @@ switch (command) {
       printEngineError(inst);
       process.exit(1);
     }
+    let modelRefresh = null;
+    try {
+      const { persistIosBuildValidation } = await import(path.join(packageRoot, "mcp-server", "src", "application-model.js"));
+      modelRefresh = await persistIosBuildValidation({
+        projectDir: dir,
+        bundleId: inst.bundleId,
+        container: built.container,
+        scheme: built.scheme,
+        configuration: built.configuration,
+      });
+    } catch (error) {
+      console.error(`⚠️  Build succeeded, but Tapp could not refresh the existing application model: ${error.message || String(error)}`);
+    }
     console.log(`🔨 Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installed as ${inst.bundleId}`);
+    if (modelRefresh) console.log(`   application model refreshed: ${modelRefresh.modelPath}`);
     console.log(`\nNext: npx -y @aarwitz/tapp@latest explore ${inst.bundleId}`);
     break;
   }
@@ -923,8 +949,12 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const verb = positionals[0] || "run";
     const flowPath = positionals[1] || (verb === "run" || verb === "validate" ? "" : verb);
+    if (verb === "example") {
+      console.log(`# Tapp Flow — deterministic, keyless replay\nname: sign-in-smoke\nplatform: web\nurl: https://example.test/login\nsteps:\n  - login:\n      email: $TEST_EMAIL\n      password: $TEST_PASSWORD\n  - wait_for: Dashboard\n  - assert_screen: Dashboard\n`);
+      break;
+    }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp flow run <flow.yml> [--platform ios|android|web] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
+      console.error("usage: tapp flow example\n       tapp flow run <flow.yml> [--platform ios|android|web] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
       process.exit(2);
     }
     const absolute = path.resolve(flowPath);
@@ -1214,6 +1244,13 @@ switch (command) {
     const python = run("python3", ["--version"]);
     python.code === 0 ? ok("python3", `${python.stdout} (used by Flows)`) : bad("python3", "not found — Flow replay needs python3 + pyyaml (everything else works)");
 
+    const { storagePreflight } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
+    const storage = storagePreflight(tappHome);
+    if (storage.level === "blocked") { bad("Disk space", storage.message); healthy = false; }
+    else if (storage.level === "warning") console.log(`  ⚠️  Disk space — ${storage.message}`);
+    else if (storage.level === "ok") ok("Disk space", storage.message);
+    else console.log(`  ⬜ Disk space — ${storage.message || "could not be checked"}`);
+
     console.log("\n  Platforms:");
     if (process.platform === "darwin") {
       const xcode = run("xcode-select", ["-p"]);
@@ -1332,7 +1369,13 @@ switch (command) {
       console.log(`✅ Actor '${name}' configured — ${result.actor.session} session · ${result.actor.provisioning} provisioning`);
       console.log(`   ${result.path}`);
       console.log(`   bindings: ${Object.entries(result.actor.credentials).map(([key, binding]) => `${key}=$${binding.env}`).join(", ") || "none"}`);
-      console.log("   No credential values were accepted or written. Rerun npx -y @aarwitz/tapp@latest init --refresh to update the application model.");
+      const { refreshExistingInitArtifacts } = await import(path.join(packageRoot, "mcp-server", "src", "application-model.js"));
+      let refreshed = null;
+      let refreshWarning = "";
+      try { refreshed = await refreshExistingInitArtifacts({ projectDir }); }
+      catch (error) { refreshWarning = error.message || String(error); }
+      console.log(`   No credential values were accepted or written.${refreshed ? ` Application model refreshed: ${refreshed.modelPath}` : " Run npx -y @aarwitz/tapp@latest init when you are ready to create the application model."}`);
+      if (refreshWarning) console.error(`⚠️  Actor was saved, but Tapp could not refresh the existing application model: ${refreshWarning}`);
     } catch (error) { console.error(`❌ Actor not configured: ${error.message || String(error)}`); process.exit(2); }
     break;
   }
@@ -1571,9 +1614,9 @@ switch (command) {
   }
 
   default: {
-    console.log(`tapp v${pkg.version} — ship with proof. Autonomous exploration and deterministic release gates for iOS, Android, and web.
+    console.log(`tapp v${pkg.version} — agent-driven app testing for iOS, Android, and web.
 
-Core — explore, prove, gate (agents and humans can just run these — no server, no setup):
+Core — inspect, explore, gate (no Tapp account or server required):
   tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
                            release decision — run 'npx -y @aarwitz/tapp@latest ci' to gate a merge)
                            (web: --watch · all: --platform ios|android|web · --actions N)
@@ -1581,7 +1624,7 @@ Core — explore, prove, gate (agents and humans can just run these — no serve
   tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive
                            (see: tapp ci --help)
 
-Primitives — an agent's eyes and hands (no setup):
+Primitives — an agent's eyes and hands:
   tapp open [target]       Launch the app → screen summary + screenshot saved to a file
                            (web: --tap TEXT · --wait-for TEXT · --out FILE)
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
@@ -1597,6 +1640,7 @@ Repository & release:
   tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
 
 Advanced — deterministic suites, lifecycle & compilers:
+  tapp flow example        Print a complete starter Flow YAML (no target or MCP required)
   tapp flow run FILE       Replay a committed deterministic Flow (no AI/API key)
   tapp flow validate FILE  Validate a Flow without launching a target
   tapp task validate FILE  Validate a reusable deterministic Task (+ optional UI Map grounding)
@@ -1636,7 +1680,7 @@ Setup:
   tapp doctor     Check Xcode / simulators / toolchain
   tapp mcp        Start the MCP server on stdio (adds inline screenshots + interactive sessions)
 
-Agent Skill (optional — so a short “Use Tapp to test this app” prompt is enough):
+Agent Skill (recommended — so a short “Use Tapp to test this app” prompt is enough):
   Any supported agent: npx -y skills add aarwitz/tapp --skill tapp
   Claude skill + MCP:  claude plugin marketplace add aarwitz/tapp
                        claude plugin install tapp@tapp

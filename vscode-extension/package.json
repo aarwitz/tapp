@@ -1,8 +1,8 @@
 {
   "name": "tapp",
   "displayName": "Tapp",
-  "description": "The Tapp Agent Skill for iOS, Android, and web, plus native Copilot tools and a live simulator panel for iOS testing.",
-  "version": "0.3.2",
+  "description": "The Tapp Agent Skill for iOS, Android, and web, plus Copilot tools and an auto-refreshing iOS simulator preview.",
+  "version": "0.3.3",
   "publisher": "lidi-solutions",
   "license": "MIT",
   "engines": {
@@ -26,7 +26,7 @@
     "agent-skill",
     "mcp"
   ],
-  "homepage": "https://github.com/aarwitz/tapp",
+  "homepage": "https://runtapp.com/",
   "repository": {
     "type": "git",
     "url": "https://github.com/aarwitz/tapp.git"

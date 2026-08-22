@@ -74,6 +74,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
   const visited = new Map();
   let issues = 0;
   let actions = 0;
+  let loginTried = false;
   const crashExitBaseline = typeof d.latestCrashExitInfo === "function" ? await d.latestCrashExitInfo() : null;
   let snap = await d.launch({ clearData });
   let crashReported = false;
@@ -210,6 +211,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
     if (candidate) {
       const target = controlLabel(candidate);
       const loginSubmit = inputs.some((input) => input.secure) && isAndroidAuthSubmit(candidate);
+      if (loginSubmit) loginTried = true;
       tried.add(`${hash}|tap|${target}`);
       const before = hash;
       const r = await d.tap(target, snap);
@@ -260,7 +262,7 @@ export async function exploreAndroid({ appId, apkPath, serial, maxActions = 40, 
   }
 
   const timedOut = Date.now() >= deadline;
-  emit("COMPLETE", { actions, states: visited.size, issues, screens: [...new Set(visited.values())].join(","), outcome: timedOut ? "timeout" : "complete", timedOut, ...(timedOut ? { timeoutSeconds: timeoutSec } : {}) });
+  emit("COMPLETE", { actions, states: visited.size, issues, screens: [...new Set(visited.values())].join(","), outcome: timedOut ? "timeout" : "complete", timedOut, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried, ...(timedOut ? { timeoutSeconds: timeoutSec } : {}) });
   onProgress({ action: actions, max: maxActions, states: visited.size });
   return { markersPath, outDir, actions, states: visited.size, issues, timedOut, seedTargets: normalizedTargets };
 }

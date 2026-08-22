@@ -273,6 +273,29 @@ test("a login surface without a submitted attempt does not claim sign-in checks"
   assert.equal(r.loginEncountered, true);
 });
 
+test("supplied-but-unused credentials are disclosed without exposing values", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',
+    "OCQA_STATE:credentials_supplied",
+    'OCQA_COMPLETE:{"actions":3,"states":1,"issues":0}',
+  ]));
+  assert.equal(r.credentialsProvided, true);
+  assert.equal(r.credentialsUsed, false);
+  assert.equal(r.stopReason, "login-wall-credentials-unused");
+  assert.match(r.credentialWarning, /supplied.*did not submit/i);
+  assert.ok(r.notChecked.some((item) => /supplied.*no sign-in attempt/i.test(item)));
+  assert.doesNotMatch(JSON.stringify(r), /secret-password|person@example/);
+});
+
+test("web findings retain the page URL that produced the evidence", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Pricing","url":"/pricing","elements":10}',
+    'OCQA_ISSUE:{"type":"placeholder_link","severity":"high","title":"Link has no destination","screen":"Pricing","target":"Buy now","url":"https://example.test/pricing"}',
+    ...CLEAN_RUN,
+  ]), { platform: "web" });
+  assert.equal(r.findings[0].url, "https://example.test/pricing");
+});
+
 test("checkedFor claims failed sign-ins only after a real login submission", () => {
   const r = buildQaReport(markersFile([
     'OCQA_STATE:{"screen":"Login","elements":10,"inputs":[{"label":"Password","secure":true}]}',

@@ -1,11 +1,13 @@
 # Tapp agent playbook
 
-You (the agent) have Tapp: hands, eyes, and judgment on real app surfaces — iOS simulators,
-Android emulators/devices, plus (beta) web apps in a real browser.
+You (the agent) have Tapp: hands and eyes on real app surfaces — iOS simulators, Android
+emulators/devices, plus (beta) web apps in a real browser. Release judgment belongs only to Tapp's
+repository-connected deterministic gate.
 
 ## No MCP connected? Just run the CLI
 
-Every core capability works as a plain command — no server, no config. `[target]` is
+The core inspect, explore, replay, and gate capabilities work as plain commands — no Tapp account,
+server, or global install. `[target]` is
 optional: with nothing, tapp finds + builds the Xcode project in the cwd (or falls back to
 the app already on the simulator); it also accepts a repo dir, a `path/to/App.app`, a
 bundle id, or (web) an http(s) URL. You never need to know a bundle id up front.
@@ -57,7 +59,7 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 
 | The user wants… | Use | NOT |
 |---|---|---|
-| "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_explore` (a full multi-minute QA exploration) |
+| "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_explore` (a full multi-minute exploration) |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
 | "Is my app broken? Find bugs" | `tapp_explore` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps; returns an observation (findings + evidence), not a ship verdict — gate a merge with the CI gate (`tapp ci` CLI / the GitHub Action) + a contract | a manual session (exploration is autonomous) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
@@ -67,6 +69,7 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 
 ```
 tapp_session_start { appBundleId: "com.acme.app" }     → fresh launch + initial tree
+tapp_session_act   { action: "login", email: "qa@x.com", password: "…" } → atomic fill + submit + verify
 tapp_session_act   { action: "tap",  id: "Email" }      → tap by a11y id OR visible label
 tapp_session_act   { action: "type", text: "qa@x.com" } → types into the focused field
 tapp_session_act   { action: "tap",  id: "Sign In" }
@@ -90,7 +93,8 @@ Rules that prevent 90% of failures:
 3. **`wait` after anything async** (navigation, network loads): `{action: "wait", id|text, timeoutMs}`.
    Never assume the next screen is instantly there.
 4. **Tap the field before typing** — `type` goes to the focused field. Tap email → type email →
-   tap password → type password.
+   tap password → type password. For sign-in, prefer the atomic `login` action: it records a
+   secret-templated replay step and avoids native secure-field refocus behavior.
 5. Tap results: `ok` (landed), `not_hittable` (exists but disabled/covered — the harness
    auto-dismisses keyboards and retries), `not_found` (nothing matches — re-read the tree).
 6. One session at a time. `session_start` always begins from a fresh app launch.
@@ -134,6 +138,8 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   deterministic assertions, same result every time. A failed assertion is a finding.
 - **Generate:** `tapp_flow_generate { goal: "log in and add the first item to cart" }` —
   grounded in the app's actually-explored screens, so it can't invent steps.
+- **Discover the file format without MCP:** `npx -y @aarwitz/tapp@latest flow example` prints a
+  complete starter Flow; `tapp flow validate <file>` checks it without launching a target.
 
 ## Setup facts (tell the user when relevant)
 

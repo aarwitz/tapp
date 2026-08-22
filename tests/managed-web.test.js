@@ -4,7 +4,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { startManagedWebTarget, stopManagedWebTarget } from "../mcp-server/src/index.js";
+import { managedWebDefaultPort, startManagedWebTarget, stopManagedWebTarget } from "../mcp-server/src/index.js";
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,12 @@ function freePort() {
     });
   });
 }
+
+test("managed web prefers conventional framework origins before an ephemeral port", () => {
+  assert.equal(managedWebDefaultPort({ vite:"6" }), 5173);
+  assert.equal(managedWebDefaultPort({ next:"15" }), 3000);
+  assert.equal(managedWebDefaultPort({}), 0);
+});
 
 test("managed web targets honor a fixed port declared by the repository start script", async () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-managed-fixed-port-"));

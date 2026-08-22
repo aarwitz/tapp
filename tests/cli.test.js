@@ -29,8 +29,10 @@ test("tapp version prints the package version", () => {
 
 test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
-  // Core leads with the three-word story: explore, prove (contract), gate (ci).
-  assert.match(out, /Core — explore, prove, gate/);
+  // Core leads with the user journey while keeping contract replay and the gate visible.
+  assert.match(out, /agent-driven app testing for iOS, Android, and web/);
+  assert.match(out, /Core — inspect, explore, gate/);
+  assert.match(out, /no Tapp account or server required/);
   assert.match(out, /tapp explore \[target\]/);
   assert.match(out, /tapp contract run FILE/);
   assert.match(out, /tapp ci \.\.\./);
@@ -51,6 +53,7 @@ test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   assert.match(out, /tapp baseline create \[repo\]/);
   assert.match(out, /tapp actor set NAME/);
   assert.match(out, /npx -y skills add aarwitz\/tapp --skill tapp/);
+  assert.match(out, /Agent Skill \(recommended/);
   assert.match(out, /claude plugin install tapp@tapp/);
 });
 
@@ -62,10 +65,11 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.match(root, /tapp explore \[target\]/);
   assert.equal(fs.existsSync(home), false, "root --help must not create TAPP_HOME");
   const explore = execFileSync("node", [tappBin, "explore", "--help"], { encoding: "utf8", env });
-  assert.match(explore, /command reference/);
+  assert.match(explore, /full command reference/);
   assert.match(explore, /tapp explore \[target\]/);
   assert.match(explore, /--launch-env/);
   assert.match(explore, /--watch/);
+  assert.doesNotMatch(explore, /Core — explore, prove, gate/, "verb help must not repeat the entire root reference");
   const task = execFileSync("node", [tappBin, "task", "run", "--help"], { encoding: "utf8", env });
   assert.match(task, /tapp task run FILE --platform PLATFORM/);
   const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
@@ -257,6 +261,11 @@ test("tapp actor configures only environment-variable bindings and lists them wi
   const listed = execFileSync("node", [tappBin, "actor", "list", project], { cwd: root, encoding: "utf8" });
   assert.match(listed, /alice · role member · isolated session · seeded/);
   assert.match(listed, /email=\$ALICE_EMAIL/);
+  fs.mkdirSync(path.join(project, ".tapp", "application-model.json"));
+  const configuredDespiteRefreshFailure = spawnSync("node", [tappBin, "actor", "set", "charlie", project, "--email-env", "CHARLIE_EMAIL", "--password-env", "CHARLIE_PASSWORD"], { cwd:root, encoding:"utf8" });
+  assert.equal(configuredDespiteRefreshFailure.status, 0, configuredDespiteRefreshFailure.stderr);
+  assert.match(configuredDespiteRefreshFailure.stdout, /Actor 'charlie' configured/);
+  assert.match(configuredDespiteRefreshFailure.stderr, /Actor was saved.*could not refresh/i);
   let rejected;
   try { execFileSync("node", [tappBin, "actor", "set", "bob", project, "--password", "password-value"], { cwd: root, encoding: "utf8", stdio: "pipe" }); }
   catch (error) { rejected = error; }
@@ -299,6 +308,17 @@ test("tapp validates a committed Android Flow without an agent or device", () =>
   });
   assert.match(out, /Valid android Flow/);
   assert.match(out, /7 deterministic steps/);
+});
+
+test("tapp flow example prints a complete Flow that validates without MCP", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-example-"));
+  const flowPath = path.join(project, "example.yml");
+  const example = execFileSync("node", [tappBin, "flow", "example"], { cwd:project, encoding:"utf8" });
+  fs.writeFileSync(flowPath, example);
+  assert.match(example, /login:/);
+  assert.match(example, /\$TEST_PASSWORD/);
+  const validated = execFileSync("node", [tappBin, "flow", "validate", flowPath], { cwd:project, encoding:"utf8" });
+  assert.match(validated, /Valid web Flow/);
 });
 
 test("tapp validates a committed multi-actor Scenario without a browser or model", { skip: !hasSocialDemo }, () => {

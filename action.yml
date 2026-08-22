@@ -1,5 +1,5 @@
 name: "Tapp Release Gate"
-description: "PR-aware autonomous QA + deterministic release-contract gate for iOS, Android, and web, with baselines and inspectable evidence."
+description: "PR-aware app exploration and deterministic release-contract gates for iOS, Android, and web, with inspectable evidence."
 author: Tapp
 branding:
   icon: check-circle

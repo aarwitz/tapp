@@ -90,6 +90,7 @@ function applyRuntimeTargetValidation(root, targets, validation) {
   const bundleId = String(validation.target || validation.resolution.bundleId || "").trim();
   if (!container || !scheme || !bundleId) return targets;
   const captureId = String(validation.evidence?.captureId || "").trim();
+  const explored = !!captureId;
   return targets.map((target) => {
     if (target.platform !== "ios" || posix(target.sourcePath) !== container) return target;
     return {
@@ -109,7 +110,7 @@ function applyRuntimeTargetValidation(root, targets, validation) {
       runtimeValidation: {
         status: "validated",
         basis: "runtime-observed",
-        operation: "xcode-build-install-explore",
+        operation: explored ? "xcode-build-install-explore" : "xcode-build-install",
         target: bundleId,
         build: { container, scheme, configuration },
         evidence: {
@@ -118,7 +119,9 @@ function applyRuntimeTargetValidation(root, targets, validation) {
           findingCount: Number(validation.evidence?.findingCount || 0),
           ...(validation.evidence?.observedAt ? { observedAt: String(validation.evidence.observedAt) } : {}),
         },
-        detail: "Tapp built this repository target with the recorded scheme, installed it, launched it, and produced UI Map evidence.",
+        detail: explored
+          ? "Tapp built this repository target with the recorded scheme, installed it, launched it, and produced UI Map evidence."
+          : "Tapp built this repository target with the recorded scheme and installed it on an iOS simulator.",
       },
     };
   });
@@ -133,7 +136,7 @@ function persistedTargetValidations(root, outDir) {
   if (prior?.schemaVersion !== 1 || prior.kind !== "tapp-application-model" || !Array.isArray(prior.targets)) return [];
   return prior.targets.flatMap((target) => {
     const validation = target?.runtimeValidation;
-    if (target?.platform !== "ios" || validation?.status !== "validated" || validation?.basis !== "runtime-observed" || validation?.operation !== "xcode-build-install-explore") return [];
+    if (target?.platform !== "ios" || validation?.status !== "validated" || validation?.basis !== "runtime-observed" || !["xcode-build-install", "xcode-build-install-explore"].includes(validation?.operation)) return [];
     const capture = String(validation.evidence?.capture || "");
     return [{
       platform: "ios",
@@ -307,6 +310,31 @@ function loadTargetUiMaps(root, targets) {
     const scopeRoot = path.join(root, scope === "." ? "" : scope);
     const expectedPath = posix(path.join(scope === "." ? "" : scope, projectArtifactDirectory(scopeRoot), "ui-map.json"));
     let loaded = expectedPath === rootMap.summary.path ? rootMap : loadUiMapAt(root, expectedPath);
+    // Multiple targets can legitimately share an artifact directory (for example, a root Xcode
+    // project beside a root Vite app). A file being at the target's expected path does not prove
+    // it describes that target. Never attach a web-only map to iOS merely because both resolve to
+    // `.tapp/ui-map.json`; that duplicates proposals and, worse, claims runtime evidence for the
+    // wrong application surface.
+    if (loaded.map && targets.length > 1 && !uiMapTargetsTarget(loaded.map, target, targets)) {
+      loaded = {
+        map: null,
+        summary: {
+          path: expectedPath,
+          status: "missing",
+          nodeCount: 0,
+          edgeCount: 0,
+          controlCount: 0,
+          uncoveredNodeIds: [],
+          uncoveredEdgeIds: [],
+          platforms: [],
+          rejectedArtifact: {
+            path: loaded.summary.path,
+            platforms: loaded.summary.platforms || [],
+            reason: "artifact metadata does not identify this target",
+          },
+        },
+      };
+    }
     if (!loaded.map && rootMap.map && (targets.length === 1 || uiMapTargetsTarget(rootMap.map, target, targets))) loaded = rootMap;
     return {
       targetId: target.id,
@@ -957,6 +985,45 @@ export function writeInitArtifacts({ root, model, plan, outDir = ".tapp", refres
   fs.writeFileSync(modelPath, JSON.stringify(model, null, 2) + "\n");
   fs.writeFileSync(planPath, JSON.stringify(mergedPlan, null, 2) + "\n");
   return { modelPath, planPath, plan: mergedPlan };
+}
+
+export function findApplicationModelRoot(startPath) {
+  let current = path.resolve(startPath || process.cwd());
+  try {
+    if (!fs.statSync(current).isDirectory() || /\.(?:xcodeproj|xcworkspace)$/.test(current)) current = path.dirname(current);
+  } catch {
+    current = path.dirname(current);
+  }
+  while (true) {
+    const modelPath = path.join(current, projectArtifactDirectory(current), "application-model.json");
+    if (fs.existsSync(modelPath)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+// A successful standalone `tapp build` is runtime evidence that a proposed Xcode scheme is real.
+// Refresh an existing model immediately so a later `tapp init --refresh` does not forget it. This
+// deliberately does nothing before init: build remains a build command and does not mint a product
+// model unless the repository already opted into one.
+export async function persistIosBuildValidation({ projectDir, bundleId, container, scheme, configuration = "Debug" } = {}) {
+  return refreshExistingInitArtifacts({
+    projectDir: container || projectDir,
+    targetValidation: {
+      platform: "ios",
+      target: bundleId,
+      resolution: { kind: "xcode-build-installed", bundleId, build: { container, scheme, configuration } },
+      evidence: { observedAt: new Date().toISOString() },
+    },
+  });
+}
+
+export async function refreshExistingInitArtifacts({ projectDir, ...options } = {}) {
+  const root = findApplicationModelRoot(projectDir);
+  if (!root) return null;
+  const built = await buildInitArtifacts({ projectDir: root, ...options });
+  return { root, ...writeInitArtifacts({ ...built, refresh: true }) };
 }
 
 export function reviewReleasePlan(plan, { approve = [], reject = [], defer = [] } = {}) {

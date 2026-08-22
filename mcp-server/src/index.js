@@ -335,6 +335,9 @@ export function findXcodeContainer(startDir) {
 }
 
 export async function buildAppForSim({ dir, container, scheme, configuration = "Debug" } = {}) {
+  const { storagePreflight } = await import("./environment-preflight.js");
+  const storage = storagePreflight(path.join(tappHome || os.tmpdir(), "app-builds"));
+  if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
   const target = container || findXcodeContainer(dir || process.cwd());
   if (!target) return { error: `No Xcode project or workspace found under ${dir || process.cwd()}` };
   const isWorkspace = target.endsWith(".xcworkspace");
@@ -715,6 +718,28 @@ function templateValue(text) {
   return text;
 }
 
+export function isStableFlowCheckpoint(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text || /^(loading|fetching|please wait|preparing|connecting|syncing|signing in)(?:[.…!]*|\s.*)$/i.test(text)) return false;
+  if (/^(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/i.test(text)) return false;
+  if (/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,\s+\d{4})?$/i.test(text)) return false;
+  if (/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(text)) return false;
+  return true;
+}
+
+export function semanticTargetAtPoint(elements, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
+  return (elements || [])
+    .filter((element) => {
+      const frame = element.frame || {};
+      return element.hittable !== false && Number.isFinite(frame.x) && Number.isFinite(frame.y) && Number.isFinite(frame.width) && Number.isFinite(frame.height)
+        && x >= frame.x && y >= frame.y && x <= frame.x + frame.width && y <= frame.y + frame.height
+        && String(element.id || element.identifier || element.label || "").trim();
+    })
+    .sort((a, b) => (a.frame.width * a.frame.height) - (b.frame.width * b.frame.height))
+    .map((element) => String(element.id || element.identifier || element.label || "").trim())[0] || "";
+}
+
 /** Append a Flow step for an act (record-by-doing). Inserts wait_for on screen change for
  *  deterministic replay. Inspection acts (tree/screenshot/wait) are not recorded. */
 function recordStep(cmd, result) {
@@ -725,7 +750,7 @@ function recordStep(cmd, result) {
     case "tap": {
       const target = cmd.id || cmd.label || (typeof cmd.x === "number" ? `${cmd.x},${cmd.y}` : "");
       if (target) activeSession.recording.push({ tap: target });
-      if (changed) activeSession.recording.push({ wait_for: newScreen });
+      if (changed && isStableFlowCheckpoint(newScreen)) activeSession.recording.push({ wait_for: newScreen });
       break;
     }
     case "type": {
@@ -734,12 +759,16 @@ function recordStep(cmd, result) {
       activeSession.recording.push({ type: step });
       break;
     }
+    case "login":
+      activeSession.recording.push({ login: { email: "$TEST_EMAIL", password: "$TEST_PASSWORD" } });
+      if (changed && isStableFlowCheckpoint(newScreen)) activeSession.recording.push({ wait_for: newScreen });
+      break;
     case "swipe":
       activeSession.recording.push({ swipe: cmd.direction || "up" });
       break;
     case "back":
       activeSession.recording.push({ back: true });
-      if (changed) activeSession.recording.push({ wait_for: newScreen });
+      if (changed && isStableFlowCheckpoint(newScreen)) activeSession.recording.push({ wait_for: newScreen });
       break;
     default:
       break; // tree / screenshot / wait are inspection, not test steps
@@ -748,7 +777,17 @@ function recordStep(cmd, result) {
 }
 
 async function sessionAct(cmd) {
-  if (!activeSession || activeSession.ended) return { error: "No active session. Call tapp_session_start first." };
+  const startedAt = Date.now();
+  const done = (result) => ({ ...result, durationMs: Date.now() - startedAt });
+  if (!activeSession || activeSession.ended) return done({ error: "No active session. Call tapp_session_start first." });
+  let coordinateResolvedTarget = "";
+  if (cmd.action === "tap" && !cmd.id && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) {
+    coordinateResolvedTarget = semanticTargetAtPoint(activeSession.latestTree?.elements, cmd.x, cmd.y);
+    if (coordinateResolvedTarget) {
+      const { x: _x, y: _y, ...semanticCommand } = cmd;
+      cmd = { ...semanticCommand, id: coordinateResolvedTarget };
+    }
+  }
   if (activeSession.platform === "web") {
     const session = activeSession;
     let status = "ok";
@@ -756,9 +795,13 @@ async function sessionAct(cmd) {
     let typedInto = null;
     try {
       if (cmd.action === "tap") {
-        const locator = await firstVisibleWebLocator(session.page, cmd.id || cmd.label || "");
-        if (!locator) { status = "not_found"; detail = "No visible web control matched the semantic target"; }
-        else await locator.click({ timeout:10_000 });
+        const target = cmd.id || cmd.label || "";
+        if (!target && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) await session.page.mouse.click(cmd.x, cmd.y);
+        else {
+          const locator = await firstVisibleWebLocator(session.page, target);
+          if (!locator) { status = "not_found"; detail = "No visible web control matched the semantic target"; }
+          else await locator.click({ timeout:10_000 });
+        }
       } else if (cmd.action === "type") {
         const locator = await firstVisibleWebLocator(session.page, cmd.id || cmd.label || "", { input:true });
         if (!locator) { status = "not_found"; detail = "No visible web field matched the semantic target"; }
@@ -771,6 +814,28 @@ async function sessionAct(cmd) {
           if (!locator) await session.page.waitForTimeout(120);
         }
         if (!locator) { status = "timeout"; detail = `Timed out waiting for ${cmd.id || cmd.text || "target"}`; }
+      } else if (cmd.action === "login") {
+        const emailValue = cmd.email || session.creds.email || "";
+        const passwordValue = cmd.password || session.creds.password || "";
+        if (!emailValue || !passwordValue) { status = "missing_credentials"; detail = "Email and password are required"; }
+        else {
+          const email = await firstVisibleWebLocator(session.page, "Email", { input:true })
+            || session.page.locator("input[type=email], input[name*=mail i], input[name*=user i], input[id*=mail i], input[id*=user i]").first();
+          const password = session.page.locator("input[type=password]").first();
+          if (!(await email.isVisible().catch(() => false)) || !(await password.isVisible().catch(() => false))) {
+            status = "not_found"; detail = "Could not identify email and password fields";
+          } else {
+            await email.fill(emailValue);
+            await password.fill(passwordValue);
+            const submit = session.page.getByRole("button", { name:/sign in|log in|login|continue|submit/i }).first();
+            if (!(await submit.isVisible().catch(() => false))) { status = "not_found"; detail = "Could not identify a sign-in control"; }
+            else {
+              await submit.click();
+              await session.page.waitForTimeout(500);
+              if (await password.isVisible().catch(() => false)) { status = "still_on_login"; detail = "Submit left the app on the login screen"; }
+            }
+          }
+        }
       } else if (cmd.action === "back") {
         await session.page.goBack({ waitUntil:"domcontentloaded", timeout:10_000 }).catch(() => {});
       } else if (cmd.action === "swipe") {
@@ -789,7 +854,7 @@ async function sessionAct(cmd) {
     }
     const snapshot = treeSnapshot();
     if (status === "ok") recordStep(cmd, snapshot);
-    return { status, typedInto, detail, ...snapshot, recordedSteps:session.recording.length, url:session.latestTree?.url || "" };
+    return done({ status, typedInto, detail, ...snapshot, recordedSteps:session.recording.length, url:session.latestTree?.url || "", ...(coordinateResolvedTarget ? { coordinateResolvedTarget } : {}) });
   }
   if (activeSession.platform === "android") {
     const s = activeSession;
@@ -845,7 +910,7 @@ async function sessionAct(cmd) {
     s.treeVersion += 1;
     const snap = treeSnapshot();
     if (status === "ok") recordStep(cmd, snap);
-    return { status, typedInto, detail, ...snap, recordedSteps: s.recording.length };
+    return done({ status, typedInto, detail, ...snap, recordedSteps: s.recording.length, ...(coordinateResolvedTarget ? { coordinateResolvedTarget } : {}) });
   }
   activeSession.seq += 1;
   const seq = activeSession.seq;
@@ -874,7 +939,7 @@ async function sessionAct(cmd) {
   while (activeSession.treeVersion === beforeVer && Date.now() < td && !activeSession.ended) await sleep(150);
   const snap = treeSnapshot();
   if (status === "ok") recordStep(cmd, snap); // record only successful acts
-  return { status, typedInto, detail, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0 };
+  return done({ status, typedInto, detail, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0, ...(coordinateResolvedTarget ? { coordinateResolvedTarget } : {}) });
 }
 
 async function endSession() {
@@ -919,7 +984,7 @@ export async function saveInteractiveSessionFlow({ projectDir, name, addFinalAss
   if (!projectDir || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error("A valid repository root is required to save a Flow");
   const steps = [...(activeSession.recording || [])];
   if (steps.length === 0) throw new Error("Nothing recorded yet — perform some live-session actions first.");
-  if (addFinalAssertion && activeSession.lastScreen) {
+  if (addFinalAssertion && activeSession.lastScreen && isStableFlowCheckpoint(activeSession.lastScreen)) {
     const last = steps[steps.length - 1] || {};
     if (!("assert_screen" in last)) steps.push({ assert_screen: activeSession.lastScreen });
   }
@@ -1244,6 +1309,7 @@ export function explorationEnvFromArgs(args) {
   const env = {};
   if (isNonEmptyString(args.testEmail)) env.OCQA_TEST_EMAIL = args.testEmail;
   if (isNonEmptyString(args.testPassword)) env.OCQA_TEST_PASSWORD = args.testPassword;
+  if (isNonEmptyString(args.testEmail) || isNonEmptyString(args.testPassword)) env.OCQA_CREDENTIALS_EXPLICIT = "1";
   if (Array.isArray(args.appLaunchArgs)) {
     const a = args.appLaunchArgs.filter((s) => typeof s === "string" && s.length > 0);
     if (a.length) env.OCQA_APP_LAUNCH_ARGS_JSON = JSON.stringify(a);
@@ -1336,7 +1402,7 @@ export function qaNextSteps(report, surface = "mcp") {
   if (surface === "cli") {
     const next = [];
     if (report?.findings?.length) next.push("inspect the evidence with `npx -y @aarwitz/tapp@latest report latest`");
-    next.push("re-run with `--baseline <report.json>` to compare a fix (then `npx -y @aarwitz/tapp@latest ci` to gate it)");
+    next.push("save this run with `--json <report.json>`, then re-run with `--baseline <report.json>` to compare a fix (`tapp ci` gates it)");
     next.push("replay a committed journey with `npx -y @aarwitz/tapp@latest flow run <file>`");
     return next;
   }
@@ -1359,6 +1425,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
   L.push(`### 🔭 Exploration complete — ${badge} · ${observationSummary(report)}${bundleId ? `\n\`${bundleId}\`` : ""}`);
   L.push("");
   L.push(report.headline);
+  if (report.credentialWarning) L.push("", `> ⚠️ ${report.credentialWarning}`);
   L.push("");
   L.push(`**Coverage** — ${report.screensExplored} screens · ${report.actionsPerformed} actions${timedOut ? " · ⏱️ hit time limit" : ""}`);
   if (report.platform === "web") {
@@ -1373,7 +1440,7 @@ function formatQaReport(report, { regression, inputHint, timedOut, bundleId, aiC
     L.push("");
     L.push("**Findings**");
     for (const f of report.findings.slice(0, 12)) {
-      L.push(`- ${SEV[f.severity] || "•"} \`${f.severity}\` ${f.title}${f.screen ? ` — on *${f.screen}*` : ""}`);
+      L.push(`- ${SEV[f.severity] || "•"} \`${f.severity}\` ${f.title}${f.screen ? ` — on *${f.screen}*` : ""}${f.url ? ` — ${f.url}` : ""}`);
       if (f.aiAnalysis) L.push(`  - why: ${String(f.aiAnalysis).slice(0, 200)}`);
       if (f.suggestedFix) L.push(`  - fix: ${String(f.suggestedFix).slice(0, 200)}`);
     }
@@ -1474,6 +1541,9 @@ export function formatScreen(screenTitle, elements) {
 // the surfaces can't drift.)
 
 export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {} }) {
+  const { storagePreflight } = await import("./environment-preflight.js");
+  const storage = storagePreflight(capturesDir);
+  if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
   const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
@@ -1516,6 +1586,9 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
 }
 
 export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout, testEmail, testPassword, baselineFindings, clearData = true, seedTargets = [], surface = "mcp", onProgress = () => {} }) {
+  const { storagePreflight } = await import("./environment-preflight.js");
+  const storage = storagePreflight(capturesDir);
+  if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
   const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 60)));
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "android-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
@@ -1559,6 +1632,9 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
 }
 
 export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surface = "mcp", onProgress = () => {} }) {
+  const { storagePreflight } = await import("./environment-preflight.js");
+  const storage = storagePreflight(capturesDir);
+  if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
   const captureScript = path.join(scriptsDir, "quick-capture.sh");
   if (!fs.existsSync(captureScript)) return { error: "Capture script not found", details: { captureScript } };
 
@@ -1877,6 +1953,22 @@ function openLocalPort() {
   });
 }
 
+function localPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
+  });
+}
+
+export function managedWebDefaultPort(dependencies = {}) {
+  if (dependencies.vite) return 5173;
+  if (dependencies.next) return 3000;
+  if (dependencies["react-scripts"]) return 3000;
+  return 0;
+}
+
 function managedInstallSpec(command) {
   const known = {
     "npm ci": ["npm", ["ci"]],
@@ -1961,7 +2053,9 @@ export async function startManagedWebTarget({ root, requestedTarget = "", timeou
   const pkg = (() => { try { return JSON.parse(fs.readFileSync(path.join(projectDir, "package.json"), "utf8")); } catch { return {}; } })();
   const dependencies = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
   const declaredPort = startMatch ? declaredPortFromStartScript(pkg.scripts?.[startMatch[1]]) : 0;
-  const port = declaredPort || await openLocalPort();
+  const frameworkPort = declaredPort ? 0 : managedWebDefaultPort(dependencies);
+  const port = declaredPort || (frameworkPort && await localPortAvailable(frameworkPort) ? frameworkPort : await openLocalPort());
+  const portBasis = declaredPort ? "repository-declared" : port === frameworkPort ? "framework-default" : "available-ephemeral";
   let command = "npm";
   let startArgs;
   let startDir = projectDir;
@@ -1988,13 +2082,13 @@ export async function startManagedWebTarget({ root, requestedTarget = "", timeou
   const append = (chunk) => fs.appendFileSync(logPath, String(chunk));
   child.stdout.on("data", append);
   child.stderr.on("data", append);
-  onStatus(`Managed web runtime: ${command === process.execPath ? "Tapp static server" : `npm ${startArgs.join(" ")}`} → http://127.0.0.1:${port}`);
+  onStatus(`Managed web runtime: ${command === process.execPath ? "Tapp static server" : `npm ${startArgs.join(" ")}`} → http://127.0.0.1:${port} (${portBasis} port)`);
   const ready = await waitForOwnedUrl(`http://127.0.0.1:${port}`, child, Math.min(budgetMs, 60_000), logPath);
   if (ready.error) {
     await stopManagedWebTarget({ child, detached: process.platform !== "win32" });
     return ready;
   }
-  return { child, detached: process.platform !== "win32", url: `http://127.0.0.1:${port}`, logPath, install, build, start: { command, args: startArgs, cwd: startDir } };
+  return { child, detached: process.platform !== "win32", url: `http://127.0.0.1:${port}`, logPath, install, build, start: { command, args: startArgs, cwd: startDir, portBasis } };
 }
 
 export async function stopManagedWebTarget(runtime) {
@@ -2878,11 +2972,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (inst.error) return errorResult(inst.error);
       bundleId = inst.bundleId;
     }
+    let modelRefresh = null;
+    let modelRefreshWarning = "";
+    if (bundleId) {
+      try {
+        const { persistIosBuildValidation } = await import("./application-model.js");
+        modelRefresh = await persistIosBuildValidation({ projectDir: dir, bundleId, container: built.container, scheme: built.scheme, configuration: built.configuration });
+      } catch (error) {
+        modelRefreshWarning = error.message || String(error);
+      }
+    }
     const text =
       `🔨 Built **${path.basename(built.appPath)}** (scheme \`${built.scheme}\`) in ${fmtDuration(Date.now() - startedAt)}` +
       (bundleId ? ` — installed on the simulator as \`${bundleId}\`` : "") +
       `\n\nNext: \`tapp_explore\` with \`appBundleId: "${bundleId || "<install it first>"}"\`.`;
-    return richResult(text, { ok: true, appPath: built.appPath, scheme: built.scheme, container: built.container, bundleId });
+    return richResult(text + (modelRefresh ? `\nApplication model refreshed: \`${modelRefresh.modelPath}\`.` : modelRefreshWarning ? `\n⚠️ Application model refresh failed: ${modelRefreshWarning}` : ""), { ok: true, appPath: built.appPath, scheme: built.scheme, container: built.container, bundleId, modelRefreshed: !!modelRefresh, ...(modelRefreshWarning ? { modelRefreshWarning } : {}) });
   }
 
   if (name === "tapp_capture") {
@@ -3201,7 +3305,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         credentials,
         replace: asBoolean(args.replace),
       });
-      return richResult(`✅ Actor '${args.name.trim()}' configured with ${Object.keys(result.actor.credentials).length} environment binding(s); no credential values were accepted or written`, { path: result.path, actor: result.actor, next: "Run tapp_init refresh to update the application model and release plan." });
+      const { refreshExistingInitArtifacts } = await import("./application-model.js");
+      let refreshed = null;
+      let refreshWarning = "";
+      try { refreshed = await refreshExistingInitArtifacts({ projectDir }); }
+      catch (error) { refreshWarning = error.message || String(error); }
+      return richResult(
+        `✅ Actor '${args.name.trim()}' configured with ${Object.keys(result.actor.credentials).length} environment binding(s); no credential values were accepted or written${refreshed ? " · application model refreshed" : ""}${refreshWarning ? `\n⚠️ Application model refresh failed: ${refreshWarning}` : ""}`,
+        { path: result.path, actor: result.actor, modelRefreshed: !!refreshed, ...(refreshed ? { modelPath: refreshed.modelPath, planPath: refreshed.planPath } : {}), ...(refreshWarning ? { refreshWarning } : {}) },
+      );
     } catch (error) { return errorResult("Actor not configured", { detail: error.message || String(error) }); }
   }
 
@@ -3969,7 +4081,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
-    return richResult(head + "\n\n" + formatScreen(r.screenTitle, r.elements) + rec, r);
+    const result = richResult(head + "\n\n" + formatScreen(r.screenTitle, r.elements) + rec, r);
+    if (!ok) result.isError = true;
+    return result;
   }
 
   if (name === "tapp_flow_save") {

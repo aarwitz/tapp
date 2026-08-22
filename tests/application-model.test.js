@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildInitArtifacts, generateApprovedContractProposals, mergeGeneratedTaskProposalValidation, portableEvidenceReference, promoteValidatedProposals, recordContractProposalValidation, recordGeneratedTaskProposalValidation, resolvePlanValidationFlag, reviewReleasePlan, writeInitArtifacts } from "../mcp-server/src/application-model.js";
+import { buildInitArtifacts, generateApprovedContractProposals, mergeGeneratedTaskProposalValidation, persistIosBuildValidation, portableEvidenceReference, promoteValidatedProposals, recordContractProposalValidation, recordGeneratedTaskProposalValidation, resolvePlanValidationFlag, reviewReleasePlan, writeInitArtifacts } from "../mcp-server/src/application-model.js";
 
 function write(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -92,6 +92,13 @@ test("tapp init constructs one evidence-classified model and grounded compact re
   assert.equal(model.targets.find((target) => target.platform === "web").runtime.ownedUrl, "http://127.0.0.1:4173");
   assert.equal(model.uiMap.nodeCount, 2);
   assert.deepEqual(model.uiMap.platforms, ["web"]);
+  const webTarget = model.targets.find((target) => target.platform === "web");
+  const iosTarget = model.targets.find((target) => target.platform === "ios");
+  const androidTarget = model.targets.find((target) => target.platform === "android");
+  assert.deepEqual(model.uiMap.observedTargetIds, [webTarget.id], "a root web map must belong only to the web target");
+  assert.deepEqual(new Set(model.uiMap.missingTargetIds), new Set([iosTarget.id, androidTarget.id]));
+  assert.equal(model.uiMaps.find((map) => map.targetId === iosTarget.id).status, "missing");
+  assert.deepEqual(model.uiMaps.find((map) => map.targetId === iosTarget.id).rejectedArtifact.platforms, ["web"]);
   assert.equal(model.actors[0].credentialsConfigured, true);
   assert.deepEqual(model.actors[0].credentialRequirements, ["email", "password"]);
   assert.doesNotMatch(JSON.stringify(model), /private@example|do-not-copy/);
@@ -102,6 +109,8 @@ test("tapp init constructs one evidence-classified model and grounded compact re
   assert.equal(plan.items.find((item) => item.name === "authenticationWorks").decision, "accepted");
   assert.equal(plan.items.some((item) => item.name === "openSettingsWorks" && item.origin === "deterministic-source-proposal"), true);
   assert.equal(plan.items.some((item) => item.origin === "deterministic-ui-map-proposal" && item.groundedBy[0].id === "screen_settings"), true);
+  assert.equal(plan.items.filter((item) => item.origin === "deterministic-ui-map-proposal" && item.groundedBy[0].id === "screen_settings").length, 1);
+  assert.deepEqual(plan.items.find((item) => item.origin === "deterministic-ui-map-proposal" && item.groundedBy[0].id === "screen_settings").platforms, ["web"]);
   assert.equal(plan.items.every((item) => /replay|compile/i.test(item.requiredValidation)), true);
 });
 
@@ -152,6 +161,33 @@ test("a successful init Xcode build removes the scheme blocker with portable run
   const refreshed = await buildInitArtifacts({ projectDir: root, platform: "ios" });
   assert.equal(refreshed.model.targets[0].status, "configured", "source-only refresh must retain matching runtime validation");
   assert.equal(refreshed.model.targets[0].runtimeValidation.evidence.capture, "tapp-capture:ios-init-proof");
+  assert.equal(refreshed.model.requirements.some((item) => item.id.endsWith(":scheme")), false);
+});
+
+test("a successful standalone Xcode build persists its scheme in an existing application model", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-build-xcode-proof-"));
+  const container = path.join(root, "Unshared.xcodeproj");
+  write(path.join(container, "project.pbxproj"), "// fixture");
+  const initial = await buildInitArtifacts({ projectDir: root, platform: "ios" });
+  writeInitArtifacts({ ...initial, root });
+
+  const persisted = await persistIosBuildValidation({
+    projectDir: root,
+    bundleId: "com.example.unshared",
+    container,
+    scheme: "ConfirmedScheme",
+    configuration: "Debug",
+  });
+  assert.equal(persisted.root, root);
+  const model = JSON.parse(fs.readFileSync(path.join(root, ".tapp/application-model.json"), "utf8"));
+  assert.equal(model.targets[0].status, "configured");
+  assert.equal(model.targets[0].build.proposedScheme, "ConfirmedScheme");
+  assert.equal(model.targets[0].runtimeValidation.operation, "xcode-build-install");
+  assert.match(model.targets[0].runtimeValidation.detail, /built.*installed/i);
+  assert.doesNotMatch(model.targets[0].runtimeValidation.detail, /launched|UI Map/i);
+
+  const refreshed = await buildInitArtifacts({ projectDir: root, platform: "ios" });
+  assert.equal(refreshed.model.targets[0].build.proposedScheme, "ConfirmedScheme");
   assert.equal(refreshed.model.requirements.some((item) => item.id.endsWith(":scheme")), false);
 });
 

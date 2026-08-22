@@ -17,8 +17,13 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /<meta property="og:url" content="https:\/\/runtapp\.com\/">/);
   assert.match(index, /https:\/\/www\.npmjs\.com\/package\/@aarwitz\/tapp/);
   assert.match(index, /"@type": "SoftwareApplication"/);
-  assert.match(index, /"operatingSystem": "macOS, Linux"/);
-  assert.doesNotMatch(index, /"operatingSystem"[^\n]*Windows/);
+  assert.match(index, /"operatingSystem": "macOS, Windows, Linux"/);
+  assert.match(index, /iOS simulators/);
+  assert.match(index, /Android emulators and devices/);
+  assert.match(index, /Windows\s+desktop UI apps such as WinForms, WPF, and WinUI are not currently supported/);
+  assert.match(index, /npx -y skills add aarwitz\/tapp --skill tapp/);
+  assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
+  assert.doesNotMatch(index, /Browser Product|Release Studio|One engine, every surface|@aarwitz\/tapp app \.|#quickstart/i);
   assert.doesNotMatch(index, /tapp-mcp|npmjs\.com\/package\/runtapp|npx(?:\s+-y)?\s+runtapp|\bAutoTap\b/i);
 });
 

@@ -544,7 +544,8 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   const issues = []; // emitted immediately; kept for counting only
   const issue = (type, severity, title, screen, target) => {
     issues.push(type);
-    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}) });
+    const pageUrl = page.url();
+    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}) });
   };
 
   // Async defect listeners: attribute to whatever screen is current when they fire.
@@ -925,7 +926,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       progress();
     }
   } finally {
-    emit("COMPLETE", { actions, screens: screenCount });
+    emit("COMPLETE", { actions, screens: screenCount, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried });
     fs.closeSync(markersFd);
     await browser.close().catch(() => {});
   }

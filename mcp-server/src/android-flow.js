@@ -43,6 +43,23 @@ export async function runAndroidFlow({ flow, appId, apkPath, serial, logPath, sc
       } else if (action === "type") {
         const r = await d.type(target, value, snap);
         if (r.status !== "ok") throw new Error(r.detail || `no field ‘${target}’ to type into`);
+      } else if (action === "login") {
+        const fields = snap.elements.filter((element) => /EditText/i.test(element.type));
+        const emailField = fields.find((element) => /email|user/i.test(`${element.id} ${element.label}`)) || fields.find((element) => !element.secure);
+        const passwordField = fields.find((element) => element.secure || /password|passcode/i.test(`${element.id} ${element.label}`));
+        if (!emailField || !passwordField) throw new Error("could not identify email and password fields");
+        const emailValue = substituteFlowValue(raw.params.email || "$TEST_EMAIL", vars);
+        const passwordValue = substituteFlowValue(raw.params.password || "$TEST_PASSWORD", vars);
+        const emailResult = await d.type(emailField.id || emailField.label, emailValue, snap);
+        if (emailResult.status !== "ok") throw new Error(emailResult.detail || "could not fill the email field");
+        snap = await d.settle();
+        const passwordResult = await d.type(passwordField.id || passwordField.label, passwordValue, snap);
+        if (passwordResult.status !== "ok") throw new Error(passwordResult.detail || "could not fill the password field");
+        snap = await d.settle();
+        const submit = snap.elements.find((element) => element.clickable && /sign in|log in|login|continue|submit/i.test(`${element.text} ${element.label} ${element.id}`));
+        if (!submit) throw new Error("could not identify a sign-in control");
+        const submitResult = await d.tap(submit.id || submit.description || submit.text, snap);
+        if (submitResult.status !== "ok") throw new Error(submitResult.detail || "could not submit the login form");
       } else if (action === "swipe") {
         await d.swipe(target || "up");
       } else if (action === "back") {
@@ -81,7 +98,7 @@ export async function runAndroidFlow({ flow, appId, apkPath, serial, logPath, sc
       detail = error.message || String(error);
       if (screenshotDir) await d.screenshot(path.join(screenshotDir, `flow-failure-${i + 1}.png`)).catch(() => {});
     }
-    log.step({ index: i + 1, action, target: target || value, status, detail, task: raw.task });
+    log.step({ index: i + 1, action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task });
     if (status === "fail" && !flow.continueOnFailure) break;
   }
   if (screenshotDir) await d.screenshot(path.join(screenshotDir, "flow-final.png")).catch(() => {});

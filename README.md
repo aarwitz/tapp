@@ -1,4 +1,4 @@
-# tapp — ship with proof
+# Tapp
 
 [![CI](https://github.com/aarwitz/tapp/actions/workflows/ci.yml/badge.svg)](https://github.com/aarwitz/tapp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40aarwitz%2Ftapp?color=cb3837&label=npm)](https://www.npmjs.com/package/@aarwitz/tapp)
@@ -9,29 +9,24 @@
 [![Install in Cursor](https://img.shields.io/badge/Cursor-Install_MCP-000000)](cursor://anysphere.cursor-deeplink/mcp/install?name=tapp&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBhYXJ3aXR6L3RhcHBAbGF0ZXN0IiwibWNwIl19)
 [![VS Code MCP](https://img.shields.io/badge/VS_Code-Install_MCP-0098FF)](https://insiders.vscode.dev/redirect/mcp/install?name=tapp&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40aarwitz%2Ftapp%40latest%22%2C%22mcp%22%5D%7D)
 
-**Tapp is the release-contract and evidence layer for teams shipping agent-authored applications.**
-It turns a repository and real product into an observed UI Map, a compact reviewed deterministic
-suite, and an inspectable merge decision.
+**Tapp gives coding agents hands and eyes on real iOS, Android, and web apps.** It can inspect and
+drive screens, explore for technical failures, save journeys as deterministic tests, and gate
+reviewed behavior in CI.
 
-Coding agents can write the code, and (with Playwright & friends) they can even drive the app.
-What nobody gives them is **proof it works**. tapp explores your app like a user — no test code,
-no app changes — and surfaces what's broken, with evidence. Then a deterministic gate applies
-versioned policy to that evidence — the findings and coverage, any selected deterministic suites
-(Flows/Scenarios/contracts), and, when available, a target-scoped baseline — and returns a merge
-decision your queue can trust: `pass`, `fail`, or `inconclusive`. Exploration **observes**; the gate
-**judges** — never a soft "ship-ready" guess.
+Exploration reports findings, coverage, evidence, and limits. Only the repository-connected gate
+returns `pass`, `fail`, or `inconclusive`. Tapp does not turn an autonomous crawl into a subjective
+"ship-ready" score.
 
-Three platforms, one observe-and-gate engine:
+Supported targets:
 
-- **iOS** — the missing Playwright for iOS. tapp is hands *and* eyes: a generic XCUITest
-  harness drives any app on the simulator via the accessibility surface. Native — no Appium,
-  no WebDriverAgent.
-- **Android** — black-box native driving through ADB + UIAutomator. Install an APK, target its
-  application id, and run the same exploration, committed Flows, evidence, and regression gate. The
-  app does not link a Tapp SDK.
-- **Web (beta)** — built *on* Playwright. Your agent already has browser hands; tapp adds the
-  autonomous exploration, the deterministic detectors (uncaught exceptions, failed requests,
-  dead buttons, broken links, placeholder `href="#"` links, error pages), and the same gate.
+| Target app | Runtime |
+|---|---|
+| iOS | Simulator on macOS with Xcode; driven through XCUITest and accessibility |
+| Android | Connected emulator or device with `adb`; driven through UIAutomator |
+| Web (beta) | Owned browser app in Playwright Chromium |
+
+Windows can host Android and web testing when their prerequisites are installed. Windows desktop
+UI applications such as WinForms, WPF, and WinUI are not currently Tapp targets.
 
 ## Give Tapp to your coding agent
 
@@ -41,9 +36,9 @@ After setup, the whole user prompt is:
 
 The official skill teaches the agent to choose the smallest useful operation, handle repositories
 with multiple app targets, inspect visual evidence, and keep exploration observations separate from
-release judgment.
+gate decisions.
 
-**Claude Code, Codex, Cursor, Copilot, and other Agent Skills clients — skill only (recommended):**
+**Claude Code, Codex, Cursor, Copilot, and other Agent Skills clients (recommended):**
 
 ```bash
 npx -y skills add aarwitz/tapp --skill tapp
@@ -66,15 +61,16 @@ The plugin bundles the same `tapp` Agent Skill with the matching npm-backed MCP 
 you want inline screenshot tool results and a persistent interactive tap/read/type session; it is
 not required for the core skill-to-CLI workflow.
 
-**No agent integration:** run the npm package directly from an app repository:
+**No agent integration:** run the npm package directly from an app repository in one line:
 
 ```bash
 npx -y @aarwitz/tapp@latest init . --explore
 ```
 
 **VS Code:** install [Tapp from the Marketplace](https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp).
-It contributes the same cross-platform Agent Skill to Copilot plus focused iOS simulator tools and a
-live simulator panel. Android and web remain available through the skill's CLI/MCP workflow.
+It contributes the same cross-platform Agent Skill to Copilot plus focused iOS simulator tools and
+an auto-refreshing screenshot preview. The preview is not an embedded Simulator or video stream.
+Android and web remain available through the skill's CLI/MCP workflow.
 
 ```
 you:    "Add a logout button to the settings screen"
@@ -98,7 +94,9 @@ npx -y @aarwitz/tapp@latest explore     # explores the real app; prints findings
 Claude Code can read the saved image with its file-reading tool; Codex can open it with
 `view_image`. The agent should report what the screenshot proves, relay the exploration findings
 as-is (an observation, not a merge decision — `tapp ci` gates that), and link the HTML evidence
-report. No server, account, config file, test code, API key, or bundle id is required for this loop.
+report. No Tapp server, account, global install, API key, or bundle id is required for this loop.
+The platform runtime still needs to be installed, and repository onboarding can write reviewed
+configuration under `.tapp/`.
 
 The product, executable, and package leaf are all Tapp: npm distributes it as
 `@aarwitz/tapp`, while the installed command remains `tapp`.
@@ -173,17 +171,23 @@ npx -y @aarwitz/tapp@latest explore path/to/app-debug.apk --platform android --a
 npx -y @aarwitz/tapp@latest open com.acme.app --platform android
 ```
 
+Turn a driven journey into a deterministic test, or print the complete Flow format before writing
+one by hand:
+
+```bash
+npx -y @aarwitz/tapp@latest flow example
+npx -y @aarwitz/tapp@latest flow validate .tapp/flows/smoke.yml
+npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
+```
+
+Flows support an atomic `login` step using `$TEST_EMAIL` / `$TEST_PASSWORD`; Tapp's session recorder
+creates that step without writing credential values into the repository.
+
 Optional but recommended (prebuilds the test harness so the first run is fast):
 ```bash
 npx -y @aarwitz/tapp@latest install    # ~2 min, one time
 npx -y @aarwitz/tapp@latest doctor     # verify Xcode / simulators / toolchain
 ```
-
-### Optional browser workspace
-
-`npx -y @aarwitz/tapp@latest app .` opens a local Release Studio for people who want visual repository
-onboarding, release-plan review, and CI preparation. It is not required for the coding-agent
-`open`/`explore` workflow.
 
 ### MCP hookup (optional)
 
@@ -389,12 +393,6 @@ environment. Add
 [`docs/scenarios.md`](docs/scenarios.md). Automatic
 baselines are isolated by platform and target, so two same-platform apps are never compared.
 
-**The hosted service is under development and is not currently offered for customer repositories.**
-Do not upload private code or credentials to an old preview. The retained
-cloud prototype is not the production SaaS boundary. Use the local Release Studio and the portable
-GitHub Action in infrastructure you control until the new account, tenant authorization, private
-evidence, and isolated-worker boundary passes security review.
-
 ## Make your repo agent-verified
 
 Drop this into your repo's `AGENTS.md` (read by Codex, Cursor, Copilot, Devin, Zed, …) so
@@ -436,13 +434,6 @@ only an optional authoring/enrichment layer (`tapp_flow_generate`, `assert_ai`, 
 
 The first tool call builds the harness once (~2 min, cached in `~/.tapp`; rebuilt automatically
 if you switch simulators). All captures land in `~/.tapp/captures/`.
-
-## Desktop status
-
-The macOS cockpit is frozen as a supported native interface and parity floor; it still reads the
-canonical Application Model, release plan, and UI Map in Coverage. Its older import/build path is
-not yet a thin client of the shared product-operation layer, so new product work is converging in
-the browser without deleting or reducing the desktop experience.
 
 ## License
 

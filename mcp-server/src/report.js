@@ -146,6 +146,7 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   const screenElementCounts = {}; // screen -> max elements observed (content-collapse detection)
   let anySecure = false;
   let loginAttempted = false;
+  let credentialsProvided = base.complete?.credentialsProvided === true;
   let actions = 0;
 
   for (const line of raw.split(/\r?\n/)) {
@@ -158,7 +159,8 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
         // `target` gives a finding its identity beyond type|screen — two dead buttons on the
         // same screen are two findings, and fixing one while breaking another is a regression.
         const target = (typeof o.control === "string" && o.control) || (typeof o.target === "string" && o.target) || null;
-        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, target, step: o.step ?? null });
+        const url = typeof o.url === "string" && o.url.trim() ? o.url.trim() : null;
+        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, target, url, step: o.step ?? null });
       } catch {
         /* ignore malformed */
       }
@@ -175,6 +177,8 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       t === "OCQA_STATE:login_preamble_two_step_submitted"
     ) {
       loginAttempted = true;
+    } else if (t === "OCQA_STATE:credentials_supplied") {
+      credentialsProvided = true;
     } else if (t.startsWith("OCQA_STATE:{")) {
       try {
         const s = JSON.parse(t.slice("OCQA_STATE:".length));
@@ -273,9 +277,9 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   const coverageFloorMet = platform === "web"
     ? screensExplored >= 1 && actionsPerformed >= 1
     : screensExplored >= 2 && actionsPerformed >= 3;
-  const credentiallessLoginWall = anySecure && !loginAttempted && screensExplored <= 1;
-  const inconclusive = !coverageFloorMet || credentiallessLoginWall || timeBudgetExhausted;
-  const stopReason = credentiallessLoginWall ? "login-wall-no-credentials"
+  const unexercisedLoginWall = anySecure && !loginAttempted && screensExplored <= 1;
+  const inconclusive = !coverageFloorMet || unexercisedLoginWall || timeBudgetExhausted;
+  const stopReason = unexercisedLoginWall ? (credentialsProvided ? "login-wall-credentials-unused" : "login-wall-no-credentials")
     : timeBudgetExhausted ? "time-budget-exhausted"
     : coverageFloorMet ? "completed" : "coverage-floor-not-met";
 
@@ -338,7 +342,9 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   // "Failed sign-ins" is only a claim when credentials were actually submitted. Merely seeing a
   // password field proves that a login surface was reached, not that authentication was exercised.
   if (loginAttempted) checkedFor.splice(2, 0, "failed sign-ins");
+  else if (anySecure && credentialsProvided) notChecked.push("sign-in behavior (test credentials were supplied, but no sign-in attempt was observed)");
   else if (anySecure) notChecked.push("sign-in behavior (login form reached, no test credentials supplied)");
+  else if (credentialsProvided) conditionsNotReached.push("sign-in (test credentials were supplied but no login form was encountered, so they were not used)");
   else conditionsNotReached.push("sign-in (no login form encountered this run)");
   if (timeBudgetExhausted) notChecked.push("the full requested action budget (run reached its wall-clock timeout)");
 
@@ -385,6 +391,13 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     screenElementCounts,
     inputFieldsEncountered,
     loginEncountered: anySecure,
+    credentialsProvided,
+    credentialsUsed: loginAttempted,
+    credentialWarning: credentialsProvided && !loginAttempted
+      ? anySecure
+        ? "Test credentials were supplied, but this run did not submit the login form. Authentication was not exercised."
+        : "Test credentials were supplied, but this run did not encounter a login form. They were not used."
+      : null,
     complete: base.complete,
     relativeMarkersFilePath: base.relativeMarkersFilePath,
   };

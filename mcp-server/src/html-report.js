@@ -18,7 +18,7 @@ const VALID_PLATFORMS = new Set(["web", "android", "ios"]);
 
 // Recover a capture's platform when no in-memory report is available. Prefer the run's persisted
 // metadata (ui-map.json → app.platforms) — it is authoritative and survives a renamed folder — and
-// fall back to the capture-id prefix (web-*/android-*, ios unprefixed) only for legacy captures that
+// fall back to the capture-id prefix (ios-*/web-*/android-*, with unprefixed iOS as a legacy case) only for captures that
 // predate the map. Defaults to ios if nothing is resolvable, matching buildQaReport's own default.
 export function capturePlatform(captureDir) {
   try {
@@ -81,7 +81,7 @@ export function writeHtmlReport(captureDir, { report, label = "", recordingWarni
         .map(
           (f) => `<li>
   <span class="sev" style="background:${SEV_COLOR[f.severity] || "#57606a"}">${esc(f.severity)}</span>
-  ${esc(f.title)}${f.screen ? ` <span class="dim">— on ${esc(f.screen)}</span>` : ""}
+  ${esc(f.title)}${f.screen ? ` <span class="dim">— on ${esc(f.screen)}</span>` : ""}${f.url ? ` <span class="dim">— ${esc(f.url)}</span>` : ""}
   ${f.aiAnalysis ? `<div class="ai">why: ${esc(f.aiAnalysis)}</div>` : ""}
   ${f.suggestedFix ? `<div class="ai">fix: ${esc(f.suggestedFix)}</div>` : ""}
 </li>`
@@ -138,6 +138,7 @@ ${r.conditionsNotReached?.length ? `<div><h2>Conditions not reached</h2><ul>${sc
 <div class="meta">${esc(label)} · evidence page (observation, not a release decision)</div>
 ${r.platform === "web" ? `<div class="meta">Deterministic basis: ${r.deterministicFindingCounts?.total || 0} deterministic finding(s); ${r.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.</div>` : ""}
 <div class="headline">${esc(r.headline)}</div>
+${r.credentialWarning ? `<div class="warning">${esc(r.credentialWarning)}</div>` : ""}
 ${scopeHtml}
 <h2>Findings</h2>
 <ul class="findings">

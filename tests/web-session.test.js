@@ -10,6 +10,7 @@ import {
   endInteractiveSession,
   saveInteractiveSessionFlow,
   startWebInteractiveSession,
+  isStableFlowCheckpoint,
 } from "../mcp-server/src/index.js";
 import { loadFlowFile } from "../mcp-server/src/flow-runtime.js";
 import { runWebFlow } from "../mcp-server/src/web-flow.js";
@@ -17,6 +18,13 @@ import { runWebFlow } from "../mcp-server/src/web-flow.js";
 let chromium;
 try { ({ chromium } = await import("playwright")); } catch {}
 const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
+
+test("recorded Flow checkpoints reject loading labels and current-date headings", () => {
+  assert.equal(isStableFlowCheckpoint("Loading…"), false);
+  assert.equal(isStableFlowCheckpoint("Friday, August 21"), false);
+  assert.equal(isStableFlowCheckpoint("August 21, 2026"), false);
+  assert.equal(isStableFlowCheckpoint("Dashboard"), true);
+});
 
 test("shared interactive session drives and captures a real web application", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {
   const server = http.createServer((_request, response) => {
@@ -57,6 +65,35 @@ test("shared interactive session drives and captures a real web application", { 
     await endInteractiveSession();
     const flow = loadFlowFile(path.join(project, saved.path));
     const replay = await runWebFlow({ flow, url });
+    assert.equal(replay.passed, true);
+  } finally {
+    await endInteractiveSession();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("one-call login is recorded without secrets and replays from a cold web session", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {
+  const server = http.createServer((_request, response) => {
+    response.writeHead(200, { "content-type":"text/html" });
+    response.end(`<!doctype html><h1>Sign In</h1><label>Email <input type="email"></label><label>Password <input type="password"></label><button onclick="document.querySelector('h1').textContent='Dashboard';document.querySelectorAll('label,button').forEach((e)=>e.remove())">Sign in</button>`);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-web-login-flow-"));
+  try {
+    const started = await startWebInteractiveSession(url, { testEmail:"private@example.test", testPassword:"private-password" });
+    assert.equal(started.ok, true, started.error);
+    const loggedIn = await actInteractiveSession({ action:"login" });
+    assert.equal(loggedIn.status, "ok", loggedIn.detail);
+    assert.equal(loggedIn.screenTitle, "Dashboard");
+    assert.ok(loggedIn.durationMs >= 0);
+    const saved = await saveInteractiveSessionFlow({ projectDir:project, name:"Recorded login", url });
+    assert.match(saved.yaml, /login:/);
+    assert.match(saved.yaml, /\$TEST_EMAIL/);
+    assert.match(saved.yaml, /\$TEST_PASSWORD/);
+    assert.doesNotMatch(saved.yaml, /private@example|private-password/);
+    await endInteractiveSession();
+    const replay = await runWebFlow({ flow:loadFlowFile(path.join(project, saved.path)), url });
     assert.equal(replay.passed, true);
   } finally {
     await endInteractiveSession();

@@ -1,11 +1,11 @@
 # Tapp MCP server
 
-The Tapp MCP server gives coding agents eyes, hands, and release judgment on real iOS, Android, and
-web application surfaces. It uses the same product operations as the CLI and local browser Release
-Studio; MCP adds inline screenshots and a long-lived interactive session loop.
+The Tapp MCP server gives coding agents hands and eyes on real iOS, Android, and web application
+surfaces. It uses the same engine as the npm CLI and GitHub Action; MCP adds inline screenshots and
+a long-lived interactive session loop.
 
 Normal exploration, deterministic Flow/Task/contract replay, evidence, regression comparison, and
-release judgment do not require a model or Tapp cloud account.
+gate evaluation do not require a model or Tapp cloud account.
 
 ## Recommended installation
 

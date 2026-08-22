@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>tapp — ship with proof</title>
-<meta name="description" content="The release-contract and evidence layer for agent-authored web applications. Map the real product, review business guarantees, replay deterministically, and gate every merge.">
+<title>Tapp — agent-driven app testing</title>
+<meta name="description" content="Give coding agents hands and eyes on real iOS, Android, and web apps. Inspect screens, explore failures, replay flows, and gate reviewed behavior in CI.">
 <link rel="canonical" href="https://runtapp.com/">
-<meta property="og:title" content="tapp — ship with proof">
-<meta property="og:description" content="Turn a repository and real web application into a maintained UI Map, deterministic release contracts, and an evidence-backed merge decision.">
+<meta property="og:title" content="Tapp — agent-driven app testing">
+<meta property="og:description" content="Give coding agents hands and eyes on iOS, Android, and web apps, with replayable flows and deterministic CI gates.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="tapp — ship with proof">
-<meta name="twitter:description" content="The official home of @aarwitz/tapp: app exploration, deterministic release contracts, and evidence-backed merge gates.">
+<meta name="twitter:title" content="Tapp — agent-driven app testing">
+<meta name="twitter:description" content="Test real iOS, Android, and web app surfaces with agents, replayable flows, and deterministic CI gates.">
 <meta name="theme-color" content="#2f6fed">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
 <script type="application/ld+json">
@@ -23,8 +23,8 @@
   "url": "https://runtapp.com/",
   "downloadUrl": "https://www.npmjs.com/package/@aarwitz/tapp",
   "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "macOS, Linux",
-  "description": "App exploration and deterministic release gates for iOS, Android, and web.",
+  "operatingSystem": "macOS, Windows, Linux",
+  "description": "Agent-driven app testing for iOS, Android, and web with replayable flows and deterministic CI gates.",
   "sameAs": [
     "https://github.com/aarwitz/tapp",
     "https://www.npmjs.com/package/@aarwitz/tapp"
@@ -94,6 +94,10 @@
   nav.links { display: flex; gap: 1.5rem; font-size: 0.92rem; }
   nav.links a { color: var(--fg-dim); text-decoration: none; }
   nav.links a:hover { color: var(--fg); }
+  @media (max-width: 640px) {
+    nav.links { gap: 1rem; font-size: 0.85rem; }
+    nav.links a:nth-child(-n+2) { display: none; }
+  }
 
   .hero { padding: 5rem 0 3.5rem; text-align: center; }
   .hero h1 { font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 1.1rem; }
@@ -173,32 +177,35 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#">tapp<span>.</span></a>
+    <a class="brand" href="#">Tapp<span>.</span></a>
     <nav class="links">
-      <a href="#gate">Browser Product</a>
-      <a href="#tools">Tools</a>
+      <a href="#platforms">Platforms</a>
+      <a href="#workflow">How it works</a>
       <a href="https://github.com/aarwitz/tapp">GitHub</a>
       <a href="https://www.npmjs.com/package/@aarwitz/tapp">npm</a>
-      <a href="https://github.com/aarwitz/tapp#quickstart">Quickstart</a>
+      <a href="https://github.com/aarwitz/tapp#give-tapp-to-your-coding-agent">Agent skill</a>
     </nav>
   </div>
 </header>
 
 <div class="hero wrap">
-  <h1>Know if the product still works.</h1>
+  <h1>Let your coding agent test the app it changed.</h1>
   <p class="sub">
-    Tapp turns a repository and real web application into an observed UI Map, a compact set of
-    reviewed deterministic release contracts, and an inspectable merge decision. AI can help plan;
-    ordinary replay and gating stay keyless.
+    Tapp gives coding agents hands and eyes on iOS simulators, Android emulators and devices, and
+    browser apps. Inspect screens, explore technical failures, save journeys as deterministic tests,
+    and gate reviewed behavior in CI.
   </p>
   <div class="cta-row">
-    <a class="btn primary" href="https://github.com/aarwitz/tapp#quickstart">Run Tapp locally →</a>
+    <a class="btn primary" href="https://github.com/aarwitz/tapp#give-tapp-to-your-coding-agent">Install the agent skill →</a>
     <a class="btn ghost" href="https://github.com/aarwitz/tapp">View on GitHub</a>
   </div>
   <div class="copybox mono">
-    <span>npx -y @aarwitz/tapp app .</span>
-    <button onclick="navigator.clipboard.writeText('npx -y @aarwitz/tapp app .')">copy</button>
+    <span>npx -y skills add aarwitz/tapp --skill tapp</span>
+    <button onclick="navigator.clipboard.writeText('npx -y skills add aarwitz/tapp --skill tapp')">copy</button>
   </div>
+  <p class="sub" style="font-size:0.9rem;margin-top:1rem">
+    Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
+  </p>
 </div>
 
 <section class="flush">
@@ -212,46 +219,48 @@
   </div>
 </section>
 
-<section>
+<section id="platforms">
   <div class="wrap">
     <span class="tag">Platforms</span>
-    <h2>One engine, every surface. One release contract across integrations.</h2>
+    <h2>Three app surfaces. One testing workflow.</h2>
     <p class="lead">
-      The npm package — CLI, MCP, and the GitHub Action — is the launch surface. VS Code, iOS,
-      Android, the optional browser Studio, desktop Coverage, and CI all use the same repository
-      artifacts and evidence protocol.
+      Tapp drives the real target through its native accessibility surface, captures inspectable
+      evidence, and keeps the same Flow and gate contract across supported platforms.
     </p>
     <div class="grid">
       <div class="card">
-        <div class="icon">📦</div>
-        <h3>CLI + MCP (npx)</h3>
-        <p><code>npx -y @aarwitz/tapp explore</code> — no server, account, or config. Agents call the
-        same tools over MCP; the same engine gates every PR as a portable GitHub Action.</p>
+        <div class="icon">🍎</div>
+        <h3>iOS simulator</h3>
+        <p>A generic XCUITest harness drives accessible simulator apps. No Tapp SDK, Appium, or
+        WebDriverAgent is added to the app.</p>
       </div>
       <div class="card">
-        <div class="icon">📱</div>
-        <h3>Browser Release Studio (optional)</h3>
-        <p>A local workspace: import an owned checkout, build and explore the real web app, inspect
-        its UI Map, review business contracts, validate without AI, establish a baseline, preview CI.</p>
+        <div class="icon">🤖</div>
+        <h3>Android emulator or device</h3>
+        <p>ADB and UIAutomator provide black-box driving on a connected emulator or device. Install
+        an APK or let Tapp build a detected Gradle target.</p>
       </div>
       <div class="card">
         <div class="icon">🌐</div>
-        <h3>Web — launch lane</h3>
-        <p>Built <em>on</em> Playwright: your agent already has browser hands; tapp adds autonomous
-        exploration and detectors for uncaught exceptions, failed requests, dead buttons, broken
-        links, and error pages.</p>
+        <h3>Web (beta)</h3>
+        <p>Playwright Chromium explores an owned browser app and checks technical behavior such as
+        failed requests, broken assets and links, uncaught exceptions, and placeholder links.</p>
       </div>
       <div class="card">
-        <div class="icon">🖥</div>
-        <h3>Native and agent integrations</h3>
-        <p>iOS XCUITest, Android UIAutomator, CLI, MCP, VS Code, desktop, and the GitHub Action retain
-        the shared Flow, Task, contract, map, baseline, and gate protocol.</p>
+        <div class="icon">📦</div>
+        <h3>Agents, CLI, and CI</h3>
+        <p>Use the Agent Skill first, call the npm CLI directly, add MCP for inline images and
+        persistent sessions, or run the same deterministic gate in GitHub Actions.</p>
       </div>
     </div>
+    <p class="lead" style="margin-top:1.4rem">
+      Windows can host Android and web testing when their prerequisites are installed. Windows
+      desktop UI apps such as WinForms, WPF, and WinUI are not currently supported targets.
+    </p>
   </div>
 </section>
 
-<section id="tools">
+<section id="workflow">
   <div class="wrap">
     <span class="tag">Local and inspectable</span>
     <h2>Explore autonomously. Commit only what matters.</h2>
@@ -273,7 +282,8 @@
       <div class="card">
         <div class="icon">🔭</div>
         <h3><code>tapp_explore</code></h3>
-        <p>Autonomous exploration — explores the app (iOS bundle id or web URL), returns an observation <code>{findings[], coverage, inconclusive}</code>. Not a ship verdict.</p>
+        <p>Autonomous exploration on iOS, Android, or web returns an observation
+        <code>{findings[], coverage, inconclusive}</code>. It is not a release verdict.</p>
       </div>
       <div class="card">
         <div class="icon">🔁</div>
@@ -297,13 +307,14 @@
 <section>
   <div class="wrap">
     <span class="tag">Observe, then judge</span>
-    <h2>Deterministic. No LLM in the run loop.</h2>
+    <h2>Exploration observes. The gate judges.</h2>
     <p class="lead">
-      tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
+      Tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
       screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
       links. Exploration <strong>observes</strong> (findings + evidence, never a ship verdict). The
       <strong>gate</strong> judges: the same evidence + contracts + baseline always produce the same
-      outcome. A shallow run is <code>inconclusive</code>, never a pass — absence of findings is not a pass.
+      outcome. A shallow run is <code>inconclusive</code>, never a pass. Optional model-assisted
+      authoring and advisory analysis never silently become deterministic gate authority.
     </p>
     <div class="verdicts">
       <div class="verdict ready">
@@ -325,15 +336,15 @@
 <section id="gate">
   <div class="wrap">
     <span class="tag">The complete product loop</span>
-    <h2>From checkout to a merge decision.</h2>
+    <h2>Turn important journeys into merge checks.</h2>
     <p class="lead">
-      Start locally in the browser, approve the guarantees that define a safe release, and install
-      the same engine as a portable GitHub Action. Every PR answers one question with evidence:
+      Explore broadly, preserve important journeys as reviewed Flows or contracts, and install the
+      same engine as a portable GitHub Action. Every PR answers one question with evidence:
       <strong>did this break important behavior that worked in the reviewed baseline?</strong>
     </p>
     <div class="gate-panel">
       <ul>
-        <li>Builds/starts and maps the owned real web application</li>
+        <li>Builds or starts the selected iOS, Android, or web target</li>
         <li>Composes reusable Tasks into business-level release contracts</li>
         <li>Blocks on failed critical contracts, crashes, and new high/critical regressions</li>
         <li>Shows exact coverage boundaries, screenshots, and deterministic replay evidence</li>
@@ -347,7 +358,7 @@
       </div>
     </div>
     <div class="cta-row" style="margin-top:1.8rem">
-      <a class="btn primary" href="https://github.com/aarwitz/tapp#quickstart">Start locally</a>
+      <a class="btn primary" href="https://github.com/aarwitz/tapp#npm-cli-quickstart">Run the npm package</a>
       <a class="btn ghost" href="https://github.com/aarwitz/tapp/blob/main/README.md#ci-gate">Read the docs</a>
     </div>
   </div>

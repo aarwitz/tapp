@@ -132,6 +132,22 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
       const el = await locateWebElement(page, target);
       if (!el) throw new Error(`no field ‘${target}’ to type into`);
       await el.fill(value);
+    } else if (action === "login") {
+      const emailValue = substituteFlowValue(raw.params.email || "$TEST_EMAIL", vars);
+      const passwordValue = substituteFlowValue(raw.params.password || "$TEST_PASSWORD", vars);
+      const email = await firstVisible([
+        page.locator("input[type=email]"), page.locator("input[name*=mail i]"),
+        page.locator("input[name*=user i]"), page.getByLabel(/email|user/i),
+      ]);
+      const password = await firstVisible([page.locator("input[type=password]"), page.getByLabel(/password|passcode/i)]);
+      if (!email || !password) throw new Error("could not identify email and password fields");
+      await email.fill(emailValue);
+      await password.fill(passwordValue);
+      const submit = await firstVisible([page.getByRole("button", { name:/sign in|log in|login|continue|submit/i })]);
+      if (!submit) throw new Error("could not identify a sign-in control");
+      await submit.click();
+      await page.waitForTimeout(400);
+      if (await password.isVisible().catch(() => false)) throw new Error("submit left the app on the login screen");
     } else if (action === "swipe") {
       const dy = target.toLowerCase() === "down" ? -600 : 600;
       await page.evaluate((y) => window.scrollBy({ top: y, behavior: "instant" }), dy);
@@ -173,7 +189,7 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
     status = "fail";
     detail = error.message || String(error);
   }
-  return { action, target: target || value, status, detail, task: raw.task };
+  return { action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task };
 }
 
 export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright }) {

@@ -102,7 +102,7 @@ def report(path, as_json=False):
         return 0 if passed else 1
 
     icon = {"pass": "✅", "fail": "❌", "skip": "⚪️"}
-    verb = {"tap": "👆 tap", "type": "⌨️  type", "swipe": "↔️  swipe", "back": "◀️  back",
+    verb = {"tap": "👆 tap", "type": "⌨️  type", "login": "🔐 sign in", "swipe": "↔️  swipe", "back": "◀️  back",
             "wait": "⏳ wait", "wait_for": "⏳ wait for", "assert_screen": "🔎 screen is",
             "assert_exists": "🔎 exists", "assert_absent": "🔎 absent", "assert_text": "🔎 text",
             "assert_ai": "🤖 ai"}
