@@ -27,7 +27,10 @@ npx -y @aarwitz/tapp@latest explore https://staging.example.com
 npx -y @aarwitz/tapp@latest explore MyApp.xcodeproj --platform ios
 npx -y @aarwitz/tapp@latest open com.example.MyApp --platform ios
 
-# Android: app id is required; APK is optional if already installed.
+# Android source: select a modeled target; Tapp builds, installs, and focuses it.
+npx -y @aarwitz/tapp@latest focus "About screen" . --target demoapp
+
+# Android black-box entry: app id is required; APK is optional if already installed.
 npx -y @aarwitz/tapp@latest explore app-debug.apk --platform android --app-id com.example.app
 ```
 
@@ -51,8 +54,9 @@ npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for 
 - `tapp_ci_setup`: create a target-scoped baseline or reviewable CI installation.
 
 An iOS no-bundle-id MCP path is `tapp_build {projectDir:"."}` followed by `tapp_explore` with the
-returned `bundleId`. Android uses `androidAppId` and optional `apkPath`; web uses `url` or
-source-connected `tapp_init`.
+returned `bundleId`. Android uses `androidAppId` and optional `apkPath`. Web can use an explicit
+owned `url`, or `tapp_session_start {projectDir:".", focus:"..."}` can build/start one unambiguous
+owned browser target and stop it with `tapp_session_end`.
 
 ## Interactive session loop
 
@@ -98,7 +102,8 @@ or `inconclusive`; both `fail` and `inconclusive` block a merge.
 ## Platform prerequisites
 
 - iOS: macOS, Xcode, and a booted simulator. First use builds a cached harness under `~/.tapp`.
-- Android: `adb` and a connected authorized emulator/device.
+- Android: `adb` and a connected authorized emulator/device; JDK 17 for source builds (not for a
+  prebuilt APK).
 - Web: Playwright and Chromium. If Tapp reports the browser missing, run
   `npx playwright install chromium` and retry.
 

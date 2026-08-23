@@ -217,6 +217,15 @@ function printEngineError(r) {
   if (r.details && Array.isArray(r.details.errors) && r.details.errors.length) {
     console.error(r.details.errors.map((e) => "  " + e.trim()).join("\n"));
   }
+  const choices = Array.isArray(r.details?.choices) ? r.details.choices : Array.isArray(r.details?.targets) ? r.details.targets : [];
+  if (choices.length) {
+    console.error("  Available targets:");
+    for (const choice of choices) {
+      const selector = choice.name || choice.id || choice.sourcePath;
+      console.error(`    ${choice.platform ? `${choice.platform} · ` : ""}${choice.name || choice.id}${choice.sourcePath ? ` (${choice.sourcePath})` : ""}${selector ? ` — use --target ${JSON.stringify(selector)}` : ""}`);
+    }
+  }
+  if (r.details?.remediation) console.error(`  Next: ${r.details.remediation}`);
 }
 
 async function promptForInitTarget(details) {
@@ -254,7 +263,7 @@ async function resolveTargetOrExit(engine, input) {
 function safeCommandUsage(verb) {
   const usage = {
     explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
-    focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--map FILE] [--out FILE]",
+    focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
     open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]",
     tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]",
@@ -544,33 +553,113 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const query = positionals[0] || "";
     if (!query) {
-      console.error('usage: tapp focus "SCREEN OR CONTROL" [target] [--platform ios|android|web] [--project-dir REPO] [--map FILE] [--out FILE]');
+      console.error('usage: tapp focus "SCREEN OR CONTROL" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]');
       process.exit(2);
     }
     let projectDir;
     try { projectDir = fs.realpathSync(path.resolve(typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd())); }
     catch { console.error("❌ --project-dir must be an existing repository directory"); process.exit(2); }
     const target = positionals[1] || (typeof flags.url === "string" ? flags.url : "");
-    const platform = requestedPlatform(flags, target);
+    if (typeof flags["project-dir"] !== "string" && target && !/^https?:\/\//i.test(target)) {
+      try {
+        const targetPath = fs.realpathSync(path.resolve(target));
+        if (fs.statSync(targetPath).isDirectory()) projectDir = targetPath;
+      } catch { /* a bundle/application id is not a repository path */ }
+    }
+    let platform = requestedPlatform(flags, target);
+    let modeledTarget = null;
+    const directRuntimeTarget = /^https?:\/\//i.test(target) || /\.apk$/i.test(target)
+      || (target && !fs.existsSync(path.resolve(target)));
+    const modelPath = existingProjectArtifactPath(projectDir, "application-model.json");
+    if (!directRuntimeTarget && fs.existsSync(modelPath)) {
+      try {
+        const model = JSON.parse(fs.readFileSync(modelPath, "utf8"));
+        const { selectApplicationTarget } = await import(path.join(packageRoot, "mcp-server", "src", "ci-setup.js"));
+        modeledTarget = selectApplicationTarget(model, {
+          platform:typeof flags.platform === "string" ? flags.platform.toLowerCase() : "",
+          target:typeof flags.target === "string" ? flags.target.trim() : "",
+          useDefault:true,
+        });
+        platform = modeledTarget.platform;
+      } catch (error) {
+        let choices = [];
+        try {
+          const model = JSON.parse(fs.readFileSync(modelPath, "utf8"));
+          choices = (model.targets || []).filter((item) => typeof flags.platform !== "string" || item.platform === flags.platform.toLowerCase());
+        } catch { /* the primary parse/select error is printed below */ }
+        printEngineError({ error:error.message || String(error), details:{ targets:choices } });
+        process.exit(2);
+      }
+    }
     if (!["ios", "android", "web"].includes(platform)) { console.error("❌ --platform must be ios|android|web"); process.exit(2); }
     const engine = await engineImport();
     let started = null;
     try {
       if (platform === "ios") {
         requireMacFor("iOS focused navigation");
-        const sim = await engine.ensureBootedSim({ autoBoot:true });
-        if (sim.error) throw new Error(sim.error);
-        const bundleId = await resolveTargetOrExit(engine, target || projectDir);
+        let bundleId;
+        if (modeledTarget) {
+          const resolved = await engine.resolveAppTarget(path.resolve(projectDir, modeledTarget.sourcePath || "."), {
+            cwd:projectDir,
+            scheme:modeledTarget.build?.scheme || modeledTarget.build?.proposedScheme || "",
+            configuration:modeledTarget.build?.configuration || "Debug",
+            onStatus:(status) => console.error(`⏳ ${status}`),
+          });
+          if (resolved.error) {
+            printEngineError(resolved);
+            process.exitCode = 1;
+            break;
+          }
+          bundleId = resolved.bundleId;
+          if (resolved.via) console.error(`🎯 Target: ${bundleId} — ${resolved.via}`);
+        } else {
+          const sim = await engine.ensureBootedSim({ autoBoot:true });
+          if (sim.error) throw new Error(sim.error);
+          bundleId = await resolveTargetOrExit(engine, target || projectDir);
+        }
         const launch = iosLaunchOptions(flags, rest);
         started = await engine.startIosInteractiveSession(bundleId, engine.explorationEnvFromArgs({ testEmail:flags.email, testPassword:flags.password, ...launch }));
       } else if (platform === "android") {
-        const android = androidTarget(flags, target);
-        started = await engine.startAndroidInteractiveSession(android.appId, { serial:android.serial, apkPath:android.apkPath, clearData:flags["keep-data"] !== true });
+        const explicitAndroid = typeof flags["app-id"] === "string" || /\.apk$/i.test(target)
+          || (target && !fs.existsSync(path.resolve(target)));
+        if (explicitAndroid) {
+          const android = androidTarget(flags, target);
+          started = await engine.startAndroidInteractiveSession(android.appId, { serial:android.serial, apkPath:android.apkPath, clearData:flags["keep-data"] !== true });
+        } else {
+          const prepared = await engine.prepareAndroidInteractiveTarget({
+            projectDir,
+            target:typeof flags.target === "string" ? flags.target : modeledTarget?.id || "",
+            onStatus:(status) => console.error(`⏳ ${status}`),
+          });
+          if (prepared.error) {
+            printEngineError(prepared);
+            process.exitCode = 1;
+            break;
+          }
+          console.error(`🎯 Target: ${prepared.appId} — built ${prepared.selectedTarget.name} → ${prepared.apkPath}`);
+          started = await engine.startAndroidInteractiveSession(prepared.appId, {
+            serial:typeof flags.serial === "string" ? flags.serial : undefined,
+            apkPath:prepared.apkPath,
+            clearData:flags["keep-data"] !== true,
+          });
+        }
       } else {
-        if (!/^https?:\/\//i.test(target)) { console.error("❌ Web focus needs an http(s) target URL"); process.exit(2); }
-        started = await engine.startWebInteractiveSession(target);
+        started = /^https?:\/\//i.test(target)
+          ? await engine.startWebInteractiveSession(target)
+          : await engine.startManagedWebInteractiveSession({
+              projectDir,
+              requestedTarget:typeof flags.target === "string" ? flags.target : modeledTarget?.sourcePath || modeledTarget?.name || target,
+              timeout:flags.timeout,
+              testEmail:typeof flags.email === "string" ? flags.email : "",
+              testPassword:typeof flags.password === "string" ? flags.password : "",
+              onStatus:(status) => console.error(`⏳ ${status}`),
+            });
       }
-      if (started.error) throw new Error(started.error);
+      if (started.error) {
+        printEngineError(started);
+        process.exitCode = 1;
+        break;
+      }
       const focused = await engine.focusInteractiveSession({ projectDir, query, platform, mapPath:typeof flags.map === "string" ? flags.map : "" });
       const { focusedTargetSummary } = await import(path.join(packageRoot, "mcp-server", "src", "focused-navigation.js"));
       console.log(focusedTargetSummary(focused));
@@ -1338,7 +1427,7 @@ switch (command) {
       console.log(`  ⬜ iOS — requires macOS (this host: ${process.platform})`);
     }
 
-    const { resolveAdbPath } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
+    const { resolveAdbPath, resolveAndroidSdkRoot } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
     const adbPath = resolveAdbPath();
     const adb = adbPath ? run(adbPath, ["devices"]) : { code: 1, stdout: "" };
     if (adb.code === 0) {
@@ -1346,6 +1435,14 @@ switch (command) {
       ok("Android", devices.length ? `${devices.length} connected emulator/device` : "adb available; no device connected");
     } else {
       console.log("  ⬜ Android — adb not found (install Android SDK platform-tools)");
+    }
+    const { resolveJavaRuntime } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
+    const java = resolveJavaRuntime();
+    const androidSdkRoot = resolveAndroidSdkRoot();
+    if (java && androidSdkRoot) ok("Android source builds", `${java.version || java.javaHome}; SDK ${androidSdkRoot}`);
+    else {
+      const missing = [!java ? "JDK 17" : "", !androidSdkRoot ? "Android SDK root" : ""].filter(Boolean).join(" and ");
+      console.log(`  ⬜ Android source builds — install/configure ${missing} (prebuilt APK testing still works)`);
     }
 
     try {

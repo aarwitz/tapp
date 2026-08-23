@@ -1,6 +1,6 @@
 {
   "name": "@aarwitz/tapp",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Let coding agents verify UI changes on real iOS, Android, and web surfaces, then enforce reviewed proof in deterministic CI.",
   "license": "MIT",

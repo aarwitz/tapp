@@ -124,6 +124,7 @@ test("tapp doctor keeps the package-only CLI path primary", () => {
   assert.match(out, /Ready\. Start with:/);
   assert.match(out, /@aarwitz\/tapp@latest open \[target\]/);
   assert.match(out, /@aarwitz\/tapp@latest explore \[target\]/);
+  assert.match(out, /Android source builds/);
   assert.doesNotMatch(out, /claude mcp add|@aarwitz\/tapp mcp/);
 });
 
@@ -231,6 +232,65 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
   } finally {
     server.kill();
   }
+});
+
+test("tapp focus prepares and stops an owned web target when a repository is passed", { skip: skipRealBrowser }, async () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-managed-web-focus-cli-"));
+  const home = path.join(project, "tapp-home");
+  const screenshot = path.join(project, "focused.jpg");
+  fs.writeFileSync(path.join(project, "index.html"), '<main><h1>Home</h1><a href="/settings.html">Storefront</a></main>');
+  fs.writeFileSync(path.join(project, "settings.html"), '<main><h1>Storefront Settings</h1><button id="save">Save storefront settings</button></main>');
+  fs.writeFileSync(path.join(project, "StorefrontSettings.tsx"), 'export const StorefrontSettings = () => <button>Save storefront settings</button>;\n');
+  fs.mkdirSync(path.join(project, ".tapp"));
+  fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), JSON.stringify({
+    kind:"tapp-application-model",
+    application:{ name:"Storefront", platforms:["web", "ios"], targetIds:["storefront", "native"], defaultTargetId:"storefront" },
+    targets:[
+      { id:"storefront", platform:"web", name:"Storefront", sourcePath:".", build:{ tool:"static-files", projectDir:".", install:null, start:null }, runtime:{} },
+      { id:"native", platform:"ios", name:"Native", sourcePath:"Native.xcodeproj", build:{ tool:"xcodebuild", proposedScheme:"Native", configuration:"Debug" }, runtime:{} },
+    ],
+    requirements:[],
+  }));
+  const markersPath = path.join(project, "markers.txt");
+  fs.writeFileSync(markersPath, [
+    'OCQA_STATE:{"screen":"Home","url":"http://127.0.0.1:1/","controls":[{"kind":"link","label":"Storefront"}]}',
+    'OCQA_ACTION:{"type":"tap","target":"Storefront","screen":"Home"}',
+    'OCQA_TRANSITION:{"from":"Home","to":"Storefront Settings","action":"Storefront","changed":true}',
+    'OCQA_STATE:{"screen":"Storefront Settings","url":"http://127.0.0.1:1/settings.html","controls":[{"kind":"button","label":"Save storefront settings","cssId":"save"}]}',
+  ].join("\n") + "\n");
+  fs.writeFileSync(path.join(project, ".tapp", "ui-map.json"), JSON.stringify(buildUiMapFromMarkers({ markersPath, platform:"web", target:"http://127.0.0.1:1", runId:"managed-cli-focus" })));
+
+  const focused = spawnSync("node", [tappBin, "focus", "Save storefront settings", ".", "--out", screenshot], {
+    cwd:project, encoding:"utf8", timeout:30_000, env:{ ...process.env, TAPP_HOME:home },
+  });
+  assert.equal(focused.status, 0, focused.stderr || focused.stdout);
+  const output = `${focused.stderr}\n${focused.stdout}`;
+  assert.match(output, /Managed web runtime:/);
+  assert.match(output, /Reached in 1 route action/);
+  assert.match(output, /Read screen \*\*Storefront Settings\*\*/);
+  assert.ok(fs.statSync(screenshot).size > 1000);
+
+  const runtimeUrl = output.match(/→ (http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+  assert.ok(runtimeUrl, "managed runtime URL is reported");
+  await assert.rejects(fetch(runtimeUrl, { signal:AbortSignal.timeout(1500) }), "managed runtime stops after focus");
+});
+
+test("tapp focus refuses to guess among modeled targets and prints exact selectors", () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-focus-target-choices-"));
+  fs.mkdirSync(path.join(project, ".tapp"));
+  fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), JSON.stringify({
+    kind:"tapp-application-model",
+    application:{ name:"Multi", platforms:["web", "ios"], targetIds:["web", "ios"] },
+    targets:[
+      { id:"web", platform:"web", name:"Storefront", sourcePath:"web" },
+      { id:"ios", platform:"ios", name:"Native", sourcePath:"Native.xcodeproj" },
+    ],
+  }));
+  const result = spawnSync("node", [tappBin, "focus", "Settings", "."], { cwd:project, encoding:"utf8", timeout:10_000 });
+  assert.equal(result.status, 2, result.stderr || result.stdout);
+  assert.match(result.stderr, /Multiple targets match/);
+  assert.match(result.stderr, /use --target "Storefront"/);
+  assert.match(result.stderr, /use --target "Native"/);
 });
 
 test("web QA reports placeholder links and dead controls deterministically despite ambient DOM churn", { skip: skipRealBrowser }, async () => {

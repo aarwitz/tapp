@@ -418,14 +418,57 @@ export async function buildAndroidApp({ projectDir, gradleProjectDir, moduleDir,
   const wrapper = path.join(gradleRoot, process.platform === "win32" ? "gradlew.bat" : "gradlew");
   const command = fs.existsSync(wrapper) ? (process.platform === "win32" ? wrapper : "bash") : "gradle";
   const args = fs.existsSync(wrapper) && process.platform !== "win32" ? [wrapper, task, "--no-daemon"] : [task, "--no-daemon"];
-  const build = await runCommand(command, args, { cwd: gradleRoot, timeoutMs: 25 * 60 * 1000 });
+  const { resolveJavaRuntime } = await import("./environment-preflight.js");
+  const java = resolveJavaRuntime();
+  if (!java) return { error:"Android source builds need a working Java runtime. Install JDK 17 or set JAVA_HOME; an already-built APK can still be tested directly." };
+  const { resolveAndroidSdkRoot } = await import("./android-driver.js");
+  const androidSdkRoot = resolveAndroidSdkRoot();
+  if (!androidSdkRoot) return { error:"Android source builds need an Android SDK root. Install SDK platform-tools or set ANDROID_SDK_ROOT/ANDROID_HOME; an already-built APK can still be tested directly." };
+  const build = await runCommand(command, args, {
+    cwd:gradleRoot,
+    timeoutMs:25 * 60 * 1000,
+    env:{
+      JAVA_HOME:java.javaHome,
+      ANDROID_HOME:androidSdkRoot,
+      ANDROID_SDK_ROOT:androidSdkRoot,
+      PATH:`${path.dirname(java.javaPath)}${path.delimiter}${process.env.PATH || ""}`,
+    },
+  });
   if (build.code !== 0) {
-    const errors = `${build.stdout}\n${build.stderr}`.split("\n").filter((line) => /(?:error|failure|exception)/i.test(line)).slice(-10);
+    const errors = `${build.stdout}\n${build.stderr}`.split("\n").filter((line) => /(?:error|failure|exception|sdk location|could not|not found)/i.test(line)).slice(-10);
     return { error: `Android build failed (${task})${build.timedOut ? " — timed out" : ""}`, details: { errors, tail: (build.stderr || build.stdout || "").slice(-1800) } };
   }
   const apkPath = androidApkCandidates(moduleRoot)[0];
   if (!apkPath) return { error: `Android build completed but no application APK was found under ${path.relative(root, moduleRoot) || "."}/build/outputs/apk` };
   return { apkPath, task, gradleProjectDir: gradleRoot, moduleDir: moduleRoot };
+}
+
+/** Resolve one reviewed Android target from the repository model and build its installable APK. */
+export async function prepareAndroidInteractiveTarget({ projectDir = process.cwd(), target = "", onStatus = () => {}, build = buildAndroidApp } = {}) {
+  let root;
+  try { root = fs.realpathSync(path.resolve(projectDir)); }
+  catch { return { error:`Repository directory not found: ${projectDir}` }; }
+  const modelPath = existingProjectArtifactPath(root, "application-model.json");
+  if (!fs.existsSync(modelPath)) return { error:"No application model found — run `npx -y @aarwitz/tapp@latest init . --explore --platform android` first." };
+  let model;
+  try { model = JSON.parse(fs.readFileSync(modelPath, "utf8")); }
+  catch (error) { return { error:`Application model is unreadable: ${error.message || String(error)}` }; }
+  const { selectApplicationTarget } = await import("./ci-setup.js");
+  let selected;
+  try { selected = selectApplicationTarget(model, { platform:"android", target, useDefault:true }); }
+  catch (error) { return { error:error.message || String(error), details:error.details || {} }; }
+  const appId = String(selected.runtime?.applicationId || "").trim();
+  if (!appId) return { error:`The Android target '${selected.name}' has no confirmed application id — rerun init or provide --app-id.` };
+  const task = selected.build?.task || "assembleDebug";
+  onStatus(`Building the Android APK for ${selected.name} (${task})…`);
+  const built = await build({
+    projectDir:root,
+    gradleProjectDir:path.resolve(root, selected.build?.projectDir || "."),
+    moduleDir:path.resolve(root, selected.sourcePath || "."),
+    task,
+  });
+  if (built.error) return built;
+  return { ...built, appId, selectedTarget:selected };
 }
 
 export async function installAppOnBootedSim(appPath, { cleanInstall = true } = {}) {
@@ -762,6 +805,32 @@ async function startWebSession(url, { testEmail = "", testPassword = "" } = {}) 
   }
 }
 
+/**
+ * Start a persistent web session from an owned repository target. The managed runtime belongs to
+ * the session and is stopped by endSession(), so MCP/CLI callers cannot strand a development
+ * server when focus succeeds, fails, or the client explicitly ends the session.
+ */
+export async function startManagedWebInteractiveSession({
+  projectDir = process.cwd(), requestedTarget = "", timeout,
+  testEmail = "", testPassword = "", onStatus = () => {},
+} = {}) {
+  let root;
+  try { root = fs.realpathSync(path.resolve(projectDir)); }
+  catch { return { error:`Repository directory not found: ${projectDir}` }; }
+  const runtime = await startManagedWebTarget({ root, requestedTarget, timeout, onStatus });
+  if (runtime.error) return runtime;
+  const session = await startWebSession(runtime.url, { testEmail, testPassword });
+  if (session.error) {
+    await stopManagedWebTarget(runtime);
+    return session;
+  }
+  if (activeSession?.platform === "web") activeSession.managedRuntime = runtime;
+  return {
+    ...session,
+    managedRuntime:{ url:runtime.url, logPath:runtime.logPath, start:runtime.start },
+  };
+}
+
 /** Turn a typed value into a shareable token: known creds become $TEST_EMAIL / $TEST_PASSWORD. */
 function templateValue(text) {
   const c = (activeSession && activeSession.creds) || {};
@@ -1001,6 +1070,7 @@ async function endSession() {
   if (s.platform === "web") {
     activeSession = null;
     await s.browser.close().catch(() => {});
+    if (s.managedRuntime) await stopManagedWebTarget(s.managedRuntime).catch(() => {});
     return { ok:true };
   }
   if (s.platform === "android") {
@@ -2964,7 +3034,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "tapp_session_start",
       title: "Start interactive session",
       description:
-        "Start a PERSISTENT interactive session against an installed iOS/Android app or a web URL. The app " +
+        "Start a PERSISTENT interactive session against an installed iOS/Android app, a web URL, or an " +
+        "unambiguous managed web target in the MCP workspace. The app " +
         "launches once and stays up, so you can drive a Playwright-style tap → inspect loop without a cold " +
         "launch per action. Returns the initial screen {screenTitle, elements[]}. Drive it with " +
         "tapp_focus for any named destination (source + shortest observed route), then tapp_session_act only for remaining actions; finish with tapp_session_end. " +
@@ -2978,7 +3049,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
           appBundleId: { type: "string", description: "Bundle id of the installed app to drive" },
           androidAppId: { type: "string", description: "Android application id to drive (alternative to appBundleId)" },
-          url: { type: "string", description: "Owned http(s) web app URL to drive (alternative to appBundleId/androidAppId)" },
+          url: { type: "string", description: "Owned http(s) web app URL to drive (alternative to appBundleId/androidAppId); omit all three target identifiers to build/start an unambiguous owned web target from projectDir" },
+          target: { type: "string", description: "Optional managed-web target name/path when projectDir contains multiple browser applications" },
           apkPath: { type: "string", description: "Android APK to install before starting" },
           androidSerial: { type: "string", description: "Android adb device serial" },
           clearData: { type: "boolean", default: true, description: "Android: clear app data before launch" },
@@ -4100,7 +4172,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
     const maxWidth = Math.max(200, Math.min(1400, asInteger(args.maxWidth, 700)));
     const r = await openApp(String(args.appBundleId).trim(), explorationEnvFromArgs(args), maxWidth);
-    if (r.error) return errorResult(r.error);
+    if (r.error) return errorResult(r.error, r.details || {});
     const content = [];
     content.push({ type: "text", text: `🚀 Launched \`${String(args.appBundleId).trim()}\`\n\n` + formatScreen(r.screenTitle, r.elements) });
     if (r.img && !r.img.error) content.push({ type: "image", data: r.img.data, mimeType: r.img.mimeType });
@@ -4201,10 +4273,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const ios = isNonEmptyString(args.appBundleId);
     const android = isNonEmptyString(args.androidAppId);
     const web = isNonEmptyString(args.url);
-    if ([ios, android, web].filter(Boolean).length !== 1) return errorResult("Provide exactly one of appBundleId, androidAppId, or url");
-    const target = ios ? args.appBundleId.trim() : android ? args.androidAppId.trim() : args.url.trim();
+    if ([ios, android, web].filter(Boolean).length > 1) return errorResult("Provide at most one of appBundleId, androidAppId, or url");
+    const managedWeb = !ios && !android && !web;
+    let target = ios ? args.appBundleId.trim() : android ? args.androidAppId.trim() : web ? args.url.trim() : "managed web target";
     let focusProjectDir = workspaceRoot;
-    if (isNonEmptyString(args.focus)) {
+    if (isNonEmptyString(args.focus) || managedWeb) {
       try { focusProjectDir = fs.realpathSync(path.resolve(workspaceRoot, isNonEmptyString(args.projectDir) ? args.projectDir.trim() : ".")); }
       catch { return errorResult("projectDir must be an existing directory inside the workspace"); }
       if (!isInsideDir(workspaceRoot, focusProjectDir) || !fs.statSync(focusProjectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
@@ -4213,8 +4286,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       ? await startSession(target, explorationEnvFromArgs(args))
       : android
         ? await startAndroidSession(target, { serial: args.androidSerial, apkPath: args.apkPath, clearData: args.clearData !== false, testEmail: args.testEmail, testPassword: args.testPassword })
-        : await startWebSession(target, { testEmail:args.testEmail, testPassword:args.testPassword });
-    if (r.error) return errorResult(r.error);
+        : web
+          ? await startWebSession(target, { testEmail:args.testEmail, testPassword:args.testPassword })
+          : await startManagedWebInteractiveSession({
+              projectDir:focusProjectDir,
+              requestedTarget:isNonEmptyString(args.target) ? args.target.trim() : "",
+              testEmail:args.testEmail,
+              testPassword:args.testPassword,
+            });
+    if (r.error) return errorResult(r.error, r.details || {});
+    if (managedWeb) target = r.url || r.managedRuntime?.url || target;
     let focused = null;
     if (isNonEmptyString(args.focus)) {
       try {

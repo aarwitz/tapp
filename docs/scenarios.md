@@ -74,7 +74,7 @@ tapp ci --platform web --url http://127.0.0.1:4180 \
 GitHub Action:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.1 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.2 # or pin the reviewed release commit SHA
   with:
     platform: web
     url: http://127.0.0.1:4180

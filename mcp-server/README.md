@@ -74,8 +74,9 @@ tapp_screenshot
 tapp_session_end
 ```
 
-Android uses `androidAppId` and optionally `apkPath`; web sessions use an owned `url`. Prefer stable
-resource/accessibility ids or exact labels over coordinates.
+Android uses `androidAppId` and optionally `apkPath`. Web sessions use an owned `url`, or can omit
+the URL to build/start one unambiguous target from `projectDir`; `tapp_session_end` also stops that
+managed runtime. Prefer stable resource/accessibility ids or exact labels over coordinates.
 
 ## Observation and gate contract
 

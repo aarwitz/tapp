@@ -34,10 +34,10 @@ function startMcp(cwd) {
   });
   const send = (message) => proc.stdin.write(`${JSON.stringify(message)}\n`);
   const waitFor = (id, timeoutMs = 15_000) => new Promise((resolve, reject) => {
-    const started = Date.now();
+    const started = performance.now();
     const poll = () => {
       if (responses.has(id)) return resolve(responses.get(id));
-      if (Date.now() - started > timeoutMs) return reject(new Error(`no MCP response for id ${id}`));
+      if (performance.now() - started > timeoutMs) return reject(new Error(`no MCP response for id ${id}`));
       setTimeout(poll, 25);
     };
     poll();
@@ -53,7 +53,15 @@ test("installed MCP repository tools are rooted in the client workspace, not the
     scripts: { start: "node server.js" },
   }, null, 2));
   fs.writeFileSync(path.join(workspace, "index.html"), "<!doctype html><title>Workspace App</title>");
-  fs.writeFileSync(path.join(workspace, "server.js"), "require('node:http').createServer((_, r) => r.end('ok')).listen(3000);\n");
+  fs.writeFileSync(path.join(workspace, "server.js"), `
+const http = require("node:http");
+http.createServer((request, response) => {
+  response.setHeader("content-type", "text/html");
+  response.end(request.url === "/settings"
+    ? '<!doctype html><h1>Settings</h1><button id="save">Save settings</button>'
+    : '<!doctype html><h1>Home</h1><a href="/settings">Settings</a>');
+}).listen(Number(process.env.PORT) || 3000, "127.0.0.1");
+`);
   fs.writeFileSync(path.join(workspace, "Settings.tsx"), "export const Settings = () => <button>Save storefront settings</button>;\n");
 
   const server = http.createServer((request, response) => {
@@ -107,7 +115,8 @@ test("installed MCP repository tools are rooted in the client workspace, not the
     const tools = await waitFor(7);
     const sessionStart = tools.result.tools.find((tool) => tool.name === "tapp_session_start");
     assert.ok(sessionStart.inputSchema.properties.url, "the source-connected session contract must include web URLs");
-    assert.match(sessionStart.description, /iOS\/Android app or a web URL/);
+    assert.ok(sessionStart.inputSchema.properties.target, "managed multi-target workspaces can select a browser target");
+    assert.match(sessionStart.description, /managed web target in the MCP workspace/);
 
     if (!skipRealBrowser) {
       const markersPath = path.join(workspace, "focus-markers.txt");
@@ -136,6 +145,18 @@ test("installed MCP repository tools are rooted in the client workspace, not the
 
       send({ jsonrpc:"2.0", id:10, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
       await waitFor(10);
+
+      send({ jsonrpc:"2.0", id:11, method:"tools/call", params:{ name:"tapp_session_start", arguments:{ focus:"Settings page" } } });
+      const managed = await waitFor(11, 30_000);
+      assert.notEqual(managed.result.isError, true, managed.result.content?.[0]?.text);
+      assert.equal(managed.result.structuredContent.screenTitle, "Settings");
+      assert.equal(managed.result.structuredContent.focus.execution.status, "reached");
+      const managedUrl = managed.result.content[0].text.match(/`(http:\/\/127\.0\.0\.1:\d+)/)?.[1];
+      assert.ok(managedUrl, "managed session reports its owned runtime URL");
+
+      send({ jsonrpc:"2.0", id:12, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
+      await waitFor(12);
+      await assert.rejects(fetch(managedUrl, { signal:AbortSignal.timeout(1500) }), "MCP session end stops the managed web runtime");
     }
   } finally {
     try {

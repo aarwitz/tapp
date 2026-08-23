@@ -38,7 +38,9 @@ When the user asks for a general first test of a repository:
    `npx -y @aarwitz/tapp@latest doctor`, apply only the stated remediation that is in scope, and
    retry once.
 
-For a focused request, use the requested target directly rather than forcing repository onboarding.
+For a focused request in an already-grounded repository, use the requested target directly rather
+than starting another broad exploration. If `.tapp/ui-map.json` does not exist yet, ground it once
+with `init . --explore`; source alone can locate a surface but cannot authorize unobserved taps.
 Targets may be a repository path, Xcode container, `.app`, iOS bundle id, APK plus Android app id,
 or owned HTTP(S) URL. Never explore a third-party web property without authorization: exploration
 clicks and types.
@@ -48,8 +50,10 @@ clicks and types.
 When the user names a screen, control, or UI condition, do not discover the app one screenshot at a
 time. Start from the repository source, then use Tapp's observed navigation evidence:
 
-1. With MCP, pass the exact request as `focus` to `tapp_session_start`, or call `tapp_focus` in an
-   active session. Without MCP, run `npx -y @aarwitz/tapp@latest focus "<exact request>" [target]`.
+1. In a source repository, run `npx -y @aarwitz/tapp@latest focus "<exact request>" [target]`; it
+   selects the reviewed model target and prepares web, iOS, or Android from source. In an active MCP
+   session call `tapp_focus`; for managed web, `tapp_session_start` can also take `projectDir` and
+   `focus` without retyping the URL.
 2. Tapp searches owned source, reconciles the likely surface with `.tapp/ui-map.json`, and executes
    the shortest runtime-observed route in one call. Read its final tree before visual assertions.
 3. If Tapp returns source evidence but no replayable route, inspect the cited file/line and relevant
@@ -91,5 +95,4 @@ content. Use coordinates only as a last resort. End the session when finished.
 Do not edit the app merely because testing found a defect unless the user also asked for a fix. State
 what the evidence proves and what remains untested.
 
-Read [references/commands.md](references/commands.md) only when exact CLI/MCP syntax, Flow replay,
-credentials, or platform prerequisites are needed.
+Read [references/commands.md](references/commands.md) only for exact CLI/MCP syntax, Flow replay, credentials, or platform prerequisites.

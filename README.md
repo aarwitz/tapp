@@ -84,7 +84,8 @@ agent:  "Done — and here it is working on the simulator: [screenshot]"
 ## npm CLI quickstart
 
 Requirements: **Node ≥ 18**. iOS needs **macOS + Xcode**; Android needs `adb` plus a connected
-emulator/device; web needs Playwright + Chromium.
+emulator/device (and JDK 17 when Tapp builds source rather than installing an existing APK); web
+needs Playwright + Chromium. `tapp doctor` reports these separately.
 
 From the app repository, ground Tapp once, then use the smallest operation for later checks:
 
@@ -337,7 +338,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@v0.17.1 # or pin the reviewed release commit SHA
+      - uses: aarwitz/tapp@v0.17.2 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -387,7 +388,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.1 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.2 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app

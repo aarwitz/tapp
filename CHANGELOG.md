@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.2
+
+**One source-connected focused command across web, iOS, and Android.**
+
+- Let bare `tapp focus` reuse the target reviewed during `init`, build or start it from source, and
+  stop with exact `--target` choices instead of guessing when a repository remains ambiguous.
+- Keep owned web focus sessions alive for the complete CLI/MCP interaction and reliably stop the
+  managed server when the session ends or startup fails.
+- Build, install, and focus modeled Android modules without requiring callers to supply an APK,
+  application id, platform flag, `JAVA_HOME`, or SDK-root variables when standard installations are
+  discoverable. `tapp doctor` reports source-build readiness separately from prebuilt-APK testing.
+- Preserve the source-plus-observed-map authority boundary: source locates the requested surface,
+  while only previously observed route edges authorize fast navigation.
+
+## VS Code 0.3.6
+
+- Bundle the source-preparing cross-platform Agent Skill and pin the extension engine to Tapp
+  0.17.2. The extension's native preview/tools remain iOS-specific; Android and web use the same
+  bundled Skill through the CLI or MCP.
+
 ## 0.17.1
 
 **Faster source-connected agent navigation and cleaner evidence.**

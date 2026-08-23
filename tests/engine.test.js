@@ -6,7 +6,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { storagePreflight } from "../mcp-server/src/environment-preflight.js";
+import { resolveAndroidSdkRoot } from "../mcp-server/src/android-driver.js";
+import { resolveJavaRuntime, storagePreflight } from "../mcp-server/src/environment-preflight.js";
 
 const engine = await import("../mcp-server/src/index.js");
 
@@ -22,6 +23,33 @@ test("storage preflight warns while preserving a usable volume", () => {
   assert.equal(result.ok, true);
   assert.equal(result.level, "warning");
   assert.match(result.message, /iOS builds can require several GiB/);
+});
+
+test("Android source builds can use an explicitly installed but unlinked JDK", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-java-home-"));
+  const bin = path.join(home, "bin");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, process.platform === "win32" ? "java.exe" : "java"), "fixture");
+  const runtime = resolveJavaRuntime({ JAVA_HOME:home, PATH:"" }, { probe:() => ({ status:0, stderr:'openjdk version "17.0.1"' }) });
+  assert.equal(runtime.javaHome, home);
+  assert.equal(runtime.major, 17);
+  assert.match(runtime.version, /17\.0\.1/);
+});
+
+test("Android source builds reject Java versions older than the documented minimum", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-java-old-"));
+  const bin = path.join(home, "bin");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, process.platform === "win32" ? "java.exe" : "java"), "fixture");
+  assert.equal(resolveJavaRuntime({ JAVA_HOME:home, PATH:"" }, { probe:() => ({ status:0, stderr:'java version "1.8.0_402"' }) }), null);
+});
+
+test("Android source builds derive the SDK root from the same adb discovery path as device testing", () => {
+  const sdk = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-sdk-"));
+  const platformTools = path.join(sdk, "platform-tools");
+  fs.mkdirSync(platformTools);
+  fs.writeFileSync(path.join(platformTools, process.platform === "win32" ? "adb.exe" : "adb"), "fixture");
+  assert.equal(resolveAndroidSdkRoot({ ANDROID_SDK_ROOT:sdk, PATH:"" }), sdk);
 });
 
 test("coordinate session taps resolve to the smallest semantic element under the point", () => {
@@ -41,7 +69,9 @@ test("engine is import-safe and exports the shared surface", () => {
     "runExploreTarget",
     "startManagedWebTarget",
     "stopManagedWebTarget",
+    "startManagedWebInteractiveSession",
     "buildAndroidApp",
+    "prepareAndroidInteractiveTarget",
     "captureUiTree",
     "openApp",
     "ensureBootedSim",
@@ -124,6 +154,37 @@ test("runExploreTarget requires a confirmed Android application id before buildi
   }));
   const r = await engine.runExploreTarget({ projectDir: dir });
   assert.ok(r.error && /application id/i.test(r.error), r.error);
+});
+
+test("source-focused Android preparation selects one modeled target and builds its APK", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-focus-android-source-"));
+  fs.mkdirSync(path.join(dir, ".tapp"));
+  fs.mkdirSync(path.join(dir, "demoapp"), { recursive:true });
+  fs.writeFileSync(path.join(dir, ".tapp", "application-model.json"), JSON.stringify({
+    kind:"tapp-application-model",
+    application:{ name:"android-corpus", platforms:["android"], targetIds:["demo", "shop"] },
+    targets:[
+      { id:"demo", platform:"android", name:"demoapp", sourcePath:"demoapp", build:{ projectDir:".", task:":demoapp:assembleDebug" }, runtime:{ applicationId:"io.tapp.demo" } },
+      { id:"shop", platform:"android", name:"shopdemo", sourcePath:"shopdemo", build:{ projectDir:".", task:":shopdemo:assembleDebug" }, runtime:{ applicationId:"io.tapp.shop" } },
+    ],
+    requirements:[],
+  }));
+  const realDir = fs.realpathSync(dir);
+  const apkPath = path.join(realDir, "demoapp", "build", "outputs", "apk", "debug", "demoapp-debug.apk");
+  const prepared = await engine.prepareAndroidInteractiveTarget({
+    projectDir:dir,
+    target:"demoapp",
+    build:async (options) => {
+      assert.equal(options.task, ":demoapp:assembleDebug");
+      assert.equal(options.moduleDir, path.join(realDir, "demoapp"));
+      fs.mkdirSync(path.dirname(apkPath), { recursive:true });
+      fs.writeFileSync(apkPath, "apk");
+      return { apkPath, task:options.task, gradleProjectDir:options.gradleProjectDir, moduleDir:options.moduleDir };
+    },
+  });
+  assert.equal(prepared.appId, "io.tapp.demo");
+  assert.equal(prepared.selectedTarget.name, "demoapp");
+  assert.equal(path.basename(prepared.apkPath), "demoapp-debug.apk");
 });
 
 test("QA next steps match the package-only surface without leaking MCP calls", () => {

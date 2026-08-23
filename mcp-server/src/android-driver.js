@@ -33,6 +33,13 @@ export function resolveAdbPath(env = process.env) {
   return executable("adb", env);
 }
 
+/** Resolve the SDK root from the same evidence used to find adb, including common unlinked
+ * Homebrew installations. Gradle needs this even when device automation already found adb. */
+export function resolveAndroidSdkRoot(env = process.env) {
+  const adbPath = resolveAdbPath(env);
+  return adbPath ? path.dirname(path.dirname(adbPath)) : null;
+}
+
 function runFile(command, args, { encoding = "utf8", timeout = 30_000, maxBuffer = 16 * 1024 * 1024 } = {}) {
   return new Promise((resolve) => {
     execFile(command, args, { encoding, timeout, maxBuffer }, (error, stdout, stderr) => {

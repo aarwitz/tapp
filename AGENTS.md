@@ -7,10 +7,9 @@ repository-connected deterministic gate.
 ## No MCP connected? Just run the CLI
 
 The core inspect, explore, replay, and gate capabilities work as plain commands — no Tapp account,
-server, or global install. `[target]` is
-optional: with nothing, tapp finds + builds the Xcode project in the cwd (or falls back to
-the app already on the simulator); it also accepts a repo dir, a `path/to/App.app`, a
-bundle id, or (web) an http(s) URL. You never need to know a bundle id up front.
+server, or global install. `[target]` is optional: with a repository/model, Tapp selects and prepares
+one conclusive web, iOS, or Android target; it also accepts a repo dir, `path/to/App.app`, bundle id,
+APK plus app id, or an owned HTTP(S) URL. You never need to know an iOS bundle id up front.
 
 ```bash
 npx -y @aarwitz/tapp@latest explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
@@ -77,6 +76,7 @@ wander blindly or invent a route. URL-only targets correctly have no source adva
 
 ```
 tapp_session_start { appBundleId: "com.acme.app", focus: "Save storefront settings visible above keyboard", projectDir: "." }
+tapp_session_start { focus: "Storefront Settings", projectDir: "." } → managed web target from the workspace
 tapp_focus         { query: "Save storefront settings visible above keyboard" } → one-call shortest observed route
 tapp_session_act   { action: "login", email: "qa@x.com", password: "…" } → atomic fill + submit + verify
 tapp_session_act   { action: "tap",  id: "Email" }      → tap by a11y id OR visible label
@@ -153,7 +153,8 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
 ## Setup facts (tell the user when relevant)
 
 - iOS runs locally on a Mac with Xcode + a simulator. Android needs `adb` and a connected
-  emulator/device. Web needs Playwright + Chromium. `tapp doctor` reports each capability.
+  emulator/device; source builds also need JDK 17, while prebuilt APK testing does not. Web needs
+  Playwright + Chromium. `tapp doctor` reports each capability separately.
 - First tool call builds the test harness once (~2 min, cached in `~/.tapp`). `tapp install`
   prebuilds it. Switching simulators triggers an automatic rebuild.
 - The app under test must be **installed on the booted simulator** (`tapp_install_app` builds
