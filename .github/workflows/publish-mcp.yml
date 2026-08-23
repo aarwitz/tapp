@@ -1,0 +1,50 @@
+name: Publish MCP Registry descriptor
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: mcp-registry-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'aarwitz/tapp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      - name: Verify the published npm package and release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(jq -r '.version' server.json)"
+          PACKAGE_VERSION="$(jq -r '.packages[0].version' server.json)"
+          test "$VERSION" = "$PACKAGE_VERSION"
+          test "$(npm view "@aarwitz/tapp@$VERSION" version)" = "$VERSION"
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            test "$GITHUB_REF_NAME" = "v$VERSION"
+          fi
+
+      - name: Install the checksum-pinned MCP publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            --output mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz
+          echo "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc  mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish server.json
