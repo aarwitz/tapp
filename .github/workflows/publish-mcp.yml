@@ -48,3 +48,25 @@ jobs:
 
       - name: Publish server.json
         run: ./mcp-publisher publish server.json
+
+      - name: Deprecate superseded Tapp descriptors
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION="$(jq -r '.version' server.json)"
+          REGISTRY_RESPONSE="$(curl --fail --silent --show-error --get \
+            --data-urlencode 'search=io.github.aarwitz/tapp' \
+            https://registry.modelcontextprotocol.io/v0.1/servers)"
+          while IFS= read -r VERSION; do
+            [[ -n "$VERSION" ]] || continue
+            ./mcp-publisher status \
+              --status deprecated \
+              --message "Superseded by Tapp $CURRENT_VERSION; install @aarwitz/tapp@latest." \
+              io.github.aarwitz/tapp "$VERSION"
+          done < <(jq -r --arg current "$CURRENT_VERSION" '
+            .servers[]
+            | select(.server.name == "io.github.aarwitz/tapp")
+            | select(.server.version != $current)
+            | select(._meta["io.modelcontextprotocol.registry/official"].status == "active")
+            | .server.version
+          ' <<<"$REGISTRY_RESPONSE")
