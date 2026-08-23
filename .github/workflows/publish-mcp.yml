@@ -46,8 +46,21 @@ jobs:
       - name: Authenticate with GitHub OIDC
         run: ./mcp-publisher login github-oidc
 
-      - name: Publish server.json
-        run: ./mcp-publisher publish server.json
+      - name: Publish server.json when the version is new
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION="$(jq -r '.version' server.json)"
+          if curl --fail --silent --show-error --get \
+            --data-urlencode 'search=io.github.aarwitz/tapp' \
+            https://registry.modelcontextprotocol.io/v0.1/servers \
+            | jq -e --arg current "$CURRENT_VERSION" '
+              any(.servers[]; .server.name == "io.github.aarwitz/tapp" and .server.version == $current)
+            ' >/dev/null; then
+            echo "MCP descriptor $CURRENT_VERSION already exists; preserving the immutable version."
+          else
+            ./mcp-publisher publish server.json
+          fi
 
       - name: Deprecate superseded Tapp descriptors
         shell: bash
