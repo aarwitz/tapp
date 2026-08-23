@@ -97,5 +97,6 @@ test("runtapp.com remains the canonical product website", () => {
 test("the private publication guard verifies the current CLI identity", { skip: !hasPrivatePublicationTool }, () => {
   const guard = read("tools/sync-public.sh");
   assert.match(guard, /agent-driven app testing for iOS, Android, and web/);
+  assert.match(guard, /git add -A --force/, "the exact staged allowlist wins over path-specific ignores");
   assert.doesNotMatch(guard, /ship with proof/i);
 });
