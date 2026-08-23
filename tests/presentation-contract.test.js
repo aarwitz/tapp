@@ -100,3 +100,23 @@ test("the private publication guard verifies the current CLI identity", { skip: 
   assert.match(guard, /git add -A --force/, "the exact staged allowlist wins over path-specific ignores");
   assert.doesNotMatch(guard, /ship with proof/i);
 });
+
+test("current public baselines do not retain the retired exploration verdict or score", () => {
+  for (const relative of [
+    "DemoApp/.tapp/baselines/ios/target_bf05ddc53dcded7f.json",
+    "AndroidCorpus/.tapp/baselines/android/target_4fa4825fe4191b9c.json",
+    "AndroidCorpus/.tapp/baselines/android/target_7488b63ddbfb90b0.json",
+    "AndroidCorpus/.tapp/baselines/android/target_b0450646e4866df7.json",
+    "AndroidCorpus/logindemo/.tapp/baselines/android/target_f9ef018700dffe80.json",
+  ]) {
+    if (!fs.existsSync(new URL(`../${relative}`, import.meta.url))) continue;
+    const baseline = JSON.parse(read(relative));
+    assert.equal(baseline.verdict, undefined, relative);
+    assert.equal(baseline.confidence, undefined, relative);
+    assert.equal(baseline.releaseScore, undefined, relative);
+    assert.equal(baseline.gate?.outcome, "pass", relative);
+    assert.equal(baseline.baselineIdentity?.outcome, "pass", relative);
+    assert.equal(baseline.baselineIdentity?.verdict, undefined, relative);
+    assert.doesNotMatch(baseline.headline, /ship-ready|release decision: pass/i, relative);
+  }
+});

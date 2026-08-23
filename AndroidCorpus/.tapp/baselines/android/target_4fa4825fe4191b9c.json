@@ -1,8 +1,5 @@
 {
-  "verdict": "ready",
-  "confidence": 100,
-  "releaseScore": 100,
-  "headline": "Ship-ready — no release-blocking issues found.",
+  "headline": "No issues surfaced in the exercised surfaces. An observation, not a release decision.",
   "inconclusive": false,
   "checkedFor": [
     "crashes / process exits",
@@ -199,6 +196,7 @@
   ],
   "gate": {
     "policy": "gate",
+    "outcome": "pass",
     "failed": false,
     "reasons": []
   },
@@ -208,7 +206,7 @@
     "platform": "android",
     "targetId": "target_4fa4825fe4191b9c",
     "conclusive": true,
-    "verdict": "ready",
+    "outcome": "pass",
     "screensExplored": 5,
     "actionsPerformed": 8,
     "suite": {

@@ -1,8 +1,5 @@
 {
-  "verdict": "ready",
-  "confidence": 100,
-  "releaseScore": 100,
-  "headline": "Ship-ready — no release-blocking issues found.",
+  "headline": "No issues surfaced in the exercised surfaces. An observation, not a release decision.",
   "inconclusive": false,
   "checkedFor": [
     "crashes (launch + in-run)",
@@ -550,6 +547,7 @@
   ],
   "gate": {
     "policy": "gate",
+    "outcome": "pass",
     "failed": false,
     "reasons": []
   },
@@ -559,7 +557,7 @@
     "platform": "ios",
     "targetId": "target_bf05ddc53dcded7f",
     "conclusive": true,
-    "verdict": "ready",
+    "outcome": "pass",
     "screensExplored": 7,
     "actionsPerformed": 12,
     "suite": {
