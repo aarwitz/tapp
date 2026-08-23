@@ -11,7 +11,7 @@ test("npm package exposes Tapp as its only current product identity", () => {
 
   for (const file of ["README.md", "AGENTS.md", "SECURITY.md", "server.json", "mcp-server/README.md"]) {
     assert.doesNotMatch(read(file), /\bAutoTap\b/, file);
-    assert.doesNotMatch(read(file), /\bruntapp\b|\btapp-mcp\b/i, file);
+    assert.doesNotMatch(read(file), /\bruntapp\b(?!\.com)|\btapp-mcp\b/i, file);
   }
 });
 

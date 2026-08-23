@@ -23,8 +23,36 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /Windows\s+desktop UI apps such as WinForms, WPF, and WinUI are not currently supported/);
   assert.match(index, /npx -y skills add aarwitz\/tapp --skill tapp/);
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
+  assert.match(index, /Let your coding agent prove the UI it changed/);
+  assert.match(index, /Real evidence/);
+  assert.match(index, /evidence\/webdemo\/report\.html/);
+  assert.match(index, /founding-pilot\.yml/);
+  assert.match(index, /og:image" content="https:\/\/runtapp\.com\/assets\/tapp-social\.png/);
+  assert.doesNotMatch(index, /href="#"/);
+  assert.doesNotMatch(index, /onclick=/);
   assert.doesNotMatch(index, /Browser Product|Release Studio|One engine, every surface|@aarwitz\/tapp app \.|#quickstart/i);
   assert.doesNotMatch(index, /tapp-mcp|npmjs\.com\/package\/runtapp|npx(?:\s+-y)?\s+runtapp|\bAutoTap\b/i);
+});
+
+test("landing proof assets and public pilot intake ship together", () => {
+  for (const file of [
+    "assets/tapp-mark.svg",
+    "assets/tapp-icon.png",
+    "assets/tapp-social.png",
+    "assets/tapp-focus-ios.jpg",
+    "assets/tapp-focus-proof.png",
+    "assets/tapp-explore-ios.webm",
+    "assets/tapp-explore-ios.mp4",
+    "assets/tapp-web-report.png",
+    "evidence/webdemo/report.html",
+  ]) {
+    assert.ok(fs.existsSync(path.join(landingRoot, file)), `${file} exists`);
+  }
+
+  const report = read("evidence/webdemo/report.html");
+  assert.match(report, /Real, sanitized demo evidence/);
+  assert.match(report, /observation, not a release decision/);
+  assert.doesNotMatch(report, /\/Users\/|aarwitz\/.tapp|127\.0\.0\.1/);
 });
 
 test("landing discovery files point only at the canonical site", () => {

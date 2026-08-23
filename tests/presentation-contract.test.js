@@ -20,7 +20,7 @@ test("public package surfaces describe one Tapp product", () => {
   assert.match(readme, /^# Tapp$/m);
   assert.match(readme, /Tapp lets coding agents verify UI changes on real iOS, Android, and web surfaces/);
   assert.match(readme, /Only the repository-connected gate[\s\S]*`pass`, `fail`, or `inconclusive`/);
-  assert.match(landing, /Let your coding agent test the app it changed/);
+  assert.match(landing, /Let your coding agent prove the UI it changed/);
 
   for (const relative of [
     "README.md",

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.3
+
+**Public proof and a safer first contact.**
+
+- Replace abstract product claims with inspectable evidence from real Tapp runs: a source-aware
+  focused iOS route, an autonomous simulator recording, and a sanitized full web report.
+- Fix the website's permission-sensitive copy control and placeholder home link, add accessible
+  focus states and demand-loaded media, and publish a professional product mark and social card.
+- Add privacy-conscious structured intake for reproducible bugs and a small paid founding pilot.
+  The pilot covers hands-on onboarding, important-journey setup, and CI integration while the
+  open-source engine continues to run in infrastructure the customer controls.
+
+## VS Code 0.3.7
+
+- Add a professional Marketplace icon and real cross-surface proof to the listing.
+- Bundle the current Agent Skill and pin the extension engine to Tapp 0.17.3.
+
 ## 0.17.2
 
 **One source-connected focused command across web, iOS, and Android.**

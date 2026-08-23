@@ -17,6 +17,12 @@ Exploration reports findings, coverage, evidence, and limits. Only the repositor
 returns `pass`, `fail`, or `inconclusive`. Tapp does not turn an autonomous crawl into a subjective
 "ship-ready" score.
 
+[![A real Tapp focus run reaches Update Profile from source and an observed route](https://runtapp.com/assets/tapp-focus-proof.png)](https://runtapp.com/#proof)
+
+**Real evidence, not a mock:** this public DemoApp run reached the requested iOS surface in three
+observed route actions. [Watch 45 seconds of autonomous exploration](https://runtapp.com/assets/tapp-explore-ios.mp4)
+or [inspect a complete sanitized web evidence report](https://runtapp.com/evidence/webdemo/report.html).
+
 Supported targets:
 
 | Target app | Runtime |
@@ -73,6 +79,10 @@ npx -y @aarwitz/tapp@latest init . --explore
 It contributes the same cross-platform Agent Skill to Copilot plus focused iOS simulator tools and
 an auto-refreshing screenshot preview. The preview is not an embedded Simulator or video stream.
 Android and web remain available through the skill's CLI/MCP workflow.
+
+**Teams:** Tapp's core stays MIT licensed. A small paid founding pilot is open for hands-on
+repository onboarding, important-journey setup, and CI integration in infrastructure you control.
+[Apply without sharing private data](https://github.com/aarwitz/tapp/issues/new?template=founding-pilot.yml).
 
 ```
 you:    "Add a logout button to the settings screen"
@@ -338,7 +348,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@v0.17.2 # or pin the reviewed release commit SHA
+      - uses: aarwitz/tapp@v0.17.3 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -388,7 +398,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.2 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.3 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app

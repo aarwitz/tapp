@@ -3,18 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tapp — agent-driven app testing</title>
+<title>Tapp — UI verification for coding agents</title>
 <meta name="description" content="Let coding agents verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
 <link rel="canonical" href="https://runtapp.com/">
-<meta property="og:title" content="Tapp — agent-driven app testing">
+<meta property="og:title" content="Tapp — UI verification for coding agents">
 <meta property="og:description" content="Verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Tapp — agent-driven app testing">
+<meta property="og:image" content="https://runtapp.com/assets/tapp-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Tapp — let your coding agent prove the UI it changed">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tapp — UI verification for coding agents">
 <meta name="twitter:description" content="Let coding agents verify real iOS, Android, and web UI changes, then enforce reviewed proof in CI.">
+<meta name="twitter:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta name="theme-color" content="#2f6fed">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%B1%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/assets/tapp-icon.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -89,7 +95,8 @@
     backdrop-filter: blur(8px); z-index: 10;
   }
   header.nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
-  .brand { font-family: ui-rounded, -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+  .brand { display: inline-flex; align-items: center; gap: 0.55rem; font-family: ui-rounded, -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; color: var(--fg); text-decoration: none; }
+  .brand img { width: 1.65rem; height: 1.65rem; border-radius: 0.42rem; }
   .brand span { color: var(--accent); }
   nav.links { display: flex; gap: 1.5rem; font-size: 0.92rem; }
   nav.links a { color: var(--fg-dim); text-decoration: none; }
@@ -108,8 +115,10 @@
     font-weight: 600; font-size: 0.95rem; text-decoration: none; border: 1px solid transparent; cursor: pointer;
   }
   .btn.primary { background: var(--accent); color: var(--accent-fg); }
+  .btn.primary:hover { filter: brightness(1.06); }
   .btn.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
   .btn.ghost:hover { background: var(--bg-alt); }
+  a:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 3px; }
 
   .copybox {
     display: inline-flex; align-items: center; gap: 0.8rem; background: var(--code-bg); color: var(--code-fg);
@@ -120,6 +129,7 @@
     color: var(--code-fg); border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.78rem; cursor: pointer;
   }
   .copybox button:hover { background: color-mix(in srgb, var(--code-fg) 12%, transparent); }
+  .copy-note { color: var(--fg-dim); font-size: 0.82rem; min-height: 1.3rem; margin: 0.45rem 0 0; }
 
   section { padding: 3.2rem 0; border-top: 1px solid var(--border); }
   section.flush { border-top: none; padding-top: 0; }
@@ -133,6 +143,27 @@
   .convo .l { white-space: pre; }
   .convo .you { color: #8ec9ff; }
   .convo .agent { color: #b8f0c8; }
+
+  .proof-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem; align-items: center; }
+  .proof-terminal { background: var(--code-bg); color: var(--code-fg); border-radius: 12px; padding: 1.4rem 1.5rem; box-shadow: 0 20px 55px color-mix(in srgb, var(--fg) 13%, transparent); overflow-x: auto; }
+  .proof-terminal pre { margin: 0; font-size: 0.88rem; line-height: 1.8; white-space: pre-wrap; }
+  .proof-terminal .dim { color: #9ba6ba; }
+  .proof-terminal .ok { color: #76d494; }
+  .proof-terminal .shot { color: #8ec9ff; }
+  .proof-device { justify-self: center; margin: 0; text-align: center; }
+  .proof-device img, .proof-device video { display: block; width: min(100%, 270px); max-height: 590px; object-fit: contain; margin: 0 auto; border: 9px solid #11141b; border-radius: 34px; background: #11141b; box-shadow: 0 24px 60px color-mix(in srgb, var(--fg) 18%, transparent); }
+  .proof-device figcaption, .evidence-card figcaption { color: var(--fg-dim); font-size: 0.8rem; margin-top: 0.75rem; }
+  .evidence-grid { display: grid; grid-template-columns: 0.72fr 1.28fr; gap: 1.2rem; margin-top: 2.2rem; }
+  .evidence-card { margin: 0; border: 1px solid var(--border); background: var(--bg-alt); border-radius: 12px; padding: 1rem; }
+  .evidence-card img { width: 100%; display: block; border: 1px solid var(--border); border-radius: 8px; background: white; }
+  .evidence-card video { width: 100%; max-height: 470px; display: block; object-fit: contain; border-radius: 8px; background: #11141b; }
+  .evidence-card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+  .evidence-card p { color: var(--fg-dim); font-size: 0.88rem; margin: 0 0 0.9rem; }
+  @media (max-width: 760px) {
+    .proof-grid, .evidence-grid { grid-template-columns: 1fr; }
+    .proof-device { order: -1; }
+    .proof-device img, .proof-device video { width: min(72vw, 280px); }
+  }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
   .card {
@@ -165,6 +196,13 @@
   .mini-comment .title { font-weight: 700; color: var(--green); margin-bottom: 0.4rem; }
   .mini-comment .row { display: flex; justify-content: space-between; color: var(--fg-dim); border-top: 1px solid var(--border); padding: 0.3rem 0; }
 
+  .pilot-panel { border-radius: 16px; padding: 2.2rem; background: linear-gradient(135deg, #10182d, #193c80); color: #fff; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 2rem; align-items: center; }
+  .pilot-panel h2 { font-size: 2rem; }
+  .pilot-panel p { color: #d4def2; margin: 0.7rem 0 0; }
+  .pilot-panel .btn.primary { background: #fff; color: #172d5d; justify-content: center; }
+  .pilot-panel .small { font-size: 0.78rem; color: #b9c7e4; text-align: center; margin-top: 0.65rem; }
+  @media (max-width: 720px) { .pilot-panel { grid-template-columns: 1fr; padding: 1.6rem; } }
+
   footer { border-top: 1px solid var(--border); padding: 2.5rem 0; color: var(--fg-dim); font-size: 0.85rem; }
   footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
   footer a { color: var(--fg-dim); }
@@ -177,44 +215,74 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="#">Tapp<span>.</span></a>
+    <a class="brand" href="/" aria-label="Tapp home"><img src="/assets/tapp-mark.svg" alt="">Tapp<span>.</span></a>
     <nav class="links">
+      <a href="#proof">Proof</a>
       <a href="#platforms">Platforms</a>
-      <a href="#workflow">How it works</a>
       <a href="https://github.com/aarwitz/tapp">GitHub</a>
       <a href="https://www.npmjs.com/package/@aarwitz/tapp">npm</a>
-      <a href="https://github.com/aarwitz/tapp#give-tapp-to-your-coding-agent">Agent skill</a>
+      <a href="#pilot">Pilot</a>
     </nav>
   </div>
 </header>
 
 <div class="hero wrap">
-  <h1>Let your coding agent test the app it changed.</h1>
+  <h1>Let your coding agent prove the UI it changed.</h1>
   <p class="sub">
-    Tapp lets coding agents verify UI changes on iOS simulators, Android emulators and devices, and
-    browser apps, then turn reviewed proof into deterministic CI checks. Inspect screens, explore
-    technical failures, and save important journeys as replayable tests.
+    Tapp locates the requested surface from source, follows runtime-observed routes on real iOS simulators,
+    Android emulators and devices, and web apps, captures inspectable evidence, and turns approved journeys into
+    deterministic CI checks.
   </p>
   <div class="cta-row">
     <a class="btn primary" href="https://github.com/aarwitz/tapp#give-tapp-to-your-coding-agent">Install the agent skill →</a>
-    <a class="btn ghost" href="https://github.com/aarwitz/tapp">View on GitHub</a>
+    <a class="btn ghost" href="#proof">See a real run</a>
   </div>
   <div class="copybox mono">
-    <span>npx -y skills add aarwitz/tapp --skill tapp</span>
-    <button onclick="navigator.clipboard.writeText('npx -y skills add aarwitz/tapp --skill tapp')">copy</button>
+    <span id="install-command">npx -y skills add aarwitz/tapp --skill tapp</span>
+    <button id="copy-install" type="button" aria-describedby="copy-status">copy</button>
   </div>
+  <p class="copy-note" id="copy-status" role="status" aria-live="polite"></p>
   <p class="sub" style="font-size:0.9rem;margin-top:1rem">
     Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
   </p>
 </div>
 
-<section class="flush">
+<section class="flush" id="proof">
   <div class="wrap">
-    <div class="convo">
-<div class="l"><span class="you">you:</span>    "Add a logout button to the settings screen"</div>
-<div class="l"><span class="agent">agent:</span>  *writes the Swift*</div>
-<div class="l"><span class="agent">agent:</span>  *tapp: builds, opens the app, follows its observed route to Settings, screenshots it*</div>
-<div class="l"><span class="agent">agent:</span>  "Done — and here it is working on the simulator: [screenshot]"</div>
+    <span class="tag">Real evidence</span>
+    <h2>Reach the requested UI without wandering.</h2>
+    <p class="lead">This is a real Tapp 0.17.2 run against the public DemoApp corpus. Source located the surface; only previously observed runtime transitions authorized navigation.</p>
+    <div class="proof-grid">
+      <div class="proof-terminal mono">
+<pre><span class="dim">$</span> tapp focus "Update Profile" DemoApp
+<span class="ok">✓</span> source located Settings → Update Profile
+<span class="ok">✓</span> observed route:
+  Continue → Settings → Update Profile
+<span class="ok">✓</span> reached in 3 route actions
+<span class="shot">📸 screenshot + accessibility tree saved</span></pre>
+      </div>
+      <figure class="proof-device">
+        <img src="/assets/tapp-focus-ios.jpg" width="603" height="1311" alt="The Update Profile screen reached by Tapp on an iOS simulator">
+        <figcaption>Actual final screenshot · no mocked product UI</figcaption>
+      </figure>
+    </div>
+    <div class="evidence-grid">
+      <figure class="evidence-card">
+        <h3>Watch autonomous exploration</h3>
+        <p>The first 45 seconds of a full 60-action iOS run. Recording begins after build and installation finish.</p>
+        <video controls muted playsinline preload="none" poster="/assets/tapp-focus-ios.jpg" aria-label="Tapp autonomously exploring the public iOS DemoApp">
+          <source src="/assets/tapp-explore-ios.webm" type="video/webm">
+          <source src="/assets/tapp-explore-ios.mp4" type="video/mp4">
+          Your browser does not support embedded video. <a href="/assets/tapp-explore-ios.mp4">Download the clip.</a>
+        </video>
+        <figcaption>Real simulator recording · 13 screens and 60 actions in the complete run</figcaption>
+      </figure>
+      <figure class="evidence-card">
+        <h3>Inspect a complete evidence report</h3>
+        <p>Tapp explored the intentionally defective WebDemo corpus and surfaced six evidence-backed findings across seven screens, while stating what it did not check.</p>
+        <a href="/evidence/webdemo/report.html"><img src="/assets/tapp-web-report.png" width="1200" height="900" alt="Tapp WebDemo report showing checked scope and six findings"></a>
+        <figcaption><a href="/evidence/webdemo/report.html">Open the sanitized report →</a></figcaption>
+      </figure>
     </div>
   </div>
 </section>
@@ -364,12 +432,61 @@
   </div>
 </section>
 
+<section id="pilot">
+  <div class="wrap">
+    <div class="pilot-panel">
+      <div>
+        <span class="tag">Founding Tapp Teams</span>
+        <h2>Put Tapp on a real agent-authored app.</h2>
+        <p>We are opening a small paid pilot for teams that want hands-on repository onboarding, important-journey setup, and deterministic CI integration. Core Tapp stays MIT licensed and runs in infrastructure you control.</p>
+      </div>
+      <div>
+        <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?template=founding-pilot.yml">Apply for the founding pilot →</a>
+        <div class="small">The application opens a public GitHub issue. Do not include private code, credentials, or customer data.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
-    <span>MIT licensed. <a href="https://github.com/aarwitz/tapp">github.com/aarwitz/tapp</a></span>
-    <span><a href="https://www.npmjs.com/package/@aarwitz/tapp">npmjs.com/package/@aarwitz/tapp</a></span>
+    <span>MIT licensed. <a href="https://github.com/aarwitz/tapp">GitHub</a> · <a href="https://github.com/aarwitz/tapp/security/policy">Security</a></span>
+    <span><a href="https://www.npmjs.com/package/@aarwitz/tapp">npm</a> · <a href="https://marketplace.visualstudio.com/items?itemName=lidi-solutions.tapp">VS Code</a> · <a href="https://github.com/aarwitz/tapp/releases/latest">Latest release</a></span>
   </div>
 </footer>
 
+<script>
+  const copyButton = document.getElementById("copy-install");
+  const copyStatus = document.getElementById("copy-status");
+  const installCommand = document.getElementById("install-command").textContent;
+
+  copyButton.addEventListener("click", async () => {
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(installCommand);
+        copied = true;
+      }
+    } catch (_) {
+      copied = false;
+    }
+
+    if (!copied) {
+      const input = document.createElement("textarea");
+      input.value = installCommand;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      try { copied = document.execCommand("copy"); } catch (_) { copied = false; }
+      input.remove();
+    }
+
+    copyButton.textContent = copied ? "copied" : "select";
+    copyStatus.textContent = copied ? "Install command copied." : "Clipboard access is unavailable; select the command above to copy it.";
+    window.setTimeout(() => { copyButton.textContent = "copy"; }, 2200);
+  });
+</script>
 </body>
 </html>

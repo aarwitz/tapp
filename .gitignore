@@ -36,6 +36,8 @@ captures/
 *.mov
 *.webm
 *.mp4
+!landing/assets/tapp-explore-ios.webm
+!landing/assets/tapp-explore-ios.mp4
 *.bak
 
 # Python

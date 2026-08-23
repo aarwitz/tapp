@@ -4,6 +4,13 @@ Give Copilot agent mode the Tapp Agent Skill for testing real iOS, Android, and 
 The extension also contributes focused iOS simulator tools and an auto-refreshing screenshot
 preview beside the editor. It is a preview, not an embedded Simulator or video stream.
 
+[![A real Tapp source-aware focus run reaches Update Profile on an iOS simulator](https://runtapp.com/assets/tapp-focus-proof.png)](https://runtapp.com/#proof)
+
+The image above is evidence from a real Tapp 0.17.2 run against the public DemoApp corpus: source
+located the requested surface and the observed UI Map supplied the three-action route. It is not a
+mock of the VS Code panel. [Watch the real exploration clip](https://runtapp.com/assets/tapp-explore-ios.mp4)
+or [inspect a complete web evidence report](https://runtapp.com/evidence/webdemo/report.html).
+
 | Need | Tapp exposure |
 |---|---|
 | Decide how to test the current app | bundled Tapp Agent Skill |

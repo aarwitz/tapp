@@ -1,0 +1,57 @@
+name: Founding Tapp pilot
+description: Apply for hands-on Tapp onboarding and release-gate setup.
+title: "[Pilot] "
+labels:
+  - founding-pilot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your interest in the paid Founding Tapp Teams pilot. This issue is public: describe the application at a high level and do not paste private source, credentials, customer data, or security details. Aaron will follow up through your GitHub account to arrange a private conversation.
+  - type: input
+    id: app
+    attributes:
+      label: What are you building?
+      description: A one-sentence, non-confidential description is enough.
+      placeholder: A consumer iOS and Android marketplace app
+    validations:
+      required: true
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Which surfaces do you need to verify?
+      options:
+        - label: iOS simulator
+        - label: Android emulator or device
+        - label: Web application
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Primary coding agent
+      options:
+        - Claude Code
+        - Codex CLI
+        - Cursor
+        - VS Code Copilot
+        - Another coding agent
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: What would make the pilot successful?
+      description: Name the UI workflow or release risk you most want Tapp to verify.
+      placeholder: Our agent should reach the changed screen quickly, prove the save flow works, and prevent regressions in pull requests.
+    validations:
+      required: true
+  - type: checkboxes
+    id: expectations
+    attributes:
+      label: Pilot expectations
+      options:
+        - label: I understand this is a paid, hands-on design-partner pilot rather than a hosted self-serve service.
+          required: true
+        - label: I will not put secrets or private customer information in this public issue.
+          required: true

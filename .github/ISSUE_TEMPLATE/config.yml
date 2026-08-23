@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/aarwitz/tapp/security/policy
+    about: Report vulnerabilities through the private process in SECURITY.md, not a public issue.
+  - name: Tapp documentation
+    url: https://github.com/aarwitz/tapp#readme
+    about: Start with the Agent Skill, package quickstart, and platform requirements.
