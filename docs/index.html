@@ -131,6 +131,23 @@
   .copybox button:hover { background: color-mix(in srgb, var(--code-fg) 12%, transparent); }
   .copy-note { color: var(--fg-dim); font-size: 0.82rem; min-height: 1.3rem; margin: 0.45rem 0 0; }
 
+  .featured-film { padding: 0 0 4rem; border-top: 0; scroll-margin-top: 4.5rem; }
+  .featured-film figure { margin: 0; }
+  .film-frame {
+    padding: 0.45rem; border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 18px;
+    background: #090b11; box-shadow: 0 28px 75px color-mix(in srgb, var(--fg) 18%, transparent);
+  }
+  .film-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: #090b11; }
+  .film-caption { display: flex; justify-content: space-between; gap: 1.5rem; margin: 0.9rem 0.35rem 0; color: var(--fg-dim); font-size: 0.84rem; }
+  .film-caption strong { color: var(--fg); }
+  @media (max-width: 640px) {
+    .featured-film { padding-bottom: 3.2rem; }
+    .film-frame { padding: 0.28rem; border-radius: 12px; }
+    .film-frame video { border-radius: 8px; }
+    .film-caption { display: block; }
+    .film-caption span { display: block; margin-top: 0.2rem; }
+  }
+
   section { padding: 3.2rem 0; border-top: 1px solid var(--border); }
   section.flush { border-top: none; padding-top: 0; }
   h2 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.5rem; }
@@ -217,6 +234,7 @@
   <div class="wrap">
     <a class="brand" href="/" aria-label="Tapp home"><img src="/assets/tapp-mark.svg" alt="">Tapp<span>.</span></a>
     <nav class="links">
+      <a href="#film">Film</a>
       <a href="#proof">Proof</a>
       <a href="#platforms">Platforms</a>
       <a href="https://github.com/aarwitz/tapp">GitHub</a>
@@ -246,6 +264,23 @@
     Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
   </p>
 </div>
+
+<section class="featured-film" id="film" aria-labelledby="film-title">
+  <div class="wrap">
+    <figure>
+      <div class="film-frame">
+        <video controls playsinline preload="metadata" poster="/assets/tapp-product-film-poster.jpg" aria-describedby="film-caption">
+          <source src="/assets/tapp-product-film.mp4" type="video/mp4">
+          Your browser does not support embedded video. <a href="/assets/tapp-product-film.mp4">Download the Tapp product film.</a>
+        </video>
+      </div>
+      <figcaption class="film-caption" id="film-caption">
+        <strong id="film-title">See Tapp in 90 seconds.</strong>
+        <span>The product vision—then a real, inspectable run below.</span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
 
 <section class="flush" id="proof">
   <div class="wrap">
