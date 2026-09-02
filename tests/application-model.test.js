@@ -164,6 +164,101 @@ test("a successful init Xcode build removes the scheme blocker with portable run
   assert.equal(refreshed.model.requirements.some((item) => item.id.endsWith(":scheme")), false);
 });
 
+test("release-plan refresh regrounds a decided proposal whose id drifted, instead of duplicating it", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-plan-reground-"));
+  write(path.join(root, ".tapp/release-plan.json"), {
+    schemaVersion: 1,
+    kind: "tapp-release-plan",
+    items: [{ id: "proposal-old-hash", name: "dashboard", scope: "website", origin: "proposed", decision: "approved", criticality: "important" }],
+  });
+  // Proposal ids hash targetId, which can shift between refreshes when target detection or
+  // map attribution changes — the regenerated item arrives with a new id but the same
+  // name+scope identity the customer already reviewed.
+  const merged = writeInitArtifacts({
+    root,
+    refresh: true,
+    model: { schemaVersion: 1, kind: "tapp-application-model", targets: [] },
+    plan: {
+      schemaVersion: 1,
+      kind: "tapp-release-plan",
+      review: {},
+      items: [{ id: "proposal-new-hash", name: "dashboard", scope: "website", origin: "proposed", decision: "pending" }],
+    },
+  }).plan;
+  const dashboards = merged.items.filter((item) => item.name === "dashboard" && item.scope === "website");
+  assert.equal(dashboards.length, 1, "the decided item must not survive alongside a re-added pending duplicate");
+  assert.equal(dashboards[0].id, "proposal-old-hash", "plan identity stays stable across the id drift");
+  assert.equal(dashboards[0].decision, "approved");
+  assert.equal(dashboards[0].stale, undefined);
+});
+
+test("decided items from a no-longer-derived scope reground or collapse instead of duplicating", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-plan-vanished-scope-"));
+  // The field-tested shape: `.`-scoped items were once mis-grounded onto the iOS target; after
+  // the attribution fix only `website` derives proposals, but the reviewed `.` decisions remain.
+  write(path.join(root, ".tapp/release-plan.json"), {
+    schemaVersion: 1,
+    kind: "tapp-release-plan",
+    items: [
+      { id: "p-phantom-dash", name: "dashboard", scope: ".", origin: "proposed", decision: "rejected" },
+      { id: "p-phantom-settings", name: "settings", scope: ".", origin: "proposed", decision: "approved" },
+      { id: "p-web-dash", name: "dashboard", scope: "website", origin: "proposed", decision: "approved" },
+    ],
+  });
+  const merged = writeInitArtifacts({
+    root,
+    refresh: true,
+    model: { schemaVersion: 1, kind: "tapp-application-model", targets: [] },
+    plan: {
+      schemaVersion: 1,
+      kind: "tapp-release-plan",
+      review: {},
+      items: [
+        { id: "p-web-dash", name: "dashboard", scope: "website", origin: "proposed", decision: "pending" },
+        { id: "p-web-settings-new", name: "settings", scope: "website", origin: "proposed", decision: "pending" },
+      ],
+    },
+  }).plan;
+  assert.equal(merged.items.length, 2, "the vanished-scope duplicates must not survive as stale copies");
+  const dashboard = merged.items.find((item) => item.name === "dashboard");
+  assert.equal(dashboard.decision, "approved");
+  assert.equal(dashboard.id, "p-web-dash");
+  assert.equal(dashboard.regroundedFromScope, undefined);
+  const settings = merged.items.find((item) => item.name === "settings");
+  assert.equal(settings.decision, "approved", "the vanished-scope decision migrates to the surviving surface");
+  assert.equal(settings.id, "p-phantom-settings", "plan identity follows the reviewed item");
+  assert.equal(settings.regroundedFromScope, ".", "the migration is recorded, not silent");
+  assert.equal(merged.items.some((item) => item.stale), false);
+});
+
+test("a single-iOS-target model accepts build validation recorded against a differently-resolved container", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-build-container-drift-"));
+  write(path.join(root, "App.xcworkspace", "contents.xcworkspacedata"), "<?xml version=\"1.0\"?>");
+  write(path.join(root, "Unshared.xcodeproj", "project.pbxproj"), "// fixture");
+  const initial = await buildInitArtifacts({ projectDir: root, platform: "ios" });
+  assert.equal(initial.model.targets.filter((target) => target.platform === "ios").length, 1);
+  assert.equal(initial.model.targets[0].sourcePath, "App.xcworkspace");
+  writeInitArtifacts({ ...initial, root });
+
+  // A CocoaPods-layout repo models the workspace, but `tapp build MyApp.xcodeproj` records the
+  // explicitly-passed project as the container. With exactly one iOS target the validation is
+  // unambiguous and must apply instead of silently dropping.
+  await persistIosBuildValidation({
+    projectDir: root,
+    bundleId: "com.example.unshared",
+    container: path.join(root, "Unshared.xcodeproj"),
+    scheme: "ConfirmedScheme",
+    configuration: "Debug",
+  });
+  const model = JSON.parse(fs.readFileSync(path.join(root, ".tapp/application-model.json"), "utf8"));
+  assert.equal(model.targets[0].status, "configured");
+  assert.equal(model.targets[0].build.proposedScheme, "ConfirmedScheme");
+
+  const refreshed = await buildInitArtifacts({ projectDir: root, platform: "ios" });
+  assert.equal(refreshed.model.targets[0].status, "configured", "refresh must not re-block on scheme confirmation");
+  assert.equal(refreshed.model.requirements.some((item) => item.id.endsWith(":scheme")), false);
+});
+
 test("a successful standalone Xcode build persists its scheme in an existing application model", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-build-xcode-proof-"));
   const container = path.join(root, "Unshared.xcodeproj");

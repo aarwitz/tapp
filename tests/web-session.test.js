@@ -23,9 +23,14 @@ const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
 
 test("recorded Flow checkpoints reject loading labels and current-date headings", () => {
   assert.equal(isStableFlowCheckpoint("Loading…"), false);
+  assert.equal(isStableFlowCheckpoint("Loading your earnings."), false);
   assert.equal(isStableFlowCheckpoint("Friday, August 21"), false);
   assert.equal(isStableFlowCheckpoint("August 21, 2026"), false);
+  // Week headers roll over every Monday — a range is as volatile as a single date.
+  assert.equal(isStableFlowCheckpoint("AUG 16 - AUG 22, 2026"), false);
+  assert.equal(isStableFlowCheckpoint("Aug 16 – 22"), false);
   assert.equal(isStableFlowCheckpoint("Dashboard"), true);
+  assert.equal(isStableFlowCheckpoint("May Sales Report"), true);
 });
 
 test("shared interactive session drives and captures a real web application", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {

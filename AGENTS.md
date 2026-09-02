@@ -106,7 +106,13 @@ Rules that prevent 90% of failures:
    secret-templated replay step and avoids native secure-field refocus behavior.
 5. Tap results: `ok` (landed), `not_hittable` (exists but disabled/covered — the harness
    auto-dismisses keyboards and retries), `not_found` (nothing matches — re-read the tree).
-6. One session at a time. `session_start` always begins from a fresh app launch.
+6. One session at a time. `session_start` always begins from a fresh **cold** launch
+   (terminate + relaunch, for a deterministic starting screen). Persisted app data such as
+   Keychain credentials survives, but the app opens on its launch screen, not a resumed
+   foreground state — an app that gates each cold start behind sign-in WILL show its login
+   wall, so plan `login` (or a bypass launch argument) as the first act. Plain `tapp tree` /
+   `tapp screenshot` warm-resume the currently foregrounded app instead, which is why they can
+   look signed-in when a fresh session does not.
 
 ## Autonomous exploration (`tapp_explore`)
 
@@ -145,6 +151,11 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   a final screen assertion auto-inserted; typed credentials are templated to `$TEST_EMAIL`/`$TEST_PASSWORD`.
 - **Replay:** `tapp_flow_run { flowPath: ".tapp/flows/checkout.yml" }` — exact steps,
   deterministic assertions, same result every time. A failed assertion is a finding.
+- **Credentials at replay:** pass real values (`testEmail`/`testPassword`, CLI `--email`/
+  `--password`), or name a configured actor (`actor: "coach"`, CLI `--actor coach`) and Tapp
+  resolves `$TEST_EMAIL`/`$TEST_PASSWORD` from the env vars that actor binds. Actors store
+  env-var **names** only — never values. `tapp actor set` refuses to overwrite an existing
+  actor unless you pass `--replace`, so idempotent setup scripts must include it.
 - **Generate:** `tapp_flow_generate { goal: "log in and add the first item to cart" }` —
   grounded in the app's actually-explored screens, so it can't invent steps.
 - **Discover the file format without MCP:** `npx -y @aarwitz/tapp@latest flow example` prints a
@@ -161,6 +172,15 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   and installs from an Xcode project/workspace; or the user's normal build).
 - A simulator must be booted (`tapp_list_simulators` → `tapp_boot_simulator`).
 - Screenshots/captures land in `~/.tapp/captures/`.
+- Driving `tapp mcp` from a raw stdio client: **consume or discard stderr** — the server logs
+  progress there, and an unread stderr pipe can deadlock a naive client. The first
+  `tapp_session_start` on a cold machine includes the one-time harness build, so it can take
+  minutes before the first result arrives; that is startup cost, not a hang.
+- Managed web targets always bind `127.0.0.1` and prefer the repository's declared or framework
+  default port (vite → 5173, next → 3000). If the app's backend uses a CORS allowlist, pin the
+  origin with `"web": { "port": 5173 }` in `.tapp/project.json` — an unexpected port surfaces as
+  misleading fetch/CORS findings, and a busy pinned port is a hard error, never a silent
+  ephemeral fallback.
 
 ## Honesty rules
 

@@ -348,7 +348,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@v0.17.3 # or pin the reviewed release commit SHA
+      - uses: aarwitz/tapp@v0.17.4 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -398,7 +398,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.3 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.4 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app

@@ -19,7 +19,7 @@ function exec(cmd, args, timeoutMs = 60_000) {
 // caches tag-resolved installs (`@latest` can serve a stale engine forever), and the
 // tool contract (tapp_build shape, target resolution) must match what the bridge expects.
 // Bump together with the extension version. TAPP_ENGINE_SPEC overrides for development.
-const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.3";
+const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.4";
 
 class TappBridge {
   constructor({ cwd, command, args } = {}) {

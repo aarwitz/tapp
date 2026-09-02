@@ -22,7 +22,7 @@ function cleanActor(actor) {
 export function validateProjectConfig(config) {
   const errors = [];
   if (!config || typeof config !== "object" || Array.isArray(config)) return ["Project configuration must be an object"];
-  for (const key of Object.keys(config)) if (!["kind", "schemaVersion", "actors", "lifecycle", "provenance"].includes(key)) errors.push(`unsupported project configuration field '${key}'`);
+  for (const key of Object.keys(config)) if (!["kind", "schemaVersion", "actors", "lifecycle", "provenance", "web"].includes(key)) errors.push(`unsupported project configuration field '${key}'`);
   if (config.kind !== "tapp-project-config") errors.push("kind must be 'tapp-project-config'");
   if (config.schemaVersion !== 1) errors.push("schemaVersion must be 1");
   if (config.actors !== undefined && (!config.actors || typeof config.actors !== "object" || Array.isArray(config.actors))) errors.push("actors must be an object");
@@ -41,6 +41,13 @@ export function validateProjectConfig(config) {
       if (!CREDENTIAL_NAME.test(credential)) errors.push(`actor '${name}' credential '${credential}' has an invalid name`);
       if (!binding || typeof binding !== "object" || Array.isArray(binding) || !ENV_NAME.test(String(binding.env || ""))) errors.push(`actor '${name}' credential '${credential}' must define env with an uppercase environment-variable name`);
       for (const key of Object.keys(binding || {})) if (key !== "env") errors.push(`actor '${name}' credential '${credential}' may contain only env; credential values are forbidden`);
+    }
+  }
+  if (config.web !== undefined) {
+    if (!config.web || typeof config.web !== "object" || Array.isArray(config.web)) errors.push("web must be an object");
+    else {
+      for (const key of Object.keys(config.web)) if (key !== "port") errors.push(`web has unsupported field '${key}'; the managed web host is always 127.0.0.1`);
+      if (config.web.port !== undefined && (!Number.isInteger(config.web.port) || config.web.port < 1 || config.web.port > 65535)) errors.push("web.port must be an integer between 1 and 65535");
     }
   }
   if (config.lifecycle !== undefined && (!config.lifecycle || typeof config.lifecycle !== "object" || Array.isArray(config.lifecycle))) errors.push("lifecycle must be an object");

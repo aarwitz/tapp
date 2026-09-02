@@ -48,6 +48,11 @@ npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for 
 - `tapp_focus`: source-locate a named screen/control and execute the shortest observed route in the active session.
 - `tapp_ui_tree` / `tapp_screenshot`: inspect the current real surface.
 - `tapp_session_start` → `tapp_session_act` → `tapp_session_end`: drive one persistent journey.
+  Sessions begin from a **cold** launch: persisted data survives, but an app that gates each cold
+  start behind sign-in shows its login wall first — make `{action:"login"}` the first act (plain
+  `tapp_ui_tree`/`tapp_screenshot` warm-resume the foregrounded app, so they can look signed-in
+  when a fresh session does not). A `tree` act accepts `full:true` for the complete raw element
+  list when the default ≤160-element projection might omit the text you are checking for.
 - `tapp_explore`: autonomous iOS, Android, or web exploration; observation only.
 - `tapp_flow_save` / `tapp_flow_run`: save a driven journey and replay it deterministically.
 - `tapp_release_contract`: validate, compile, or run a reviewed business guarantee.
@@ -82,6 +87,10 @@ For autonomous exploration, pass test-only values when authorized:
 - CLI: `--email`, `--password`, repeated `--launch-arg`, and JSON `--launch-env`.
 - MCP: `testEmail`, `testPassword`, `inputOverrides`, `appLaunchArgs`, `appLaunchEnv`, or explicit
   `loginSteps`.
+- Reusable: `tapp actor set NAME --email-env ENV --password-env ENV` stores env-var **names**
+  (never values); Flow replay resolves them via `tapp flow run FILE --actor NAME` or
+  `tapp_flow_run {actor:"NAME"}`. Re-running `actor set` on an existing actor requires
+  `--replace` — idempotent setup scripts must include it.
 
 Do not persist secrets in `.tapp/`. If the result reports input fields and no values were supplied,
 ask the user rather than pretending the explored surface was complete.

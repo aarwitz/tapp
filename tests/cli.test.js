@@ -34,6 +34,28 @@ test("Flow CLI only advertises evidence after a runner writes artifacts", () => 
   assert.match(flowCommand, /Evidence unavailable — the platform runner did not write any artifacts/);
 });
 
+test("flow run --actor resolves credentials from configured env-var bindings", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-actor-"));
+  const env = { ...process.env, TAPP_HOME: path.join(dir, "home") };
+  delete env.TAPP_TEST_COACH_EMAIL;
+  delete env.TAPP_TEST_COACH_PASSWORD;
+  fs.writeFileSync(path.join(dir, "smoke.yml"), "name: smoke\nplatform: web\nurl: http://127.0.0.1:9/\nsteps:\n  - wait_for: Home\n");
+
+  const unknown = spawnSync("node", [tappBin, "flow", "run", "smoke.yml", "--actor", "coach"], { cwd: dir, env, encoding: "utf8" });
+  assert.equal(unknown.status, 2);
+  assert.match(unknown.stderr, /Actor 'coach' is not configured/);
+
+  fs.mkdirSync(path.join(dir, ".tapp"), { recursive: true });
+  fs.writeFileSync(path.join(dir, ".tapp", "project.json"), JSON.stringify({
+    kind: "tapp-project-config",
+    schemaVersion: 1,
+    actors: { coach: { role: "coach", session: "default", provisioning: "existing", credentials: { email: { env: "TAPP_TEST_COACH_EMAIL" }, password: { env: "TAPP_TEST_COACH_PASSWORD" } } } },
+  }, null, 2));
+  const unset = spawnSync("node", [tappBin, "flow", "run", "smoke.yml", "--actor", "coach"], { cwd: dir, env, encoding: "utf8" });
+  assert.equal(unset.status, 2, "a bound but unset env var must refuse the run, not replay with placeholder credentials");
+  assert.match(unset.stderr, /TAPP_TEST_COACH_EMAIL/);
+});
+
 test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
   // Core leads with the user journey while keeping contract replay and the gate visible.

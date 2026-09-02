@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.17.4
+
+**Field-report fixes: every filed finding from the first real adoption sessions is closed.**
+
+- Keep the release plan honest across refreshes: a decided proposal whose generated id drifted, or
+  whose scope is no longer derived at all, regrounds onto the surviving same-name item (recorded
+  via `regroundedFromScope`) or drops as a duplicate instead of lingering as a stale copy beside a
+  re-added pending twin. Committed and promoted items always carry.
+- Apply a successful build's scheme confirmation to a single-iOS-target repository even when the
+  build resolved a different Xcode container than the model, so `init --refresh` stops re-blocking
+  on an already-confirmed scheme.
+- Resolve Flow replay credentials from a configured actor's environment-variable bindings
+  (`tapp flow run FILE --actor NAME`, MCP `actor`); explicit values still win, and a bound but
+  unset variable refuses the run instead of replaying with placeholders.
+- Let coordinate taps fall back to a labelled control that reports itself non-hittable at its own
+  center (custom tab bars), routing into the harness's retrying element tap instead of a dead raw
+  coordinate tap — containers are never hijacked.
+- Add a full raw session tree (`tree` with `full: true`), exclude date ranges such as week headers
+  from auto-recorded wait targets, and pin the managed web port with `web.port` in
+  `.tapp/project.json` for CORS-exact origins (busy or contradicted pins fail loudly; the host
+  stays 127.0.0.1).
+- Document the cold-launch session contract (fresh sessions show an app's login wall; CLI
+  inspection warm-resumes), stderr consumption for raw stdio MCP clients, first-session harness
+  build time, and `actor set --replace` on the agent-facing surfaces.
+
 ## 0.17.3
 
 **Public proof and a safer first contact.**

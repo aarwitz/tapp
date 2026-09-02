@@ -634,9 +634,9 @@ export function agentFacingElements(elements, limit = 160) {
   return result;
 }
 
-function agentScreenProjection(screen) {
+function agentScreenProjection(screen, { full = false } = {}) {
   const all = screen?.elements || [];
-  const elements = agentFacingElements(all);
+  const elements = full ? all : agentFacingElements(all);
   return {
     screenTitle:screen?.screenTitle ?? null,
     elementCount:elements.length,
@@ -843,22 +843,32 @@ export function isStableFlowCheckpoint(value) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   if (!text || /^(loading|fetching|please wait|preparing|connecting|syncing|signing in)(?:[.…!]*|\s.*)$/i.test(text)) return false;
   if (/^(?:mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?|sun)(?:day)?\b/i.test(text)) return false;
-  if (/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:,\s+\d{4})?$/i.test(text)) return false;
+  // Single dates ("Aug 16, 2026") and date ranges ("AUG 16 - AUG 22, 2026") both roll over on
+  // the calendar, so neither is a stable replay checkpoint.
+  const monthDay = "(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\s+\\d{1,2}";
+  if (new RegExp(`^${monthDay}(?:,\\s+\\d{4})?(?:\\s*[-–—]\\s*(?:${monthDay}|\\d{1,2})(?:,\\s+\\d{4})?)?$`, "i").test(text)) return false;
   if (/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/.test(text)) return false;
   return true;
 }
 
 export function semanticTargetAtPoint(elements, x, y) {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return "";
-  return (elements || [])
+  const containing = (elements || [])
     .filter((element) => {
       const frame = element.frame || {};
-      return element.hittable !== false && Number.isFinite(frame.x) && Number.isFinite(frame.y) && Number.isFinite(frame.width) && Number.isFinite(frame.height)
+      return Number.isFinite(frame.x) && Number.isFinite(frame.y) && Number.isFinite(frame.width) && Number.isFinite(frame.height)
         && x >= frame.x && y >= frame.y && x <= frame.x + frame.width && y <= frame.y + frame.height
         && String(element.id || element.identifier || element.label || "").trim();
     })
-    .sort((a, b) => (a.frame.width * a.frame.height) - (b.frame.width * b.frame.height))
-    .map((element) => String(element.id || element.identifier || element.label || "").trim())[0] || "";
+    .sort((a, b) => (a.frame.width * a.frame.height) - (b.frame.width * b.frame.height));
+  // Prefer a hittable match. A labelled control that reports hittable=false at its own
+  // tree-reported center (custom tab bars over safe-area insets do this) still responds to an
+  // element tap, which retries in the harness — so fall back to it rather than firing a raw
+  // coordinate tap that lands on nothing. Containers stay excluded: redirecting a coordinate
+  // tap to the center of a large labelled group would change where the tap lands.
+  const best = containing.find((element) => element.hittable !== false)
+    || containing.find((element) => /button|link|cell|tab|switch|checkbox|toggle|textfield|securetext|textarea|edittext|segmented|menuitem/i.test(`${element.role || ""} ${element.type || ""}`));
+  return best ? String(best.id || best.identifier || best.label || "").trim() : "";
 }
 
 /** Append a Flow step for an act (record-by-doing). Inserts wait_for on screen change for
@@ -2258,8 +2268,21 @@ export async function startManagedWebTarget({ root, requestedTarget = "", timeou
   const dependencies = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
   const declaredPort = startMatch ? declaredPortFromStartScript(pkg.scripts?.[startMatch[1]]) : 0;
   const frameworkPort = declaredPort ? 0 : managedWebDefaultPort(dependencies);
-  const port = declaredPort || (frameworkPort && await localPortAvailable(frameworkPort) ? frameworkPort : await openLocalPort());
-  const portBasis = declaredPort ? "repository-declared" : port === frameworkPort ? "framework-default" : "available-ephemeral";
+  // An explicit `.tapp/project.json` web.port pin outranks everything: backends with a CORS
+  // allowlist need the managed origin to be exact, so a busy pinned port is a hard error, never
+  // a silent ephemeral fallback that would resurface as fetch/CORS findings.
+  const { readProjectConfig } = await import("./project-config.js");
+  const projectConfig = readProjectConfig(root);
+  if (projectConfig.exists && projectConfig.errors.length) return { error: `Invalid ${projectConfig.relativePath}: ${projectConfig.errors.join("; ")}` };
+  const pinnedPort = Number(projectConfig.config?.web?.port) || 0;
+  if (pinnedPort && declaredPort && pinnedPort !== declaredPort) {
+    return { error: `${projectConfig.relativePath} pins the managed web port to ${pinnedPort}, but the repository start script declares port ${declaredPort}`, details: { remediation: "Align web.port with the start script (or remove one of them) so the managed origin is unambiguous." } };
+  }
+  if (pinnedPort && !(await localPortAvailable(pinnedPort))) {
+    return { error: `${projectConfig.relativePath} pins the managed web port to ${pinnedPort}, but that port is already in use`, details: { remediation: "Stop the process holding the port, change web.port, or provide an already-running owned --url." } };
+  }
+  const port = pinnedPort || declaredPort || (frameworkPort && await localPortAvailable(frameworkPort) ? frameworkPort : await openLocalPort());
+  const portBasis = pinnedPort ? "project-pinned" : declaredPort ? "repository-declared" : port === frameworkPort ? "framework-default" : "available-ephemeral";
   let command = "npm";
   let startArgs;
   let startDir = projectDir;
@@ -2846,7 +2869,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "Opt-in AI assertion: {assert_ai: '<claim about the current screen>'} (judged host-side; needs a key; " +
         "skipped otherwise). Pass a flow inline via `flow`, or a repo-relative `flowPath` to a .yml/.json. " +
         "A failed assertion fails the flow and is reported like a QA finding. $TEST_EMAIL/$TEST_PASSWORD and any " +
-        "flow `vars` are substituted; pass testEmail/testPassword for real credential values.",
+        "flow `vars` are substituted; pass testEmail/testPassword for real credential values, or `actor` to " +
+        "resolve them from a configured actor's environment-variable bindings.",
       inputSchema: {
         type: "object",
         properties: {
@@ -2865,6 +2889,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           androidSerial: { type: "string", description: "Android adb device serial." },
           testEmail: { type: "string", description: "Value for $TEST_EMAIL" },
           testPassword: { type: "string", description: "Value for $TEST_PASSWORD" },
+          actor: { type: "string", description: "Configured actor name; resolves $TEST_EMAIL/$TEST_PASSWORD from the actor's env-var bindings (explicit testEmail/testPassword win)" },
         },
       },
     },
@@ -3040,7 +3065,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "launch per action. Returns the initial screen {screenTitle, elements[]}. Drive it with " +
         "tapp_focus for any named destination (source + shortest observed route), then tapp_session_act only for remaining actions; finish with tapp_session_end. " +
         "For a focused user request, ALWAYS pass it in `focus` so the session reaches that surface before returning. Only one session at a time. Starts from a " +
-        "fresh launch. Use appLaunchArgs/appLaunchEnv for apps that need a backend override or login bypass. " +
+        "fresh COLD launch (terminate + relaunch, for a deterministic starting screen): persisted data such as Keychain credentials survives, but the app opens on its " +
+        "launch screen, NOT a resumed foreground state — an app that gates each cold start behind sign-in will show its login wall, so plan a `login` act (or a login bypass " +
+        "launch argument) as the first step. CLI `tapp tree`/`tapp screenshot` warm-resume the currently foregrounded app instead, which is why they can look signed-in when a session does not. " +
+        "Use appLaunchArgs/appLaunchEnv for apps that need a backend override or login bypass. " +
         "When you reach a screen with input fields and don't have values for them, ASK THE USER what to type " +
         "(offer defaults/skip) before typing — the session does not prompt on its own.",
       inputSchema: {
@@ -3091,8 +3119,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "on refocus, so step-by-step login flows lose the password), 'tap' (by `id` = accessibility identifier " +
         "or visible/partial label or placeholder, or by `x`/`y` coordinates), 'type' (`text`, optional `id` to " +
         "target a field — always REPLACES the field's content), 'swipe' (`direction`), 'back', 'wait' (block " +
-        "until an element with `id`/`text` appears, up to `timeoutMs`), 'tree' (re-inspect without acting), " +
-        "'screenshot'. Returns {status, screenTitle, elements[]}; status 'not_found'/'timeout'/'still_on_login' " +
+        "until an element with `id`/`text` appears, up to `timeoutMs`), 'tree' (re-inspect without acting; " +
+        "pass `full: true` for every raw element with frames — the default projection dedupes and caps at " +
+        "160 elements, so grep-style checks against it can miss text that IS on screen), " +
+        "'screenshot'. Returns {status, screenTitle, elements[], durationMs}; status 'not_found'/'timeout'/'still_on_login' " +
         "etc. with a `detail` explaining login failures.",
       inputSchema: {
         type: "object",
@@ -3107,6 +3137,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           text: { type: "string", description: "Text to type, or the label/text to wait for" },
           direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Swipe direction" },
           timeoutMs: { type: "integer", minimum: 500, maximum: 60000, default: 5000, description: "For 'wait': how long to poll for the element" },
+          full: { type: "boolean", default: false, description: "For 'tree': return the complete raw element list (frames included) instead of the deduplicated agent-facing projection capped at 160 elements" },
           label: { type: "string", description: "Optional screenshot label" },
         },
         required: ["action"],
@@ -3927,6 +3958,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const runEnv = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (isNonEmptyString(args.testEmail)) runEnv.OCQA_TEST_EMAIL = args.testEmail.trim();
     if (isNonEmptyString(args.testPassword)) runEnv.OCQA_TEST_PASSWORD = args.testPassword.trim();
+    if (isNonEmptyString(args.actor)) {
+      const { readProjectConfig } = await import("./project-config.js");
+      const loaded = readProjectConfig(workspaceRoot);
+      if (loaded.errors.length) return errorResult(`Invalid ${loaded.relativePath}: ${loaded.errors.join("; ")}`);
+      const actor = loaded.config.actors?.[args.actor.trim()];
+      if (!actor) return errorResult(`Actor '${args.actor.trim()}' is not configured in ${loaded.relativePath}`, { hint: "Configure it with tapp_actor_set / tapp actor set first" });
+      // Actors store env-var NAMES only; resolve values here. Explicit testEmail/testPassword win.
+      for (const [credential, argName, envKey] of [["email", "testEmail", "OCQA_TEST_EMAIL"], ["password", "testPassword", "OCQA_TEST_PASSWORD"]]) {
+        if (isNonEmptyString(args[argName])) continue;
+        const binding = actor.credentials?.[credential];
+        if (!binding) continue;
+        const value = process.env[binding.env];
+        if (!value) return errorResult(`Actor '${args.actor.trim()}' binds ${credential} to $${binding.env}, but that environment variable is not set in the MCP server's environment.`);
+        runEnv[envKey] = value;
+      }
+    }
     let run = { stdout: "", stderr: "", code: 0 };
     if (platform === "web") {
       try {
@@ -4376,7 +4423,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
-    const screen = agentScreenProjection(r);
+    const screen = agentScreenProjection(r, { full: action === "tree" && args.full === true });
     const result = richResult(head + "\n\n" + formatScreen(screen.screenTitle, screen.elements) + rec, { ...r, ...screen });
     if (!ok) result.isError = true;
     return result;

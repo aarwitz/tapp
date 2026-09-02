@@ -91,8 +91,15 @@ function applyRuntimeTargetValidation(root, targets, validation) {
   if (!container || !scheme || !bundleId) return targets;
   const captureId = String(validation.evidence?.captureId || "").trim();
   const explored = !!captureId;
+  // The build records the container findXcodeContainer resolved (shallowest workspace-first),
+  // which can differ from the modeled sourcePath in a repo exposing both a workspace and a
+  // project. With exactly one iOS target there is no ambiguity — apply the validation rather
+  // than silently dropping it and re-blocking on scheme confirmation after every refresh.
+  const iosTargets = targets.filter((target) => target.platform === "ios");
+  const pathMatched = iosTargets.some((target) => posix(target.sourcePath) === container);
   return targets.map((target) => {
-    if (target.platform !== "ios" || posix(target.sourcePath) !== container) return target;
+    if (target.platform !== "ios") return target;
+    if (posix(target.sourcePath) !== container && (pathMatched || iosTargets.length !== 1)) return target;
     return {
       ...target,
       status: "configured",
@@ -917,12 +924,25 @@ function mergePlanDecisions(next, prior, { invalidateValidation = false } = {}) 
     priorByNameScope.set(key, list);
   }
   const consumedPriorIds = new Set();
+  const derivedScopes = new Set(next.items.map((item) => item.scope || "."));
   const carried = next.items.map((item) => {
     const exact = priorItems.get(item.id);
     const lineage = item.origin === "committed"
       ? (priorByNameScope.get(`${item.scope || "."}|${item.name}`) || []).find((candidate) => candidate.origin === "promoted-validated" || candidate.generation?.status === "promoted")
       : null;
-    const previous = exact || lineage;
+    // Proposal ids hash the node's targetId, which can drift between refreshes when target
+    // detection or map attribution shifts. Without name+scope regrounding, that drift strands
+    // the reviewed item as stale AND re-adds the same proposal as pending — a duplicate the
+    // customer already decided.
+    const sameNameScope = exact || lineage ? [] : (priorByNameScope.get(`${item.scope || "."}|${item.name}`) || []).filter((candidate) => !consumedPriorIds.has(candidate.id));
+    const regrounded = sameNameScope.find((candidate) => candidate.decision && candidate.decision !== "pending") || sameNameScope[0] || null;
+    // When a scope stops being derived entirely (its target no longer grounds any proposals — the
+    // mis-attribution case), a decided same-name item from that vanished scope carries the
+    // customer's decision onto the surviving surface instead of lingering as a stale duplicate
+    // beside a re-added pending twin. The migration is recorded via regroundedFromScope.
+    const crossScope = exact || lineage || regrounded ? null
+      : (prior.items || []).find((candidate) => !consumedPriorIds.has(candidate.id) && candidate.name === item.name && !derivedScopes.has(candidate.scope || ".") && candidate.decision && candidate.decision !== "pending") || null;
+    const previous = exact || lineage || regrounded || crossScope;
     if (!previous) return item;
     consumedPriorIds.add(previous.id);
     if (exact && lineage && exact.id !== lineage.id) consumedPriorIds.add(lineage.id);
@@ -936,10 +956,20 @@ function mergePlanDecisions(next, prior, { invalidateValidation = false } = {}) 
     // A reviewed proposal becomes a committed contract without becoming a different
     // customer decision. Preserve its original plan identity so browser links, CLI
     // item selectors, and review history remain stable across promotion refreshes.
-    return { ...item, id: previous.id, ...human };
+    return { ...item, id: previous.id, ...human, ...(crossScope ? { regroundedFromScope: previous.scope || "." } : {}) };
   });
   const currentIds = new Set(carried.map((item) => item.id));
-  for (const previous of prior.items || []) if (!currentIds.has(previous.id) && !consumedPriorIds.has(previous.id) && previous.decision && previous.decision !== "pending") carried.push({ ...previous, stale: true, status: "not-derived-on-refresh" });
+  const survivorNames = new Set(carried.map((item) => item.name));
+  for (const previous of prior.items || []) {
+    if (currentIds.has(previous.id) || consumedPriorIds.has(previous.id) || !previous.decision || previous.decision === "pending") continue;
+    const committed = previous.origin === "committed" || previous.origin === "promoted-validated" || previous.generation?.status === "promoted";
+    // A decided proposal whose scope is no longer derived duplicates the surviving same-name
+    // decision — drop the duplicate rather than carrying it as stale forever. If that scope is
+    // re-derived later, its proposals return as pending review; the failure direction is more
+    // human review, never a silently granted decision. Committed/promoted items always carry.
+    if (!committed && !derivedScopes.has(previous.scope || ".") && survivorNames.has(previous.name)) continue;
+    carried.push({ ...previous, stale: true, status: "not-derived-on-refresh" });
+  }
   let generation = prior.generation;
   if (invalidateValidation && generation) generation = {
     ...generation,

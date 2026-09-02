@@ -270,7 +270,7 @@ function safeCommandUsage(verb) {
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--email VALUE] [--password VALUE]",
+    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE]",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]",
     scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]",
@@ -279,7 +279,7 @@ function safeCommandUsage(verb) {
     plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]",
     baseline: "tapp baseline create [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
     ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]",
-    actor: "tapp actor set NAME --email-env ENV --password-env ENV [--project-dir DIR]\ntapp actor list [repo]",
+    actor: "tapp actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
     doctor: "tapp doctor",
@@ -1111,7 +1111,7 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp flow example\n       tapp flow run <flow.yml> [--platform ios|android|web] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
+      console.error("usage: tapp flow example\n       tapp flow run <flow.yml> [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
       process.exit(2);
     }
     const absolute = path.resolve(flowPath);
@@ -1146,6 +1146,28 @@ switch (command) {
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (typeof flags.email === "string") env.OCQA_TEST_EMAIL = flags.email;
     if (typeof flags.password === "string") env.OCQA_TEST_PASSWORD = flags.password;
+    if (typeof flags.actor === "string" && flags.actor) {
+      const { readProjectConfig } = await import(path.join(packageRoot, "mcp-server", "src", "project-config.js"));
+      const loaded = readProjectConfig(process.cwd());
+      if (loaded.errors.length) { console.error(`❌ Invalid ${loaded.relativePath}: ${loaded.errors.join("; ")}`); process.exit(2); }
+      const actor = loaded.config.actors?.[flags.actor];
+      if (!actor) {
+        console.error(`❌ Actor '${flags.actor}' is not configured in ${loaded.relativePath}. Run from the repository root, or configure it: tapp actor set ${flags.actor} --email-env ENV --password-env ENV`);
+        process.exit(2);
+      }
+      // Actors store env-var NAMES only; resolve the values here. Explicit --email/--password win.
+      for (const [credential, flagName, envKey] of [["email", "email", "OCQA_TEST_EMAIL"], ["password", "password", "OCQA_TEST_PASSWORD"]]) {
+        if (typeof flags[flagName] === "string") continue;
+        const binding = actor.credentials?.[credential];
+        if (!binding) continue;
+        const value = process.env[binding.env];
+        if (!value) {
+          console.error(`❌ Actor '${flags.actor}' binds ${credential} to $${binding.env}, but that environment variable is not set.`);
+          process.exit(2);
+        }
+        env[envKey] = value;
+      }
+    }
     let invocation;
     if (platform === "web") {
       const url = typeof flags.url === "string" ? flags.url : flow.url || flow.app;

@@ -95,7 +95,11 @@ derived lockfile-backed install command, runs its declared build script when pre
 `start`, `dev`, `serve`, or `preview` package script with argument-array process execution (never
 generated shell source). A static site with no script uses Tapp's local read-only static server. The
 runtime binds to an available loopback port, writes its log under the Tapp runtime directory, and is
-terminated after exploration even when QA fails. Multiple web targets, an unlocked dependency
+terminated after exploration even when QA fails. Port precedence is: an explicit
+`"web": { "port": N }` pin in `.tapp/project.json`, then a port declared by the start script, then
+the framework default (vite 5173, next 3000), then an ephemeral port. Pin the port when a backend
+CORS allowlist expects a fixed origin; a busy or contradicted pin is a hard startup error rather
+than a silent fallback that would resurface as fetch/CORS findings. The host is always `127.0.0.1`. Multiple web targets, an unlocked dependency
 graph, an unrecognized start path, or backend-specific configuration produce explicit remediation;
 provide `--target` and/or an already-running owned `--url` in those cases. Running repository build
 scripts executes repository code and should only be used for a checkout the customer trusts.

@@ -60,6 +60,18 @@ test("coordinate session taps resolve to the smallest semantic element under the
   assert.equal(target, "settings-tab");
 });
 
+test("coordinate session taps fall back to a labelled non-hittable control, never a container", () => {
+  const elements = [
+    { id:"root", label:"Feed", hittable:false, type:"Group", frame:{ x:0, y:0, width:400, height:800 } },
+    { id:"Message", label:"Message", hittable:false, type:"Button", frame:{ x:320, y:740, width:70, height:50 } },
+  ];
+  // A custom tab button can report hittable=false at its own center yet respond to an element
+  // tap; resolve it so the harness retry path takes over instead of a dead raw coordinate tap.
+  assert.equal(engine.semanticTargetAtPoint(elements, 355, 765), "Message");
+  // But a labelled non-hittable container must not hijack a tap aimed at empty space inside it.
+  assert.equal(engine.semanticTargetAtPoint(elements, 200, 300), "");
+});
+
 test("engine is import-safe and exports the shared surface", () => {
   for (const name of [
     "startMcpServer",

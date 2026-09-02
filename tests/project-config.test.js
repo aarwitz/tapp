@@ -31,6 +31,15 @@ test("project configuration rejects values, malformed environment names, and cro
   assert.match(validateProjectConfig({ ...base, lifecycle: { setup: [{ request: { path: "//other.test/reset" } }] } }).join("; "), /same-origin/);
 });
 
+test("project configuration accepts a managed web port pin and rejects host overrides", () => {
+  const base = { kind: "tapp-project-config", schemaVersion: 1 };
+  assert.deepEqual(validateProjectConfig({ ...base, web: { port: 5173 } }), []);
+  assert.match(validateProjectConfig({ ...base, web: { port: 0 } }).join("; "), /between 1 and 65535/);
+  assert.match(validateProjectConfig({ ...base, web: { port: "5173" } }).join("; "), /between 1 and 65535/);
+  assert.match(validateProjectConfig({ ...base, web: { host: "0.0.0.0" } }).join("; "), /always 127\.0\.0\.1/);
+  assert.match(validateProjectConfig({ ...base, web: [] }).join("; "), /web must be an object/);
+});
+
 test("contract credential placeholders become non-secret environment bindings", () => {
   assert.deepEqual(credentialBindingsFromValue({ email: "$ALICE_EMAIL", password: "$ALICE_PASSWORD", token: "literal" }), { email: "ALICE_EMAIL", password: "ALICE_PASSWORD" });
 });
