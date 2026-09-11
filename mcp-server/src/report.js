@@ -295,6 +295,7 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     : timeBudgetExhausted ? "time-budget-exhausted"
     : !coverageFloorMet ? "coverage-floor-not-met"
     : driverStop === "frontier-drained" ? "no-unexplored-in-scope-controls"
+    : driverStop === "probe-cap" ? "probe-cap-reached"
     : "completed";
 
   const headline = timeBudgetExhausted
@@ -320,12 +321,12 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404, same-origin crawl)",
       "placeholder links and anchors with no destination", "sampled dead-button probes (advisory)", "error text on pages", "load timeouts",
     ];
-    if (outbound && !outbound.skipped && (outbound.total || outbound.mailtos)) {
+    if (outbound && outbound.total) {
       checkedFor.push(outbound.total > outbound.checked
-        ? `outbound link reachability — DNS · HTTP · unavailable-shell heuristic (first ${outbound.checked} of ${outbound.total})`
-        : "outbound link reachability (DNS · HTTP · unavailable-shell heuristic)");
-      if (outbound.mailtos) checkedFor.push("mailto address domains (MX/A records)");
+        ? `outbound link reachability — browser-rendered · DNS · HTTP · unavailable-shell heuristic (first ${outbound.checked} of ${outbound.total})`
+        : "outbound link reachability (browser-rendered · DNS · HTTP · unavailable-shell heuristic)");
     }
+    if (outbound?.mailtos && !outbound.mailtoSkipped) checkedFor.push("mailto address domains (MX/A records)");
     notChecked = [
       "app-specific business logic (cover with Flows: record or generate, then assert)",
       "content and claim accuracy (including copy versus API data)",
@@ -335,8 +336,8 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       "only the first few visible buttons per page are probed (web beta)",
       "content & reachability regressions require a baseline",
     ];
-    if (outbound?.skipped === "egress-policy") notChecked.push("outbound links and mailto domains (skipped by the public-egress policy)");
-    else if (!outbound || (!outbound.total && !outbound.mailtos)) conditionsNotReached.push("outbound links (none encountered this run)");
+    if (outbound?.mailtoSkipped === "egress-policy") notChecked.push("mailto address domains (MX lookups are skipped by the public-egress policy)");
+    if (!outbound || (!outbound.total && !outbound.mailtos)) conditionsNotReached.push("outbound links (none encountered this run)");
     if (inputFieldsEncountered.length && !loginAttempted) {
       notChecked.push(`form submission (${inputFieldsEncountered.reduce((n, s) => n + s.fields.length, 0)} field(s) catalogued, none submitted)`);
     }
@@ -543,7 +544,11 @@ export function computeRegression(current, baseline) {
 // the evidence." Exit codes are the CI contract; precedence is fail > inconclusive > pass.
 export const GATE_EXIT = { pass: 0, fail: 1, error: 2, inconclusive: 3 };
 // Bump when the gate's decision semantics change (NOT the npm version). Recorded on every GateRun.
-export const GATE_POLICY_VERSION = "2";
+// v3: `failOn` gained severity thresholds ("high" | "medium") that block on any deterministic-tier
+// finding at or above that severity, and the CLI defaults web targets to `medium` — a 404 in the
+// nav is the release blocker on a website, and a field-tested green PASS over six deterministic
+// findings was exactly the dishonest verdict this product refuses to render.
+export const GATE_POLICY_VERSION = "3";
 
 // Pure gate evaluator: frozen evidence + policy → a GateRun decision. Extracted verbatim from the
 // former inline logic in ci-report.js so the `[char]` characterization tests keep passing — the
@@ -591,6 +596,13 @@ export function evaluateGate({ report, regression = null, flows = [], scenarios 
   if (failOn === "any") {
     if (report.findingCounts.total > 0) fail(`${report.findingCounts.total} finding(s) (fail-on: any)`);
     // "any" is the strictest policy — an inconclusive run (evidence not obtained) must never pass it.
+    if (report.inconclusive) inconclusive("run was inconclusive (coverage floor not met)");
+  } else if (failOn === "medium" || failOn === "high") {
+    // Severity thresholds are absolute over the deterministic tier: anything at or above the
+    // requested severity blocks, baseline or not. Sampled/advisory findings never participate.
+    const counts = report.deterministicFindingCounts || {};
+    const blocking = (counts.critical || 0) + (counts.high || 0) + (failOn === "medium" ? counts.medium || 0 : 0);
+    if (blocking > 0) fail(`${blocking} deterministic finding(s) at or above ${failOn} severity (fail-on: ${failOn})`);
     if (report.inconclusive) inconclusive("run was inconclusive (coverage floor not met)");
   } else if (failOn === "absolute" || (failOn === "gate" && !regression)) {
     if (findingsBlock(report.deterministicFindingCounts, { inconclusive: report.inconclusive })) fail("blocking deterministic finding(s)");

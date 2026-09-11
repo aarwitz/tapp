@@ -466,23 +466,26 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
     }
     const observed = await page.evaluate(() => {
       const visible = (element) => element.offsetParent !== null;
-      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, [role=button], [role=tab], [role=checkbox], [role=switch]")]
+      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, summary, [role=button], [role=tab], [role=checkbox], [role=switch]")]
         .filter((element) => element.type !== "hidden" && visible(element))
         .slice(0, 80)
         .map((element) => {
           const tag = element.tagName.toLowerCase();
           const field = ["input", "textarea", "select"].includes(tag);
           const secure = element.type === "password";
-          const role = element.getAttribute("role") || (tag === "a" ? "link" : tag === "button" ? "button" : "");
+          const role = element.getAttribute("role") || (tag === "a" ? "link" : tag === "button" || tag === "summary" ? "button" : "");
           const label = (element.labels?.[0]?.textContent || element.getAttribute("aria-label") || element.textContent || element.placeholder || element.name || element.id || "").trim().slice(0, 120);
+          const box = element.getBoundingClientRect();
           return {
-            type: field ? (secure ? "SecureTextField" : "TextField") : "Button",
+            // `type` stays faithful so an agent follows links and presses buttons, not vice versa.
+            type: field ? (secure ? "SecureTextField" : "TextField") : tag === "a" ? "Link" : "Button",
             role,
             label,
             identifier: element.id || element.getAttribute("data-testid") || element.getAttribute("aria-label") || "",
             isEnabled: !element.disabled && element.getAttribute("aria-disabled") !== "true",
             hittable: true,
             secure,
+            rect: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) },
           };
         })
         .filter((control) => control.label || control.identifier);
@@ -581,9 +584,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   const deadline = Date.now() + timeoutSec * 1000;
   const issues = []; // emitted immediately; kept for counting only
-  const issue = (type, severity, title, screen, target) => {
+  const issue = (type, severity, title, screen, target, sourceUrl) => {
     issues.push(type);
-    const pageUrl = page.url();
+    // Findings belong to the page that CARRIED the defect. Async detectors default to the
+    // current page; the post-crawl outbound audit passes the link's source page explicitly so
+    // a bad footer link is never attributed to whatever page happened to be visited last.
+    const pageUrl = sourceUrl || page.url();
     emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}) });
   };
 
@@ -628,6 +634,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   const outboundLinks = new Map(); // href → { label, screen }
   const mailtoLinks = new Map(); // address → { screen }
   const outbound = { total: 0, checked: 0, mailtos: 0 };
+  let probeCapHit = false;
   let actions = 0;
   let screenCount = 0;
   let lastScreen = null;
@@ -930,14 +937,14 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         try {
           if (/^mailto:/i.test(link.raw)) {
             const address = link.raw.replace(/^mailto:/i, "").split("?")[0].trim();
-            if (address.includes("@") && !mailtoLinks.has(address)) mailtoLinks.set(address, { screen: ob.screen });
+            if (address.includes("@") && !mailtoLinks.has(address)) mailtoLinks.set(address, { screen: ob.screen, sourceUrl: start.origin + ob.key });
             continue;
           }
           const u = new URL(link.href);
           if (!/^https?:$/.test(u.protocol)) continue;
           if (u.origin !== start.origin) {
             const clean = u.origin + u.pathname;
-            if (!outboundLinks.has(clean)) outboundLinks.set(clean, { label: link.label, screen: ob.screen });
+            if (!outboundLinks.has(clean)) outboundLinks.set(clean, { label: link.label, screen: ob.screen, sourceUrl: start.origin + ob.key });
             continue;
           }
           const key = u.pathname.replace(/\/+$/, "") + u.search || "/";
@@ -950,7 +957,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       // Bounded button pass: click, watch for effect, flag dead controls (the web analog
       // of the iOS dead-button detector). Navigations are undone so BFS order holds.
       const buttons = page.locator("button:visible, [role=button]:visible, input[type=submit]:visible, summary:visible");
-      const n = Math.min(await buttons.count().catch(() => 0), BUTTONS_PER_PAGE);
+      const buttonTotal = await buttons.count().catch(() => 0);
+      const n = Math.min(buttonTotal, BUTTONS_PER_PAGE);
+      if (buttonTotal > BUTTONS_PER_PAGE) probeCapHit = true;
       for (let i = 0; i < n && actions < maxActions && Date.now() < deadline; i++) {
         const b = buttons.nth(i);
         const label = webControlLabel({
@@ -1000,56 +1009,65 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       progress();
     }
 
-    // Post-crawl outbound audit: DNS + bounded HTTP for external links, MX for mailto.
-    // These calls leave the proxied browser, so the whole pass is skipped (and reported as
-    // not-checked) when the public-egress policy is enforced.
+    // Post-crawl outbound audit. Link checks run through the LIVE browser context: JS-rendered
+    // "unavailable" shells (Facebook et al.) are only visible to a real renderer, and browser
+    // navigation honors the egress proxy policy, so these checks never bypass it. Only the
+    // mailto MX lookups use node:dns and are therefore skipped under the enforced-egress policy.
     outbound.total = outboundLinks.size;
     outbound.mailtos = mailtoLinks.size;
-    if (process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
-      outbound.skipped = "egress-policy";
-    } else if (outboundLinks.size || mailtoLinks.size) {
-      const dns = await import("node:dns/promises");
-      const hostResolvable = new Map();
-      const resolves = async (host) => {
-        if (!hostResolvable.has(host)) {
-          hostResolvable.set(host, await dns.lookup(host).then(() => true).catch(() => false));
-        }
-        return hostResolvable.get(host);
-      };
+    if (outboundLinks.size) {
+      const auditPage = await context.newPage();
+      auditPage.setDefaultTimeout(8000);
       const targets = [...outboundLinks.entries()].slice(0, OUTBOUND_LINK_LIMIT);
       outbound.checked = targets.length;
       for (const [href, meta] of targets) {
         if (Date.now() >= deadline) break;
-        const u = new URL(href);
-        if (!(await resolves(u.hostname))) {
-          issue("unresolvable_host", "medium", `Outbound link host does not resolve: ${u.hostname}`, meta.screen, href);
+        const nav = await auditPage.goto(href, { waitUntil: "domcontentloaded", timeout: 8000 })
+          .catch((error) => ({ navError: String(error && error.message || error) }));
+        if (nav && nav.navError) {
+          const dnsFailure = /ERR_NAME_NOT_RESOLVED/i.test(nav.navError);
+          issue("unresolvable_host", "medium",
+            dnsFailure
+              ? `Outbound link host does not resolve: ${new URL(href).hostname}`
+              : `Outbound link unreachable: ${href.slice(0, 100)} (${nav.navError.slice(0, 60)})`,
+            meta.screen, href, meta.sourceUrl);
           continue;
         }
-        try {
-          const res = await fetch(href, { redirect: "follow", signal: AbortSignal.timeout(6000), headers: { "user-agent": "Mozilla/5.0 (compatible; tapp-link-audit)" } });
-          if (res.status >= 400) {
-            issue("broken_link", "medium", `Outbound link returns HTTP ${res.status}: ${href.slice(0, 100)}`, meta.screen, href);
-          } else {
-            const phrase = webUnavailableShellPhrase(await res.text().catch(() => ""));
-            if (phrase) issue("outbound_unavailable", "low", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href);
-          }
-        } catch (error) {
-          issue("unresolvable_host", "medium", `Outbound link unreachable: ${href.slice(0, 100)}`, meta.screen, href);
+        if (nav && typeof nav.status === "function" && nav.status() >= 400) {
+          issue("broken_link", "medium", `Outbound link returns HTTP ${nav.status()}: ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
+          continue;
         }
+        await auditPage.waitForTimeout(400); // let client-rendered shells paint their copy
+        const text = await auditPage.evaluate(() => (document.body && document.body.innerText || "").slice(0, 120000)).catch(() => "");
+        const phrase = webUnavailableShellPhrase(text);
+        if (phrase) issue("outbound_unavailable", "low", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
       }
-      for (const [address, meta] of mailtoLinks) {
-        if (Date.now() >= deadline) break;
-        const domain = (address.split("@")[1] || "").toLowerCase();
-        if (!domain) continue;
-        // RFC 5321 implicit-MX: a domain with no MX but an A/AAAA record can still receive.
-        const deliverable = await dns.resolveMx(domain).then((records) => records.length > 0).catch(() => false)
-          || await dns.lookup(domain).then(() => true).catch(() => false);
-        if (!deliverable) issue("mailto_no_mx", "medium", `mailto: domain cannot receive email (no MX or address record): ${address}`, meta.screen, address);
+      await auditPage.close().catch(() => {});
+    }
+    if (mailtoLinks.size) {
+      if (process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
+        outbound.mailtoSkipped = "egress-policy"; // node:dns would bypass the enforced proxy
+      } else {
+        const dns = await import("node:dns/promises");
+        for (const [address, meta] of mailtoLinks) {
+          if (Date.now() >= deadline) break;
+          const domain = (address.split("@")[1] || "").toLowerCase();
+          if (!domain) continue;
+          // RFC 5321 implicit-MX: a domain with no MX but an A/AAAA record can still receive.
+          const deliverable = await dns.resolveMx(domain).then((records) => records.length > 0).catch(() => false)
+            || await dns.lookup(domain).then(() => true).catch(() => false);
+          if (!deliverable) issue("mailto_no_mx", "medium", `mailto: domain cannot receive email (no MX or address record): ${address}`, meta.screen, address, meta.sourceUrl);
+        }
       }
     }
   } finally {
     const timedOut = Date.now() >= deadline;
-    const stop = timedOut ? "time-budget" : actions >= maxActions ? "action-budget" : "frontier-drained";
+    // A drained frontier with a truncating probe cap is NOT "nothing left" — twin controls may
+    // sit untapped past the per-page cap, and the stop reason must not claim otherwise.
+    const stop = timedOut ? "time-budget"
+      : actions >= maxActions ? "action-budget"
+      : probeCapHit ? "probe-cap"
+      : "frontier-drained";
     emit("COMPLETE", { actions, screens: screenCount, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried, timedOut, stop, outbound });
     fs.closeSync(markersFd);
     await browser.close().catch(() => {});

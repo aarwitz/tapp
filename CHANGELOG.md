@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.17.6
+
+**The gate tells the truth — policy v3.** ⚠️ Behavior change for web gates.
+
+- **Web targets now default to `--fail-on medium`**: any deterministic finding at medium
+  severity or above (broken links, missing anchors, unresolvable outbound hosts, undeliverable
+  mailto domains, missing assets) fails the gate. On a website, a 404 in the nav IS the release
+  blocker. Restore the previous baseline-diff behavior with `--fail-on gate`. New severity
+  policies `--fail-on high|medium` are available on every platform.
+- **A green PASS states what it ignored**: "PASS — N deterministic finding(s) below the fail
+  threshold (…)" instead of silence over known findings.
+- `tapp ci` run inside an initialized repository now connects to it: `.tapp/application-model.json`
+  supplies the platform (when unambiguous) and target identity without `--project-dir`.
+  A web gate with no target exits 2 with guidance instead of an uncaught stack trace, and
+  `ci --help` speaks in `tapp ci` terms.
+- The outbound link audit runs inside the live browser: client-rendered "content isn't
+  available" shells are now visible, navigation honors the egress proxy, and findings are
+  attributed to the page that carried the link. A truncating per-page probe cap reports
+  `probe-cap-reached` instead of claiming no controls remain.
+- `tree`/`open` list `<details>/<summary>` toggles, type links faithfully as `Link`, carry
+  bounding rects, and mark truncated control lists; the per-action trace renders in
+  `report.html`.
+
 ## 0.17.5
 
 **Web field-report fixes: mobile rendering, honest stop reasons, and a complete link audit.**

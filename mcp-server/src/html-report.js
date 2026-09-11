@@ -125,6 +125,9 @@ ${r.conditionsNotReached?.length ? `<div><h2>Conditions not reached</h2><ul>${sc
   .scope ul { margin-top: 0; padding-left: 1.2rem; }
   .sev { color: #fff; border-radius: 4px; padding: 0.05rem 0.45rem; font-size: 0.78rem; font-weight: 600; margin-right: 0.4rem; }
   ul.findings { padding-left: 1.1rem; } ul.findings li { margin-bottom: 0.6rem; }
+  table.trace { border-collapse: collapse; font-size: 0.88rem; width: 100%; }
+  table.trace th, table.trace td { text-align: left; padding: 0.25rem 0.7rem 0.25rem 0; border-bottom: 1px solid #eceef1; }
+  table.trace th { color: #57606a; font-weight: 600; }
   .ai { color: #57606a; font-size: 0.88rem; margin: 0.15rem 0 0 0.2rem; }
   .dim { color: #57606a; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
@@ -144,6 +147,10 @@ ${scopeHtml}
 <ul class="findings">
 ${findingsHtml}
 </ul>
+${Array.isArray(r.trace) && r.trace.length ? `<h2>Action trace — what was done, in order</h2>
+<table class="trace"><thead><tr><th>t</th><th>action</th><th>target</th><th>screen</th></tr></thead><tbody>
+${r.trace.map((a) => `<tr><td>${typeof a.t === "number" ? (a.t / 1000).toFixed(1) + "s" : "—"}</td><td>${esc(a.type || "")}</td><td>${esc(a.target || "")}</td><td>${esc(a.screen || "")}</td></tr>`).join("\n")}
+</tbody></table>` : ""}
 <h2>Evidence — every screen explored</h2>
 <div class="grid">
 ${shotsHtml || "<p class='dim'>No screenshots captured.</p>"}

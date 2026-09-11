@@ -250,12 +250,46 @@ test("outbound link auditing shows up in the scope lists honestly", () => {
   assert.ok(checked.checkedFor.some((item) => /outbound link reachability.*first 10 of 12/.test(item)));
   assert.ok(checked.checkedFor.some((item) => /mailto address domains/.test(item)));
 
+  // Link checks run through the proxied browser, so only MX lookups honor the egress skip.
   const skipped = buildQaReport(markersFile([
     'OCQA_ACTION:{"type":"open","target":"/"}',
     'OCQA_STATE:{"screen":"Landing","elements":8}',
-    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained","outbound":{"total":3,"checked":0,"mailtos":0,"skipped":"egress-policy"}}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained","outbound":{"total":3,"checked":3,"mailtos":2,"mailtoSkipped":"egress-policy"}}',
   ]), { platform: "web" });
-  assert.ok(skipped.notChecked.some((item) => /outbound links and mailto domains \(skipped by the public-egress policy\)/.test(item)));
+  assert.ok(skipped.checkedFor.some((item) => /outbound link reachability \(browser-rendered/.test(item)));
+  assert.ok(skipped.notChecked.some((item) => /mailto address domains \(MX lookups are skipped by the public-egress policy\)/.test(item)));
+  assert.equal(skipped.checkedFor.some((item) => /mailto address domains \(MX\/A records\)/.test(item)), false);
+});
+
+test("a truncating probe cap reports probe-cap-reached, never nothing-left", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"FAQ","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"FAQ toggle 4","screen":"FAQ"}',
+    'OCQA_COMPLETE:{"actions":5,"states":1,"issues":0,"timedOut":false,"stop":"probe-cap"}',
+  ]), { platform: "web" });
+  assert.equal(r.stopReason, "probe-cap-reached");
+  assert.equal(r.inconclusive, false);
+});
+
+test("fail-on severity thresholds block deterministic findings at or above the bar", () => {
+  const base = {
+    findings: [],
+    findingCounts: { critical: 0, high: 0, medium: 1, low: 0, total: 1 },
+    deterministicFindingCounts: { critical: 0, high: 0, medium: 1, low: 0, total: 1 },
+    inconclusive: false,
+  };
+  const medium = evaluateGate({ report: base, failOn: "medium" });
+  assert.equal(medium.outcome, "fail");
+  assert.equal(medium.exitCode, 1);
+  assert.match(medium.reasons.join("; "), /1 deterministic finding\(s\) at or above medium severity/);
+  const high = evaluateGate({ report: base, failOn: "high" });
+  assert.equal(high.outcome, "pass", "a medium finding passes fail-on high");
+  const highBlocked = evaluateGate({ report: { ...base, deterministicFindingCounts: { critical: 0, high: 1, medium: 0, low: 0, total: 1 } }, failOn: "high" });
+  assert.equal(highBlocked.outcome, "fail");
+  // Sampled/advisory findings never participate: deterministic counts of zero pass fail-on medium.
+  const advisoryOnly = evaluateGate({ report: { ...base, deterministicFindingCounts: { critical: 0, high: 0, medium: 0, low: 0, total: 0 } }, failOn: "medium" });
+  assert.equal(advisoryOnly.outcome, "pass");
 });
 
 test("forms catalogued but never submitted are reported as not checked", () => {

@@ -87,6 +87,11 @@ test("field-report fixture: the complete link audit surfaces all eight cases", {
     assert.ok(report.trace.some((a) => a.type === "tap" && /FAQ item/.test(a.target)), "details/summary toggles are exercised");
     assert.ok(report.checkedFor.some((item) => /outbound link reachability/.test(item)));
     assert.ok(report.checkedFor.some((item) => /mailto address domains/.test(item)));
+
+    // Outbound findings are attributed to the page that CARRIED the link, not the last page
+    // visited before the post-crawl audit ran.
+    const unresolvable = report.findings.find((f) => f.type === "unresolvable_host");
+    assert.match(String(unresolvable.url || ""), new RegExp(`127\\.0\\.0\\.1:${mainPort}/$`), "source-page attribution");
   } finally {
     main.close();
     external.close();

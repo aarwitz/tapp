@@ -179,3 +179,25 @@ test("a valid PR plan selecting zero contracts survives Bash 3.2 nounset handlin
   assert.doesNotMatch(r.stderr, /unbound variable/);
   assert.deepEqual(JSON.parse(fs.readFileSync(planPath, "utf8")).selected, []);
 });
+
+test("web gate without a target is a usage error (exit 2), never a stack trace", () => {
+  const r = spawnSync("bash", [gate, "--platform", "web"], { encoding: "utf8", env: { ...process.env } });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr + r.stdout, /needs a target: pass --url/);
+  assert.doesNotMatch(r.stderr, /at \S+\.js:\d+/, "no uncaught stack trace");
+});
+
+test("web targets default to fail-on medium and --fail-on validates severity values", () => {
+  const r = spawnSync("bash", [gate, "--platform", "web"], { encoding: "utf8", env: { ...process.env } });
+  assert.match(r.stdout + r.stderr, /fail-on medium \(web default/);
+  const bad = spawnSync("bash", [gate, "--platform", "web", "--fail-on", "sometimes"], { encoding: "utf8", env: { ...process.env } });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--fail-on must be gate\|absolute\|any\|high\|medium/);
+});
+
+test("ci --help speaks in tapp ci terms, not internal script paths", () => {
+  const r = spawnSync("bash", [gate, "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /tapp ci \[--platform ios\]/);
+  assert.doesNotMatch(r.stdout, /scripts\/ci-gate\.sh \[--platform/);
+});

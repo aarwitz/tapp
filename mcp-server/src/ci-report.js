@@ -16,7 +16,7 @@
 //                         [--pr-plan <plan.json>]           # selected PR contract execution manifest
 //                         [--project-dir <repo> --maintenance-url <url>]
 //                                                           # optional disposable web patch replay
-//                         [--fail-on <gate|absolute|any>]    # default: gate
+//                         [--fail-on <gate|absolute|any|high|medium>]  # default: gate (web CLI defaults to medium)
 //
 // Gate policy (--fail-on):
 //   gate     fail when the run introduced NEW high/critical findings vs. the baseline
@@ -25,6 +25,9 @@
 //   absolute fail on any current-run deterministic findings-block (critical / risk threshold) or an
 //            inconclusive run, or any failed suite — no baseline needed.
 //   any      fail on any finding at all, or any suite failure. Strictest.
+//   high     fail on any deterministic finding at high/critical severity (absolute; no baseline).
+//   medium   fail on any deterministic finding at medium severity or above. The `tapp ci` CLI
+//            defaults web targets to this: on a website, a broken link IS the release blocker.
 import fs from "fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
@@ -61,8 +64,8 @@ function parseArgs(argv) {
     console.error("Required: --markers <ocqa-markers.txt>");
     process.exit(2);
   }
-  if (!["gate", "absolute", "any"].includes(args.failOn)) {
-    console.error(`--fail-on must be gate|absolute|any, got: ${args.failOn}`);
+  if (!["gate", "absolute", "any", "high", "medium"].includes(args.failOn)) {
+    console.error(`--fail-on must be gate|absolute|any|high|medium, got: ${args.failOn}`);
     process.exit(2);
   }
   return args;
@@ -477,7 +480,15 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
   }
   lines.push("");
   const badge = GATE_BADGE[gate.outcome] || (gate.failed ? "🔴 FAIL" : "🟢 PASS");
-  lines.push(`**Gate (${gate.policy}): ${badge}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}`);
+  // A PASS must state what it chose to ignore — a green banner over known findings without
+  // saying so is exactly the dishonest verdict this product refuses to render.
+  const ignored = gate.outcome === "pass" && report.deterministicFindingCounts
+    ? ["high", "medium", "low"].map((sev) => [sev, report.deterministicFindingCounts[sev] || 0]).filter(([, n]) => n > 0)
+    : [];
+  const ignoredNote = ignored.length
+    ? ` — ${ignored.reduce((n, [, c]) => n + c, 0)} deterministic finding(s) below the fail threshold (${ignored.map(([sev, n]) => `${n} ${sev}`).join(", ")})`
+    : "";
+  lines.push(`**Gate (${gate.policy}): ${badge}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}${ignoredNote}`);
   // The gate is only authoritative about what it actually ran — record the scope explicitly.
   const rev = gate.revision?.sha ? `${String(gate.revision.sha).slice(0, 12)}${gate.revision.dirty ? "-dirty" : ""}` : "unknown";
   lines.push(`_target: ${gate.target || "—"} · revision: ${rev} · policy: ${gate.policy} v${gate.policyVersion || "?"}_`);

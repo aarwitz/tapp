@@ -42,12 +42,18 @@ for (let i = 2; i < process.argv.length; i += 1) {
     process.exit(2);
   }
 }
-if (!["web", "android"].includes(args.platform)) throw new Error("--platform must be web|android");
-if (args.platform === "web" && !args.url && !args.projectDir) throw new Error("Web gate requires --url or --project-dir for managed build/start");
-if (args.platform === "android" && !args.appId) throw new Error("Android gate requires --app-id");
+// Usage problems are part of the public outcome contract (exit 2), never an uncaught stack trace.
+const usageError = (message) => { console.error(`❌ ${message}`); process.exit(2); };
+if (!["web", "android"].includes(args.platform)) usageError("--platform must be web|android");
+if (args.platform === "web" && !args.url && !args.projectDir) usageError("The web gate needs a target: pass --url <http(s)://owned-app>, or --project-dir <repo> to build/start the repository's own web target.");
+if (args.platform === "android" && !args.appId) usageError("The Android gate requires --app-id");
 if (args.projectDir) {
-  args.projectDir = fs.realpathSync(path.resolve(args.projectDir));
-  if (!fs.statSync(args.projectDir).isDirectory()) throw new Error(`Project directory not found: ${args.projectDir}`);
+  try {
+    args.projectDir = fs.realpathSync(path.resolve(args.projectDir));
+    if (!fs.statSync(args.projectDir).isDirectory()) usageError(`Project directory not found: ${args.projectDir}`);
+  } catch {
+    usageError(`Project directory not found: ${args.projectDir}`);
+  }
 }
 
 // Parse and platform-filter before launching a browser/device so a typo cannot

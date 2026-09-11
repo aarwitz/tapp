@@ -1740,13 +1740,15 @@ function elementBreakdown(elements) {
 /** Scannable "Read screen X — N elements (...)" readout, plus the tappable/typeable controls. */
 export function formatScreen(screenTitle, elements) {
   const els = elements || [];
-  const interactable = els.filter((e) => e.isEnabled !== false && (String(e.type).includes("Button") || String(e.type).includes("rawValue: 9") || String(e.type).includes("TextField") || String(e.type).includes("rawValue: 49") || String(e.type).includes("rawValue: 50") || String(e.type).includes("Cell") || String(e.type).includes("rawValue: 75")));
-  const labels = interactable
+  const interactable = els.filter((e) => e.isEnabled !== false && (String(e.type).includes("Button") || String(e.type).includes("Link") || String(e.type).includes("rawValue: 9") || String(e.type).includes("TextField") || String(e.type).includes("rawValue: 49") || String(e.type).includes("rawValue: 50") || String(e.type).includes("Cell") || String(e.type).includes("rawValue: 75")));
+  const allLabels = interactable
     .map((e) => (e.label || e.identifier || "").trim())
-    .filter((s) => s && s.length <= 40 && !s.includes("."))
-    .slice(0, 8);
+    .filter((s) => s && s.length <= 40 && !s.includes("."));
+  const labels = allLabels.slice(0, 8);
   const L = [`🌳 Read screen **${screenTitle || "Unknown"}** — ${els.length} elements (${elementBreakdown(els)})`];
-  if (labels.length) L.push("", "**Controls:** " + labels.map((l) => `\`${l}\``).join(" · "));
+  // A silently cut list reads as complete; say when it isn't.
+  if (labels.length) L.push("", "**Controls:** " + labels.map((l) => `\`${l}\``).join(" · ")
+    + (allLabels.length > labels.length ? ` · … and ${allLabels.length - labels.length} more` : ""));
   return L.join("\n");
 }
 

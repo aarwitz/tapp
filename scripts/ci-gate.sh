@@ -10,9 +10,10 @@
 # for GitHub Actions; equally usable from any other CI or locally.
 #
 # Usage:
-#   scripts/ci-gate.sh [--platform ios] --app <path/to/App.app> [--bundle-id <com.example.app>]
-#   scripts/ci-gate.sh --platform android --apk <path/to/app.apk> --app-id <com.example.app> [--serial <adb-serial>]
-#   scripts/ci-gate.sh --platform web [--url <http(s)://owned-app>]
+#   tapp ci [--platform ios] --app <path/to/App.app> [--bundle-id <com.example.app>]
+#   tapp ci --platform android --apk <path/to/app.apk> --app-id <com.example.app> [--serial <adb-serial>]
+#   tapp ci --platform web [--url <http(s)://owned-app>]
+#   tapp ci        # in an initialized repo: reads .tapp/application-model.json for platform/target
 #                      # omit --url with --project-dir to detect/build/start/stop one owned web target
 #                      # bundle id is detected from the .app when omitted
 #                      [--actions N]              # exploration budget (default 40)
@@ -27,7 +28,10 @@
 #                      [--pr-plan-out <file.json>] # persist the reviewable selection plan
 #                      [--baseline <file.json>]   # prior report to diff against (skipped if absent)
 #                      [--target-key <stable-id>] # isolates target-specific baselines in monorepos
-#                      [--fail-on gate|absolute|any]  # gate policy (default gate; see ci-report.js)
+#                      [--fail-on gate|absolute|any|high|medium]
+#                                                 # gate policy (default: gate; web targets default
+#                                                 # to medium — any deterministic medium+ finding
+#                                                 # blocks; see ci-report.js)
 #                      [--json-out <file.json>]   # write the full report (use as the next baseline)
 #                      [--md-out <file.md>]       # write the rendered markdown report (for a PR comment)
 #                      [--device <name>]          # simulator device to boot if none is (default "iPhone 16 Pro")
@@ -43,10 +47,10 @@ usage() {
 
 PLATFORM="ios" APP_PATH="" BUNDLE_ID="" APK_PATH="" APP_ID="" URL="" WEB_TARGET="" TARGET_KEY="" SERIAL="" ACTIONS=40 TIMEOUT=600 FLOWS="" SCENARIOS="" CONTRACTS="" PROJECT_DIR="" BASELINE="" FAIL_ON="gate" JSON_OUT="" MD_OUT="" DEVICE="iPhone 16 Pro" PR_BASE="" PR_HEAD="HEAD" CHANGED_FILES_FILE="" PR_PLAN_OUT=""
 IOS_PR_TARGET_JSON=""
-FLOWS_EXPLICIT=false SCENARIOS_EXPLICIT=false CONTRACTS_EXPLICIT=false
+FLOWS_EXPLICIT=false SCENARIOS_EXPLICIT=false CONTRACTS_EXPLICIT=false PLATFORM_EXPLICIT=false FAIL_ON_EXPLICIT=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --platform) PLATFORM="$2"; shift 2 ;;
+    --platform) PLATFORM="$2"; PLATFORM_EXPLICIT=true; shift 2 ;;
     --app) APP_PATH="$2"; shift 2 ;;
     --bundle-id) BUNDLE_ID="$2"; shift 2 ;;
     --apk) APK_PATH="$2"; shift 2 ;;
@@ -66,7 +70,7 @@ while [[ $# -gt 0 ]]; do
     --changed-files-file) CHANGED_FILES_FILE="$2"; shift 2 ;;
     --pr-plan-out) PR_PLAN_OUT="$2"; shift 2 ;;
     --baseline) BASELINE="$2"; shift 2 ;;
-    --fail-on) FAIL_ON="$2"; shift 2 ;;
+    --fail-on) FAIL_ON="$2"; FAIL_ON_EXPLICIT=true; shift 2 ;;
     --json-out) JSON_OUT="$2"; shift 2 ;;
     --md-out) MD_OUT="$2"; shift 2 ;;
     --device) DEVICE="$2"; shift 2 ;;
@@ -77,14 +81,46 @@ done
 [[ "$PLATFORM" == "ios" || "$PLATFORM" == "android" || "$PLATFORM" == "web" ]] || { echo "❌ --platform must be ios|android|web" >&2; exit 2; }
 [[ "$ACTIONS" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --actions must be a positive integer" >&2; exit 2; }
 [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --timeout must be a positive integer" >&2; exit 2; }
-[[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "absolute" || "$FAIL_ON" == "any" ]] || { echo "❌ --fail-on must be gate|absolute|any" >&2; exit 2; }
+[[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "absolute" || "$FAIL_ON" == "any" || "$FAIL_ON" == "high" || "$FAIL_ON" == "medium" ]] || { echo "❌ --fail-on must be gate|absolute|any|high|medium" >&2; exit 2; }
 if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR" ]] || { echo "❌ Project directory not found: $PROJECT_DIR" >&2; exit 2; }
   PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 fi
+# A repository-connected gate should connect to the repository it is run from: when no
+# --project-dir was given but the working directory is an initialized Tapp repo, use it.
+if [[ -z "$PROJECT_DIR" && -f "$(pwd)/.tapp/application-model.json" ]]; then
+  PROJECT_DIR="$(pwd)"
+  echo "Using repository artifacts from $PROJECT_DIR/.tapp"
+fi
 TAPP_PROJECT_ARTIFACTS=""
 if [[ -n "$PROJECT_DIR" ]]; then
   [[ -d "$PROJECT_DIR/.tapp" ]] && TAPP_PROJECT_ARTIFACTS="$PROJECT_DIR/.tapp"
+fi
+
+# When --platform was not given, derive it from the application model instead of assuming iOS —
+# but only when the model is unambiguous (exactly one platform across its targets).
+if [[ "$PLATFORM_EXPLICIT" == "false" && -n "$TAPP_PROJECT_ARTIFACTS" && -f "$TAPP_PROJECT_ARTIFACTS/application-model.json" ]]; then
+  MODEL_PLATFORM="$(node - "$TAPP_PROJECT_ARTIFACTS/application-model.json" <<'NODE'
+const fs = require("fs");
+try {
+  const model = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+  const platforms = [...new Set((model.targets || []).map((t) => t.platform).filter(Boolean))];
+  if (platforms.length === 1) process.stdout.write(platforms[0]);
+} catch {}
+NODE
+  )"
+  if [[ -n "$MODEL_PLATFORM" && "$MODEL_PLATFORM" != "$PLATFORM" ]]; then
+    PLATFORM="$MODEL_PLATFORM"
+    echo "Platform derived from the application model: $PLATFORM (pass --platform to override)"
+  fi
+fi
+
+# Web policy default (gate policy v3): on a website, a deterministic broken link IS the release
+# blocker — default web targets to fail-on medium. Pass --fail-on gate to restore baseline-diff
+# semantics for a web target.
+if [[ "$FAIL_ON_EXPLICIT" == "false" && "$PLATFORM" == "web" ]]; then
+  FAIL_ON="medium"
+  echo "Gate policy: fail-on medium (web default; any deterministic medium+ finding blocks — override with --fail-on)"
 fi
 
 # A repository-connected gate must retain the stable application-model target identity in its
