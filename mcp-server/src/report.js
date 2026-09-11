@@ -72,6 +72,7 @@ export function parseOcqaMarkers(markersFilePath) {
       )
     ),
     complete,
+    actions,
     recentActions: actions.slice(-5),
     recentTransitions: transitions.slice(-5),
     recentIssues: issues.slice(-5),
@@ -87,6 +88,10 @@ export const ISSUE_CATEGORY = {
   error_surface: "network_error_surface",
   unresponsive_element: "unresponsive_element",
   placeholder_link: "broken_link",
+  anchor_missing: "broken_link",
+  unresolvable_host: "broken_link",
+  mailto_no_mx: "broken_link",
+  outbound_unavailable: "broken_link",
   dead_end: "navigation_dead_end",
   navigation_loop: "repeated_loop",
   navigation_trap: "navigation_dead_end",
@@ -96,7 +101,7 @@ export const ISSUE_CATEGORY = {
   explore_timeout: "performance_timeout",
 };
 export const CRITICAL_ISSUE_TYPES = new Set(["crash"]);
-export const WEB_SAMPLED_ISSUE_TYPES = new Set(["unresponsive_element"]);
+export const WEB_SAMPLED_ISSUE_TYPES = new Set(["unresponsive_element", "outbound_unavailable"]);
 
 export function severityRank(s) {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 4;
@@ -206,7 +211,9 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   // keep the concrete missing-asset finding and discard that transport-level duplicate.
   const normalizedIssues = rawIssues.map((issue) => {
     if (platform !== "web") return issue;
-    if (issue.type === "placeholder_link" && issue.target) return { ...issue, screen: null };
+    if (["placeholder_link", "anchor_missing", "unresolvable_host", "mailto_no_mx", "outbound_unavailable"].includes(issue.type) && issue.target) {
+      return { ...issue, screen: null };
+    }
     if (!["missing_asset", "network_error"].includes(issue.type)) return issue;
     const title = String(issue.title || "");
     const match = issue.type === "missing_asset"
@@ -279,9 +286,16 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     : screensExplored >= 2 && actionsPerformed >= 3;
   const unexercisedLoginWall = anySecure && !loginAttempted && screensExplored <= 1;
   const inconclusive = !coverageFloorMet || unexercisedLoginWall || timeBudgetExhausted;
+  // "completed" is reserved for a run that exhausted its action budget; a drained frontier is
+  // reported as its own honest reason so a 2-action sweep of a small surface never reads like a
+  // 40-action campaign. Drivers signal the real cause in COMPLETE.stop; captures from drivers
+  // that predate the field keep the old inference.
+  const driverStop = base.complete && typeof base.complete === "object" ? base.complete.stop : null;
   const stopReason = unexercisedLoginWall ? (credentialsProvided ? "login-wall-credentials-unused" : "login-wall-no-credentials")
     : timeBudgetExhausted ? "time-budget-exhausted"
-    : coverageFloorMet ? "completed" : "coverage-floor-not-met";
+    : !coverageFloorMet ? "coverage-floor-not-met"
+    : driverStop === "frontier-drained" ? "no-unexplored-in-scope-controls"
+    : "completed";
 
   const headline = timeBudgetExhausted
     ? `Inconclusive — exploration reached its ${base.complete?.timeoutSeconds || "configured"}s time budget after ${actionsPerformed} action(s) across ${screensExplored} screen(s). Findings are partial; this is not an app performance finding. Increase --timeout or request fewer actions.`
@@ -301,10 +315,17 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   let checkedFor;
   let notChecked;
   if (platform === "web") {
+    const outbound = base.complete && typeof base.complete === "object" ? base.complete.outbound : null;
     checkedFor = [
-      "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404)",
-      "placeholder links with no destination", "sampled dead-button probes (advisory)", "error text on pages", "load timeouts",
+      "page errors (uncaught exceptions)", "failed/5xx requests", "broken links (404, same-origin crawl)",
+      "placeholder links and anchors with no destination", "sampled dead-button probes (advisory)", "error text on pages", "load timeouts",
     ];
+    if (outbound && !outbound.skipped && (outbound.total || outbound.mailtos)) {
+      checkedFor.push(outbound.total > outbound.checked
+        ? `outbound link reachability — DNS · HTTP · unavailable-shell heuristic (first ${outbound.checked} of ${outbound.total})`
+        : "outbound link reachability (DNS · HTTP · unavailable-shell heuristic)");
+      if (outbound.mailtos) checkedFor.push("mailto address domains (MX/A records)");
+    }
     notChecked = [
       "app-specific business logic (cover with Flows: record or generate, then assert)",
       "content and claim accuracy (including copy versus API data)",
@@ -314,6 +335,11 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       "only the first few visible buttons per page are probed (web beta)",
       "content & reachability regressions require a baseline",
     ];
+    if (outbound?.skipped === "egress-policy") notChecked.push("outbound links and mailto domains (skipped by the public-egress policy)");
+    else if (!outbound || (!outbound.total && !outbound.mailtos)) conditionsNotReached.push("outbound links (none encountered this run)");
+    if (inputFieldsEncountered.length && !loginAttempted) {
+      notChecked.push(`form submission (${inputFieldsEncountered.reduce((n, s) => n + s.fields.length, 0)} field(s) catalogued, none submitted)`);
+    }
   } else if (platform === "android") {
     checkedFor = [
       "crashes / process exits", "dead controls", "error surfaces", "blank screens",
@@ -361,6 +387,18 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     headline,
     inconclusive,
     coverage: { screensExplored, actionsPerformed, screens: Array.from(screens) },
+    // Per-action evidence: what was done, to what, on which screen, at what offset — so an
+    // agent can distinguish "clicked Services, clicked FAQ" from "clicked the same button twice".
+    trace: (base.actions || [])
+      .filter((action) => action && typeof action === "object")
+      .map((action) => ({
+        ...(typeof action.t === "number" ? { t: action.t } : {}),
+        type: action.type || "action",
+        target: action.target || "",
+        ...(action.screen ? { screen: action.screen } : {}),
+        ...(action.via ? { via: action.via } : {}),
+        ...(action.reason ? { reason: action.reason } : {}),
+      })),
     evidence: { markers: base.relativeMarkersFilePath },
     uiMap: null,
     comparison: null,

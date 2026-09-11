@@ -41,15 +41,15 @@ test("writeHtmlReport rebuild derives platform from metadata first, capture-id p
     return (fs.readFileSync(out, "utf8").match(/Checked this run<\/h2><ul>([\s\S]*?)<\/ul>/) || ["", ""])[1];
   };
   // Legacy fallback: no ui-map → the capture-id prefix decides.
-  assert.match(scopeOf("web-legacy-1"), /broken links \(404\)/);
+  assert.match(scopeOf("web-legacy-1"), /broken links \(404, same-origin crawl\)/);
   assert.match(scopeOf("android-legacy-2"), /crashes \/ process exits/);
   assert.match(scopeOf("20260101-000003"), /keyboard-covered actions/); // unprefixed → native
   // Persisted metadata WINS over a contradicting folder prefix.
   const webFolderAndroidMap = scopeOf("web-20990101-000009", ["android"]);
   assert.match(webFolderAndroidMap, /crashes \/ process exits/);
-  assert.doesNotMatch(webFolderAndroidMap, /broken links \(404\)/);
+  assert.doesNotMatch(webFolderAndroidMap, /broken links \(404, same-origin crawl\)/);
   const nativeFolderWebMap = scopeOf("20990101-000010", ["web"]); // unprefixed folder, map says web
-  assert.match(nativeFolderWebMap, /broken links \(404\)/);
+  assert.match(nativeFolderWebMap, /broken links \(404, same-origin crawl\)/);
   assert.doesNotMatch(nativeFolderWebMap, /keyboard-covered actions/);
 });
 
@@ -212,6 +212,80 @@ test("a fully swept one-page web target is conclusive", () => {
   ]), { platform: "web" });
   assert.equal(r.inconclusive, false);
   assert.equal(r.stopReason, "completed");
+});
+
+test("a drained frontier reports its own stop reason, not a claimed-complete campaign", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"t":120,"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_ACTION:{"t":950,"type":"tap","target":"Book a chat","screen":"Landing"}',
+    'OCQA_COMPLETE:{"actions":2,"states":1,"issues":0,"timedOut":false,"stop":"frontier-drained"}',
+  ]), { platform: "web" });
+  assert.equal(r.inconclusive, false, "a drained small surface is still conclusive evidence");
+  assert.equal(r.stopReason, "no-unexplored-in-scope-controls");
+  // The per-action trace carries what was done, to what, and when.
+  assert.deepEqual(r.trace.map((a) => a.type), ["open", "tap"]);
+  assert.equal(r.trace[1].target, "Book a chat");
+  assert.equal(r.trace[1].t, 950);
+  assert.equal(r.trace[1].screen, "Landing");
+});
+
+test("a web run that hits its wall clock is time-budget-exhausted, not completed", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"timedOut":true,"stop":"time-budget"}',
+  ]), { platform: "web" });
+  assert.equal(r.stopReason, "time-budget-exhausted");
+  assert.equal(r.inconclusive, true);
+});
+
+test("outbound link auditing shows up in the scope lists honestly", () => {
+  const checked = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained","outbound":{"total":12,"checked":10,"mailtos":1}}',
+  ]), { platform: "web" });
+  assert.ok(checked.checkedFor.some((item) => /broken links \(404, same-origin/.test(item)));
+  assert.ok(checked.checkedFor.some((item) => /outbound link reachability.*first 10 of 12/.test(item)));
+  assert.ok(checked.checkedFor.some((item) => /mailto address domains/.test(item)));
+
+  const skipped = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained","outbound":{"total":3,"checked":0,"mailtos":0,"skipped":"egress-policy"}}',
+  ]), { platform: "web" });
+  assert.ok(skipped.notChecked.some((item) => /outbound links and mailto domains \(skipped by the public-egress policy\)/.test(item)));
+});
+
+test("forms catalogued but never submitted are reported as not checked", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/contact"}',
+    'OCQA_STATE:{"screen":"Contact","elements":12,"inputs":[{"label":"Name"},{"label":"Email"},{"label":"Message"}]}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained"}',
+  ]), { platform: "web" });
+  assert.ok(r.notChecked.some((item) => /form submission \(3 field\(s\) catalogued, none submitted\)/.test(item)));
+});
+
+test("new link-audit issue types keep desktop-known categories and honest tiers", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_ISSUE:{"type":"anchor_missing","severity":"medium","title":"Anchor link \\"#nowhere\\" has no matching element on the page","screen":"Landing","target":"/#nowhere"}',
+    'OCQA_ISSUE:{"type":"unresolvable_host","severity":"medium","title":"Outbound link host does not resolve: x.invalid","screen":"Landing","target":"https://x.invalid/"}',
+    'OCQA_ISSUE:{"type":"mailto_no_mx","severity":"medium","title":"mailto: domain cannot receive email (no MX or address record): a@b.invalid","screen":"Landing","target":"a@b.invalid"}',
+    'OCQA_ISSUE:{"type":"outbound_unavailable","severity":"low","title":"Outbound link returns 200 but shows \\"page not found\\"","screen":"Landing","target":"https://social.example/x"}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":4,"stop":"frontier-drained"}',
+  ]), { platform: "web" });
+  const byType = Object.fromEntries(r.findings.map((f) => [f.type, f]));
+  for (const type of ["anchor_missing", "unresolvable_host", "mailto_no_mx", "outbound_unavailable"]) {
+    assert.equal(byType[type].category, "broken_link", type);
+    assert.equal(byType[type].screen, null, `${type} dedups by resource, not screen`);
+  }
+  assert.equal(byType.anchor_missing.evaluationTier, "deterministic");
+  assert.equal(byType.unresolvable_host.evaluationTier, "deterministic");
+  assert.equal(byType.mailto_no_mx.evaluationTier, "deterministic");
+  assert.equal(byType.outbound_unavailable.evaluationTier, "sampled", "the 200-shell heuristic never gates");
 });
 
 test("a one-page web login wall without submitted credentials remains inconclusive", () => {

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.5
+
+**Web field-report fixes: mobile rendering, honest stop reasons, and a complete link audit.**
+
+- Render web commands (`open`, `tree`, `explore`, `flow run`, MCP sessions) at any Playwright
+  device profile with `--device "iPhone 13"` or an explicit `--viewport 390x844`; `open` gains
+  `--full-page` screenshots. One shared context seam replaces five hardcoded desktop viewports.
+- Report why exploration stopped: `completed` is reserved for an exhausted action budget, a
+  drained frontier reports `no-unexplored-in-scope-controls`, and wall-clock exhaustion on web is
+  `time-budget-exhausted` instead of silently reading as complete. The JSON report carries a
+  timestamped per-action `trace` (type, target, screen, offset).
+- Audit the deterministic link cases a static site actually breaks on: anchors to missing ids,
+  outbound hosts that do not resolve, `mailto:` domains with no MX or address record, and
+  outbound pages returning 200 with unmistakable "content isn't available" copy (advisory, never
+  a gate failure). Outbound checks are capped, stated honestly, and disabled under the
+  public-egress policy.
+- Exercise `<details>/<summary>` disclosure controls, state the same-origin crawl boundary in the
+  scope block, and report catalogued-but-unsubmitted forms as not checked.
+- The field report's own eight-case fixture page ships as an end-to-end regression test (8/8).
+
 ## 0.17.4
 
 **Field-report fixes: every filed finding from the first real adoption sessions is closed.**

@@ -1,9 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin } from "../mcp-server/src/web-explorer.js";
+import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, parseWebViewport, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webContextOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin, webUnavailableShellPhrase } from "../mcp-server/src/web-explorer.js";
 
 test("focused web inspection rejects non-http targets before launching a browser", async () => {
   await assert.rejects(inspectWebPage({ url: "file:///private/app.html" }), /valid http\(s\) URL/);
+});
+
+test("web context options: device profiles, viewport overrides, and the desktop default", () => {
+  const devices = {
+    "iPhone 13": { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, defaultBrowserType: "webkit", userAgent: "iphone-ua" },
+  };
+  assert.deepEqual(webContextOptions({}), { viewport: { width: 1280, height: 900 } });
+  const phone = webContextOptions({ device: "iPhone 13", devices });
+  assert.deepEqual(phone.viewport, { width: 390, height: 844 });
+  assert.equal(phone.isMobile, true);
+  assert.equal("defaultBrowserType" in phone, false, "newContext rejects defaultBrowserType — it must be stripped");
+  // An explicit viewport wins over the device profile's.
+  assert.deepEqual(webContextOptions({ device: "iPhone 13", viewport: "500x600", devices }).viewport, { width: 500, height: 600 });
+  assert.throws(() => webContextOptions({ device: "iPhone 99", devices }), /Unknown Playwright device 'iPhone 99'.*iPhone 13/);
+  assert.throws(() => parseWebViewport("phone-sized"), /expected WIDTHxHEIGHT/);
+  assert.deepEqual(parseWebViewport("390X844"), { width: 390, height: 844 });
+});
+
+test("the unavailable-shell heuristic matches only unmistakable outage copy", () => {
+  assert.match(webUnavailableShellPhrase("<title>Facebook</title>This content isn't available right now"), /content isn'?t available/i);
+  assert.match(webUnavailableShellPhrase("Sorry, this page isn't available."), /page isn'?t available/i);
+  assert.equal(webUnavailableShellPhrase("<h1>Pricing</h1>We keep your content available worldwide."), null);
+  assert.equal(webUnavailableShellPhrase(""), null);
 });
 
 test("help copy about possible failures is not treated as a visible error surface", () => {

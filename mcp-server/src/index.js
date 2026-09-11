@@ -778,16 +778,16 @@ async function firstVisibleWebLocator(page, target, { input = false } = {}) {
   return await fallback.isVisible().catch(() => false) ? fallback : null;
 }
 
-async function startWebSession(url, { testEmail = "", testPassword = "" } = {}) {
+async function startWebSession(url, { testEmail = "", testPassword = "", device = "", viewport = "" } = {}) {
   if (activeSession && !activeSession.ended) return { error: "A session is already active; call tapp_session_end first.", screen:treeSnapshot() };
   let browser;
   try {
     const parsed = new URL(String(url || ""));
     if (!/^https?:$/.test(parsed.protocol)) return { error:"Web session URL must be http(s)" };
-    const { loadPlaywright } = await import("./web-explorer.js");
-    const { chromium } = await loadPlaywright();
+    const { loadPlaywright, webContextOptions } = await import("./web-explorer.js");
+    const { chromium, devices } = await loadPlaywright();
     browser = await chromium.launch({ headless:true });
-    const context = await browser.newContext({ viewport:{ width:1280, height:900 } });
+    const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
     const page = await context.newPage();
     await page.goto(parsed.href, { waitUntil:"domcontentloaded", timeout:30_000 });
     await page.waitForLoadState("networkidle", { timeout:5_000 }).catch(() => {});
@@ -1754,7 +1754,7 @@ export function formatScreen(screenTitle, elements) {
 // `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
 // the surfaces can't drift.)
 
-export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {} }) {
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {}, device = "", viewport = "" }) {
   const { storagePreflight } = await import("./environment-preflight.js");
   const storage = storagePreflight(capturesDir);
   if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
@@ -1776,6 +1776,8 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
       seedTargets,
       watch: watch === true,
       onProgress,
+      device: isNonEmptyString(device) ? device.trim() : "",
+      viewport: isNonEmptyString(viewport) ? viewport.trim() : "",
     });
   } catch (err) {
     return { error: String(err.message || err) };
@@ -2602,6 +2604,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           clearData: { type: "boolean", default: true, description: "Android: clear app data before launch for a repeatable starting state." },
           url: { type: "string", description: "Web (beta): URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
           watch: { type: "boolean", default: false, description: "Web only: open Tapp's controlled Chromium window and show a cursor/HUD for each exploration action. Evidence screenshots exclude the overlay." },
+          device: { type: "string", description: "Web only: render as a Playwright device profile (e.g. \"iPhone 13\") — viewport, user agent, touch" },
+          viewport: { type: "string", description: "Web only: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\"); overrides the device profile's viewport" },
           maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
           timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
           testEmail: { type: "string", description: "Email for the login preamble, if the app has a sign-in" },
@@ -2890,6 +2894,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           testEmail: { type: "string", description: "Value for $TEST_EMAIL" },
           testPassword: { type: "string", description: "Value for $TEST_PASSWORD" },
           actor: { type: "string", description: "Configured actor name; resolves $TEST_EMAIL/$TEST_PASSWORD from the actor's env-var bindings (explicit testEmail/testPassword win)" },
+          device: { type: "string", description: "Web flows: replay in a Playwright device profile (e.g. \"iPhone 13\")" },
+          viewport: { type: "string", description: "Web flows: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\")" },
         },
       },
     },
@@ -3078,6 +3084,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           appBundleId: { type: "string", description: "Bundle id of the installed app to drive" },
           androidAppId: { type: "string", description: "Android application id to drive (alternative to appBundleId)" },
           url: { type: "string", description: "Owned http(s) web app URL to drive (alternative to appBundleId/androidAppId); omit all three target identifiers to build/start an unambiguous owned web target from projectDir" },
+          device: { type: "string", description: "Web sessions: render as a Playwright device profile (e.g. \"iPhone 13\")" },
+          viewport: { type: "string", description: "Web sessions: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\")" },
           target: { type: "string", description: "Optional managed-web target name/path when projectDir contains multiple browser applications" },
           apkPath: { type: "string", description: "Android APK to install before starting" },
           androidSerial: { type: "string", description: "Android adb device serial" },
@@ -3444,6 +3452,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         testPassword: args.testPassword,
         baselineFindings: args.baselineFindings,
         watch: args.watch === true,
+        device: isNonEmptyString(args.device) ? args.device.trim() : "",
+        viewport: isNonEmptyString(args.viewport) ? args.viewport.trim() : "",
         onProgress: notifyProgress("pages reached"),
       });
       if (r.error) return errorResult(r.error, r.details || {});
@@ -3983,6 +3993,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           url: isNonEmptyString(args.url) ? args.url.trim() : undefined,
           logPath: flowLog,
           screenshotDir: evidenceDir,
+          device: isNonEmptyString(args.device) ? args.device.trim() : "",
+          viewport: isNonEmptyString(args.viewport) ? args.viewport.trim() : "",
         });
         run = { ...run, code: result.passed ? 0 : 1, evidenceDir };
       } catch (error) {
@@ -4334,7 +4346,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       : android
         ? await startAndroidSession(target, { serial: args.androidSerial, apkPath: args.apkPath, clearData: args.clearData !== false, testEmail: args.testEmail, testPassword: args.testPassword })
         : web
-          ? await startWebSession(target, { testEmail:args.testEmail, testPassword:args.testPassword })
+          ? await startWebSession(target, { testEmail:args.testEmail, testPassword:args.testPassword, device:isNonEmptyString(args.device) ? args.device.trim() : "", viewport:isNonEmptyString(args.viewport) ? args.viewport.trim() : "" })
           : await startManagedWebInteractiveSession({
               projectDir:focusProjectDir,
               requestedTarget:isNonEmptyString(args.target) ? args.target.trim() : "",

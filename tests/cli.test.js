@@ -236,6 +236,17 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
     assert.match(interacted, /Found `Coach Ready`/);
     assert.doesNotMatch(interacted, /still showed a loading state/);
 
+    // --viewport actually changes the rendered width (PNG IHDR carries the pixel size).
+    const phoneShot = path.join(project, "phone.png");
+    execFileSync("node", [tappBin, "open", url, "--platform", "web", "--viewport", "390x844", "--out", phoneShot], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
+    const header = fs.readFileSync(phoneShot);
+    assert.equal(header.readUInt32BE(16), 390, "screenshot width follows --viewport");
+    let deviceError = "";
+    try {
+      execFileSync("node", [tappBin, "open", url, "--platform", "web", "--device", "Nokia Brick"], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home }, stdio: "pipe" });
+    } catch (error) { deviceError = String(error.stderr || error.message || error); }
+    assert.match(deviceError, /Unknown Playwright device 'Nokia Brick'/);
+
     const markersPath = path.join(project, "markers.txt");
     fs.writeFileSync(markersPath, [
       `OCQA_STATE:{"screen":"Agent Home","url":"${url}/","controls":[{"kind":"link","label":"Storefront"}]}`,

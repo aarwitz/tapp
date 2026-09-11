@@ -18,7 +18,14 @@ const logPath = process.env.FLOW_LOG || path.join(os.tmpdir(), `tapp-web-flow-${
 const screenshotDir = process.env.TAPP_FLOW_EVIDENCE_DIR || path.join(os.tmpdir(), `tapp-web-flow-${token}`);
 
 try {
-  const result = await runWebFlow({ flow, url: process.argv[3], logPath, screenshotDir });
+  const result = await runWebFlow({
+    flow,
+    url: process.argv[3],
+    logPath,
+    screenshotDir,
+    device: process.env.TAPP_WEB_DEVICE || "",
+    viewport: process.env.TAPP_WEB_VIEWPORT || "",
+  });
   const report = spawnSync("python3", [path.join(root, "scripts", "flow_lib.py"), "report", logPath], { encoding: "utf8" });
   process.stdout.write((report.stdout || "").trim() + "\n");
   process.exit(result.passed ? 0 : 1);

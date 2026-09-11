@@ -104,6 +104,13 @@ npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
 npx -y @aarwitz/tapp@latest ci
 ```
 
+Web commands (`open`, `tree`, `explore`, `flow run`) accept `--device "iPhone 13"` (any
+Playwright device profile) or `--viewport 390x844` to render at mobile sizes, and `open`
+accepts `--full-page` for a full-height screenshot — use these for "does it look right on a
+phone" checks. Web explores also audit outbound links (DNS, HTTP status, unavailable-shell
+heuristic) and `mailto:` domains, report an honest `stopReason` (`no-unexplored-in-scope-controls`
+when a small surface is swept before the budget), and return a per-action `trace` in `--json`.
+
 `tapp explore` observes. `tapp ci` applies versioned deterministic policy to evidence, selected
 Flows/Scenarios/contracts, coverage, and any target-scoped baseline. Its outcomes are `pass`, `fail`,
 or `inconclusive`; both `fail` and `inconclusive` block a merge.

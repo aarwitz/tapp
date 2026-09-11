@@ -262,15 +262,15 @@ async function resolveTargetOrExit(engine, input) {
 
 function safeCommandUsage(verb) {
   const usage = {
-    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
     focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
-    open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]",
-    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]",
+    open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
+    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE]",
+    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]",
     scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]",
@@ -774,6 +774,8 @@ switch (command) {
           testPassword: flags.password,
           baselineFindings,
           watch: flags.watch === true,
+          device: typeof flags.device === "string" ? flags.device : "",
+          viewport: typeof flags.viewport === "string" ? flags.viewport : "",
           surface: "cli",
           onProgress,
         })
@@ -827,6 +829,9 @@ switch (command) {
           timeoutMs: Number(flags.timeout) * 1000 || 15_000,
           tapText: typeof flags.tap === "string" ? flags.tap : "",
           waitForText: typeof flags["wait-for"] === "string" ? flags["wait-for"] : "",
+          device: typeof flags.device === "string" ? flags.device : "",
+          viewport: typeof flags.viewport === "string" ? flags.viewport : "",
+          fullPage: flags["full-page"] === true,
         });
         const out = typeof flags.out === "string" ? path.resolve(flags.out) : path.join(tappHome, "shots", `web-${Date.now()}.png`);
         fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -899,6 +904,8 @@ switch (command) {
           screenshot: false,
           tapText: typeof flags.tap === "string" ? flags.tap : "",
           waitForText: typeof flags["wait-for"] === "string" ? flags["wait-for"] : "",
+          device: typeof flags.device === "string" ? flags.device : "",
+          viewport: typeof flags.viewport === "string" ? flags.viewport : "",
         });
         if (flags.json) console.log(JSON.stringify({ platform: "web", url: snap.url, screenTitle: snap.screenTitle, settled: snap.settled, elements: snap.elements }, null, 2));
         else console.log(engine.formatScreen(snap.screenTitle, snap.elements));
@@ -1146,6 +1153,8 @@ switch (command) {
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (typeof flags.email === "string") env.OCQA_TEST_EMAIL = flags.email;
     if (typeof flags.password === "string") env.OCQA_TEST_PASSWORD = flags.password;
+    if (typeof flags.device === "string") env.TAPP_WEB_DEVICE = flags.device;
+    if (typeof flags.viewport === "string") env.TAPP_WEB_VIEWPORT = flags.viewport;
     if (typeof flags.actor === "string" && flags.actor) {
       const { readProjectConfig } = await import(path.join(packageRoot, "mcp-server", "src", "project-config.js"));
       const loaded = readProjectConfig(process.cwd());

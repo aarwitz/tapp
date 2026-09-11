@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue } from "./flow-runtime.js";
-import { loadPlaywright } from "./web-explorer.js";
+import { loadPlaywright, webContextOptions } from "./web-explorer.js";
 
 const DEFAULT_TIMEOUT = 6000;
 
@@ -192,7 +192,7 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
   return { action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task };
 }
 
-export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright }) {
+export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright, device = "", viewport = "" }) {
   const startUrl = url || flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
   if (!startUrl) throw new Error("Web Flow needs `url:` (or an http(s) `app:` value)");
   if (logPath) fs.rmSync(logPath, { force: true });
@@ -202,7 +202,7 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
   const log = new FlowLog({ logPath, flow: loggedFlow });
   const pw = playwright || await loadPlaywright();
   const browser = await pw.chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext(webContextOptions({ device, viewport, devices: pw.devices }));
   const page = await context.newPage();
   const timeout = Number(flow.timeoutMs) || DEFAULT_TIMEOUT;
   page.setDefaultTimeout(timeout);

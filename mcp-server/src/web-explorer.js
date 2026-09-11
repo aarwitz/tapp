@@ -23,6 +23,7 @@ import { execFileSync } from "child_process";
 const CLICK_SETTLE_MS = 700;
 const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
+const OUTBOUND_LINK_LIMIT = 10;
 const WATCH_ACTION_DELAY_MS = 350;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 const STANDALONE_ERROR_TEXT_RE = /^(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)(?:[.!:]|\s|$)/i;
@@ -299,6 +300,42 @@ export function webBrowserLaunchOptions(environment = process.env, { watch = fal
   };
 }
 
+export function parseWebViewport(value) {
+  if (!value) return null;
+  const match = /^(\d{2,5})[xX](\d{2,5})$/.exec(String(value).trim());
+  if (!match) throw new Error(`Invalid viewport '${value}'; expected WIDTHxHEIGHT, e.g. 390x844`);
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+// The one seam for every web browser context: an optional Playwright device profile (viewport,
+// user agent, touch, scale factor) with an explicit WIDTHxHEIGHT override on top; the historical
+// 1280×900 desktop default otherwise. `defaultBrowserType` is stripped because newContext
+// rejects it — we always drive the profile through chromium.
+export function webContextOptions({ device = "", viewport = "", devices = null } = {}) {
+  const name = String(device || "").trim();
+  let base = {};
+  if (name) {
+    const profile = devices ? devices[name] : null;
+    if (!profile) {
+      const head = name.toLowerCase().split(" ")[0];
+      const close = devices ? Object.keys(devices).filter((d) => d.toLowerCase().includes(head)).slice(0, 5) : [];
+      throw new Error(`Unknown Playwright device '${name}'${close.length ? `; close matches: ${close.join(", ")}` : ""}`);
+    }
+    const { defaultBrowserType: _ignored, ...rest } = profile;
+    base = rest;
+  }
+  const parsed = parseWebViewport(viewport);
+  return { ...base, viewport: parsed || base.viewport || { width: 1280, height: 900 } };
+}
+
+// Conservative "the page answered 200 but is an unavailable shell" phrases (outbound links to
+// social platforms that never 404). Precision over recall: only unmistakable copy matches.
+export function webUnavailableShellPhrase(html) {
+  const text = String(html || "").slice(0, 120_000);
+  const match = /(this content isn'?t available|content (?:is )?(?:currently )?unavailable|this page isn'?t available|page (?:can'?t|cannot) be found|page not found|isn'?t available right now)/i.exec(text);
+  return match ? match[1] : null;
+}
+
 // A headed Playwright browser does not move the host OS pointer when locator.click() runs. In
 // explicit watch mode, draw a pointer inside the controlled page so a human can follow Tapp's
 // real actions. The UI lives in a closed shadow root, ignores pointer events, and is hidden from
@@ -398,16 +435,16 @@ async function screenshotWithoutWebWatchUi(page, options, watch) {
 // Focused one-screen inspection for the agent-facing `tapp open <url>` and `tapp tree <url>`
 // commands. This deliberately does no exploration or judgment; it opens exactly one page,
 // captures the visible semantic controls, and optionally takes one screenshot.
-export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screenshot = true, tapText = "", waitForText = "" }) {
+export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screenshot = true, tapText = "", waitForText = "", device = "", viewport = "", fullPage = false }) {
   let target;
   try { target = new URL(url); }
   catch { throw new Error("Web inspection needs a valid http(s) URL"); }
   if (!/^https?:$/.test(target.protocol)) throw new Error("Web inspection needs a valid http(s) URL");
 
-  const { chromium } = await loadPlaywright();
+  const { chromium, devices } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions());
   try {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
     const page = await context.newPage();
     const boundedTimeout = Math.max(1000, Math.min(60_000, Number(timeoutMs) || NAV_TIMEOUT_MS));
     page.setDefaultTimeout(boundedTimeout);
@@ -455,7 +492,7 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
         controls,
       };
     });
-    const image = screenshot ? await page.screenshot({ type: "png" }) : null;
+    const image = screenshot ? await page.screenshot({ type: "png", fullPage: !!fullPage }) : null;
     return {
       url: page.url(),
       screenTitle: webScreenTitle(observed, target.pathname || target.href),
@@ -524,17 +561,19 @@ export function normalizeWebSeedTargets(seedTargets = [], limit = 5) {
   return result;
 }
 
-export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], watch = false, onProgress }) {
+export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], watch = false, onProgress, device = "", viewport = "" }) {
   const start = new URL(url);
   if (!/^https?:$/.test(start.protocol)) throw new Error("url must be http(s)");
   fs.mkdirSync(outDir, { recursive: true });
   const markersPath = path.join(outDir, "ocqa-markers.txt");
   const markersFd = fs.openSync(markersPath, "w");
   const emit = (kind, payload) => fs.writeSync(markersFd, `OCQA_${kind}:${JSON.stringify(payload)}\n`);
+  const startedAtMs = Date.now();
+  const emitAction = (payload) => emit("ACTION", { t: Date.now() - startedAtMs, ...payload });
 
-  const { chromium } = await loadPlaywright();
+  const { chromium, devices } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions(process.env, { watch }));
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
   await installWebListenerTracking(context);
   if (watch) await installWebWatchUi(context);
   const page = await context.newPage();
@@ -585,6 +624,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   ];
   const screenshotFor = new Map();
   const placeholderLinksSeen = new Set();
+  const missingAnchorsSeen = new Set();
+  const outboundLinks = new Map(); // href → { label, screen }
+  const mailtoLinks = new Map(); // address → { screen }
+  const outbound = { total: 0, checked: 0, mailtos: 0 };
   let actions = 0;
   let screenCount = 0;
   let lastScreen = null;
@@ -607,12 +650,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           secure: el.type === "password",
         }))
         .filter((f) => f.label);
-      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, [role=button], [role=tab], [role=checkbox], [role=switch]")]
+      const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, summary, [role=button], [role=tab], [role=checkbox], [role=switch]")]
         .filter((el) => el.type !== "hidden" && el.offsetParent !== null)
         .slice(0, 60)
         .map((el) => {
           const tag = el.tagName.toLowerCase();
-          const role = el.getAttribute("role") || (tag === "a" ? "link" : tag === "button" ? "button" : "");
+          const role = el.getAttribute("role") || (tag === "a" ? "link" : tag === "button" || tag === "summary" ? "button" : "");
           const field = ["input", "textarea", "select"].includes(tag);
           const secure = el.type === "password";
           const label = (el.labels?.[0]?.textContent || el.getAttribute("aria-label") || el.textContent || el.placeholder || el.name || el.id || "").trim().slice(0, 120);
@@ -674,6 +717,18 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
               fingerprint: el.id || el.getAttribute("data-testid") || svgPath.slice(0, 80) || `link-${index + 1}`,
             };
           }),
+        missingAnchors: [...document.querySelectorAll('a[href^="#"]')]
+          .filter((el) => el.offsetParent !== null)
+          .map((el) => el.getAttribute("href") || "")
+          .filter((href) => href.length > 1)
+          .filter((href) => {
+            const id = decodeURIComponent(href.slice(1));
+            try {
+              const esc = window.CSS && CSS.escape ? CSS.escape(id) : id;
+              return !document.getElementById(id) && !document.querySelector(`a[name="${esc}"]`);
+            } catch { return !document.getElementById(id); }
+          })
+          .slice(0, 20),
         inputs,
         controls,
       };
@@ -717,6 +772,13 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         placeholderLinksSeen.add(finding.target);
         issue(finding.type, finding.severity, finding.title, screen, finding.target);
       }
+      // Anchor links pointing at ids that do not exist are deterministic dead navigation.
+      for (const anchor of info.missingAnchors || []) {
+        const anchorTarget = `${key}${anchor}`;
+        if (missingAnchorsSeen.has(anchorTarget)) continue;
+        missingAnchorsSeen.add(anchorTarget);
+        issue("anchor_missing", "medium", `Anchor link "${anchor}" has no matching element on the page`, screen, anchorTarget);
+      }
     }
     return { key, screen, info };
   }
@@ -737,7 +799,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     if (watch) await showWebWatchAction(page, { locator: pw, action: "Type", target: "Password" });
     await pw.fill(testPassword).catch(() => {});
     lastActionTarget = "Sign in";
-    emit("ACTION", { type: "login", target: "Sign in", screen, narrative: "Filled and submitted the sign-in form with the provided test credentials" });
+    emitAction({ type: "login", target: "Sign in", screen, narrative: "Filled and submitted the sign-in form with the provided test credentials" });
     actions += 1;
     await submitWebLogin(page, watch
       ? (locator) => showWebWatchAction(page, { locator, action: "Click", target: "Sign in" })
@@ -784,7 +846,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       actions += 1;
       lastActionTarget = webNavigationAction(entry.action, target);
       pendingNavigation = entry.pathTarget ? { ...entry, prTarget: false } : entry;
-      emit("ACTION", { type: "open", target, via: lastActionTarget, narrative: `Opened ${target}` });
+      emitAction({ type: "open", target, via: lastActionTarget, narrative: `Opened ${target}` });
       // Attribute load-time events (pageerror, 404s) to the page being loaded, not the one
       // we just left; observe() refines this to the page title once it settles.
       currentScreen = target;
@@ -814,7 +876,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           const beforeScreen = ob.screen;
           actions += 1;
           lastActionTarget = action.target;
-          emit("ACTION", { type: action.type, target: action.target, screen: beforeScreen, reason: "pr_ui_map_path", narrative: `Following observed UI Map path: ${action.type} ${action.target}` });
+          emitAction({ type: action.type, target: action.target, screen: beforeScreen, reason: "pr_ui_map_path", narrative: `Following observed UI Map path: ${action.type} ${action.target}` });
           let acted = false;
           if (action.type === "back") {
             if (watch) await showWebWatchAction(page, { action: "Back", target: beforeScreen });
@@ -857,15 +919,27 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         emit("PR_TARGET", { targetId: entry.targetId, status: "observed", screen: ob.screen });
       }
 
-      // Enqueue unvisited same-origin links (BFS keeps exploration order deterministic).
+      // Enqueue unvisited same-origin links (BFS keeps exploration order deterministic);
+      // collect outbound http(s) links and mailto addresses for the post-crawl audit.
       const links = await page.$$eval("a[href]", (as) => as.map((a) => ({
         href: a.href,
+        raw: a.getAttribute("href") || "",
         label: (a.getAttribute("aria-label") || a.textContent || "").trim(),
       }))).catch(() => []);
       for (const link of links) {
         try {
+          if (/^mailto:/i.test(link.raw)) {
+            const address = link.raw.replace(/^mailto:/i, "").split("?")[0].trim();
+            if (address.includes("@") && !mailtoLinks.has(address)) mailtoLinks.set(address, { screen: ob.screen });
+            continue;
+          }
           const u = new URL(link.href);
-          if (u.origin !== start.origin || !/^https?:$/.test(u.protocol)) continue;
+          if (!/^https?:$/.test(u.protocol)) continue;
+          if (u.origin !== start.origin) {
+            const clean = u.origin + u.pathname;
+            if (!outboundLinks.has(clean)) outboundLinks.set(clean, { label: link.label, screen: ob.screen });
+            continue;
+          }
           const key = u.pathname.replace(/\/+$/, "") + u.search || "/";
           if (!visited.has(key) && !frontier.some((item) => item.target === key)) {
             frontier.push({ target: key, action: webNavigationAction(link.label, key), fromScreen: ob.screen });
@@ -875,7 +949,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
       // Bounded button pass: click, watch for effect, flag dead controls (the web analog
       // of the iOS dead-button detector). Navigations are undone so BFS order holds.
-      const buttons = page.locator("button:visible, [role=button]:visible, input[type=submit]:visible");
+      const buttons = page.locator("button:visible, [role=button]:visible, input[type=submit]:visible, summary:visible");
       const n = Math.min(await buttons.count().catch(() => 0), BUTTONS_PER_PAGE);
       for (let i = 0; i < n && actions < maxActions && Date.now() < deadline; i++) {
         const b = buttons.nth(i);
@@ -893,7 +967,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         const beforeState = await captureWebControlState(page, b);
         actions += 1;
         lastActionTarget = label;
-        emit("ACTION", { type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
+        emitAction({ type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
         let clickSucceeded = false;
         try {
           if (watch) await showWebWatchAction(page, { locator: b, action: "Click", target: label });
@@ -925,8 +999,58 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       }
       progress();
     }
+
+    // Post-crawl outbound audit: DNS + bounded HTTP for external links, MX for mailto.
+    // These calls leave the proxied browser, so the whole pass is skipped (and reported as
+    // not-checked) when the public-egress policy is enforced.
+    outbound.total = outboundLinks.size;
+    outbound.mailtos = mailtoLinks.size;
+    if (process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
+      outbound.skipped = "egress-policy";
+    } else if (outboundLinks.size || mailtoLinks.size) {
+      const dns = await import("node:dns/promises");
+      const hostResolvable = new Map();
+      const resolves = async (host) => {
+        if (!hostResolvable.has(host)) {
+          hostResolvable.set(host, await dns.lookup(host).then(() => true).catch(() => false));
+        }
+        return hostResolvable.get(host);
+      };
+      const targets = [...outboundLinks.entries()].slice(0, OUTBOUND_LINK_LIMIT);
+      outbound.checked = targets.length;
+      for (const [href, meta] of targets) {
+        if (Date.now() >= deadline) break;
+        const u = new URL(href);
+        if (!(await resolves(u.hostname))) {
+          issue("unresolvable_host", "medium", `Outbound link host does not resolve: ${u.hostname}`, meta.screen, href);
+          continue;
+        }
+        try {
+          const res = await fetch(href, { redirect: "follow", signal: AbortSignal.timeout(6000), headers: { "user-agent": "Mozilla/5.0 (compatible; tapp-link-audit)" } });
+          if (res.status >= 400) {
+            issue("broken_link", "medium", `Outbound link returns HTTP ${res.status}: ${href.slice(0, 100)}`, meta.screen, href);
+          } else {
+            const phrase = webUnavailableShellPhrase(await res.text().catch(() => ""));
+            if (phrase) issue("outbound_unavailable", "low", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href);
+          }
+        } catch (error) {
+          issue("unresolvable_host", "medium", `Outbound link unreachable: ${href.slice(0, 100)}`, meta.screen, href);
+        }
+      }
+      for (const [address, meta] of mailtoLinks) {
+        if (Date.now() >= deadline) break;
+        const domain = (address.split("@")[1] || "").toLowerCase();
+        if (!domain) continue;
+        // RFC 5321 implicit-MX: a domain with no MX but an A/AAAA record can still receive.
+        const deliverable = await dns.resolveMx(domain).then((records) => records.length > 0).catch(() => false)
+          || await dns.lookup(domain).then(() => true).catch(() => false);
+        if (!deliverable) issue("mailto_no_mx", "medium", `mailto: domain cannot receive email (no MX or address record): ${address}`, meta.screen, address);
+      }
+    }
   } finally {
-    emit("COMPLETE", { actions, screens: screenCount, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried });
+    const timedOut = Date.now() >= deadline;
+    const stop = timedOut ? "time-budget" : actions >= maxActions ? "action-budget" : "frontier-drained";
+    emit("COMPLETE", { actions, screens: screenCount, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried, timedOut, stop, outbound });
     fs.closeSync(markersFd);
     await browser.close().catch(() => {});
   }
