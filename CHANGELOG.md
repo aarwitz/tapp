@@ -25,6 +25,12 @@
   inspection warm-resumes), stderr consumption for raw stdio MCP clients, first-session harness
   build time, and `actor set --replace` on the agent-facing surfaces.
 
+## VS Code 0.3.8
+
+- Bundle the field-fix Agent Skill and pin the extension engine to Tapp 0.17.4, bringing the
+  closed field-report findings (session cold-launch guidance, full raw session trees, coordinate
+  tap fallback, actor-resolved Flow credentials) to Copilot users.
+
 ## 0.17.3
 
 **Public proof and a safer first contact.**
