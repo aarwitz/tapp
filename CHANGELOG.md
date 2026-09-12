@@ -16,6 +16,10 @@
 - The gate banner prints the target URL/bundle instead of the application-model hash (the
   stable id remains on `targetKey` for baseline identity).
 - Screen readouts count `Link` controls as links: "14 links · 6 buttons", not "20 buttons".
+- **Agent-scriptable CLI surface**: `tapp doctor --json` emits a structured environment
+  report (per-platform availability, booted simulator, harness cache; exit 0 healthy /
+  1 blocked), and `flow run` / `contract run` / `scenario run` help now documents the
+  outcome contract (0 passed · 1 failed · 2 infrastructure/usage error).
 
 ## 0.17.6
 
