@@ -30,6 +30,7 @@ export function parseOcqaMarkers(markersFilePath) {
   const transitions = [];
   const issues = [];
   let complete = null;
+  let context = null;
 
   for (const line of lines) {
     if (!line.startsWith("OCQA_")) continue;
@@ -57,6 +58,7 @@ export function parseOcqaMarkers(markersFilePath) {
     if (category === "TRANSITION") transitions.push(parsed);
     if (category === "ISSUE") issues.push(parsed);
     if (category === "COMPLETE") complete = parsed;
+    if (category === "CONTEXT") context = parsed;
   }
 
   return {
@@ -72,6 +74,7 @@ export function parseOcqaMarkers(markersFilePath) {
       )
     ),
     complete,
+    context,
     actions,
     recentActions: actions.slice(-5),
     recentTransitions: transitions.slice(-5),
@@ -101,7 +104,11 @@ export const ISSUE_CATEGORY = {
   explore_timeout: "performance_timeout",
 };
 export const CRITICAL_ISSUE_TYPES = new Set(["crash"]);
-export const WEB_SAMPLED_ISSUE_TYPES = new Set(["unresponsive_element", "outbound_unavailable"]);
+// outbound_unavailable graduated to the deterministic tier in policy v4: since 0.17.6 the
+// outbound audit renders each link in the live browser, so the unavailable-shell phrase match
+// is a stable observation of the page, not a sampled probe — and a dead social link is exactly
+// the broken-link class the web fail-on default exists to block.
+export const WEB_SAMPLED_ISSUE_TYPES = new Set(["unresponsive_element"]);
 
 export function severityRank(s) {
   return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 4;
@@ -401,6 +408,12 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
         ...(action.reason ? { reason: action.reason } : {}),
       })),
     evidence: { markers: base.relativeMarkersFilePath },
+    // Capture conditions shared by every screenshot/marker in this run (web: from the driver's
+    // CONTEXT marker). A baseline diff across different captures is a layout comparison, not a
+    // regression signal — consumers must be able to see that.
+    capture: base.context && typeof base.context === "object"
+      ? { device: base.context.device || null, viewport: base.context.viewport || null, deviceScaleFactor: base.context.deviceScaleFactor ?? null }
+      : null,
     uiMap: null,
     comparison: null,
     checkedFor,
@@ -548,7 +561,7 @@ export const GATE_EXIT = { pass: 0, fail: 1, error: 2, inconclusive: 3 };
 // finding at or above that severity, and the CLI defaults web targets to `medium` — a 404 in the
 // nav is the release blocker on a website, and a field-tested green PASS over six deterministic
 // findings was exactly the dishonest verdict this product refuses to render.
-export const GATE_POLICY_VERSION = "3";
+export const GATE_POLICY_VERSION = "4";
 
 // Pure gate evaluator: frozen evidence + policy → a GateRun decision. Extracted verbatim from the
 // former inline logic in ci-report.js so the `[char]` characterization tests keep passing — the

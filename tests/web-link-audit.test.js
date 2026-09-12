@@ -92,6 +92,13 @@ test("field-report fixture: the complete link audit surfaces all eight cases", {
     // visited before the post-crawl audit ran.
     const unresolvable = report.findings.find((f) => f.type === "unresolvable_host");
     assert.match(String(unresolvable.url || ""), new RegExp(`127\\.0\\.0\\.1:${mainPort}/$`), "source-page attribution");
+
+    // Policy v4: the browser-rendered unavailable-shell finding gates like every other
+    // broken-link-class finding, and the run records its capture conditions.
+    const shell = report.findings.find((f) => f.type === "outbound_unavailable");
+    assert.equal(shell.evaluationTier, "deterministic");
+    assert.equal(shell.severity, "medium");
+    assert.deepEqual(report.capture, { device: null, viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   } finally {
     main.close();
     external.close();

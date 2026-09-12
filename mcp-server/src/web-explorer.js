@@ -576,7 +576,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   const { chromium, devices } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions(process.env, { watch }));
-  const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
+  const captureProfile = webContextOptions({ device, viewport, devices });
+  // Evidence is only comparable when the capture conditions are on record: a desktop run and a
+  // phone run legitimately disagree about which nav links exist, and a baseline diff across
+  // them must be able to say so instead of reporting "resolved".
+  emit("CONTEXT", { ...(String(device || "").trim() ? { device: String(device).trim() } : {}), viewport: captureProfile.viewport, deviceScaleFactor: captureProfile.deviceScaleFactor ?? 1 });
+  const context = await browser.newContext(captureProfile);
   await installWebListenerTracking(context);
   if (watch) await installWebWatchUi(context);
   const page = await context.newPage();
@@ -1040,7 +1045,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         await auditPage.waitForTimeout(400); // let client-rendered shells paint their copy
         const text = await auditPage.evaluate(() => (document.body && document.body.innerText || "").slice(0, 120000)).catch(() => "");
         const phrase = webUnavailableShellPhrase(text);
-        if (phrase) issue("outbound_unavailable", "low", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
+        if (phrase) issue("outbound_unavailable", "medium", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
       }
       await auditPage.close().catch(() => {});
     }

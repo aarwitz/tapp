@@ -140,6 +140,7 @@ ${r.conditionsNotReached?.length ? `<div><h2>Conditions not reached</h2><ul>${sc
 <h1>${esc(observationBadge(r))} <span class="dim">· ${esc(observationSummary(r))}</span></h1>
 <div class="meta">${esc(label)} · evidence page (observation, not a release decision)</div>
 ${r.platform === "web" ? `<div class="meta">Deterministic basis: ${r.deterministicFindingCounts?.total || 0} deterministic finding(s); ${r.sampledFindingCounts?.total || 0} sampled probe finding(s) are advisory.</div>` : ""}
+${r.capture ? `<div class="meta">Captured at ${esc([r.capture.device, r.capture.viewport ? `${r.capture.viewport.width}×${r.capture.viewport.height}` : null, r.capture.deviceScaleFactor ? `@${r.capture.deviceScaleFactor}x` : null].filter(Boolean).join(" "))} — every screenshot on this page shares these conditions.</div>` : ""}
 <div class="headline">${esc(r.headline)}</div>
 ${r.credentialWarning ? `<div class="warning">${esc(r.credentialWarning)}</div>` : ""}
 ${scopeHtml}

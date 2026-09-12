@@ -308,7 +308,7 @@ test("new link-audit issue types keep desktop-known categories and honest tiers"
     'OCQA_ISSUE:{"type":"anchor_missing","severity":"medium","title":"Anchor link \\"#nowhere\\" has no matching element on the page","screen":"Landing","target":"/#nowhere"}',
     'OCQA_ISSUE:{"type":"unresolvable_host","severity":"medium","title":"Outbound link host does not resolve: x.invalid","screen":"Landing","target":"https://x.invalid/"}',
     'OCQA_ISSUE:{"type":"mailto_no_mx","severity":"medium","title":"mailto: domain cannot receive email (no MX or address record): a@b.invalid","screen":"Landing","target":"a@b.invalid"}',
-    'OCQA_ISSUE:{"type":"outbound_unavailable","severity":"low","title":"Outbound link returns 200 but shows \\"page not found\\"","screen":"Landing","target":"https://social.example/x"}',
+    'OCQA_ISSUE:{"type":"outbound_unavailable","severity":"medium","title":"Outbound link returns 200 but shows \\"page not found\\"","screen":"Landing","target":"https://social.example/x"}',
     'OCQA_COMPLETE:{"actions":1,"states":1,"issues":4,"stop":"frontier-drained"}',
   ]), { platform: "web" });
   const byType = Object.fromEntries(r.findings.map((f) => [f.type, f]));
@@ -319,7 +319,27 @@ test("new link-audit issue types keep desktop-known categories and honest tiers"
   assert.equal(byType.anchor_missing.evaluationTier, "deterministic");
   assert.equal(byType.unresolvable_host.evaluationTier, "deterministic");
   assert.equal(byType.mailto_no_mx.evaluationTier, "deterministic");
-  assert.equal(byType.outbound_unavailable.evaluationTier, "sampled", "the 200-shell heuristic never gates");
+  // Policy v4: the shell match is a browser-rendered observation of the destination page, so a
+  // dead social link gates on web exactly like every other broken-link-class finding.
+  assert.equal(byType.outbound_unavailable.evaluationTier, "deterministic", "the 200-shell finding gates under policy v4");
+  assert.ok(r.deterministicFindingCounts.medium >= 4, "all four link-audit findings enter the gate counts");
+});
+
+test("the capture context stamps the report root; absent marker leaves it null", () => {
+  const stamped = buildQaReport(markersFile([
+    'OCQA_CONTEXT:{"device":"iPhone 13","viewport":{"width":390,"height":844},"deviceScaleFactor":3}',
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained"}',
+  ]), { platform: "web" });
+  assert.deepEqual(stamped.capture, { device: "iPhone 13", viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+
+  const legacy = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Landing","elements":8}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained"}',
+  ]), { platform: "web" });
+  assert.equal(legacy.capture, null, "captures without a CONTEXT marker stay honest: unknown, not defaulted");
 });
 
 test("a one-page web login wall without submitted credentials remains inconclusive", () => {

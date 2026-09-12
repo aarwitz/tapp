@@ -178,6 +178,7 @@ function loadBaseline(baselinePath) {
     actionsPerformed: parsed.actionsPerformed || 0,
     platform: parsed.baselineIdentity?.platform || parsed.platform || null,
     targetKey: parsed.baselineIdentity?.targetId || parsed.targetKey || null,
+    capture: parsed.capture || null,
   };
 }
 
@@ -399,6 +400,10 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
     lines.push(`### Since baseline — ${regFailed ? "🔴 regression gate FAILED" : "🟢 regression gate passed"}`);
     lines.push(`+${regression.counts.new} new · ${regression.counts.persisting} persisting · ${regression.counts.resolved} resolved` +
       (regFailed ? ` — **${newCritical} new critical, ${newHigh} new high**` : ""));
+    if (regression.captureMismatch) {
+      const describe = (c) => [c?.device, c?.viewport ? `${c.viewport.width}x${c.viewport.height}` : null, c?.deviceScaleFactor ? `@${c.deviceScaleFactor}x` : null].filter(Boolean).join(" ") || "unknown";
+      lines.push(`⚠️ **Capture mismatch**: baseline was captured at ${describe(regression.captureMismatch.baseline)}, this run at ${describe(regression.captureMismatch.current)}. "Resolved" findings may reflect layout differences at the new size, not fixes — re-baseline at the same device/viewport to compare honestly.`);
+    }
     for (const f of regression.newFindings) {
       lines.push(`- NEW ${SEV_ICON[f.severity] || ""} ${f.severity}: ${f.title} (${f.screen ?? "—"})`);
     }
@@ -491,7 +496,11 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
   lines.push(`**Gate (${gate.policy}): ${badge}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}${ignoredNote}`);
   // The gate is only authoritative about what it actually ran — record the scope explicitly.
   const rev = gate.revision?.sha ? `${String(gate.revision.sha).slice(0, 12)}${gate.revision.dirty ? "-dirty" : ""}` : "unknown";
-  lines.push(`_target: ${gate.target || "—"} · revision: ${rev} · policy: ${gate.policy} v${gate.policyVersion || "?"}_`);
+  const captured = report.capture
+    ? ` · capture: ${[report.capture.device, report.capture.viewport ? `${report.capture.viewport.width}x${report.capture.viewport.height}` : null, report.capture.deviceScaleFactor ? `@${report.capture.deviceScaleFactor}x` : null].filter(Boolean).join(" ")}`
+    : "";
+  const stableId = report.targetKey && report.targetKey !== gate.target ? ` (${report.targetKey})` : "";
+  lines.push(`_target: ${gate.target || "—"}${stableId} · revision: ${rev} · policy: ${gate.policy} v${gate.policyVersion || "?"}${captured}_`);
   if (Array.isArray(gate.checked) && gate.checked.length) lines.push(`_Checked: ${gate.checked.join(" · ")}_`);
   if (Array.isArray(gate.notChecked) && gate.notChecked.length) lines.push(`_Not checked: ${gate.notChecked.join(" · ")}_`);
   return lines.join("\n");
@@ -550,6 +559,12 @@ if (collapsed.length) {
   report.headline = `${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }
 const regression = computeRegression(report.findings, baseline?.findings ?? null);
+// A baseline captured at a different device/viewport is a layout comparison, not a regression
+// signal: a phone run legitimately hides desktop nav links, so its "resolved" list lies. Keep
+// the diff (new findings still gate) but stamp the mismatch so every consumer can see it.
+if (regression && baseline?.capture && report.capture && JSON.stringify(baseline.capture) !== JSON.stringify(report.capture)) {
+  regression.captureMismatch = { baseline: baseline.capture, current: report.capture };
+}
 const runs = args.flowLogs.map(parseFlowLog);
 const contracts = runs.filter((run) => run.kind === "release-contract");
 const flows = runs.filter((run) => !["scenario", "release-contract"].includes(run.kind));
@@ -572,7 +587,9 @@ try {
 const decision = evaluateGate({ report, regression, flows, scenarios, contracts, prPlan, baseline, failOn: args.failOn });
 const gate = {
   ...decision,
-  target: args.targetKey || report.target || null,
+  // Display identity is the URL/bundle the run exercised; the stable application-model id
+  // stays on report.targetKey for baseline matching (a hash is not a target name).
+  target: report.target || args.targetKey || null,
   revision: gitRevision(args.projectDir),
   checked: report.checkedFor,
   notChecked: report.notChecked,

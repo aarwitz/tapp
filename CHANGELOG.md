@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.7
+
+**Comparable evidence — gate policy v4.** ⚠️ Behavior change for web gates.
+
+- **`outbound_unavailable` now gates**: promoted to medium severity and the deterministic tier.
+  Since 0.17.6 the outbound audit renders each link in the live browser, so a 200-but-
+  "content isn't available" shell (dead Facebook/Instagram links) is a stable observation —
+  under the web `--fail-on medium` default it now fails the gate like any other broken link.
+- **Capture conditions are on record**: web runs stamp `capture` (device, viewport, scale
+  factor) on the report root, the HTML evidence page, and the gate summary line. A
+  `--baseline` diff across different captures prints a capture-mismatch warning — a phone run
+  "resolving" desktop nav findings is a layout difference, not a fix — and stamps
+  `regression.captureMismatch` in the JSON.
+- The gate banner prints the target URL/bundle instead of the application-model hash (the
+  stable id remains on `targetKey` for baseline identity).
+- Screen readouts count `Link` controls as links: "14 links · 6 buttons", not "20 buttons".
+
 ## 0.17.6
 
 **The gate tells the truth — policy v3.** ⚠️ Behavior change for web gates.

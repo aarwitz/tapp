@@ -1721,9 +1721,10 @@ async function writeRunUiMap({ markersPath, platform, target, runId, outDir }) {
 /** One-line "3 buttons · 2 fields · 8 text" breakdown of an accessibility element list. */
 function elementBreakdown(elements) {
   const has = (e, ...pats) => pats.some((p) => String(e.type || "").includes(p));
-  let buttons = 0, fields = 0, texts = 0, cells = 0, other = 0;
+  let buttons = 0, links = 0, fields = 0, texts = 0, cells = 0, other = 0;
   for (const e of elements || []) {
-    if (has(e, "Button", "rawValue: 9", "Link", "rawValue: 39")) buttons++;
+    if (has(e, "Link", "rawValue: 39")) links++;
+    else if (has(e, "Button", "rawValue: 9")) buttons++;
     else if (has(e, "TextField", "rawValue: 49", "rawValue: 50", "SecureTextField")) fields++;
     else if (has(e, "StaticText", "rawValue: 48")) texts++;
     else if (has(e, "Cell", "rawValue: 75")) cells++;
@@ -1731,6 +1732,7 @@ function elementBreakdown(elements) {
   }
   return [
     buttons && `${buttons} button${buttons > 1 ? "s" : ""}`,
+    links && `${links} link${links > 1 ? "s" : ""}`,
     fields && `${fields} field${fields > 1 ? "s" : ""}`,
     cells && `${cells} cell${cells > 1 ? "s" : ""}`,
     texts && `${texts} text`,

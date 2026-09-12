@@ -290,3 +290,14 @@ test("isInsideDir rejects sibling directories sharing a path prefix", () => {
   assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp-malicious/x.yml"), false);
   assert.equal(engine.isInsideDir("/repos/tapp", "/repos/tapp/../evil"), false);
 });
+
+test("formatScreen counts Link controls as links, not buttons", () => {
+  const out = engine.formatScreen("Landing", [
+    { type: "Link", role: "button", label: "Docs", frame: { x: 0, y: 0, width: 80, height: 20 } },
+    { type: "Link", role: "button", label: "Pricing", frame: { x: 0, y: 30, width: 80, height: 20 } },
+    { type: "Button", role: "button", label: "Sign up", frame: { x: 0, y: 60, width: 80, height: 30 } },
+  ]);
+  assert.match(out, /2 links/);
+  assert.match(out, /1 button\b/);
+  assert.doesNotMatch(out, /3 buttons/);
+});

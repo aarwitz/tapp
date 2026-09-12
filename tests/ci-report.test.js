@@ -141,7 +141,9 @@ test("first run passes clean evidence but states that regression gating is not a
 test("the gate report shows its scope: target, revision, policy version, and checked/not-checked", () => {
   const r = runGate({ targetKey: "target_web_store" });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.markdown, /target: target_web_store/);
+  // The human target leads; the stable application-model id is disclosed alongside it — a
+  // reader should never have to decode target_<hash> to learn what was exercised.
+  assert.match(r.markdown, /target: fixture \(target_web_store\)/);
   assert.match(r.markdown, /revision:/);
   assert.match(r.markdown, /policy: gate v\d/);
   assert.match(r.markdown, /Checked:/);
