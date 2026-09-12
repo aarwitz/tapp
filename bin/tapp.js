@@ -270,10 +270,10 @@ function safeCommandUsage(verb) {
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]",
+    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
-    contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]",
-    scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]",
+    contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
+    scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
     map: "tapp map build MARKERS [--platform PLATFORM] [--out FILE] [--replace]\ntapp map inspect [FILE]\ntapp map diff BEFORE AFTER [--comparable]",
     pr: "tapp pr plan [--base REF|--changed-files FILE] [--head REF] [--platform PLATFORM] [--out FILE]\ntapp pr gate PLAN [gate target/options]\ntapp pr adopt PLAN --item ID [--project-dir DIR]",
     plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]",
@@ -282,7 +282,7 @@ function safeCommandUsage(verb) {
     actor: "tapp actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
-    doctor: "tapp doctor",
+    doctor: "tapp doctor [--json]\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
     install: "tapp install",
     mcp: "tapp mcp",
   };
@@ -1425,37 +1425,51 @@ switch (command) {
   }
 
   case "doctor": {
-    console.log(`tapp v${pkg.version} — doctor\n`);
+    const { flags: doctorFlags } = parseVerbArgs(rest);
+    const jsonMode = doctorFlags.json === true;
+    const report = { version: pkg.version, healthy: true, node: {}, python3: {}, disk: {},
+      platforms: { ios: {}, android: {}, web: {} }, home: tappHome };
+    const say = (line) => { if (!jsonMode) console.log(line); };
+    const sayOk = (label, detail = "") => { if (!jsonMode) ok(label, detail); };
+    const sayBad = (label, detail = "") => { if (!jsonMode) bad(label, detail); };
+    say(`tapp v${pkg.version} — doctor\n`);
     let healthy = true;
 
     const major = Number(process.versions.node.split(".")[0]);
-    major >= 18 ? ok("Node", `v${process.versions.node}`) : (bad("Node", `v${process.versions.node} (need >= 18)`), (healthy = false));
+    report.node = { ok: major >= 18, version: process.versions.node };
+    major >= 18 ? sayOk("Node", `v${process.versions.node}`) : (sayBad("Node", `v${process.versions.node} (need >= 18)`), (healthy = false));
 
     const python = run("python3", ["--version"]);
-    python.code === 0 ? ok("python3", `${python.stdout} (used by Flows)`) : bad("python3", "not found — Flow replay needs python3 + pyyaml (everything else works)");
+    report.python3 = { ok: python.code === 0, version: python.code === 0 ? python.stdout : null };
+    python.code === 0 ? sayOk("python3", `${python.stdout} (used by Flows)`) : sayBad("python3", "not found — Flow replay needs python3 + pyyaml (everything else works)");
 
     const { storagePreflight } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
     const storage = storagePreflight(tappHome);
-    if (storage.level === "blocked") { bad("Disk space", storage.message); healthy = false; }
-    else if (storage.level === "warning") console.log(`  ⚠️  Disk space — ${storage.message}`);
-    else if (storage.level === "ok") ok("Disk space", storage.message);
-    else console.log(`  ⬜ Disk space — ${storage.message || "could not be checked"}`);
+    report.disk = { level: storage.level, message: storage.message || null };
+    if (storage.level === "blocked") { sayBad("Disk space", storage.message); healthy = false; }
+    else if (storage.level === "warning") say(`  ⚠️  Disk space — ${storage.message}`);
+    else if (storage.level === "ok") sayOk("Disk space", storage.message);
+    else say(`  ⬜ Disk space — ${storage.message || "could not be checked"}`);
 
-    console.log("\n  Platforms:");
+    say("\n  Platforms:");
     if (process.platform === "darwin") {
       const xcode = run("xcode-select", ["-p"]);
       const simctl = run("xcrun", ["simctl", "help"]);
       if (xcode.code === 0 && simctl.code === 0) {
         const ver = run("xcodebuild", ["-version"]).stdout.split("\n")[0];
         const booted = bootedSims();
-        ok("iOS", `${ver || "Xcode"}; ${booted.length ? `${booted[0].name} booted` : "no simulator booted yet"}`);
         const xctestrun = harnessXctestrun();
-        xctestrun ? ok("iOS harness cache", xctestrun) : console.log("  ⬜ iOS harness cache — builds on first use (or: npx -y @aarwitz/tapp@latest install)");
+        report.platforms.ios = { available: true, xcode: ver || "Xcode",
+          bootedSimulator: booted.length ? booted[0].name : null, harnessCache: Boolean(xctestrun) };
+        sayOk("iOS", `${ver || "Xcode"}; ${booted.length ? `${booted[0].name} booted` : "no simulator booted yet"}`);
+        xctestrun ? sayOk("iOS harness cache", xctestrun) : say("  ⬜ iOS harness cache — builds on first use (or: npx -y @aarwitz/tapp@latest install)");
       } else {
-        console.log("  ⬜ iOS — unavailable (install Xcode + simulator runtime)");
+        report.platforms.ios = { available: false, reason: "install Xcode + simulator runtime" };
+        say("  ⬜ iOS — unavailable (install Xcode + simulator runtime)");
       }
     } else {
-      console.log(`  ⬜ iOS — requires macOS (this host: ${process.platform})`);
+      report.platforms.ios = { available: false, reason: `requires macOS (this host: ${process.platform})` };
+      say(`  ⬜ iOS — requires macOS (this host: ${process.platform})`);
     }
 
     const { resolveAdbPath, resolveAndroidSdkRoot } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));
@@ -1463,17 +1477,20 @@ switch (command) {
     const adb = adbPath ? run(adbPath, ["devices"]) : { code: 1, stdout: "" };
     if (adb.code === 0) {
       const devices = adb.stdout.split(/\r?\n/).slice(1).filter((line) => /\sdevice(?:\s|$)/.test(line));
-      ok("Android", devices.length ? `${devices.length} connected emulator/device` : "adb available; no device connected");
+      report.platforms.android = { adb: true, devicesConnected: devices.length };
+      sayOk("Android", devices.length ? `${devices.length} connected emulator/device` : "adb available; no device connected");
     } else {
-      console.log("  ⬜ Android — adb not found (install Android SDK platform-tools)");
+      report.platforms.android = { adb: false, devicesConnected: 0 };
+      say("  ⬜ Android — adb not found (install Android SDK platform-tools)");
     }
     const { resolveJavaRuntime } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
     const java = resolveJavaRuntime();
     const androidSdkRoot = resolveAndroidSdkRoot();
-    if (java && androidSdkRoot) ok("Android source builds", `${java.version || java.javaHome}; SDK ${androidSdkRoot}`);
+    report.platforms.android.sourceBuilds = Boolean(java && androidSdkRoot);
+    if (java && androidSdkRoot) sayOk("Android source builds", `${java.version || java.javaHome}; SDK ${androidSdkRoot}`);
     else {
       const missing = [!java ? "JDK 17" : "", !androidSdkRoot ? "Android SDK root" : ""].filter(Boolean).join(" and ");
-      console.log(`  ⬜ Android source builds — install/configure ${missing} (prebuilt APK testing still works)`);
+      say(`  ⬜ Android source builds — install/configure ${missing} (prebuilt APK testing still works)`);
     }
 
     try {
@@ -1481,18 +1498,26 @@ switch (command) {
       let executable = "";
       try { executable = chromium.executablePath(); } catch { /* report the missing browser below */ }
       if (executable && fs.existsSync(executable)) {
-        ok("Web", `Playwright + Chromium (${executable})`);
+        report.platforms.web = { available: true, chromium: executable };
+        sayOk("Web", `Playwright + Chromium (${executable})`);
       } else {
-        console.log("  ⬜ Web — Playwright installed; Chromium browser missing (run: npx playwright install chromium)");
+        report.platforms.web = { available: false, reason: "Chromium browser missing (run: npx playwright install chromium)" };
+        say("  ⬜ Web — Playwright installed; Chromium browser missing (run: npx playwright install chromium)");
       }
     } catch {
-      console.log("  ⬜ Web — install Playwright in the app workspace: npm install -D playwright && npx playwright install chromium");
+      report.platforms.web = { available: false, reason: "Playwright not installed" };
+      say("  ⬜ Web — install Playwright in the app workspace: npm install -D playwright && npx playwright install chromium");
     }
 
-    console.log(`\n  Home: ${tappHome}`);
-    console.log(healthy
-      ? "\nReady. Start with:\n  npx -y @aarwitz/tapp@latest open [target]\n  npx -y @aarwitz/tapp@latest explore [target]"
-      : "\nFix the ❌ items above, then re-run: npx -y @aarwitz/tapp@latest doctor");
+    report.healthy = healthy;
+    if (jsonMode) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(`\n  Home: ${tappHome}`);
+      console.log(healthy
+        ? "\nReady. Start with:\n  npx -y @aarwitz/tapp@latest open [target]\n  npx -y @aarwitz/tapp@latest explore [target]"
+        : "\nFix the ❌ items above, then re-run: npx -y @aarwitz/tapp@latest doctor");
+    }
     process.exit(healthy ? 0 : 1);
   }
 

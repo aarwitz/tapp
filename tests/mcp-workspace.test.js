@@ -46,7 +46,7 @@ function startMcp(cwd) {
 }
 
 test("installed MCP repository tools are rooted in the client workspace, not the package cache", async () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-mcp-workspace-"));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-workspace-"));
   fs.writeFileSync(path.join(workspace, "package.json"), JSON.stringify({
     name: "workspace-app",
     private: true,

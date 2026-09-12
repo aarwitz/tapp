@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tapp — UI verification for coding agents</title>
+<title>tapp — UI verification for coding agents</title>
 <meta name="description" content="Let coding agents verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
 <link rel="canonical" href="https://runtapp.com/">
-<meta property="og:title" content="Tapp — UI verification for coding agents">
+<meta property="og:title" content="tapp — UI verification for coding agents">
 <meta property="og:description" content="Verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
 <meta property="og:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Tapp — let your coding agent prove the UI it changed">
+<meta property="og:image:alt" content="tapp — let your coding agent prove the UI it changed">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Tapp — UI verification for coding agents">
+<meta name="twitter:title" content="tapp — UI verification for coding agents">
 <meta name="twitter:description" content="Let coding agents verify real iOS, Android, and web UI changes, then enforce reviewed proof in CI.">
 <meta name="twitter:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta name="theme-color" content="#2f6fed">
@@ -25,7 +25,7 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Tapp",
+  "name": "tapp",
   "url": "https://runtapp.com/",
   "downloadUrl": "https://www.npmjs.com/package/@aarwitz/tapp",
   "applicationCategory": "DeveloperApplication",
@@ -131,6 +131,25 @@
   .copybox button:hover { background: color-mix(in srgb, var(--code-fg) 12%, transparent); }
   .copy-note { color: var(--fg-dim); font-size: 0.82rem; min-height: 1.3rem; margin: 0.45rem 0 0; }
 
+  .hero-demo { max-width: 920px; margin: 2.8rem auto 0; text-align: left; }
+  .term-frame {
+    border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 16px; overflow: hidden;
+    background: #0a0c12; box-shadow: 0 30px 80px color-mix(in srgb, var(--fg) 20%, transparent),
+      0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .term-bar { display: flex; align-items: center; gap: 7px; padding: 0.65rem 0.9rem; background: #12151d;
+    border-bottom: 1px solid color-mix(in srgb, #ffffff 7%, transparent); }
+  .term-bar i { width: 11px; height: 11px; border-radius: 50%; }
+  .term-bar i.r { background: #ff5f57; } .term-bar i.y { background: #febc2e; } .term-bar i.g { background: #28c840; }
+  .term-bar span { flex: 1; text-align: center; color: #8a8f9c; font-size: 0.78rem; }
+  .term-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0a0c12; }
+  .hero-demo .demo-note { color: var(--fg-dim); font-size: 0.84rem; margin: 0.8rem 0.2rem 0; text-align: center; }
+  .hero-demo .demo-note strong { color: var(--fg); }
+  @media (max-width: 640px) {
+    .hero-demo { margin-top: 2rem; }
+    .term-frame { border-radius: 11px; }
+  }
+
   .featured-film { padding: 0 0 4rem; border-top: 0; scroll-margin-top: 4.5rem; }
   .featured-film figure { margin: 0; }
   .film-frame {
@@ -232,7 +251,7 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="/" aria-label="Tapp home"><img src="/assets/tapp-mark.svg" alt="">Tapp<span>.</span></a>
+    <a class="brand" href="/" aria-label="tapp home"><img src="/assets/tapp-mark.svg" alt="">tapp<span>.</span></a>
     <nav class="links">
       <a href="#film">Film</a>
       <a href="#proof">Proof</a>
@@ -247,7 +266,7 @@
 <div class="hero wrap">
   <h1>Let your coding agent prove the UI it changed.</h1>
   <p class="sub">
-    Tapp locates the requested surface from source, follows runtime-observed routes on real iOS simulators,
+    tapp locates the requested surface from source, follows runtime-observed routes on real iOS simulators,
     Android emulators and devices, and web apps, captures inspectable evidence, and turns approved journeys into
     deterministic CI checks.
   </p>
@@ -263,20 +282,32 @@
   <p class="sub" style="font-size:0.9rem;margin-top:1rem">
     Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
   </p>
+  <div class="hero-demo">
+    <div class="term-frame">
+      <div class="term-bar" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i><span>tapp — a real run</span></div>
+      <video id="hero-demo-video" autoplay muted loop playsinline preload="metadata"
+             poster="/assets/tapp-hero-poster.jpg" aria-label="A real tapp run: one command explores an iOS app on the simulator and reports three findings">
+        <source src="/assets/tapp-hero-loop.mp4" type="video/mp4">
+        <source src="/assets/tapp-hero-loop.webm" type="video/webm">
+      </video>
+    </div>
+    <p class="demo-note"><strong>A real run, straight from the terminal.</strong> One command on a fixture with three seeded bugs — tapp builds the app, explores 50 actions on the simulator, and finds all three. No API key, no test code.</p>
+  </div>
 </div>
 
 <section class="featured-film" id="film" aria-labelledby="film-title">
   <div class="wrap">
     <figure>
       <div class="film-frame">
-        <video controls playsinline preload="metadata" poster="/assets/tapp-product-film-poster.jpg" aria-describedby="film-caption">
-          <source src="/assets/tapp-product-film.mp4" type="video/mp4">
-          Your browser does not support embedded video. <a href="/assets/tapp-product-film.mp4">Download the Tapp product film.</a>
+        <video controls playsinline preload="metadata" poster="/assets/tapp-cli-demo-poster.jpg" aria-describedby="film-caption">
+          <source src="/assets/tapp-cli-demo.mp4" type="video/mp4">
+          <source src="/assets/tapp-cli-demo.webm" type="video/webm">
+          Your browser does not support embedded video. <a href="/assets/tapp-cli-demo.mp4">Download the tapp demo.</a>
         </video>
       </div>
       <figcaption class="film-caption" id="film-caption">
-        <strong id="film-title">See Tapp in 90 seconds.</strong>
-        <span>The product vision—then a real, inspectable run below.</span>
+        <strong id="film-title">See a full run in 28 seconds.</strong>
+        <span>Recorded from a real terminal — three planted bugs, three findings, and a real, inspectable run below.</span>
       </figcaption>
     </figure>
   </div>
@@ -286,7 +317,7 @@
   <div class="wrap">
     <span class="tag">Real evidence</span>
     <h2>Reach the requested UI without wandering.</h2>
-    <p class="lead">This is a real Tapp 0.17.2 run against the public DemoApp corpus. Source located the surface; only previously observed runtime transitions authorized navigation.</p>
+    <p class="lead">This is a real tapp 0.17.2 run against the public DemoApp corpus. Source located the surface; only previously observed runtime transitions authorized navigation.</p>
     <div class="proof-grid">
       <div class="proof-terminal mono">
 <pre><span class="dim">$</span> tapp focus "Update Profile" DemoApp
@@ -297,7 +328,7 @@
 <span class="shot">📸 screenshot + accessibility tree saved</span></pre>
       </div>
       <figure class="proof-device">
-        <img src="/assets/tapp-focus-ios.jpg" width="603" height="1311" alt="The Update Profile screen reached by Tapp on an iOS simulator">
+        <img src="/assets/tapp-focus-ios.jpg" width="603" height="1311" alt="The Update Profile screen reached by tapp on an iOS simulator">
         <figcaption>Actual final screenshot · no mocked product UI</figcaption>
       </figure>
     </div>
@@ -305,7 +336,7 @@
       <figure class="evidence-card">
         <h3>Watch autonomous exploration</h3>
         <p>The first 45 seconds of a full 60-action iOS run. Recording begins after build and installation finish.</p>
-        <video controls muted playsinline preload="none" poster="/assets/tapp-focus-ios.jpg" aria-label="Tapp autonomously exploring the public iOS DemoApp">
+        <video controls muted playsinline preload="none" poster="/assets/tapp-focus-ios.jpg" aria-label="tapp autonomously exploring the public iOS DemoApp">
           <source src="/assets/tapp-explore-ios.webm" type="video/webm">
           <source src="/assets/tapp-explore-ios.mp4" type="video/mp4">
           Your browser does not support embedded video. <a href="/assets/tapp-explore-ios.mp4">Download the clip.</a>
@@ -314,8 +345,8 @@
       </figure>
       <figure class="evidence-card">
         <h3>Inspect a complete evidence report</h3>
-        <p>Tapp explored the intentionally defective WebDemo corpus and surfaced six evidence-backed findings across seven screens, while stating what it did not check.</p>
-        <a href="/evidence/webdemo/report.html"><img src="/assets/tapp-web-report.png" width="1200" height="900" alt="Tapp WebDemo report showing checked scope and six findings"></a>
+        <p>tapp explored the intentionally defective WebDemo corpus and surfaced six evidence-backed findings across seven screens, while stating what it did not check.</p>
+        <a href="/evidence/webdemo/report.html"><img src="/assets/tapp-web-report.png" width="1200" height="900" alt="tapp WebDemo report showing checked scope and six findings"></a>
         <figcaption><a href="/evidence/webdemo/report.html">Open the sanitized report →</a></figcaption>
       </figure>
     </div>
@@ -327,21 +358,21 @@
     <span class="tag">Platforms</span>
     <h2>Three app surfaces. One testing workflow.</h2>
     <p class="lead">
-      Tapp drives the real target through its native accessibility surface, captures inspectable
+      tapp drives the real target through its native accessibility surface, captures inspectable
       evidence, and keeps the same Flow and gate contract across supported platforms.
     </p>
     <div class="grid">
       <div class="card">
         <div class="icon">🍎</div>
         <h3>iOS simulator</h3>
-        <p>A generic XCUITest harness drives accessible simulator apps. No Tapp SDK, Appium, or
+        <p>A generic XCUITest harness drives accessible simulator apps. No tapp SDK, Appium, or
         WebDriverAgent is added to the app.</p>
       </div>
       <div class="card">
         <div class="icon">🤖</div>
         <h3>Android emulator or device</h3>
         <p>ADB and UIAutomator provide black-box driving on a connected emulator or device. Install
-        an APK or let Tapp build a detected Gradle target.</p>
+        an APK or let tapp build a detected Gradle target.</p>
       </div>
       <div class="card">
         <div class="icon">🌐</div>
@@ -368,7 +399,7 @@
     <span class="tag">Local and inspectable</span>
     <h2>Explore autonomously. Commit only what matters.</h2>
     <p class="lead">
-      Tapp can discover broadly, then distill the highest-value behavior into reusable Tasks and
+      tapp can discover broadly, then distill the highest-value behavior into reusable Tasks and
       reviewable business contracts. The deterministic suite runs in CI without a model or API key.
     </p>
     <div class="grid">
@@ -412,7 +443,7 @@
     <span class="tag">Observe, then judge</span>
     <h2>Exploration observes. The gate judges.</h2>
     <p class="lead">
-      Tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
+      tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
       screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
       links. Exploration <strong>observes</strong> (findings + evidence, never a ship verdict). The
       <strong>gate</strong> judges: the same evidence + contracts + baseline always produce the same
@@ -471,9 +502,9 @@
   <div class="wrap">
     <div class="pilot-panel">
       <div>
-        <span class="tag">Founding Tapp Teams</span>
-        <h2>Put Tapp on a real agent-authored app.</h2>
-        <p>We are opening a small paid pilot for teams that want hands-on repository onboarding, important-journey setup, and deterministic CI integration. Core Tapp stays MIT licensed and runs in infrastructure you control.</p>
+        <span class="tag">Founding tapp Teams</span>
+        <h2>Put tapp on a real agent-authored app.</h2>
+        <p>We are opening a small paid pilot for teams that want hands-on repository onboarding, important-journey setup, and deterministic CI integration. Core tapp stays MIT licensed and runs in infrastructure you control.</p>
       </div>
       <div>
         <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?template=founding-pilot.yml">Apply for the founding pilot →</a>
@@ -491,6 +522,15 @@
 </footer>
 
 <script>
+  // Respect reduced-motion: stop the hero loop and surface controls instead.
+  const heroDemo = document.getElementById("hero-demo-video");
+  if (heroDemo && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    heroDemo.removeAttribute("autoplay");
+    heroDemo.removeAttribute("loop");
+    heroDemo.setAttribute("controls", "");
+    heroDemo.pause();
+  }
+
   const copyButton = document.getElementById("copy-install");
   const copyStatus = document.getElementById("copy-status");
   const installCommand = document.getElementById("install-command").textContent;

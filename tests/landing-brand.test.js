@@ -25,9 +25,11 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
   assert.match(index, /Let your coding agent prove the UI it changed/);
   assert.match(index, /Real evidence/);
-  assert.match(index, /See Tapp in 90 seconds/);
-  assert.match(index, /assets\/tapp-product-film\.mp4/);
-  assert.match(index, /assets\/tapp-product-film-poster\.jpg/);
+  assert.match(index, /See a full run in 28 seconds/);
+  assert.match(index, /assets\/tapp-hero-loop\.mp4/);
+  assert.match(index, /prefers-reduced-motion/);
+  assert.match(index, /assets\/tapp-cli-demo\.mp4/);
+  assert.match(index, /assets\/tapp-cli-demo-poster\.jpg/);
   assert.match(index, /evidence\/webdemo\/report\.html/);
   assert.match(index, /founding-pilot\.yml/);
   assert.match(index, /og:image" content="https:\/\/runtapp\.com\/assets\/tapp-social\.png/);
@@ -46,8 +48,12 @@ test("landing proof assets and public pilot intake ship together", () => {
     "assets/tapp-focus-proof.png",
     "assets/tapp-explore-ios.webm",
     "assets/tapp-explore-ios.mp4",
-    "assets/tapp-product-film.mp4",
-    "assets/tapp-product-film-poster.jpg",
+    "assets/tapp-cli-demo.mp4",
+    "assets/tapp-cli-demo.webm",
+    "assets/tapp-cli-demo-poster.jpg",
+    "assets/tapp-hero-loop.mp4",
+    "assets/tapp-hero-loop.webm",
+    "assets/tapp-hero-poster.jpg",
     "assets/tapp-web-report.png",
     "evidence/webdemo/report.html",
   ]) {
