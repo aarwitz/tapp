@@ -34,7 +34,9 @@
 #                                                 # blocks; see ci-report.js)
 #                      [--json-out <file.json>]   # write the full report (use as the next baseline)
 #                      [--md-out <file.md>]       # write the rendered markdown report (for a PR comment)
-#                      [--device <name>]          # simulator device to boot if none is (default "iPhone 16 Pro")
+#                      [--device <name>]          # ios: simulator to boot (default "iPhone 16 Pro")
+#                                                 # web: Playwright device profile, same as `tapp explore`
+#                      [--viewport WxH]           # web only: explicit viewport, e.g. 390x844
 #                      [--serial <adb-serial>]    # Android emulator/device (default: first connected device)
 #
 # The app must be a SIMULATOR build (xcodebuild ... -destination 'generic/platform=iOS Simulator').
@@ -47,7 +49,7 @@ usage() {
 
 PLATFORM="ios" APP_PATH="" BUNDLE_ID="" APK_PATH="" APP_ID="" URL="" WEB_TARGET="" TARGET_KEY="" SERIAL="" ACTIONS=40 TIMEOUT=600 FLOWS="" SCENARIOS="" CONTRACTS="" PROJECT_DIR="" BASELINE="" FAIL_ON="gate" JSON_OUT="" MD_OUT="" DEVICE="iPhone 16 Pro" PR_BASE="" PR_HEAD="HEAD" CHANGED_FILES_FILE="" PR_PLAN_OUT=""
 IOS_PR_TARGET_JSON=""
-FLOWS_EXPLICIT=false SCENARIOS_EXPLICIT=false CONTRACTS_EXPLICIT=false PLATFORM_EXPLICIT=false FAIL_ON_EXPLICIT=false
+FLOWS_EXPLICIT=false SCENARIOS_EXPLICIT=false CONTRACTS_EXPLICIT=false PLATFORM_EXPLICIT=false FAIL_ON_EXPLICIT=false DEVICE_EXPLICIT=false VIEWPORT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --platform) PLATFORM="$2"; PLATFORM_EXPLICIT=true; shift 2 ;;
@@ -73,12 +75,14 @@ while [[ $# -gt 0 ]]; do
     --fail-on) FAIL_ON="$2"; FAIL_ON_EXPLICIT=true; shift 2 ;;
     --json-out) JSON_OUT="$2"; shift 2 ;;
     --md-out) MD_OUT="$2"; shift 2 ;;
-    --device) DEVICE="$2"; shift 2 ;;
+    --device) DEVICE="$2"; DEVICE_EXPLICIT=true; shift 2 ;;
+    --viewport) VIEWPORT="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 [[ "$PLATFORM" == "ios" || "$PLATFORM" == "android" || "$PLATFORM" == "web" ]] || { echo "❌ --platform must be ios|android|web" >&2; exit 2; }
+[[ "$PLATFORM" == "ios" && -n "$VIEWPORT" ]] && { echo "❌ --viewport applies to web gates only; on ios --device selects the simulator" >&2; exit 2; }
 [[ "$ACTIONS" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --actions must be a positive integer" >&2; exit 2; }
 [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --timeout must be a positive integer" >&2; exit 2; }
 [[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "absolute" || "$FAIL_ON" == "any" || "$FAIL_ON" == "high" || "$FAIL_ON" == "medium" ]] || { echo "❌ --fail-on must be gate|absolute|any|high|medium" >&2; exit 2; }
@@ -283,6 +287,16 @@ if [[ "$PLATFORM" != "ios" ]]; then
   [[ -n "$URL" ]] && PLATFORM_ARGS+=(--url "$URL")
   [[ -n "$PROJECT_DIR" ]] && PLATFORM_ARGS+=(--project-dir "$PROJECT_DIR")
   [[ -n "$WEB_TARGET" ]] && PLATFORM_ARGS+=(--web-target "$WEB_TARGET")
+  # On a web gate --device/--viewport carry the SAME meaning as `tapp explore` (a Playwright
+  # rendering profile) — one flag must not silently mean "simulator" here and get dropped.
+  if [[ "$PLATFORM" == "web" ]]; then
+    [[ "$DEVICE_EXPLICIT" == "true" ]] && PLATFORM_ARGS+=(--device "$DEVICE")
+    [[ -n "$VIEWPORT" ]] && PLATFORM_ARGS+=(--viewport "$VIEWPORT")
+  elif [[ "$PLATFORM" == "android" ]]; then
+    if [[ "$DEVICE_EXPLICIT" == "true" || -n "$VIEWPORT" ]]; then
+      echo "❌ --device/--viewport have no meaning on an android gate (use --serial to pick a device)" >&2; exit 2
+    fi
+  fi
   [[ -n "$TARGET_KEY" ]] && PLATFORM_ARGS+=(--target-key "$TARGET_KEY")
   [[ -n "$APP_ID" ]] && PLATFORM_ARGS+=(--app-id "$APP_ID")
   [[ -n "$APK_PATH" ]] && PLATFORM_ARGS+=(--apk "$APK_PATH")

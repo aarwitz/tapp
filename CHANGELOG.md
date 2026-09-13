@@ -20,6 +20,14 @@ observations.** ⚠️ Behavior change for iOS exploration.
 - **`init --dry-run --refresh` previews the merged plan**: reviewed decisions from the
   existing plan are merged into the preview (pure, no writes), so a dry run no longer claims
   approvals would revert to pending.
+- **The capture stamp survives in explore JSON as `captureContext`**: exploration output
+  already used `capture` for the evidence-folder record, which clobbered the 0.17.7
+  device/viewport stamp in exactly the file passed as `--baseline`. The stamp now lives at
+  `captureContext` everywhere (gate JSON, explore JSON, mismatch warning); gates still read a
+  0.17.7 baseline's old key when it is a real stamp.
+- **`tapp ci --device`/`--viewport` mean the same as `explore` on web gates**: a web gate
+  renders at the requested Playwright profile or WxH viewport instead of silently ignoring the
+  flag (on iOS `--device` still selects the simulator; android refuses both).
 
 ## 0.17.7
 

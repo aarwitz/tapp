@@ -332,14 +332,18 @@ test("the capture context stamps the report root; absent marker leaves it null",
     'OCQA_STATE:{"screen":"Landing","elements":8}',
     'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained"}',
   ]), { platform: "web" });
-  assert.deepEqual(stamped.capture, { device: "iPhone 13", viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+  assert.deepEqual(stamped.captureContext, { device: "iPhone 13", viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+  // Exploration consumers publish `capture` as the evidence-FOLDER record ({id, path, …}) and
+  // spread it over this report — the stamp must not share that key or it gets clobbered in the
+  // very file people pass as --baseline (field report № 7, #21 partial).
+  assert.equal("capture" in stamped, false, "the stamp key must not collide with the evidence-folder record");
 
   const legacy = buildQaReport(markersFile([
     'OCQA_ACTION:{"type":"open","target":"/"}',
     'OCQA_STATE:{"screen":"Landing","elements":8}',
     'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"frontier-drained"}',
   ]), { platform: "web" });
-  assert.equal(legacy.capture, null, "captures without a CONTEXT marker stay honest: unknown, not defaulted");
+  assert.equal(legacy.captureContext, null, "captures without a CONTEXT marker stay honest: unknown, not defaulted");
 });
 
 test("driver-signalled stop causes pass through; only budget exhaustion reads as completed", () => {

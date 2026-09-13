@@ -201,3 +201,22 @@ test("ci --help speaks in tapp ci terms, not internal script paths", () => {
   assert.match(r.stdout, /tapp ci \[--platform ios\]/);
   assert.doesNotMatch(r.stdout, /scripts\/ci-gate\.sh \[--platform/);
 });
+
+test("--viewport is refused on an iOS gate before any simulator work", () => {
+  const r = preflight(["--viewport", "390x844"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--viewport applies to web gates only/);
+});
+
+test("--device/--viewport are refused on an android gate instead of silently ignored", () => {
+  const r = preflight(["--platform", "android", "--app-id", "com.example", "--device", "iPhone 13"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--device\/--viewport have no meaning on an android gate/);
+});
+
+test("usage documents the per-platform --device meaning and --viewport", () => {
+  const r = spawnSync("bash", [gate, "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /web: Playwright device profile/);
+  assert.match(r.stdout, /--viewport WxH/);
+});

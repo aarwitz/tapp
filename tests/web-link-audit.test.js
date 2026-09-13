@@ -98,7 +98,7 @@ test("field-report fixture: the complete link audit surfaces all eight cases", {
     const shell = report.findings.find((f) => f.type === "outbound_unavailable");
     assert.equal(shell.evaluationTier, "deterministic");
     assert.equal(shell.severity, "medium");
-    assert.deepEqual(report.capture, { device: null, viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+    assert.deepEqual(report.captureContext, { device: null, viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
   } finally {
     main.close();
     external.close();

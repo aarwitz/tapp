@@ -27,6 +27,8 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (key === "--project-dir") args.projectDir = value;
   else if (key === "--web-target") args.webTarget = value;
   else if (key === "--target-key") args.targetKey = value;
+  else if (key === "--device") args.device = value;
+  else if (key === "--viewport") args.viewport = value;
   else if (key === "--app-id") args.appId = value;
   else if (key === "--apk") args.apk = value;
   else if (key === "--serial") args.serial = value;
@@ -126,7 +128,7 @@ try {
     exitCode = 2;
   } else {
     const qa = args.platform === "web"
-      ? await runQaWeb({ url: args.url, maxActions: args.actions, timeout: args.timeout, testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets })
+      ? await runQaWeb({ url: args.url, maxActions: args.actions, timeout: args.timeout, testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets, device: args.device || "", viewport: args.viewport || "" })
       : await runQaAndroid({ appId: args.appId, apkPath: args.apk, serial: args.serial, maxActions: args.actions, timeout: args.timeout,
           testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets });
     if (qa.error) {

@@ -178,7 +178,9 @@ function loadBaseline(baselinePath) {
     actionsPerformed: parsed.actionsPerformed || 0,
     platform: parsed.baselineIdentity?.platform || parsed.platform || null,
     targetKey: parsed.baselineIdentity?.targetId || parsed.targetKey || null,
-    capture: parsed.capture || null,
+    // 0.17.7 gate JSONs briefly published the stamp as `capture`; explore JSONs use that key
+    // for the evidence-folder record. Accept the old key only when it is actually a stamp.
+    captureContext: parsed.captureContext || (parsed.capture?.viewport ? parsed.capture : null),
   };
 }
 
@@ -496,8 +498,8 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
   lines.push(`**Gate (${gate.policy}): ${badge}**${gate.reasons.length ? " — " + gate.reasons.join("; ") : ""}${ignoredNote}`);
   // The gate is only authoritative about what it actually ran — record the scope explicitly.
   const rev = gate.revision?.sha ? `${String(gate.revision.sha).slice(0, 12)}${gate.revision.dirty ? "-dirty" : ""}` : "unknown";
-  const captured = report.capture
-    ? ` · capture: ${[report.capture.device, report.capture.viewport ? `${report.capture.viewport.width}x${report.capture.viewport.height}` : null, report.capture.deviceScaleFactor ? `@${report.capture.deviceScaleFactor}x` : null].filter(Boolean).join(" ")}`
+  const captured = report.captureContext
+    ? ` · capture: ${[report.captureContext.device, report.captureContext.viewport ? `${report.captureContext.viewport.width}x${report.captureContext.viewport.height}` : null, report.captureContext.deviceScaleFactor ? `@${report.captureContext.deviceScaleFactor}x` : null].filter(Boolean).join(" ")}`
     : "";
   const stableId = report.targetKey && report.targetKey !== gate.target ? ` (${report.targetKey})` : "";
   lines.push(`_target: ${gate.target || "—"}${stableId} · revision: ${rev} · policy: ${gate.policy} v${gate.policyVersion || "?"}${captured}_`);
@@ -562,8 +564,8 @@ const regression = computeRegression(report.findings, baseline?.findings ?? null
 // A baseline captured at a different device/viewport is a layout comparison, not a regression
 // signal: a phone run legitimately hides desktop nav links, so its "resolved" list lies. Keep
 // the diff (new findings still gate) but stamp the mismatch so every consumer can see it.
-if (regression && baseline?.capture && report.capture && JSON.stringify(baseline.capture) !== JSON.stringify(report.capture)) {
-  regression.captureMismatch = { baseline: baseline.capture, current: report.capture };
+if (regression && baseline?.captureContext && report.captureContext && JSON.stringify(baseline.captureContext) !== JSON.stringify(report.captureContext)) {
+  regression.captureMismatch = { baseline: baseline.captureContext, current: report.captureContext };
 }
 const runs = args.flowLogs.map(parseFlowLog);
 const contracts = runs.filter((run) => run.kind === "release-contract");

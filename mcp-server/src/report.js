@@ -413,8 +413,10 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     evidence: { markers: base.relativeMarkersFilePath },
     // Capture conditions shared by every screenshot/marker in this run (web: from the driver's
     // CONTEXT marker). A baseline diff across different captures is a layout comparison, not a
-    // regression signal — consumers must be able to see that.
-    capture: base.context && typeof base.context === "object"
+    // regression signal — consumers must be able to see that. Named captureContext because
+    // exploration consumers already publish `capture` as the evidence-folder record (field
+    // report № 7): the stamp must survive in the file people pass as --baseline.
+    captureContext: base.context && typeof base.context === "object"
       ? { device: base.context.device || null, viewport: base.context.viewport || null, deviceScaleFactor: base.context.deviceScaleFactor ?? null }
       : null,
     uiMap: null,
