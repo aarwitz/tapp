@@ -131,23 +131,14 @@
   .copybox button:hover { background: color-mix(in srgb, var(--code-fg) 12%, transparent); }
   .copy-note { color: var(--fg-dim); font-size: 0.82rem; min-height: 1.3rem; margin: 0.45rem 0 0; }
 
-  .hero-demo { max-width: 920px; margin: 2.8rem auto 0; text-align: left; }
-  .term-frame {
-    border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 16px; overflow: hidden;
-    background: #0a0c12; box-shadow: 0 30px 80px color-mix(in srgb, var(--fg) 20%, transparent),
+  .hero-demo { max-width: 960px; margin: 2.8rem auto 0; text-align: left; }
+  .hero-demo .film-frame {
+    box-shadow: 0 30px 80px color-mix(in srgb, var(--fg) 20%, transparent),
       0 0 60px color-mix(in srgb, var(--accent) 12%, transparent);
   }
-  .term-bar { display: flex; align-items: center; gap: 7px; padding: 0.65rem 0.9rem; background: #12151d;
-    border-bottom: 1px solid color-mix(in srgb, #ffffff 7%, transparent); }
-  .term-bar i { width: 11px; height: 11px; border-radius: 50%; }
-  .term-bar i.r { background: #ff5f57; } .term-bar i.y { background: #febc2e; } .term-bar i.g { background: #28c840; }
-  .term-bar span { flex: 1; text-align: center; color: #8a8f9c; font-size: 0.78rem; }
-  .term-frame video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0a0c12; }
-  .hero-demo .demo-note { color: var(--fg-dim); font-size: 0.84rem; margin: 0.8rem 0.2rem 0; text-align: center; }
-  .hero-demo .demo-note strong { color: var(--fg); }
+  video.embedded-film { display: block; width: 100%; aspect-ratio: 16 / 9; background: #090b11; }
   @media (max-width: 640px) {
     .hero-demo { margin-top: 2rem; }
-    .term-frame { border-radius: 11px; }
   }
 
   .featured-film { padding: 0 0 4rem; border-top: 0; scroll-margin-top: 4.5rem; }
@@ -283,15 +274,12 @@
     Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
   </p>
   <div class="hero-demo">
-    <div class="term-frame">
-      <div class="term-bar" aria-hidden="true"><i class="r"></i><i class="y"></i><i class="g"></i><span>tapp — a real run</span></div>
-      <video id="hero-demo-video" autoplay muted loop playsinline preload="metadata"
-             poster="/assets/tapp-hero-poster.jpg" aria-label="A real tapp run: one command explores an iOS app on the simulator and reports three findings">
-        <source src="/assets/tapp-hero-loop.mp4" type="video/mp4">
-        <source src="/assets/tapp-hero-loop.webm" type="video/webm">
+    <div class="film-frame">
+      <video class="embedded-film" autoplay muted loop playsinline preload="metadata"
+             poster="/assets/tapp-film-poster.jpg" aria-label="The tapp film: the desktop app, coding agents, and the CLI verifying a real app">
+        <source src="/assets/tapp-film.mp4" type="video/mp4">
       </video>
     </div>
-    <p class="demo-note"><strong>A real run, straight from the terminal.</strong> One command on a fixture with three seeded bugs — tapp builds the app, explores 50 actions on the simulator, and finds all three. No API key, no test code.</p>
   </div>
 </div>
 
@@ -299,15 +287,14 @@
   <div class="wrap">
     <figure>
       <div class="film-frame">
-        <video controls playsinline preload="metadata" poster="/assets/tapp-cli-demo-poster.jpg" aria-describedby="film-caption">
-          <source src="/assets/tapp-cli-demo.mp4" type="video/mp4">
-          <source src="/assets/tapp-cli-demo.webm" type="video/webm">
-          Your browser does not support embedded video. <a href="/assets/tapp-cli-demo.mp4">Download the tapp demo.</a>
+        <video class="embedded-film" autoplay muted loop playsinline preload="metadata" poster="/assets/tapp-desktop-demo-poster.jpg" aria-describedby="film-caption">
+          <source src="/assets/tapp-desktop-demo.mp4" type="video/mp4">
+          Your browser does not support embedded video. <a href="/assets/tapp-desktop-demo.mp4">Download the tapp desktop demo.</a>
         </video>
       </div>
       <figcaption class="film-caption" id="film-caption">
-        <strong id="film-title">See a full run in 28 seconds.</strong>
-        <span>Recorded from a real terminal — three planted bugs, three findings, and a real, inspectable run below.</span>
+        <strong id="film-title">The desktop app on a real run.</strong>
+        <span>Real footage — drop a repo in, and tapp builds it, explores it autonomously, finds seeded bugs, and maps the app.</span>
       </figcaption>
     </figure>
   </div>
@@ -333,16 +320,6 @@
       </figure>
     </div>
     <div class="evidence-grid">
-      <figure class="evidence-card">
-        <h3>Watch autonomous exploration</h3>
-        <p>The first 45 seconds of a full 60-action iOS run. Recording begins after build and installation finish.</p>
-        <video controls muted playsinline preload="none" poster="/assets/tapp-focus-ios.jpg" aria-label="tapp autonomously exploring the public iOS DemoApp">
-          <source src="/assets/tapp-explore-ios.webm" type="video/webm">
-          <source src="/assets/tapp-explore-ios.mp4" type="video/mp4">
-          Your browser does not support embedded video. <a href="/assets/tapp-explore-ios.mp4">Download the clip.</a>
-        </video>
-        <figcaption>Real simulator recording · 13 screens and 60 actions in the complete run</figcaption>
-      </figure>
       <figure class="evidence-card">
         <h3>Inspect a complete evidence report</h3>
         <p>tapp explored the intentionally defective WebDemo corpus and surfaced six evidence-backed findings across seven screens, while stating what it did not check.</p>
@@ -522,13 +499,14 @@
 </footer>
 
 <script>
-  // Respect reduced-motion: stop the hero loop and surface controls instead.
-  const heroDemo = document.getElementById("hero-demo-video");
-  if (heroDemo && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    heroDemo.removeAttribute("autoplay");
-    heroDemo.removeAttribute("loop");
-    heroDemo.setAttribute("controls", "");
-    heroDemo.pause();
+  // Respect reduced-motion: stop the embedded loops and surface controls instead.
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    for (const film of document.querySelectorAll("video.embedded-film")) {
+      film.removeAttribute("autoplay");
+      film.removeAttribute("loop");
+      film.setAttribute("controls", "");
+      film.pause();
+    }
   }
 
   const copyButton = document.getElementById("copy-install");
