@@ -303,6 +303,9 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     : !coverageFloorMet ? "coverage-floor-not-met"
     : driverStop === "frontier-drained" ? "no-unexplored-in-scope-controls"
     : driverStop === "probe-cap" ? "probe-cap-reached"
+    // Any other driver-signalled cause (navigation-trap, app-crashed, stuck-no-progress …)
+    // passes through verbatim: "completed" is ONLY the exhausted action budget.
+    : driverStop && driverStop !== "action-budget" && driverStop !== "time-budget" ? String(driverStop)
     : "completed";
 
   const headline = timeBudgetExhausted

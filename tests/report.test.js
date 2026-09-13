@@ -342,6 +342,37 @@ test("the capture context stamps the report root; absent marker leaves it null",
   assert.equal(legacy.capture, null, "captures without a CONTEXT marker stay honest: unknown, not defaulted");
 });
 
+test("driver-signalled stop causes pass through; only budget exhaustion reads as completed", () => {
+  const run = (extra) => buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"open","target":"/"}',
+    'OCQA_STATE:{"screen":"Home","elements":8}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_STATE:{"screen":"Settings","elements":6}',
+    'OCQA_ACTION:{"type":"tap","target":"About"}',
+    'OCQA_STATE:{"screen":"About","elements":5}',
+    `OCQA_COMPLETE:${JSON.stringify({ actions: 15, states: 3, issues: 0, ...extra })}`,
+  ]), { platform: "ios" });
+  // The field bug: a native 15/20 run reported "completed". A driver-signalled trap or
+  // handoff must reach the report verbatim; "completed" is ONLY the exhausted budget.
+  assert.equal(run({ stop: "navigation-trap" }).stopReason, "navigation-trap");
+  assert.equal(run({ stop: "auth-cycle-complete" }).stopReason, "auth-cycle-complete");
+  assert.equal(run({ stop: "left-app-unrecovered" }).stopReason, "left-app-unrecovered");
+  assert.equal(run({ stop: "action-budget" }).stopReason, "completed");
+  assert.equal(run({ stop: "frontier-drained" }).stopReason, "no-unexplored-in-scope-controls");
+});
+
+test("a left_app handoff is trace evidence, not a finding", () => {
+  const r = buildQaReport(markersFile([
+    'OCQA_ACTION:{"type":"tap","target":"Instagram glyph","screen":"Profile"}',
+    'OCQA_STATE:{"screen":"Profile","elements":9}',
+    'OCQA_ACTION:{"type":"left_app","target":"Instagram glyph","screen":"Profile"}',
+    'OCQA_STATE:{"screen":"Profile","elements":9}',
+    'OCQA_COMPLETE:{"actions":2,"states":1,"issues":0,"stop":"action-budget"}',
+  ]), { platform: "ios" });
+  assert.ok(r.trace.some((a) => a.type === "left_app"), "the handoff is recorded in the trace");
+  assert.equal(r.findings.length, 0, "leaving the app for a system surface is not a defect");
+});
+
 test("a one-page web login wall without submitted credentials remains inconclusive", () => {
   const r = buildQaReport(markersFile([
     'OCQA_ACTION:{"type":"open","target":"/login"}',

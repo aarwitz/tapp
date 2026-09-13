@@ -1327,10 +1327,16 @@ class ExplorerTests: XCTestCase {
             beelineToTarget(target: targetScreen, route: route, actionCount: &actionCount, maxActions: maxActions)
         }
 
+        // Honest stop accounting: "action-budget" only survives when the while-condition itself
+        // ends the loop; every break records what actually stopped exploration so the report can
+        // say "navigation-trap" or "frontier-drained" instead of blessing a 15/20 run "completed".
+        var explorationStopCause = "action-budget"
+        var leftAppObservations = 0
         while actionCount < maxActions {
             // Subtract time spent paused for interactive input so human typing never eats the budget.
             if Date().timeIntervalSince(startTime) - totalWaitSeconds > timeoutSeconds {
                 print("OCQA_STATE:timeout_reached")
+                explorationStopCause = "time-budget"
                 break
             }
 
@@ -1374,6 +1380,32 @@ class ExplorerTests: XCTestCase {
                 }
             }
 
+            // ---- Left-app handoff: an observation, not a defect ----
+            // A tapped control can legitimately hand the user to a system surface or another
+            // app (mail composer, Settings, App Store, share sheet). Without this check the
+            // next tree read sees a backgrounded app, titles the screen "Unknown", and the
+            // hang/blank detectors file false HIGH findings (field report № 6 #26). Record
+            // the handoff against the action that caused it, come back, and keep exploring.
+            if app.state != .runningForeground {
+                leftAppObservations += 1
+                let causeAction = pendingTransitionFrom?.actionKey ?? "previous action"
+                let causeScreen = pendingTransitionFrom?.title ?? "Unknown"
+                print("OCQA_ACTION:{\"type\":\"left_app\",\"target\":\"\(escapeJSON(causeAction))\",\"screen\":\"\(escapeJSON(causeScreen))\",\"step\":\(actionCount),\"narrative\":\"\(escapeJSON("'\(causeAction)' handed off to a system surface or another app — returning to the app under test."))\"}")
+                pendingTransitionFrom = nil
+                app.activate()
+                _ = app.wait(for: .runningForeground, timeout: 5)
+                Thread.sleep(forTimeInterval: 1.0)
+                if app.state == .runningForeground {
+                    emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
+                    continue
+                }
+                if leftAppObservations >= 3 {
+                    explorationStopCause = "left-app-unrecovered"
+                    break
+                }
+                continue
+            }
+
             var elements = readUITree(app)
             if elements.isEmpty {
                 // App may have gone to background, crashed, or be unresponsive.
@@ -1399,6 +1431,7 @@ class ExplorerTests: XCTestCase {
                             print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"\(escapeJSON("App crashed during \(where_)"))\",\"screen\":\"\(escapeJSON(where_))\",\"step\":\(actionCount)}")
                         }
                     }
+                    explorationStopCause = "app-crashed"
                     break
                 }
             }
@@ -1528,6 +1561,7 @@ class ExplorerTests: XCTestCase {
                     emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
                     continue
                 }
+                explorationStopCause = "stuck-no-progress"
                 break
             }
 
@@ -1554,6 +1588,7 @@ class ExplorerTests: XCTestCase {
             // for an impossible back path or expecting credentials to persist after logout.
             if authSucceeded && detectedInputs.contains(where: { $0.secure }) {
                 print("OCQA_STATE:auth_cycle_complete screen=\(escapedTitle) step=\(actionCount)")
+                explorationStopCause = "auth-cycle-complete"
                 break
             }
 
@@ -1844,6 +1879,7 @@ class ExplorerTests: XCTestCase {
                     // All tab positions tried — truly stuck
                     print("OCQA_STATE:truly_stuck_dead_end screen=\(escapedTitle) step=\(actionCount)")
                     emitNavigationTrap(titleStr: titleStr, escapedTitle: escapedTitle, step: actionCount, reported: &reportedIssueKeys, issues: &issues)
+                    explorationStopCause = "navigation-trap"
                     break
                 }
 
@@ -2190,6 +2226,7 @@ class ExplorerTests: XCTestCase {
                     // Truly stuck — break
                     print("OCQA_STATE:truly_stuck screen=\(escapedTitle) step=\(actionCount)")
                     emitNavigationTrap(titleStr: titleStr, escapedTitle: escapedTitle, step: actionCount, reported: &reportedIssueKeys, issues: &issues)
+                    explorationStopCause = "navigation-trap"
                     break
                 }
             }
@@ -2200,6 +2237,23 @@ class ExplorerTests: XCTestCase {
                                             elementScreenPresence: elementScreenPresence,
                                             persistentThreshold: persistentThreshold,
                                             screenBounds: screenBounds)
+
+            // ---- Credential-surface policy: catalogue, don't exercise (parity with web). ----
+            // Without explicitly supplied credentials — or interactive overrides for this screen —
+            // a login/signup surface is evidence, not a playground: typing sample values and
+            // tapping Sign In / Forgot Password fires real requests against whatever backend the
+            // build points at (production, for a bare-app run). Fields are still catalogued into
+            // STATE, the report says sign-in was not checked, and navigation away stays allowed.
+            let credentialFlowLocked = (screenRole == "login" || screenRole == "signup" || detectedInputs.contains { $0.secure })
+                && (testEmail.isEmpty || testPassword.isEmpty)
+                && !detectedInputs.contains(where: { !hasNoOverride(key: $0.key, screen: titleStr, in: inputOverrides) })
+            if credentialFlowLocked {
+                if !reportedIssueKeys.contains("credlock:\(titleStr)") {
+                    reportedIssueKeys.insert("credlock:\(titleStr)")
+                    print("OCQA_STATE:credential_form_catalogued screen=\(escapedTitle) fields=\(detectedInputs.count)")
+                }
+                sorted = sorted.filter { !isTextField($0.type) && !isCredentialFlowControl($0) }
+            }
 
             // ---- Form-completion steering ----
             // A half-filled form is one tap from progress (submit) or oblivion (Close/Cancel
@@ -2214,8 +2268,8 @@ class ExplorerTests: XCTestCase {
             // screen or it abandons a form whose remaining field the pool has dropped (observed:
             // signup's Confirm Password missing from the pool while hittable in the tree).
             // Termination is per-field via typedFieldKeys, so this can never loop.
-            let treeHasFields = elements.contains(where: { isTextField($0.type) })
-            let unfilledFields = elements.filter {
+            let treeHasFields = !credentialFlowLocked && elements.contains(where: { isTextField($0.type) })
+            let unfilledFields = credentialFlowLocked ? [SimpleElement]() : elements.filter {
                 isTextField($0.type) && $0.isEnabled && $0.isHittable
                     && fieldLooksUnfilled($0, screen: titleStr, typedKeys: typedFieldKeys)
             }
@@ -2287,7 +2341,7 @@ class ExplorerTests: XCTestCase {
                 if !numericCells.isEmpty { sorted = others + numericCells }
             }
 
-            guard let target = sorted.first else { break }
+            guard let target = sorted.first else { explorationStopCause = "frontier-drained"; break }
 
             if !isTextField(target.type) {
                 dismissKeyboardIfNeeded()
@@ -2360,6 +2414,7 @@ class ExplorerTests: XCTestCase {
                                        desc: "The app terminated after \(actionType) '\(targetName)' on '\(titleStr)' and did not recover on relaunch."))
                         print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"\(escapeJSON("App crashed after \(actionType) on \(titleStr)"))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
                     }
+                    explorationStopCause = "app-crashed"
                     break
                 }
                 print("OCQA_STATE:app_reactivated step=\(actionCount)")
@@ -2479,6 +2534,7 @@ class ExplorerTests: XCTestCase {
                                        desc: "App left foreground after: \(actionDesc)"))
                         print("OCQA_ISSUE:{\"type\":\"crash\",\"severity\":\"critical\",\"title\":\"App not recoverable\",\"action\":\"\(escapedTarget)\",\"step\":\(actionCount)}")
                     }
+                    explorationStopCause = "app-crashed"
                     break
                 }
                 print("OCQA_STATE:app_reactivated step=\(actionCount)")
@@ -2529,7 +2585,7 @@ class ExplorerTests: XCTestCase {
         let uniqueScreens = screenTitles.values
         let screenList = Array(Set(uniqueScreens)).sorted().joined(separator: ",")
         didEmitComplete = true
-        print("OCQA_COMPLETE:{\"actions\":\(actionCount),\"states\":\(visitedStates.count),\"issues\":\(issues.count),\"screens\":\"\(screenList)\"}")
+        print("OCQA_COMPLETE:{\"actions\":\(actionCount),\"states\":\(visitedStates.count),\"issues\":\(issues.count),\"screens\":\"\(screenList)\",\"stop\":\"\(explorationStopCause)\",\"timedOut\":\(explorationStopCause == "time-budget" ? "true" : "false")}")
 
         let finalScreenshot = app.screenshot()
         let finalAttachment = XCTAttachment(screenshot: finalScreenshot)
@@ -3380,6 +3436,19 @@ class ExplorerTests: XCTestCase {
 
     /// Dismiss-style controls (Close/Cancel/X) that discard a form in progress. Deprioritized —
     /// never excluded — while unfilled fields remain, so they stay available as an escape hatch.
+    /// Any control that advances a credential flow: submitting, account recovery, account
+    /// creation, or third-party auth. Used by the credential-surface lock — none of these may
+    /// fire when no credentials were supplied, because each one sends real traffic to the
+    /// app's live backend. Navigation controls (tabs, Skip, Continue as guest) do not match.
+    private func isCredentialFlowControl(_ element: SimpleElement) -> Bool {
+        if isLikelySubmitControl(element) { return true }
+        let text = (element.label + " " + element.identifier).lowercased()
+        let flowTokens = ["forgot", "reset password", "recover", "with apple", "with google",
+                          "with facebook", "create account", "sign up", "verification code",
+                          "magic link", "resend"]
+        return flowTokens.contains(where: { text.contains($0) })
+    }
+
     private func isDismissControl(_ element: SimpleElement) -> Bool {
         let label = element.label.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let id = element.identifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

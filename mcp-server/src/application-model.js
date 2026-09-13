@@ -913,7 +913,7 @@ function invalidatedGeneration(generation) {
   };
 }
 
-function mergePlanDecisions(next, prior, { invalidateValidation = false } = {}) {
+export function mergePlanDecisions(next, prior, { invalidateValidation = false } = {}) {
   if (!prior || prior.schemaVersion !== 1 || prior.kind !== "tapp-release-plan") return next;
   const priorItems = new Map((prior.items || []).map((item) => [item.id, item]));
   const priorByNameScope = new Map();

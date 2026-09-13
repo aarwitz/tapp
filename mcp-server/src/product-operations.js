@@ -10,6 +10,7 @@ import {
   buildInitArtifacts,
   generateApprovedContractProposals,
   mergeGeneratedTaskProposalValidation,
+  mergePlanDecisions,
   promoteValidatedProposals,
   recordContractProposalValidation,
   recordGeneratedTaskProposalValidation,
@@ -411,6 +412,13 @@ export async function initializeProductProject({
     maxContracts: Number(maxContracts),
   });
   let written = null;
+  // Dry-run must preview the SAME plan a real refresh would produce: merge reviewed
+  // decisions from the existing plan (pure, no writes). Returning the raw regenerated
+  // plan told users their approvals would be lost on refresh (field report № 6 #25).
+  let previewPlan = built.plan;
+  if (mode === "inspect" && fs.existsSync(paths.plan)) {
+    previewPlan = mergePlanDecisions(built.plan, readJson(paths.plan));
+  }
   if (mode !== "inspect") {
     const existing = fs.existsSync(paths.model) || fs.existsSync(paths.plan);
     written = writeInitArtifacts({
@@ -422,7 +430,7 @@ export async function initializeProductProject({
     });
   }
   const requirementScope = scopeProductRequirements(built.model, { selectedTargetId: selectedTarget?.id || "" });
-  return { operation: "initialize", mode, model: built.model, plan: written?.plan || built.plan, exploration, selectedTarget, requirementScope, written, project: readProductProject({ projectDir: root, outDir }) };
+  return { operation: "initialize", mode, model: built.model, plan: written?.plan || previewPlan, exploration, selectedTarget, requirementScope, written, project: readProductProject({ projectDir: root, outDir }) };
 }
 
 function resolvePlan(root, outDir, planPath = "") {

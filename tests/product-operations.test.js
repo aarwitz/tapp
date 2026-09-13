@@ -73,6 +73,24 @@ test("shared product operations own inspect, review, generation, snapshot, and C
   assert.match(ci.workflow, /Tapp release gate/);
 });
 
+test("dry-run refresh previews merged decisions — approvals never show as pending", async () => {
+  const root = fixture();
+  const initialized = await initializeProductProject({ projectDir: root, mode: "write", platform: "web" });
+  const proposal = initialized.plan.items.find((item) => item.name === "openSettingsWorks");
+  reviewProductPlan({ projectDir: root, approve: [proposal.id] });
+
+  // The field bug (report № 6 #25): --dry-run --refresh returned the raw regenerated plan, so
+  // every reviewed item previewed as "pending" — telling users the refresh would lose their
+  // approvals when the real write path preserves them.
+  const preview = await initializeProductProject({ projectDir: root, mode: "inspect", platform: "web" });
+  const previewed = preview.plan.items.find((item) => item.name === "openSettingsWorks");
+  assert.equal(previewed.decision, "approved", "dry-run previews the same merged plan a real refresh writes");
+  assert.equal(preview.written, null, "dry-run writes nothing");
+
+  const real = await initializeProductProject({ projectDir: root, mode: "refresh", platform: "web" });
+  assert.equal(real.plan.items.find((item) => item.name === "openSettingsWorks").decision, "approved");
+});
+
 test("product readiness reads validation from the canonical generation record", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-product-validation-state-"));
   fs.mkdirSync(path.join(root, ".tapp"), { recursive: true });

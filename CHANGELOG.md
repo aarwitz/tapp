@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+**Native exploration honesty: catalogue-only credential surfaces, truthful stops, left-app
+observations.** ⚠️ Behavior change for iOS exploration.
+
+- **Credential surfaces are catalogue-only without credentials (parity with web)**: with no
+  `testEmail`/`testPassword`, iOS exploration records a login/signup form's fields but no
+  longer types sample values, taps Sign In, or opens password-reset / third-party-auth flows —
+  a bare-app run may be pointed at production. Supplying credentials remains the explicit
+  opt-in that enables the sign-in attempt.
+- **Leaving the app is an observation, not a defect**: a tap that hands off to a system
+  surface or another app records a `left_app` trace entry and returns to the app under test,
+  instead of misreporting `app_hang` + `blank_screen` on an "Unknown" screen.
+- **The native explorer reports why it stopped**: `COMPLETE` now carries
+  `stop: action-budget | time-budget | frontier-drained | navigation-trap | app-crashed |
+  auth-cycle-complete | stuck-no-progress | left-app-unrecovered`, and the report passes
+  non-budget causes through verbatim — a 15/20 run no longer reads as "completed".
+- **`init --dry-run --refresh` previews the merged plan**: reviewed decisions from the
+  existing plan are merged into the preview (pure, no writes), so a dry run no longer claims
+  approvals would revert to pending.
+
 ## 0.17.7
 
 **Comparable evidence — gate policy v4.** ⚠️ Behavior change for web gates.

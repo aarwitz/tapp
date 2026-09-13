@@ -133,6 +133,10 @@ advisory). Report the finding counts and coverage; do not invent a scalar or a s
   (e.g. `["--uitesting"]` if the app has a test bypass), and/or `appLaunchEnv` (e.g. a staging
   backend URL). If the result shows `inputFieldsEncountered` and you have no credentials, **ask
   the user** for them rather than re-running blind.
+- Credential surfaces are catalogue-only without credentials, on every platform: with no
+  `testEmail`/`testPassword` supplied, exploration records a login/signup form's fields but does
+  not type into them, submit them, or open recovery/third-party-auth flows — a bare-app run may
+  be pointed at production. Supplying credentials is the explicit opt-in that enables sign-in.
 - Diff two runs: pass the previous run's `findings` as `baselineFindings` → you get a
   `regression` **comparison** (`new` / `persisting` / `resolved`) — an observation, not a gate. To gate
   a merge on regressions, run the CI gate (`tapp ci` / the GitHub Action).
