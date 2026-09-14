@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.8
 
 **Native exploration honesty: catalogue-only credential surfaces, truthful stops, left-app
 observations.** ⚠️ Behavior change for iOS exploration.

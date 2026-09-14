@@ -29,10 +29,11 @@ Supported targets:
 |---|---|
 | iOS | Simulator on macOS with Xcode; driven through XCUITest and accessibility |
 | Android | Connected emulator or device with `adb`; driven through UIAutomator |
-| Web (beta) | Owned browser app in Playwright Chromium |
+| Web | Owned browser app in Playwright Chromium |
+| Windows desktop | WPF, WinForms, and WinUI apps through Windows UI Automation — early runs are set up through the pilot |
 
-Windows can host Android and web testing when their prerequisites are installed. Windows desktop
-UI applications such as WinForms, WPF, and WinUI are not currently Tapp targets.
+Windows hosts Android and web testing when their prerequisites are installed, and is the home of
+the Windows desktop target.
 
 ## Give Tapp to your coding agent
 
@@ -173,7 +174,7 @@ npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator 
 npx -y @aarwitz/tapp@latest build [dir]     # just build + install (scheme auto-detected)
 ```
 
-Web (beta): `npx -y @aarwitz/tapp@latest explore http://localhost:3000` *(one-time setup:
+Web: `npx -y @aarwitz/tapp@latest explore http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*. Add `--watch` to open Tapp's controlled,
 isolated Chromium window and follow its clicks with an on-page pointer/action label. Tapp hides that
 watch UI from saved evidence screenshots and does not automate your personal/default browser profile.
@@ -348,7 +349,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@v0.17.7 # or pin the reviewed release commit SHA
+      - uses: aarwitz/tapp@v0.17.8 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -398,7 +399,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.7 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.8 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app
@@ -437,7 +438,7 @@ Every driver speaks one protocol: structured `OCQA_*` markers (state, actions, i
 transitions) that the engine parses into trees, screenshots, findings, coverage, and the gate outcome.
 On **iOS**, a generic **XCUITest harness** attaches to any app by bundle id — no SDK or app code
 changes — and acts through the accessibility tree. On **Android**, ADB + UIAutomator provide the
-same black-box driver contract. On **web** (beta), a deterministic **Playwright crawler** does the
+same black-box driver contract. On **web**, a deterministic **Playwright crawler** does the
 same in a real browser. Same detectors' spirit,
 same dedup, same regression gate, same honest `pass`/`fail`/`inconclusive` outcome. Core exploration,
 evidence collection, and gate evaluation run entirely locally — no telemetry, nothing phones home. Optional AI

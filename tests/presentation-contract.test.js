@@ -78,10 +78,12 @@ test("platform claims name the exact current target boundary", () => {
   for (const source of [readme, landing]) {
     assert.match(source, /iOS/);
     assert.match(source, /Android/);
-    assert.match(source, /Web \(beta\)/i);
+    assert.match(source, /\bWeb\b/);
+    assert.match(source, /Windows desktop/);
     assert.match(source, /WinForms/);
     assert.match(source, /WPF/);
-    assert.match(source, /not currently (?:Tapp )?(?:supported )?targets?/i);
+    assert.doesNotMatch(source, /\(beta\)/i, "no platform is labelled beta (owner decision 2026-09-14)");
+    assert.doesNotMatch(source, /not currently (?:Tapp )?(?:supported )?targets?/i);
   }
   assert.match(landing, /"operatingSystem": "macOS, Windows, Linux"/);
 });

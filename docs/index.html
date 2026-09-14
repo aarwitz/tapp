@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tapp — UI verification for coding agents</title>
-<meta name="description" content="Let coding agents verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
+<meta name="description" content="Let coding agents verify UI changes on real iOS, Android, web, and Windows desktop apps, then turn reviewed proof into deterministic CI checks.">
 <link rel="canonical" href="https://runtapp.com/">
 <meta property="og:title" content="tapp — UI verification for coding agents">
-<meta property="og:description" content="Verify UI changes on real iOS, Android, and web surfaces, then turn reviewed proof into deterministic CI checks.">
+<meta property="og:description" content="Verify UI changes on real iOS, Android, web, and Windows desktop apps, then turn reviewed proof into deterministic CI checks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
 <meta property="og:image" content="https://runtapp.com/assets/tapp-social.png">
@@ -16,7 +16,7 @@
 <meta property="og:image:alt" content="tapp — let your coding agent prove the UI it changed">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="tapp — UI verification for coding agents">
-<meta name="twitter:description" content="Let coding agents verify real iOS, Android, and web UI changes, then enforce reviewed proof in CI.">
+<meta name="twitter:description" content="Let coding agents verify real iOS, Android, web, and Windows desktop UI changes, then enforce reviewed proof in CI.">
 <meta name="twitter:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta name="theme-color" content="#2f6fed">
 <link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
@@ -30,7 +30,7 @@
   "downloadUrl": "https://www.npmjs.com/package/@aarwitz/tapp",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Windows, Linux",
-  "description": "Let coding agents verify UI changes on real iOS, Android, and web surfaces, then enforce reviewed proof in deterministic CI.",
+  "description": "Let coding agents verify UI changes on real iOS, Android, web, and Windows desktop apps, then enforce reviewed proof in deterministic CI.",
   "sameAs": [
     "https://github.com/aarwitz/tapp",
     "https://www.npmjs.com/package/@aarwitz/tapp"
@@ -259,8 +259,8 @@
   <h1>Let your coding agent prove the UI it changed.</h1>
   <p class="sub">
     Your agent says the feature works. tapp actually runs the app — on real iOS simulators,
-    Android emulators and devices, and web apps — and shows you what happened: screenshots, a
-    recording, and a list of what broke. The journeys you care about become checks that run on
+    Android emulators and devices, web apps, and Windows desktop apps — and shows you what
+    happened: screenshots, a recording, and a list of what broke. The journeys you care about become checks that run on
     every pull request.
   </p>
   <div class="cta-row">
@@ -310,8 +310,8 @@
     <span class="tag">Platforms</span>
     <h2>Works with the apps you actually ship.</h2>
     <p class="lead">
-      iOS, Android, and web — tapp drives the real thing, not a mock. Same commands, same evidence,
-      same CI check on every platform.
+      iOS, Android, web, and Windows desktop — tapp drives the real thing, not a mock. Same
+      commands, same evidence, same CI check on every platform.
     </p>
     <div class="grid">
       <div class="card">
@@ -328,20 +328,21 @@
       </div>
       <div class="card">
         <div class="icon">🌐</div>
-        <h3>Web (beta)</h3>
+        <h3>Web</h3>
         <p>Explores your web app in a real Chromium browser and catches broken links, failed
         requests, missing assets, and JavaScript errors.</p>
       </div>
       <div class="card">
-        <div class="icon">📦</div>
-        <h3>Agents, CLI, and CI</h3>
-        <p>Give it to your agent as a skill, run it yourself from the terminal, add it over MCP
-        to get screenshots inside the chat, or run the same check in GitHub Actions.</p>
+        <div class="icon">🪟</div>
+        <h3>Windows desktop</h3>
+        <p>WPF, WinForms, and WinUI apps, driven through Windows UI Automation — the same
+        commands, evidence, and CI check. Early Windows runs are set up through the pilot.</p>
       </div>
     </div>
     <p class="lead" style="margin-top:1.4rem">
-      Windows can host Android and web testing when their prerequisites are installed. Windows
-      desktop UI apps such as WinForms, WPF, and WinUI are not currently supported targets.
+      Give it to your agent as a skill, run it from the terminal, add it over MCP to get
+      screenshots inside the chat, or run the same check in GitHub Actions — on macOS, Linux,
+      or Windows.
     </p>
   </div>
 </section>
