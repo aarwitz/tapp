@@ -63,6 +63,29 @@ def raw_json(path):
     print(json.dumps(load_flow(path) or {}))
 
 
+ABORT_PATTERNS = [
+    r"Failed to synthesize event: [^\n]*",
+    r"Neither element nor any descendant has keyboard focus[^\n]*",
+    r"Test Case '[^']*' failed \([^)]*\)",
+    r"Error Domain=[^\n]*",
+    r"Unable to (?:find|launch|boot)[^\n]*",
+    r"App state is [^\n]*",
+    r"Timed out [^\n]*",
+    r"Testing failed:[^\n]*",
+    r"error: [^\n]*",
+    r"\*\* TEST (?:EXECUTE )?FAILED \*\*",
+]
+
+
+def harness_abort_reason(log):
+    """First XCTest/xcodebuild line that explains why a run ended before step 1."""
+    for pat in ABORT_PATTERNS:
+        m = re.search(pat, log)
+        if m:
+            return m.group(0).strip()[:300]
+    return None
+
+
 def report(path, as_json=False):
     log = open(path, encoding="utf-8", errors="replace").read()
     steps = []
@@ -97,8 +120,19 @@ def report(path, as_json=False):
     executed = (result or {}).get("executed", len(steps))
     passed_steps = sum(1 for s in steps if s.get("status") == "pass")
 
+    # A run that died before step 1 used to print `0 passed · 0 failed · 0/0 executed` and
+    # nothing else; the XCTest reason lived only in flow.log (feedback #1). Surface it as the
+    # failure of the first step so the scoreboard says why instead of looking like a crash.
+    abort_reason = None
+    if not steps and not passed:
+        abort_reason = harness_abort_reason(log)
+        steps.append({"index": 1, "action": "harness", "target": "", "status": "fail",
+                      "detail": abort_reason or "the harness exited before the first step; see flow.log"})
+        failed = max(failed, 1)
+
     if as_json:
-        print(json.dumps({"name": name, "kind": kind, "passed": passed, "total": total, "executed": executed, "failed": failed, "steps": steps}))
+        print(json.dumps({"name": name, "kind": kind, "passed": passed, "total": total, "executed": executed, "failed": failed,
+                          **({"abortReason": abort_reason} if abort_reason else {}), "steps": steps}))
         return 0 if passed else 1
 
     icon = {"pass": "✅", "fail": "❌", "skip": "⚪️"}

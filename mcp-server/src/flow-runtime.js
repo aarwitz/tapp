@@ -36,6 +36,60 @@ export function normalizeFlowStep(raw) {
   return { action: key.toLowerCase(), target: body === true ? "" : String(body ?? ""), value: body === true ? "" : String(body ?? ""), params: {}, ...(raw.__tappTask?.name ? { task: raw.__tappTask.name } : {}) };
 }
 
+// The committed Flow step vocabulary. Every driver (XCUITest, Android, browser) implements exactly
+// this table; `tapp flow steps` prints it and `tapp flow validate` rejects anything outside it, so
+// a Flow that validates can actually replay (feedback #2: coordinate taps and `click:` used to
+// validate and then fail at runtime).
+export const FLOW_ACTIONS = Object.freeze([
+  { action: "tap", target: "a visible label / accessibility id", passes: "the control was found and tapped; coordinates are not accepted — use the session's tap-by-point to learn the label" },
+  { action: "type", target: "{field, value}", passes: "the field was found and now holds the value ($TEST_EMAIL/$TEST_PASSWORD substitute)" },
+  { action: "login", target: "{email, password} (defaults to $TEST_EMAIL/$TEST_PASSWORD)", passes: "credentials were entered and submitted and the login form went away" },
+  { action: "swipe", target: "up | down | left | right", passes: "the gesture was performed" },
+  { action: "back", target: "(none)", passes: "the platform back navigation was performed" },
+  { action: "wait", target: "milliseconds (fixed pause; prefer wait_for)", passes: "always" },
+  { action: "wait_for", target: "label / text (+ timeoutMs)", passes: "the element appeared before the timeout" },
+  { action: "assert_screen", target: "the detected SCREEN TITLE (navigation bar / heading), not arbitrary text", passes: "the current screen's title equals the target" },
+  { action: "assert_exists", target: "label / text", passes: "an element with that text or id is present" },
+  { action: "assert_absent", target: "label / text", passes: "no element with that text or id is present" },
+  { action: "assert_text", target: "{of, contains}", passes: "the element's text contains the substring" },
+  { action: "assert_ai", target: "a natural-language expectation", passes: "the vision judge agrees (needs ANTHROPIC_API_KEY; advisory)" },
+]);
+const FLOW_ACTION_NAMES = new Set(FLOW_ACTIONS.map((a) => a.action));
+const ALIASES = { click: "tap", press: "tap", fill: "type", input: "type", sleep: "wait", wait_for_text: "wait_for", assert_visible: "assert_exists", expect: "assert_exists" };
+
+// Static checks a Flow must pass before any runtime is launched. Returns human-readable errors;
+// an empty array means every step is in the vocabulary and shaped so a driver can execute it.
+export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
+  const errors = [];
+  const steps = Array.isArray(flow?.steps) ? flow.steps : [];
+  steps.forEach((raw, i) => {
+    const step = normalizeFlowStep(raw);
+    const n = i + 1;
+    if (step.action === "noop") { errors.push(`step ${n}: empty step`); return; }
+    if (!FLOW_ACTION_NAMES.has(step.action)) {
+      const alias = ALIASES[step.action];
+      errors.push(`step ${n}: unknown action '${step.action}'${alias ? ` — did you mean '${alias}'? (web flows use tap:, not click:)` : ""}; run \`tapp flow steps\` for the vocabulary`);
+      return;
+    }
+    if (step.action === "tap" && /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(step.target)) {
+      errors.push(`step ${n}: tap target '${step.target.trim()}' is a coordinate; Flow taps are label-only on ${platform} (use tapp_session_act tap {x,y} to learn the label, then record it)`);
+    }
+    if (["tap", "wait_for", "assert_screen", "assert_exists", "assert_absent"].includes(step.action) && !step.target.trim()) {
+      errors.push(`step ${n}: ${step.action} needs a target`);
+    }
+    if (step.action === "type" && (!step.target.trim() || !("value" in (step.params || {})))) {
+      errors.push(`step ${n}: type needs {field, value}`);
+    }
+    if (step.action === "assert_text" && (!step.target.trim() || !step.value)) {
+      errors.push(`step ${n}: assert_text needs {of, contains}`);
+    }
+    if (step.action === "swipe" && step.target && !["up", "down", "left", "right"].includes(step.target.trim().toLowerCase())) {
+      errors.push(`step ${n}: swipe direction must be up|down|left|right`);
+    }
+  });
+  return errors;
+}
+
 export function flowVariables(flow, overrides = {}) {
   return {
     TEST_EMAIL: process.env.OCQA_TEST_EMAIL || "test@example.com",

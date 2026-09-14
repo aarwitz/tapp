@@ -907,10 +907,39 @@ function recordStep(cmd, result) {
   if (newScreen) activeSession.lastScreen = newScreen;
 }
 
+// Argument shapes tapp_session_act accepts, per action. A malformed call is answered here with
+// the accepted shape and never reaches the driver, so it can neither time out nor disturb the
+// session (feedback #7: `{action:"wait", seconds:3}` used to wait on an empty target).
+const SESSION_ACT_ARGS = Object.freeze({
+  tap: "{id: <label|accessibility id>} or {x, y} (points)",
+  type: "{id|label: <field>, text: <value>}",
+  wait: "{text|id: <label to wait for>, timeoutMs?: <default 5000, max 60000>} — there is no fixed sleep; wait for something",
+  login: "{email?, password?} (defaults to the session's credentials)",
+  swipe: "{direction: up|down|left|right}",
+  back: "{}",
+  tree: "{verbose?: true}",
+  screenshot: "{label?}",
+});
+export function sessionActUsageError(cmd = {}) {
+  const action = String(cmd.action || "");
+  if (!SESSION_ACT_ARGS[action]) return `Unknown action '${action || "(none)"}'. Accepted: ${Object.keys(SESSION_ACT_ARGS).join(", ")}.`;
+  const has = (k) => cmd[k] !== undefined && cmd[k] !== null && String(cmd[k]).trim() !== "";
+  const bad = (why) => `${why}. ${action} takes ${SESSION_ACT_ARGS[action]}.`;
+  if (action === "wait" && !has("text") && !has("id")) return bad(`wait needs a target${cmd.seconds !== undefined || cmd.ms !== undefined ? " (seconds/ms are not arguments)" : ""}`);
+  if (action === "wait" && cmd.timeoutMs !== undefined && !(Number.isFinite(Number(cmd.timeoutMs)) && Number(cmd.timeoutMs) > 0)) return bad("timeoutMs must be a positive number of milliseconds");
+  if (action === "tap" && !has("id") && !has("label") && !(Number.isFinite(cmd.x) && Number.isFinite(cmd.y))) return bad("tap needs an id/label or both x and y");
+  if (action === "type" && !has("id") && !has("label")) return bad("type needs the field's id/label");
+  if (action === "type" && cmd.text === undefined) return bad("type needs text");
+  if (action === "swipe" && cmd.direction !== undefined && !["up", "down", "left", "right"].includes(String(cmd.direction))) return bad("direction must be up|down|left|right");
+  return null;
+}
+
 async function sessionAct(cmd) {
   const startedAt = Date.now();
   const done = (result) => ({ ...result, durationMs: Date.now() - startedAt });
   if (!activeSession || activeSession.ended) return done({ error: "No active session. Call tapp_session_start first." });
+  const usage = sessionActUsageError(cmd);
+  if (usage) return done({ status: "usage", detail: usage, ...treeSnapshot(), recordedSteps: activeSession.recording.length });
   let coordinateResolvedTarget = "";
   if (cmd.action === "tap" && !cmd.id && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) {
     coordinateResolvedTarget = semanticTargetAtPoint(activeSession.latestTree?.elements, cmd.x, cmd.y);

@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.17.10
+
+**First field-report batch through the feedback channel** (public issues aarwitz/tapp#1–#9, filed
+by an agent on a real iOS app the same afternoon the channel shipped).
+
+- **iOS runs told the truth about credentials again (#3)**: the harness printed the
+  `credentials_supplied` marker only when a flag the run config never carried was set, so every iOS
+  explore reported `credentialsProvided: false` even after signing in. The marker is now decided by
+  what actually reached the run, and the flag is forwarded too.
+- **Native stops are honest (#5)**: an XCUITest run that ended on `limited_surface` reported
+  `stopReason: "completed"`; it is now `limited-surface` (timeouts → `time-budget-exhausted`, crashes
+  → `app-crashed`). iOS runs now emit `OCQA_CONTEXT` (device, window size, scale) so `captureContext`
+  is populated on iOS as the 0.17.8 notes promised for web.
+- **A Flow that validates can replay (#2)**: `tapp flow steps` prints the single step vocabulary
+  (target semantics + pass condition; `assert_screen` is the screen *title*, `assert_exists` is
+  "text is present"). `flow validate` and `flow run` now reject unknown actions (`click:` → use
+  `tap:`), coordinate taps, and malformed `type`/`assert_text` steps with exit 2 before any target is
+  launched.
+- **A flow that dies before step 1 says why (#1)**: the scoreboard used to read
+  `0 passed · 0 failed · 0/0 executed`; the XCTest reason (e.g. *Failed to synthesize event: Neither
+  element nor any descendant has keyboard focus*) is now the first step's failure and `abortReason`
+  in `flow-report.json`.
+- **Malformed session acts are answered, not executed (#7)**: `tapp_session_act` validates the
+  argument shape per action and returns `status: "usage"` with the accepted arguments (e.g.
+  `{action:"wait", seconds:3}` → "wait takes {text|id, timeoutMs?}") without touching the driver or
+  the session.
+- **Feedback submission works for non-collaborators**: `gh issue create --label` is refused for
+  accounts without triage rights; `--submit` now retries without labels and reports `labelsApplied`.
+- Still open from the batch: share-sheet extensions scored as app defects (#4), session tap-by-id on
+  system alerts reporting ok (#6), iOS flow failure screenshots (#8), flow glob mode / full tree /
+  keep-app (#9). `tapp doctor` does not yet check the simulator's hardware-keyboard setting (#1).
+
 ## 0.17.9
 
 - **Feedback channel for people and agents**: `tapp feedback "title" [--body …] [--type bug|idea|question]`

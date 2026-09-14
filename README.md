@@ -199,6 +199,7 @@ one by hand:
 
 ```bash
 npx -y @aarwitz/tapp@latest flow example
+npx -y @aarwitz/tapp@latest flow steps      # the step vocabulary: target semantics and pass condition per step
 npx -y @aarwitz/tapp@latest flow validate .tapp/flows/smoke.yml
 npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
 ```

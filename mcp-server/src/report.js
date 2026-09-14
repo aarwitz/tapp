@@ -298,6 +298,7 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   // 40-action campaign. Drivers signal the real cause in COMPLETE.stop; captures from drivers
   // that predate the field keep the old inference.
   const driverStop = base.complete && typeof base.complete === "object" ? base.complete.stop : null;
+  const nativeOutcome = base.complete && typeof base.complete === "object" && typeof base.complete.outcome === "string" ? base.complete.outcome : null;
   const stopReason = unexercisedLoginWall ? (credentialsProvided ? "login-wall-credentials-unused" : "login-wall-no-credentials")
     : timeBudgetExhausted ? "time-budget-exhausted"
     : !coverageFloorMet ? "coverage-floor-not-met"
@@ -306,6 +307,11 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     // Any other driver-signalled cause (navigation-trap, app-crashed, stuck-no-progress …)
     // passes through verbatim: "completed" is ONLY the exhausted action budget.
     : driverStop && driverStop !== "action-budget" && driverStop !== "time-budget" ? String(driverStop)
+    // XCUITest predates COMPLETE.stop and signals the cause through COMPLETE.outcome instead
+    // (feedback #5: a run whose marker said limited_surface must not read as "completed").
+    : nativeOutcome === "limited_surface" ? "limited-surface"
+    : nativeOutcome === "timeout" ? "time-budget-exhausted"
+    : nativeOutcome && nativeOutcome.startsWith("crash") ? "app-crashed"
     : "completed";
 
   const headline = timeBudgetExhausted

@@ -86,12 +86,19 @@ export function ghStatus(ghBin = process.env.TAPP_GH_BIN || "gh") {
 }
 
 export function submitFeedbackViaGh(issue, ghBin = process.env.TAPP_GH_BIN || "gh") {
-  const r = spawnSync(ghBin, [
+  // Labels can only be set by accounts with triage rights on the repo. Anyone else (which is
+  // every real user) gets the issue filed without them; the footer already carries the kind
+  // and the maintainer applies labels on triage. Try with labels first, then without.
+  const attempt = (withLabels) => spawnSync(ghBin, [
     "issue", "create", "--repo", FEEDBACK_REPO,
-    "--title", issue.title, "--body-file", "-", "--label", issue.labels.join(","),
+    "--title", issue.title, "--body-file", "-",
+    ...(withLabels ? ["--label", issue.labels.join(",")] : []),
   ], { encoding: "utf8", input: issue.body });
+  let r = attempt(true);
+  let labelsApplied = r.status === 0;
+  if (r.status !== 0 && /label/i.test(`${r.stderr || ""}${r.stdout || ""}`)) { r = attempt(false); labelsApplied = false; }
   const out = (r.stdout || "").trim();
   const err = (r.stderr || "").trim();
   const url = (out.match(/https:\/\/github\.com\/\S+/) || [])[0] || null;
-  return { ok: r.status === 0 && Boolean(url), url, detail: r.status === 0 ? out : (err || out) };
+  return { ok: r.status === 0 && Boolean(url), url, labelsApplied, detail: r.status === 0 ? out : (err || out) };
 }

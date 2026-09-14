@@ -1082,10 +1082,22 @@ class ExplorerTests: XCTestCase {
 
         let testEmail = resolve("OCQA_TEST_EMAIL")
         let testPassword = resolve("OCQA_TEST_PASSWORD")
-        if resolve("OCQA_CREDENTIALS_EXPLICIT") == "1" {
-            // Presence only: never print, persist, or expose credential values. Report rebuilding
-            // needs this durable marker to distinguish "not supplied" from "supplied but unused".
+        // Presence only: never print, persist, or expose credential values. Report rebuilding
+        // needs this durable marker to distinguish "not supplied" from "supplied but unused".
+        // Decided by what actually reached the run config, not by a separate flag the run config
+        // never carried (feedback #3: every iOS run reported credentialsProvided=false).
+        if resolve("OCQA_CREDENTIALS_EXPLICIT") == "1" || !testEmail.isEmpty || !testPassword.isEmpty {
             print("OCQA_STATE:credentials_supplied")
+        }
+        // Capture conditions shared by every screenshot in this run, so a baseline diff across a
+        // different device/scale is visibly a layout comparison (feedback #5: iOS reports carried
+        // captureContext: null while the changelog promised it).
+        do {
+            let env = ProcessInfo.processInfo.environment
+            let device = env["SIMULATOR_DEVICE_NAME"] ?? env["SIMULATOR_MODEL_IDENTIFIER"] ?? "iOS Simulator"
+            let bounds = app.windows.firstMatch.exists ? app.windows.firstMatch.frame : app.frame
+            let scale = UIScreen.main.scale
+            print("OCQA_CONTEXT:{\"device\":\"\(escapeJSON(device))\",\"viewport\":{\"width\":\(Int(bounds.width.rounded())),\"height\":\(Int(bounds.height.rounded()))},\"deviceScaleFactor\":\(scale)}")
         }
 
         // --- Explicit login replay (config-driven): a recorded type/tap/wait sequence for custom

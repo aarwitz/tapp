@@ -270,7 +270,7 @@ function safeCommandUsage(verb) {
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    flow: "tapp flow example\ntapp flow steps [--json]\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
     scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
@@ -1133,8 +1133,16 @@ switch (command) {
       console.log(`# Tapp Flow — deterministic, keyless replay\nname: sign-in-smoke\nplatform: web\nurl: https://example.test/login\nsteps:\n  - login:\n      email: $TEST_EMAIL\n      password: $TEST_PASSWORD\n  - wait_for: Dashboard\n  - assert_screen: Dashboard\n`);
       break;
     }
+    if (verb === "steps") {
+      const { FLOW_ACTIONS } = await import(path.join(packageRoot, "mcp-server", "src", "flow-runtime.js"));
+      if (flags.json === true) { console.log(JSON.stringify(FLOW_ACTIONS, null, 2)); break; }
+      console.log("Flow step vocabulary — identical on ios, android, and web. Anything else fails `tapp flow validate`.\n");
+      for (const a of FLOW_ACTIONS) console.log(`  ${a.action.padEnd(14)} target: ${a.target}\n  ${"".padEnd(14)} passes: ${a.passes}\n`);
+      console.log("Targets are labels / accessibility ids / visible text, never coordinates. `assert_screen` checks the detected screen TITLE; use `assert_exists` for \"this text is on screen\".");
+      break;
+    }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp flow example\n       tapp flow run <flow.yml> [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
+      console.error("usage: tapp flow example\n       tapp flow steps [--json]\n       tapp flow run <flow.yml> [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
       process.exit(2);
     }
     const absolute = path.resolve(flowPath);
@@ -1142,7 +1150,7 @@ switch (command) {
       console.error(`❌ Flow not found: ${absolute}`);
       process.exit(2);
     }
-    const { loadFlowFile } = await import(path.join(packageRoot, "mcp-server", "src", "flow-runtime.js"));
+    const { loadFlowFile, validateFlowSteps } = await import(path.join(packageRoot, "mcp-server", "src", "flow-runtime.js"));
     let flow;
     try { flow = loadFlowFile(absolute); } catch (error) {
       console.error(`❌ Invalid Flow: ${error.message}`);
@@ -1155,6 +1163,13 @@ switch (command) {
     const platform = String(flags.platform || flow.platform || (flow.url || /^https?:\/\//i.test(flow.app || "") ? "web" : "ios")).toLowerCase();
     if (!["ios", "android", "web"].includes(platform)) {
       console.error(`❌ Unsupported Flow platform: ${platform}`);
+      process.exit(2);
+    }
+    // Static step checks run before validate AND run: a Flow outside the vocabulary (or a
+    // coordinate tap) can never replay, so it must not reach a simulator (feedback #2).
+    const stepErrors = validateFlowSteps(flow, platform);
+    if (stepErrors.length) {
+      console.error(`❌ Invalid ${platform} Flow — ${flow.name || path.basename(absolute)}:\n${stepErrors.map((e) => `   • ${e}`).join("\n")}\n   Vocabulary: tapp flow steps`);
       process.exit(2);
     }
     if (verb === "validate") {

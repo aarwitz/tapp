@@ -101,6 +101,8 @@ ask the user rather than pretending the explored surface was complete.
 Flow YAML belongs under `.tapp/flows/` and can replay without a model or API key:
 
 ```bash
+npx -y @aarwitz/tapp@latest flow steps     # vocabulary: assert_screen = screen TITLE, assert_exists = text present; taps are label-only
+npx -y @aarwitz/tapp@latest flow validate .tapp/flows/smoke.yml
 npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
 npx -y @aarwitz/tapp@latest ci
 ```

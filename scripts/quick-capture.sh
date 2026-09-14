@@ -184,7 +184,8 @@ run_harness_test() {
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
   "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line$visual_ready_line$recording_started_line
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-}",
+  "OCQA_CREDENTIALS_EXPLICIT": "${OCQA_CREDENTIALS_EXPLICIT:-}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line$visual_ready_line$recording_started_line
 }
 CONF
 
