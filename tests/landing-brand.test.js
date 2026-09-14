@@ -44,13 +44,10 @@ test("landing proof assets and public pilot intake ship together", () => {
     "assets/tapp-mark.svg",
     "assets/tapp-icon.png",
     "assets/tapp-social.png",
-    "assets/tapp-focus-ios.jpg",
-    "assets/tapp-focus-proof.png",
     "assets/tapp-film.mp4",
     "assets/tapp-film-poster.jpg",
     "assets/tapp-desktop-demo.mp4",
     "assets/tapp-desktop-demo-poster.jpg",
-    "assets/tapp-web-report.png",
     "evidence/webdemo/report.html",
   ]) {
     assert.ok(fs.existsSync(path.join(landingRoot, file)), `${file} exists`);

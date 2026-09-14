@@ -142,7 +142,8 @@
   }
 
   .featured-film { padding: 0 0 4rem; border-top: 0; scroll-margin-top: 4.5rem; }
-  .featured-film figure { margin: 0; }
+  .featured-film figure, .proof-film { margin: 0; }
+  .proof-film { margin-top: 1.6rem; }
   .film-frame {
     padding: 0.45rem; border: 1px solid color-mix(in srgb, var(--fg) 16%, transparent); border-radius: 18px;
     background: #090b11; box-shadow: 0 28px 75px color-mix(in srgb, var(--fg) 18%, transparent);
@@ -257,9 +258,10 @@
 <div class="hero wrap">
   <h1>Let your coding agent prove the UI it changed.</h1>
   <p class="sub">
-    tapp locates the requested surface from source, follows runtime-observed routes on real iOS simulators,
-    Android emulators and devices, and web apps, captures inspectable evidence, and turns approved journeys into
-    deterministic CI checks.
+    Your agent says the feature works. tapp actually runs the app — on real iOS simulators,
+    Android emulators and devices, and web apps — and shows you what happened: screenshots, a
+    recording, and a list of what broke. The journeys you care about become checks that run on
+    every pull request.
   </p>
   <div class="cta-row">
     <a class="btn primary" href="https://github.com/aarwitz/tapp#give-tapp-to-your-coding-agent">Install the agent skill →</a>
@@ -273,7 +275,7 @@
   <p class="sub" style="font-size:0.9rem;margin-top:1rem">
     Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code>
   </p>
-  <div class="hero-demo">
+  <div class="hero-demo" id="film">
     <div class="film-frame">
       <video class="embedded-film" autoplay muted loop playsinline preload="metadata"
              poster="/assets/tapp-film-poster.jpg" aria-label="The tapp film: the desktop app, coding agents, and the CLI verifying a real app">
@@ -283,9 +285,12 @@
   </div>
 </div>
 
-<section class="featured-film" id="film" aria-labelledby="film-title">
+<section class="flush" id="proof">
   <div class="wrap">
-    <figure>
+    <span class="tag">Real evidence</span>
+    <h2>Watch it work on a real app.</h2>
+    <p class="lead">Unedited footage of the tapp desktop app. Drop a repo in, and tapp builds it, boots a simulator, explores the app on its own, finds the bugs that were planted in it, and maps every screen it reached.</p>
+    <figure class="proof-film">
       <div class="film-frame">
         <video class="embedded-film" autoplay muted loop playsinline preload="metadata" poster="/assets/tapp-desktop-demo-poster.jpg" aria-describedby="film-caption">
           <source src="/assets/tapp-desktop-demo.mp4" type="video/mp4">
@@ -294,74 +299,44 @@
       </div>
       <figcaption class="film-caption" id="film-caption">
         <strong id="film-title">The desktop app on a real run.</strong>
-        <span>Real footage — drop a repo in, and tapp builds it, explores it autonomously, finds seeded bugs, and maps the app.</span>
+        <span>Prefer to read? <a href="/evidence/webdemo/report.html">Open a full sample evidence report →</a></span>
       </figcaption>
     </figure>
-  </div>
-</section>
-
-<section class="flush" id="proof">
-  <div class="wrap">
-    <span class="tag">Real evidence</span>
-    <h2>Reach the requested UI without wandering.</h2>
-    <p class="lead">This is a real tapp 0.17.2 run against the public DemoApp corpus. Source located the surface; only previously observed runtime transitions authorized navigation.</p>
-    <div class="proof-grid">
-      <div class="proof-terminal mono">
-<pre><span class="dim">$</span> tapp focus "Update Profile" DemoApp
-<span class="ok">✓</span> source located Settings → Update Profile
-<span class="ok">✓</span> observed route:
-  Continue → Settings → Update Profile
-<span class="ok">✓</span> reached in 3 route actions
-<span class="shot">📸 screenshot + accessibility tree saved</span></pre>
-      </div>
-      <figure class="proof-device">
-        <img src="/assets/tapp-focus-ios.jpg" width="603" height="1311" alt="The Update Profile screen reached by tapp on an iOS simulator">
-        <figcaption>Actual final screenshot · no mocked product UI</figcaption>
-      </figure>
-    </div>
-    <div class="evidence-grid">
-      <figure class="evidence-card" style="grid-column: 1 / -1">
-        <h3>Inspect a complete evidence report</h3>
-        <p>tapp explored the intentionally defective WebDemo corpus and surfaced six evidence-backed findings across seven screens, while stating what it did not check.</p>
-        <a href="/evidence/webdemo/report.html"><img src="/assets/tapp-web-report.png" width="1200" height="900" alt="tapp WebDemo report showing checked scope and six findings"></a>
-        <figcaption><a href="/evidence/webdemo/report.html">Open the sanitized report →</a></figcaption>
-      </figure>
-    </div>
   </div>
 </section>
 
 <section id="platforms">
   <div class="wrap">
     <span class="tag">Platforms</span>
-    <h2>Three app surfaces. One testing workflow.</h2>
+    <h2>Works with the apps you actually ship.</h2>
     <p class="lead">
-      tapp drives the real target through its native accessibility surface, captures inspectable
-      evidence, and keeps the same Flow and gate contract across supported platforms.
+      iOS, Android, and web — tapp drives the real thing, not a mock. Same commands, same evidence,
+      same CI check on every platform.
     </p>
     <div class="grid">
       <div class="card">
         <div class="icon">🍎</div>
         <h3>iOS simulator</h3>
-        <p>A generic XCUITest harness drives accessible simulator apps. No tapp SDK, Appium, or
-        WebDriverAgent is added to the app.</p>
+        <p>Runs your app on the iOS Simulator using Apple's own UI-testing hooks. Nothing gets
+        added to your app — no SDK, no Appium.</p>
       </div>
       <div class="card">
         <div class="icon">🤖</div>
         <h3>Android emulator or device</h3>
-        <p>ADB and UIAutomator provide black-box driving on a connected emulator or device. Install
-        an APK or let tapp build a detected Gradle target.</p>
+        <p>Drives your app on an emulator or a plugged-in device through ADB. Point it at an APK,
+        or let it build your Gradle project.</p>
       </div>
       <div class="card">
         <div class="icon">🌐</div>
         <h3>Web (beta)</h3>
-        <p>Playwright Chromium explores an owned browser app and checks technical behavior such as
-        failed requests, broken assets and links, uncaught exceptions, and placeholder links.</p>
+        <p>Explores your web app in a real Chromium browser and catches broken links, failed
+        requests, missing assets, and JavaScript errors.</p>
       </div>
       <div class="card">
         <div class="icon">📦</div>
         <h3>Agents, CLI, and CI</h3>
-        <p>Use the Agent Skill first, call the npm CLI directly, add MCP for inline images and
-        persistent sessions, or run the same deterministic gate in GitHub Actions.</p>
+        <p>Give it to your agent as a skill, run it yourself from the terminal, add it over MCP
+        to get screenshots inside the chat, or run the same check in GitHub Actions.</p>
       </div>
     </div>
     <p class="lead" style="margin-top:1.4rem">
@@ -373,43 +348,43 @@
 
 <section id="workflow">
   <div class="wrap">
-    <span class="tag">Local and inspectable</span>
-    <h2>Explore autonomously. Commit only what matters.</h2>
+    <span class="tag">The toolkit</span>
+    <h2>Six things your agent can ask for.</h2>
     <p class="lead">
-      tapp can discover broadly, then distill the highest-value behavior into reusable Tasks and
-      reviewable business contracts. The deterministic suite runs in CI without a model or API key.
+      Every one of these runs on your machine, on the real app, and hands back evidence. None of
+      them needs an API key.
     </p>
     <div class="grid">
       <div class="card">
         <div class="icon">👁</div>
         <h3><code>tapp_open_app</code></h3>
-        <p>Launch the app, get a screenshot + accessibility tree back in seconds.</p>
+        <p>Launch the app and get a screenshot plus a list of everything on screen — in seconds.</p>
       </div>
       <div class="card">
         <div class="icon">🕹</div>
         <h3><code>tapp_session_*</code></h3>
-        <p>Interactive driving — the Playwright loop. Tap, type, swipe, back, wait.</p>
+        <p>Drive the app step by step: tap, type, swipe, go back, wait.</p>
       </div>
       <div class="card">
         <div class="icon">🔭</div>
         <h3><code>tapp_explore</code></h3>
-        <p>Autonomous exploration on iOS, Android, or web returns an observation
-        <code>{findings[], coverage, inconclusive}</code>. It is not a release verdict.</p>
+        <p>Explore the whole app on its own and report what it found: bugs, what it covered, and
+        what it couldn't reach. A report, not a verdict.</p>
       </div>
       <div class="card">
         <div class="icon">🔁</div>
         <h3><code>tapp_flow_*</code></h3>
-        <p>Record a session as a replayable Flow, or generate one from a goal in plain English.</p>
+        <p>Turn a journey into a test you can replay — record one, or describe it in plain English.</p>
       </div>
       <div class="card">
         <div class="icon">📱</div>
         <h3><code>tapp_boot_simulator</code></h3>
-        <p>Simulator + app install management — list, boot, install.</p>
+        <p>Boot simulators and install builds without leaving the conversation.</p>
       </div>
       <div class="card">
         <div class="icon">🩺</div>
         <h3><code>tapp_health</code></h3>
-        <p>Diagnostics, capture history, marker parsing.</p>
+        <p>Check the environment, list past runs, and dig into the evidence.</p>
       </div>
     </div>
   </div>
@@ -418,27 +393,27 @@
 <section>
   <div class="wrap">
     <span class="tag">Observe, then judge</span>
-    <h2>Exploration observes. The gate judges.</h2>
+    <h2>Exploring finds problems. The gate decides.</h2>
     <p class="lead">
-      tapp explores like a user and surfaces crashes, failed sign-ins, dead buttons, stuck loading
-      screens, navigation dead ends — and on web, uncaught exceptions, failed requests, and broken
-      links. Exploration <strong>observes</strong> (findings + evidence, never a ship verdict). The
-      <strong>gate</strong> judges: the same evidence + contracts + baseline always produce the same
-      outcome. A shallow run is <code>inconclusive</code>, never a pass. Optional model-assisted
-      authoring and advisory analysis never silently become deterministic gate authority.
+      Exploration behaves like a curious user: it taps everything and reports crashes, dead buttons,
+      failed sign-ins, screens stuck loading, and dead ends — and on web, broken links, failed
+      requests, and JavaScript errors. It <strong>reports</strong>; it doesn't decide. The
+      <strong>gate</strong> decides, and it's deterministic: the same evidence and the same rules
+      always give the same answer. If a run was too shallow to tell, the answer is
+      <code>inconclusive</code> — never a pass.
     </p>
     <div class="verdicts">
       <div class="verdict ready">
         <div class="badge">🟢 pass</div>
-        <p>Required deterministic checks ran and passed.</p>
+        <p>The checks that matter ran and passed.</p>
       </div>
       <div class="verdict blocked">
         <div class="badge">🔴 fail</div>
-        <p>A deterministic violation or regression was observed.</p>
+        <p>Something broke, or a journey that used to work no longer does.</p>
       </div>
       <div class="verdict caution">
         <div class="badge">🟡 inconclusive</div>
-        <p>Required evidence couldn't be obtained — fails closed.</p>
+        <p>tapp couldn't gather enough evidence to say — so it doesn't.</p>
       </div>
     </div>
   </div>
@@ -446,19 +421,19 @@
 
 <section id="gate">
   <div class="wrap">
-    <span class="tag">The complete product loop</span>
-    <h2>Turn important journeys into merge checks.</h2>
+    <span class="tag">On every pull request</span>
+    <h2>Turn the journeys you care about into merge checks.</h2>
     <p class="lead">
-      Explore broadly, preserve important journeys as reviewed Flows or contracts, and install the
-      same engine as a portable GitHub Action. Every PR answers one question with evidence:
-      <strong>did this break important behavior that worked in the reviewed baseline?</strong>
+      Pick the journeys that must keep working — checkout, sign-in, onboarding — and tapp runs them
+      on the real app for every PR. Each PR gets one answer, with evidence:
+      <strong>did this change break something that used to work?</strong>
     </p>
     <div class="gate-panel">
       <ul>
-        <li>Builds or starts the selected iOS, Android, or web target</li>
-        <li>Composes reusable Tasks into business-level release contracts</li>
-        <li>Blocks on failed critical contracts, crashes, and new high/critical regressions</li>
-        <li>Shows exact coverage boundaries, screenshots, and deterministic replay evidence</li>
+        <li>Builds and launches your iOS, Android, or web app</li>
+        <li>Replays the journeys you've marked as important</li>
+        <li>Blocks the merge on crashes, failed journeys, and new serious findings</li>
+        <li>Attaches screenshots and a replay so you can see exactly what happened</li>
       </ul>
       <div class="mini-comment">
         <div class="title">🟢 PASS</div>
@@ -480,8 +455,8 @@
     <div class="pilot-panel">
       <div>
         <span class="tag">Founding tapp Teams</span>
-        <h2>Put tapp on a real agent-authored app.</h2>
-        <p>We are opening a small paid pilot for teams that want hands-on repository onboarding, important-journey setup, and deterministic CI integration. Core tapp stays MIT licensed and runs in infrastructure you control.</p>
+        <h2>Try it on your real app, with help.</h2>
+        <p>We're taking a small number of paid pilot teams. We set tapp up on your repo, pick the journeys that matter, and wire up the CI check — together. tapp itself is MIT licensed and runs on infrastructure you control.</p>
       </div>
       <div>
         <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?template=founding-pilot.yml">Apply for the founding pilot →</a>
