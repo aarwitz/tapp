@@ -14,6 +14,7 @@ npx -y @aarwitz/tapp@latest tree [target] --json
 npx -y @aarwitz/tapp@latest shot
 npx -y @aarwitz/tapp@latest report latest
 npx -y @aarwitz/tapp@latest doctor
+npx -y @aarwitz/tapp@latest feedback "short title" --body "what happened" --type bug|idea|question   # draft; add --submit to file (public)
 ```
 
 Platform examples:

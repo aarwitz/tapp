@@ -349,7 +349,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - uses: aarwitz/tapp@v0.17.8 # or pin the reviewed release commit SHA
+      - uses: aarwitz/tapp@v0.17.9 # or pin the reviewed release commit SHA
         with:
           project: MyApp.xcodeproj # or MyApp.xcworkspace
           scheme: MyApp
@@ -399,7 +399,7 @@ Android CI runs on Linux with an emulator/device already connected. The Action c
 or accept a prebuilt one:
 
 ```yaml
-- uses: aarwitz/tapp@v0.17.8 # or pin the reviewed release commit SHA
+- uses: aarwitz/tapp@v0.17.9 # or pin the reviewed release commit SHA
   with:
     platform: android
     android-app-id: com.acme.app
@@ -457,6 +457,15 @@ only an optional authoring/enrichment layer (`tapp_flow_generate`, `assert_ai`, 
 
 The first tool call builds the harness once (~2 min, cached in `~/.tapp`; rebuilt automatically
 if you switch simulators). All captures land in `~/.tapp/captures/`.
+
+## Feedback
+
+Tapp accepts feedback the way agents already work: as GitHub issues on
+[aarwitz/tapp](https://github.com/aarwitz/tapp/issues). `tapp feedback "short title" --body "…"`
+(or the `tapp_feedback` MCP tool) drafts an issue with the version, platform availability, and latest
+capture id filled in and home paths and tokens redacted; `--submit` files it with your authenticated
+`gh`. Drafts are the default because issues are public — an agent should show you the draft first.
+Nothing is uploaded automatically; captures stay on your machine.
 
 ## License
 

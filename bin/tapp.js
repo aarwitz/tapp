@@ -282,6 +282,7 @@ function safeCommandUsage(verb) {
     actor: "tapp actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
+    feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
     doctor: "tapp doctor [--json]\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
     install: "tapp install",
     mcp: "tapp mcp",
@@ -301,7 +302,7 @@ if (["--help", "-h"].includes(command)) {
 const knownCommands = new Set([
   "help", "version", "--version", "-v", "mcp", "init", "focus", "explore", "qa", "open",
   "tree", "shot", "screenshot", "apps", "build", "flow", "task", "contract", "scenario", "map",
-  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install",
+  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install", "feedback",
 ]);
 if (!knownCommands.has(command)) {
   console.error(`❌ Unknown command: ${command}`);
@@ -695,15 +696,28 @@ switch (command) {
     const launchOptions = iosLaunchOptions(flags, rest);
     let target = positionals[0] || "";
     let baselineFindings;
+    let baselineCaptureContext = null;
     if (flags.baseline) {
       try {
         const parsed = JSON.parse(fs.readFileSync(flags.baseline, "utf8"));
         baselineFindings = Array.isArray(parsed) ? parsed : parsed.findings;
+        // Accept the 0.17.7 gate JSON's stamp-shaped `capture` too (explore JSON never
+        // stamped that key — there it is the evidence-folder record).
+        if (!Array.isArray(parsed)) baselineCaptureContext = parsed.captureContext || (parsed.capture?.viewport ? parsed.capture : null);
       } catch (e) {
         console.error(`❌ Could not read baseline ${flags.baseline}: ${e.message}`);
         process.exit(2);
       }
     }
+    // The same honesty rule the CI gate applies: a baseline captured at another device/viewport
+    // makes "resolved" a layout diff, not a fix — say so on the command the JSON hint points at.
+    const applyCaptureMismatch = (structured) => {
+      if (!structured?.regression || !baselineCaptureContext || !structured.captureContext) return;
+      if (JSON.stringify(baselineCaptureContext) === JSON.stringify(structured.captureContext)) return;
+      structured.regression.captureMismatch = { baseline: baselineCaptureContext, current: structured.captureContext };
+      const describe = (c) => [c?.device, c?.viewport ? `${c.viewport.width}x${c.viewport.height}` : null, c?.deviceScaleFactor ? `@${c.deviceScaleFactor}x` : null].filter(Boolean).join(" ") || "unknown";
+      console.error(`⚠️  Capture mismatch: the baseline was captured at ${describe(baselineCaptureContext)}, this run at ${describe(structured.captureContext)}. "Resolved" findings may reflect layout differences, not fixes — re-baseline at the same device/viewport to compare honestly.`);
+    };
     const engine = await engineImport();
     // Source-preparing bare explore (ADR-0005 §5): no explicit target + a repo application model →
     // drive the model's default target end to end. Managed web is built/started/waited-for and
@@ -734,6 +748,7 @@ switch (command) {
         });
         finishProgress();
         if (r.error) { printEngineError(r); process.exit(1); }
+        applyCaptureMismatch(r.structured);
         console.log(r.text);
         if (flags.json && typeof flags.json === "string") {
           fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
@@ -804,6 +819,7 @@ switch (command) {
       printEngineError(r);
       process.exit(1);
     }
+    applyCaptureMismatch(r.structured);
     console.log(r.text);
     if (flags.json && typeof flags.json === "string") {
       fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
@@ -1829,6 +1845,58 @@ switch (command) {
     break;
   }
 
+  case "feedback": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const usage = 'Usage: tapp feedback "short title" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]';
+    const title = positionals.join(" ").trim();
+    if (!title) { console.error(`❌ ${usage}`); process.exit(2); }
+    const fb = await import(path.join(packageRoot, "mcp-server", "src", "feedback.js"));
+    const type = typeof flags.type === "string" ? flags.type : "bug";
+    if (!fb.FEEDBACK_TYPES.includes(type)) { console.error(`❌ --type must be one of ${fb.FEEDBACK_TYPES.join(", ")}\n${usage}`); process.exit(2); }
+    let body = typeof flags.body === "string" ? flags.body : "";
+    if (typeof flags["body-file"] === "string") {
+      try { body = fs.readFileSync(flags["body-file"], "utf8"); } catch (error) { console.error(`❌ Could not read --body-file: ${error.message}`); process.exit(2); }
+    }
+    const captureFlag = typeof flags.capture === "string" ? flags.capture : "latest";
+    const captureId = captureFlag === "none" ? null : captureFlag === "latest" ? fb.latestCaptureId(tappHome) : captureFlag;
+    // Platform availability comes from doctor --json so the issue carries facts, not guesses.
+    let doctor = null;
+    try {
+      const d = run(process.execPath, [path.join(packageRoot, "bin", "tapp.js"), "doctor", "--json"], { env: { ...process.env, TAPP_HOME: tappHome } });
+      doctor = JSON.parse(d.stdout);
+    } catch { /* feedback still works without the environment summary */ }
+    let issue;
+    try {
+      issue = fb.composeFeedback({ title, body, type, version: pkg.version, doctor, captureId, filedBy: flags.as === "human" ? "human" : "agent" });
+    } catch (error) { console.error(`❌ ${error.message}\n${usage}`); process.exit(2); }
+    const url = fb.feedbackIssueUrl(issue);
+    let submitted = false, issueUrl = null;
+    if (flags.submit === true) {
+      const status = fb.ghStatus();
+      if (!status.available) {
+        if (flags.json === true) console.log(JSON.stringify({ ...issue, url, submitted: false, error: "gh not authenticated" }, null, 2));
+        else console.error(`❌ The GitHub CLI is not authenticated on this machine, so nothing was filed.\n   Open this prefilled issue instead (it is public):\n   ${url}`);
+        process.exit(1);
+      }
+      const result = fb.submitFeedbackViaGh(issue);
+      if (!result.ok) {
+        if (flags.json === true) console.log(JSON.stringify({ ...issue, url, submitted: false, error: result.detail }, null, 2));
+        else console.error(`❌ gh issue create failed: ${result.detail}\n   Prefilled issue link: ${url}`);
+        process.exit(1);
+      }
+      submitted = true; issueUrl = result.url;
+    }
+    if (flags.json === true) {
+      console.log(JSON.stringify({ ...issue, url, submitted, issueUrl }, null, 2));
+      break;
+    }
+    if (submitted) { ok("Filed feedback", issueUrl); break; }
+    console.log(`📝 Feedback draft (not filed — issues on ${fb.FEEDBACK_REPO} are public; confirm with the user first):\n`);
+    console.log(`Title:  ${issue.title}\nLabels: ${issue.labels.join(", ")}\n\n${issue.body}`);
+    console.log(`File it:  tapp feedback ${JSON.stringify(issue.title)} … --submit   (uses your authenticated gh)\nOr open:  ${url}`);
+    break;
+  }
+
   case "version":
   case "--version":
   case "-v": {
@@ -1859,6 +1927,8 @@ Repository & release:
                            (--explore grounds the UI Map · --url URL · --platform · --dry-run · --refresh)
   tapp baseline create [repo] Run/import a conclusive full gate and save a target-scoped baseline
   tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
+  tapp feedback "title"    Send a bug, idea, or question to the tapp maintainers as a GitHub issue
+                           (drafts by default · --submit files it · issues are public)
   tapp ci install [repo]   Generate a reviewable target-aware GitHub workflow + CI manifest
   tapp actor set NAME      Configure an actor using environment-variable names only (never values)
   tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings

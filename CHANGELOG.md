@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.9
+
+- **Feedback channel for people and agents**: `tapp feedback "title" [--body …] [--type bug|idea|question]`
+  and the `tapp_feedback` MCP tool draft a GitHub issue on `aarwitz/tapp` with the version, platform
+  availability (from `doctor --json`), and latest capture id filled in, home paths and tokens redacted.
+  Drafts by default; `--submit` / `submit: true` files it through the authenticated `gh` CLI. Exit
+  codes 0 drafted-or-filed · 1 submission failed · 2 usage. The Agent Skill now tells agents to report
+  tapp friction this way (with user consent, since issues are public).
+
+**The credential lock actually engages.** Field report № 8 found 0.17.8's catalogue-and-stop
+inert in practice: the iOS run config baked in default credentials, so the harness never saw
+an empty credential set.
+
+- `quick-capture.sh` no longer invents `qa@example.com` / `Tapp123!`: the harness receives
+  the caller's credentials or an empty value. Signed-out runs now genuinely catalogue login
+  surfaces without typing, submitting, or opening recovery/third-party-auth flows. A
+  regression guard pins that the config writers carry no invented account.
+- `explore --baseline` prints the capture-mismatch warning and stamps
+  `regression.captureMismatch`, matching the CI gate — this is the command the report JSON
+  hint tells people to use.
+
 ## 0.17.8
 
 **Native exploration honesty: catalogue-only credential surfaces, truthful stops, left-app

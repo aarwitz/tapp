@@ -301,3 +301,16 @@ test("formatScreen counts Link controls as links, not buttons", () => {
   assert.match(out, /1 button\b/);
   assert.doesNotMatch(out, /3 buttons/);
 });
+
+test("quick-capture writes NO default credentials — the credential lock depends on their absence", () => {
+  // Field report № 8: baked-in qa@example.com/Tapp123! defaults meant testEmail was never
+  // empty inside the harness, so the credential-surface lock (catalogue-and-stop) never
+  // engaged and a signed-out run submitted a login against production. The config must carry
+  // the caller's value or an EMPTY string — never an invented account.
+  const script = fs.readFileSync(new URL("../scripts/quick-capture.sh", import.meta.url), "utf8");
+  assert.doesNotMatch(script, /qa@example\.com|Tapp123!/, "no invented default credentials");
+  const emailLines = script.match(/"OCQA_TEST_EMAIL": "\$\{OCQA_TEST_EMAIL:-\}"/g) || [];
+  const passwordLines = script.match(/"OCQA_TEST_PASSWORD": "\$\{OCQA_TEST_PASSWORD:-\}"/g) || [];
+  assert.equal(emailLines.length, 2, "both config writers pass the email through empty-default");
+  assert.equal(passwordLines.length, 2, "both config writers pass the password through empty-default");
+});

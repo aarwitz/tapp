@@ -1,0 +1,39 @@
+name: Feedback
+description: A bug in tapp, an idea, or a question — from a person or from a coding agent using tapp.
+title: "[Feedback] "
+labels:
+  - feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public. Describe the problem or idea; do not paste credentials, private source, customer data, or unredacted capture contents. Coding agents can file this form for you with `npx -y @aarwitz/tapp@latest feedback "title" --submit` (or the `tapp_feedback` MCP tool), which fills in the version and platform details automatically.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What is this?
+      options:
+        - Bug in tapp
+        - Idea or request
+        - Question
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, or what do you want?
+      description: The exact command or tool call, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: tapp version and platform
+      placeholder: 0.17.9 · macOS · iOS simulator
+  - type: dropdown
+    id: filedby
+    attributes:
+      label: Filed by
+      options:
+        - A person
+        - A coding agent on someone's behalf

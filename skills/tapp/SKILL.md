@@ -92,7 +92,7 @@ After the focused fast path, read returned `elements[]` before any remaining act
 ids or visible labels, check `hittable`, tap a field before typing, and wait for navigation or async
 content. Use coordinates only as a last resort. End the session when finished.
 
-Do not edit the app merely because testing found a defect unless the user also asked for a fix. State
-what the evidence proves and what remains untested.
+Do not edit the app merely because testing found a defect unless the user also asked for a fix. State what the evidence proves and what remains untested.
+If tapp itself misbehaves, draft feedback with `npx -y @aarwitz/tapp@latest feedback "title"` or `tapp_feedback`; it is public — draft first, `--submit` only with the user's OK.
 
 Read [references/commands.md](references/commands.md) only for exact CLI/MCP syntax, Flow replay, credentials, or platform prerequisites.

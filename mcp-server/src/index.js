@@ -2439,6 +2439,27 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
+      name: "tapp_feedback",
+      title: "Send feedback to the tapp maintainers",
+      description:
+        "Draft a public GitHub issue on aarwitz/tapp about tapp itself — a bug in tapp, an idea, or a " +
+        "question (not a finding about the app under test). Adds the tapp version, platform availability, " +
+        "and the latest capture id automatically and redacts home paths and tokens. Default is a DRAFT: " +
+        "returns the composed issue plus a prefilled github.com URL the user can open. Pass submit:true only " +
+        "after the user has agreed to file a public issue; filing uses this machine's authenticated GitHub CLI.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Short, specific title" },
+          body: { type: "string", description: "What happened, what you expected, the exact command or tool call. No secrets or private source." },
+          type: { type: "string", enum: ["bug", "idea", "question"], description: "Default bug" },
+          capture: { type: "string", description: "Capture id to reference, 'latest' (default) or 'none'" },
+          submit: { type: "boolean", description: "File the issue now with gh (needs the user's consent). Default false = draft only." },
+        },
+        required: ["title"],
+      },
+    },
+    {
       name: "tapp_health",
       title: "Check Tapp readiness",
       description: "Check Tapp workspace and toolchain availability",
@@ -3169,6 +3190,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
+
+  if (name === "tapp_feedback") {
+    const fb = await import("./feedback.js");
+    const { fileURLToPath } = await import("node:url");
+    const packageRootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+    const title = String(args.title || "").trim();
+    if (!title) return errorResult("tapp_feedback needs a short title", {});
+    const type = typeof args.type === "string" ? args.type : "bug";
+    if (!fb.FEEDBACK_TYPES.includes(type)) return errorResult(`type must be one of ${fb.FEEDBACK_TYPES.join(", ")}`, {});
+    const tappHomeDir = (process.env.TAPP_HOME || path.join(os.homedir(), ".tapp")).trim();
+    const captureArg = typeof args.capture === "string" ? args.capture : "latest";
+    const captureId = captureArg === "none" ? null : captureArg === "latest" ? fb.latestCaptureId(tappHomeDir) : captureArg;
+    let doctor = null;
+    try {
+      const d = await runCommand(process.execPath, [path.join(packageRootDir, "bin", "tapp.js"), "doctor", "--json"], { timeoutMs: 60_000, env: { TAPP_HOME: tappHomeDir } });
+      doctor = JSON.parse(d.stdout);
+    } catch { /* optional context */ }
+    const version = JSON.parse(fs.readFileSync(path.join(packageRootDir, "package.json"), "utf8")).version;
+    let issue;
+    try { issue = fb.composeFeedback({ title, body: String(args.body || ""), type, version, doctor, captureId, filedBy: "agent" }); }
+    catch (error) { return errorResult(error.message, {}); }
+    const url = fb.feedbackIssueUrl(issue);
+    if (args.submit === true) {
+      const status = fb.ghStatus();
+      if (!status.available) return errorResult("The GitHub CLI is not authenticated on this machine, so nothing was filed. Give the user the prefilled link instead.", { url, ...issue, submitted: false });
+      const result = fb.submitFeedbackViaGh(issue);
+      if (!result.ok) return errorResult(`gh issue create failed: ${result.detail}`, { url, ...issue, submitted: false });
+      return richResult(`✅ Filed feedback: ${result.url}`, { submitted: true, issueUrl: result.url, ...issue });
+    }
+    return richResult(
+      `📝 Feedback drafted, not filed. Issues on ${fb.FEEDBACK_REPO} are public — confirm with the user, then call tapp_feedback again with submit: true, or give them this prefilled link:\n${url}\n\nTitle: ${issue.title}\nLabels: ${issue.labels.join(", ")}\n\n${issue.body}`,
+      { submitted: false, url, ...issue },
+    );
+  }
 
   if (name === "tapp_health") {
     const coreChecks = [];

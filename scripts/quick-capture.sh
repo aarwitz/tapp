@@ -183,8 +183,8 @@ run_harness_test() {
   "OCQA_BUNDLE_ID": "$bundle_id",
   "OCQA_MAX_ACTIONS": "$max_actions",
   "OCQA_TIMEOUT_SECONDS": "$timeout_secs",
-  "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line$visual_ready_line$recording_started_line
+  "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-}",
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-}"$interactive_line$overrides_line$launch_args_line$launch_env_line$login_steps_line$pr_target_line$visual_ready_line$recording_started_line
 }
 CONF
 
@@ -447,8 +447,8 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
   "OCQA_SESSION_CMD_PATH": "$SESS_CMD",
   "OCQA_SESSION_RESULT_PATH": "$SESS_RES",
   "OCQA_SESSION_TIMEOUT": "$SESS_TIMEOUT",
-  "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-qa@example.com}",
-  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-Tapp123!}"$sess_args_line$sess_env_line
+  "OCQA_TEST_EMAIL": "${OCQA_TEST_EMAIL:-}",
+  "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-}"$sess_args_line$sess_env_line
 }
 CONF
     xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
