@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.12
 
 **The flows-first gate exists** (field issues #11–#22 batch). ⚠️ Gate policy v5.
 
