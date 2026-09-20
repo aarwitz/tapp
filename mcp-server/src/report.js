@@ -31,6 +31,7 @@ export function parseOcqaMarkers(markersFilePath) {
   const issues = [];
   let complete = null;
   let context = null;
+  let requestedMaxActions = null;
 
   for (const line of lines) {
     if (!line.startsWith("OCQA_")) continue;
@@ -59,6 +60,7 @@ export function parseOcqaMarkers(markersFilePath) {
     if (category === "ISSUE") issues.push(parsed);
     if (category === "COMPLETE") complete = parsed;
     if (category === "CONTEXT") context = parsed;
+    if (category === "PROGRESS" && parsed && typeof parsed === "object" && Number.isFinite(parsed.max)) requestedMaxActions = parsed.max;
   }
 
   return {
@@ -75,6 +77,7 @@ export function parseOcqaMarkers(markersFilePath) {
     ),
     complete,
     context,
+    requestedMaxActions,
     actions,
     recentActions: actions.slice(-5),
     recentTransitions: transitions.slice(-5),
@@ -288,9 +291,16 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   // placeholder anchors, and visible controls do not require a second route. Native exploration
   // retains the stronger multi-screen/action floor. A credentialless single-screen login remains
   // inconclusive so a login wall can never turn into a clean pass.
-  const coverageFloorMet = platform === "web"
-    ? screensExplored >= 1 && actionsPerformed >= 1
-    : screensExplored >= 2 && actionsPerformed >= 3;
+  // An EXPLICITLY small budget scales the floor to the request (issue #18): a --actions 1 run
+  // that performed its one action saw exactly what was asked — that is conclusive evidence of
+  // one action, not "couldn't see enough". A run that undershot even its tiny request (crash at
+  // launch: 0 of 1) stays inconclusive, so the floor's crash-detection job survives.
+  const requestedMax = Number.isFinite(base.requestedMaxActions) ? base.requestedMaxActions : null;
+  const floorActions = platform === "web" ? 1 : 3;
+  const floorScreens = platform === "web" ? 1 : 2;
+  const effectiveFloorActions = requestedMax != null ? Math.min(floorActions, requestedMax) : floorActions;
+  const effectiveFloorScreens = requestedMax != null && requestedMax < floorActions ? 1 : floorScreens;
+  const coverageFloorMet = screensExplored >= effectiveFloorScreens && actionsPerformed >= effectiveFloorActions;
   const unexercisedLoginWall = anySecure && !loginAttempted && screensExplored <= 1;
   const inconclusive = !coverageFloorMet || unexercisedLoginWall || timeBudgetExhausted;
   // "completed" is reserved for a run that exhausted its action budget; a drained frontier is
@@ -572,7 +582,47 @@ export const GATE_EXIT = { pass: 0, fail: 1, error: 2, inconclusive: 3 };
 // finding at or above that severity, and the CLI defaults web targets to `medium` — a 404 in the
 // nav is the release blocker on a website, and a field-tested green PASS over six deterministic
 // findings was exactly the dishonest verdict this product refuses to render.
-export const GATE_POLICY_VERSION = "4";
+export const GATE_POLICY_VERSION = "5";
+
+// A gate run with exploration deliberately not requested (--actions 0): reviewed Flows,
+// scenarios and contracts are the whole deterministic surface. The stub is shaped like an
+// ExplorationRun so every consumer (gate, markdown, HTML, JSON) renders it without special
+// cases, and it says plainly that exploration was not run rather than pretending coverage.
+export function buildFlowsOnlyReport({ platform = "ios", target = null } = {}) {
+  return {
+    kind: "tapp-exploration-run",
+    schemaVersion: 1,
+    runStatus: "not-run",
+    stopReason: "exploration-not-requested",
+    headline: "Exploration not requested (flows-only gate): reviewed suites are the entire deterministic surface of this run.",
+    inconclusive: false,
+    explorationRequested: false,
+    coverage: { screensExplored: 0, actionsPerformed: 0, screens: [] },
+    trace: [],
+    evidence: { markers: null },
+    captureContext: null,
+    uiMap: null,
+    comparison: null,
+    checkedFor: [],
+    notChecked: ["autonomous exploration (not requested: --actions 0 — the gate replays reviewed suites only)"],
+    conditionsNotReached: [],
+    platform,
+    target: typeof target === "string" && target.trim() ? target.trim() : null,
+    screensExplored: 0,
+    actionsPerformed: 0,
+    findingCounts: { critical: 0, high: 0, medium: 0, low: 0, total: 0 },
+    deterministicFindingCounts: { critical: 0, high: 0, medium: 0, low: 0, total: 0 },
+    sampledFindingCounts: { critical: 0, high: 0, medium: 0, low: 0, total: 0 },
+    findings: [],
+    screens: [],
+    screenElementCounts: {},
+    inputFieldsEncountered: [],
+    loginEncountered: false,
+    credentialsProvided: false,
+    credentialsUsed: false,
+    credentialWarning: false,
+  };
+}
 
 // Pure gate evaluator: frozen evidence + policy → a GateRun decision. Extracted verbatim from the
 // former inline logic in ci-report.js so the `[char]` characterization tests keep passing — the
@@ -617,7 +667,14 @@ export function evaluateGate({ report, regression = null, flows = [], scenarios 
   if (prPlan?.execution?.notRun) inconclusive(`${prPlan.execution.notRun} selected release contract(s) did not run`);
   if (prPlan?.execution?.explorationFailed) inconclusive(`${prPlan.execution.explorationFailed} planned PR exploration target(s) failed or were not reached`);
 
-  if (failOn === "any") {
+  if (report.explorationRequested === false) {
+    // Flows-only gate (v5): exploration was deliberately not requested, so no exploration-
+    // derived policy applies — the reviewed suites above are the entire decision. An empty
+    // selection proves nothing and must not pass.
+    if (!flows.length && !scenarios.length && !contracts.length) {
+      inconclusive("flows-only gate (--actions 0) selected no flows, scenarios, or contracts — nothing was verified");
+    }
+  } else if (failOn === "any") {
     if (report.findingCounts.total > 0) fail(`${report.findingCounts.total} finding(s) (fail-on: any)`);
     // "any" is the strictest policy — an inconclusive run (evidence not obtained) must never pass it.
     if (report.inconclusive) inconclusive("run was inconclusive (coverage floor not met)");

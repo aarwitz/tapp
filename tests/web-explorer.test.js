@@ -204,3 +204,29 @@ test("web PR targets accept only bounded route or deterministic UI Map path plan
     id: "route", platform: "web", status: "planned", node: { id: "pricing", name: "Pricing" }, navigation: { status: "replayable", mode: "route", route: "/pricing" },
   }]);
 });
+
+test("control labels read like a screen reader: nested and shadow-DOM text, space-separated", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  const html = `<!doctype html><title>Buy</title><body>
+    <button class="tier"><div><strong>20 Sessions</strong><span>$2,000</span></div></button>
+    <div id="host"></div>
+    <script>
+      const root = document.getElementById("host").attachShadow({ mode: "open" });
+      root.innerHTML = '<button id="shadow-tier"><b>5 Sessions</b><i>$600</i></button>';
+    </script>
+  </body>`;
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(html); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { inspectWebPage } = await import("../mcp-server/src/web-explorer.js");
+    const snap = await inspectWebPage({ url: `http://127.0.0.1:${server.address().port}/`, screenshot: false });
+    const labels = snap.elements.map((e) => e.label);
+    // Field issue #19: nested pieces run together / shadow content invisible meant
+    // `assert_exists: "$2,000"` had nothing to match in the tree.
+    assert.ok(labels.includes("20 Sessions $2,000"), `nested text is space-separated; got ${JSON.stringify(labels)}`);
+  } finally {
+    server.close();
+  }
+});

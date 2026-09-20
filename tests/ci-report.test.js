@@ -20,14 +20,16 @@ const cleanMarkers = [
   'OCQA_COMPLETE:{"actions":3,"states":2,"issues":0,"screens":"Home,Settings"}',
 ];
 
-function runGate({ markers = cleanMarkers, baseline, flowLog, scenarioLog, contractLog, prPlan, platform, targetKey, projectDir } = {}) {
+function runGate({ markers = cleanMarkers, baseline, flowLog, scenarioLog, contractLog, prPlan, platform, targetKey, projectDir, flowsOnly } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ci-report-"));
   const markersPath = path.join(dir, "markers.txt");
   const jsonPath = path.join(dir, "report.json");
   const mdPath = path.join(dir, "report.md");
   fs.writeFileSync(markersPath, markers.join("\n") + "\n");
   const htmlPath = path.join(dir, "report.html");
-  const args = [reportBin, "--markers", markersPath, "--json-out", jsonPath, "--md-out", mdPath, "--html-dir", dir, "--label", "fixture"];
+  const args = flowsOnly
+    ? [reportBin, "--flows-only", "--json-out", jsonPath, "--md-out", mdPath, "--html-dir", dir, "--label", "fixture"]
+    : [reportBin, "--markers", markersPath, "--json-out", jsonPath, "--md-out", mdPath, "--html-dir", dir, "--label", "fixture"];
   if (platform) args.push("--platform", platform);
   if (targetKey) args.push("--target-key", targetKey);
   if (projectDir) args.push("--project-dir", projectDir);
@@ -655,4 +657,55 @@ test("observed PR exploration preserves an existing human release-plan decision 
   });
   assert.match(r.markdown, /remains deferred; no duplicate or decision change was made/);
   assert.match(r.markdown, /Optional explicit evidence reconciliation/);
+});
+
+// ---- Flows-only gate (--actions 0 → --flows-only; gate policy v5, issues #11/#18) ----
+
+const PASSING_FLOW_LOG = [
+  'OCQA_FLOW_STEP:{"status":"pass","action":"tap","target":"Login"}',
+  'OCQA_FLOW_STEP:{"status":"pass","action":"assert_screen","target":"Dashboard"}',
+  'OCQA_FLOW_RESULT:{"name":"smoke","passed":true,"total":2,"executed":2,"failed":0}',
+].join("\n");
+const FAILING_FLOW_LOG = [
+  'OCQA_FLOW_STEP:{"status":"pass","action":"tap","target":"Login"}',
+  'OCQA_FLOW_STEP:{"status":"fail","action":"assert_screen","target":"Dashboard","detail":"still on Login"}',
+  'OCQA_FLOW_RESULT:{"name":"smoke","passed":false,"total":2,"executed":2,"failed":1}',
+].join("\n");
+
+test("flows-only gate: all flows green → PASS exit 0, exploration honestly not-run", () => {
+  const r = runGate({ flowsOnly: true, flowLog: PASSING_FLOW_LOG });
+  assert.equal(r.status, 0, `${r.stderr}\n${r.stdout}`);
+  assert.equal(r.report.gate.outcome, "pass");
+  assert.equal(r.report.explorationRequested, false);
+  assert.equal(r.report.runStatus, "not-run");
+  assert.equal(r.report.stopReason, "exploration-not-requested");
+  assert.match(r.markdown, /autonomous exploration \(not requested/);
+  // The field bug (#18): a fully-green flow replay must never be INCONCLUSIVE over a coverage
+  // floor for exploration that was deliberately not requested.
+  assert.doesNotMatch(r.markdown, /coverage floor/);
+});
+
+test("flows-only gate: a deterministic flow failure FAILS exit 1", () => {
+  const r = runGate({ flowsOnly: true, flowLog: FAILING_FLOW_LOG });
+  assert.equal(r.status, 1);
+  assert.equal(r.report.gate.outcome, "fail");
+  assert.match(r.report.gate.reasons.join(" "), /1 flow\(s\) failed/);
+});
+
+test("flows-only gate with nothing selected is INCONCLUSIVE — an empty selection proves nothing", () => {
+  const r = runGate({ flowsOnly: true });
+  assert.equal(r.status, 3);
+  assert.equal(r.report.gate.outcome, "inconclusive");
+  assert.match(r.report.gate.reasons.join(" "), /selected no flows, scenarios, or contracts/);
+});
+
+test("the flow scoreboard names the URL each web flow actually opened", () => {
+  const log = [
+    'OCQA_FLOW_STEP:{"status":"pass","action":"wait_for","target":"How Pricing Works"}',
+    'OCQA_FLOW_RESULT:{"passed":true,"name":"web-pricing","kind":"flow","total":1,"executed":1,"failed":0,"url":"https://example.test/pricing?intake=off"}',
+  ].join("\n");
+  const r = runGate({ flowLog: log });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.report.flows[0].url, "https://example.test/pricing?intake=off");
+  assert.match(r.markdown, /web-pricing.*`https:\/\/example\.test\/pricing\?intake=off`/);
 });

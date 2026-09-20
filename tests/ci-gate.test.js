@@ -220,3 +220,16 @@ test("usage documents the per-platform --device meaning and --viewport", () => {
   assert.match(r.stdout, /web: Playwright device profile/);
   assert.match(r.stdout, /--viewport WxH/);
 });
+
+test("--actions 0 (flows-only) without any suites exits 2 before simulator work", () => {
+  const r = preflight(["--actions", "0"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /flows-only gate, but no Flows, Scenarios, or Contracts/);
+  assert.doesNotMatch(r.stdout, /Simulator/);
+});
+
+test("--actions rejects negatives and non-integers but documents 0 as flows-only", () => {
+  const r = preflight(["--actions", "-3"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /0 = flows-only gate/);
+});

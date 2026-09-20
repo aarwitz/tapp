@@ -18,7 +18,14 @@ def load_flow(path):
     raw = open(path, encoding="utf-8").read()
     if path.endswith(".json"):
         return json.loads(raw)
-    import yaml
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        # Hosted macOS runners ship python3 without PyYAML (field issue #16); a raw
+        # ModuleNotFoundError reads like a tapp crash instead of a one-line fix.
+        sys.exit("tapp flow replay needs PyYAML to read YAML Flows: run `python3 -m pip install pyyaml` "
+                 "(on GitHub macOS runners: `pip3 install pyyaml`), or commit the Flow as .json. "
+                 "`tapp doctor` checks this.")
     return yaml.safe_load(raw)
 
 

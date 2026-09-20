@@ -126,8 +126,16 @@ try {
   }
   if (args.platform === "web" && !args.url) {
     exitCode = 2;
+  } else if (args.actions === 0 && !selectedFlows.length && !selectedScenarios.length && !selectedContracts.length) {
+    console.error("❌ --actions 0 is a flows-only gate, but no Flows, Scenarios, or Contracts were selected — nothing would be verified.");
+    exitCode = 2;
   } else {
-    const qa = args.platform === "web"
+    // --actions 0: flows-only — no explorer touches the target (it may be production, #11).
+    // The reviewed suites are the whole deterministic surface; ci-report gets --flows-only.
+    const flowsOnly = args.actions === 0;
+    const qa = flowsOnly
+      ? { structured: { capture: { path: fs.mkdtempSync(path.join(os.tmpdir(), `tapp-ci-${args.platform}-flows-only-`)) } } }
+      : args.platform === "web"
       ? await runQaWeb({ url: args.url, maxActions: args.actions, timeout: args.timeout, testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets, device: args.device || "", viewport: args.viewport || "" })
       : await runQaAndroid({ appId: args.appId, apkPath: args.apk, serial: args.serial, maxActions: args.actions, timeout: args.timeout,
           testEmail: process.env.OCQA_TEST_EMAIL, testPassword: process.env.OCQA_TEST_PASSWORD, seedTargets: prExplorationTargets });
@@ -142,7 +150,7 @@ try {
   const logPath = path.join(os.tmpdir(), `tapp-ci-${args.platform}-${path.basename(flowPath).replace(/\.ya?ml$/i, "")}-${Date.now()}.log`);
   const evidenceDir = path.join(captureDir, "flows", path.basename(flowPath).replace(/\.ya?ml$/i, ""));
   try {
-    if (args.platform === "web") await runWebFlow({ flow, url: args.url, logPath, screenshotDir: evidenceDir });
+    if (args.platform === "web") await runWebFlow({ flow, url: args.url, urlIsFallback: true, logPath, screenshotDir: evidenceDir });
     else await runAndroidFlow({ flow, appId: args.appId, apkPath: undefined, serial: args.serial, logPath, screenshotDir: evidenceDir });
   } catch (error) {
     fs.writeFileSync(logPath, `OCQA_FLOW_RESULT:${JSON.stringify({ passed: false, total: flow.steps.length, failed: 1, error: error.message || String(error) })}\n`);
@@ -153,7 +161,7 @@ try {
   const logPath = path.join(os.tmpdir(), `tapp-ci-scenario-${path.basename(scenarioPath).replace(/\.ya?ml$/i, "")}-${Date.now()}.log`);
   const evidenceDir = path.join(captureDir, "scenarios", path.basename(scenarioPath).replace(/\.ya?ml$/i, ""));
   try {
-    await runWebScenario({ scenario, url: args.url, logPath, screenshotDir: evidenceDir });
+    await runWebScenario({ scenario, url: scenario.url || args.url, logPath, screenshotDir: evidenceDir });
   } catch (error) {
     fs.writeFileSync(logPath, `OCQA_FLOW_RESULT:${JSON.stringify({ passed: false, name: scenario.name, kind: "scenario", total: scenario.steps.length, executed: 0, failed: 1, error: error.message || String(error) })}\n`);
   }
@@ -164,8 +172,8 @@ try {
   const logPath = path.join(os.tmpdir(), `tapp-ci-contract-${stem}-${Date.now()}.log`);
   const evidenceDir = path.join(captureDir, "contracts", stem);
   try {
-    if (execution.kind === "scenario") await runWebScenario({ scenario: execution, url: args.url, logPath, screenshotDir: evidenceDir });
-    else if (args.platform === "web") await runWebFlow({ flow: execution, url: args.url, logPath, screenshotDir: evidenceDir });
+    if (execution.kind === "scenario") await runWebScenario({ scenario: execution, url: execution.url || args.url, logPath, screenshotDir: evidenceDir });
+    else if (args.platform === "web") await runWebFlow({ flow: execution, url: args.url, urlIsFallback: true, logPath, screenshotDir: evidenceDir });
     else await runAndroidFlow({ flow: execution, appId: args.appId, apkPath: undefined, serial: args.serial, logPath, screenshotDir: evidenceDir });
   } catch (error) {
     fs.writeFileSync(logPath, `OCQA_FLOW_RESULT:${JSON.stringify({ passed: false, name: contract.title, kind: "release-contract", contract: contract.name, criticality: contract.criticality, total: execution.steps.length, executed: 0, failed: 1, error: error.message || String(error) })}\n`);
@@ -173,7 +181,8 @@ try {
         flowLogs.push({ kind: "contract", path: logPath });
       }
 
-      const reportArgs = [path.join(root, "mcp-server", "src", "ci-report.js"), "--markers", markers, "--platform", args.platform,
+      const reportArgs = [path.join(root, "mcp-server", "src", "ci-report.js"),
+        ...(flowsOnly ? ["--flows-only"] : ["--markers", markers]), "--platform", args.platform,
         "--fail-on", args.failOn, "--html-dir", captureDir, "--label", args.url || args.appId];
       if (args.targetKey) reportArgs.push("--target-key", args.targetKey);
       if (args.baseline) reportArgs.push("--baseline", args.baseline);

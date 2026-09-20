@@ -59,7 +59,7 @@ inputs:
     required: false
     default: "assembleDebug"
   max-actions:
-    description: "Exploration budget (number of autonomous actions)"
+    description: "Exploration budget (number of autonomous actions). 0 = flows-only gate: replay reviewed Flows/Scenarios/Contracts with no exploration — nothing autonomous touches the target."
     required: false
     default: "40"
   timeout:

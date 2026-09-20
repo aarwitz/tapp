@@ -99,3 +99,48 @@ test("single-actor browser Flows execute bounded same-origin setup and teardown"
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("a gate-level url is a FALLBACK: the Flow's own url wins, and the result records it", async () => {
+  // Field issue #15: the CI gate passed --url to every Flow, so six flows silently replayed
+  // against the gate homepage instead of the page each Flow declares.
+  const opened = [];
+  const page = new FakePage();
+  page.goto = async (u) => { opened.push(u); };
+  const playwright = { chromium: { launch: async () => ({
+    newContext: async () => ({ newPage: async () => page }), close: async () => {},
+  }) } };
+  const flow = { name: "pricing", url: "http://example.test/pricing?intake=off", steps: [{ assert_screen: "Home" }] };
+
+  const gateStyle = await runWebFlow({ flow, url: "http://example.test/", urlIsFallback: true, playwright });
+  assert.deepEqual(opened, ["http://example.test/pricing?intake=off"], "the flow's declared page is opened");
+  assert.equal(gateStyle.url, "http://example.test/pricing?intake=off", "the result records the URL actually opened");
+
+  opened.length = 0;
+  const flowWithoutUrl = { name: "bare", steps: [{ assert_screen: "Home" }] };
+  await runWebFlow({ flow: flowWithoutUrl, url: "http://example.test/fallback", urlIsFallback: true, playwright });
+  assert.deepEqual(opened, ["http://example.test/fallback"], "a Flow without url still gets the gate url");
+
+  opened.length = 0;
+  await runWebFlow({ flow, url: "http://example.test/override", playwright });
+  assert.deepEqual(opened, ["http://example.test/override"], "an explicit caller url (CLI) still overrides");
+});
+
+test("a tap failure keeps Playwright's diagnosable cause on one line", async () => {
+  const { distillPlaywrightFailure } = await import("../mcp-server/src/web-flow.js");
+  const playwrightMessage = [
+    "locator.click: Timeout 6000ms exceeded.",
+    "Call log:",
+    "  - waiting for getByText('Find a Coach')",
+    "  - element is visible, enabled and stable",
+    '  - <div id="location-intake-modal">…</div> intercepts pointer events',
+  ].join("\n");
+  // Field issue #17: the report kept only "Timeout 6000ms exceeded" and read like the element
+  // didn't exist, while the real cause (a consent modal) was in Playwright's own retry log.
+  assert.equal(
+    distillPlaywrightFailure(playwrightMessage),
+    'locator.click: Timeout 6000ms exceeded. — click intercepted by <div id="location-intake-modal">…</div>'
+  );
+  assert.equal(distillPlaywrightFailure("could not find ‘Pricing’"), "could not find ‘Pricing’");
+  const notVisible = "locator.click: Timeout 6000ms exceeded.\nCall log:\n  - element is not visible";
+  assert.match(distillPlaywrightFailure(notVisible), /element is not visible/);
+});

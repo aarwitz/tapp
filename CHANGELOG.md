@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+**The flows-first gate exists** (field issues #11–#22 batch). ⚠️ Gate policy v5.
+
+- **`--actions 0` is a flows-only gate**: reviewed Flows/Scenarios/Contracts replay with NO
+  exploration — nothing autonomous touches the target (it may be production). All suites green
+  → PASS; a deterministic suite failure → FAIL; an empty selection → INCONCLUSIVE. The report
+  states plainly that exploration was not requested. (#11)
+- **An explicitly small exploration budget scales the coverage floor to the request**: a
+  `--actions 1` run that performed its one action is conclusive; five green Flows no longer
+  read INCONCLUSIVE over a floor the budget could never meet. Undershooting even a tiny
+  request (crash at launch) stays inconclusive. (#18)
+- **A web Flow replays at its own `url:`** — the gate `--url` is a fallback, not an override —
+  in a fresh browser context per Flow, and the report names the URL each Flow actually opened.
+  (#13, #15)
+- **Tap failures keep Playwright's diagnosable cause**: "click intercepted by
+  `<div id="location-intake-modal">`" instead of a bare timeout. (#17)
+- **`wait_for` budgets are configurable**: per-step `timeoutMs`/`timeout` (both platforms) and
+  a flow-level default; wait/assert failures list the top visible labels so the report shows
+  what WAS on screen. (#20)
+- **`open --wait-for` timeouts still capture evidence**: the screenshot path and visible text
+  are printed exactly when they matter most. (#22)
+- **`tree`/`open` control labels read like a screen reader**: nested and shadow-DOM text,
+  space-separated — `assert_exists: "$2,000"` can match a custom card button. (#19)
+- **`doctor` checks PyYAML** (hosted macOS runners ship python3 without it) and a YAML Flow
+  run without it exits with the one-line fix instead of a raw ModuleNotFoundError. (#16)
+- Firebase's simulator "error accessing the keychain" login failure names the
+  `simctl erase` fix. (#21)
+
 ## 0.17.11
 
 **Typing into SwiftUI fields no longer races the keyboard** (field report from a coaching app's

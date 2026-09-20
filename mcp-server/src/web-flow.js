@@ -7,6 +7,16 @@ import { loadPlaywright, webContextOptions } from "./web-explorer.js";
 
 const DEFAULT_TIMEOUT = 6000;
 
+// What WAS visible when a wait missed — points a failure report at the fix (renamed label,
+// error state, wrong page) without a separate `tapp tree` run (field issue #20).
+async function visibleLabelsHint(page, limit = 8) {
+  try {
+    const text = await page.locator("body").innerText({ timeout: 1000 });
+    const labels = [...new Set(String(text).split(/\n+/).map((l) => l.trim()).filter((l) => l.length >= 2 && l.length <= 60))].slice(0, limit);
+    return labels.length ? ` — visible: ${labels.join(" · ")}` : "";
+  } catch { return ""; }
+}
+
 async function firstVisible(candidates) {
   for (const locator of candidates) {
     try {
@@ -115,12 +125,27 @@ export async function runWebRequestStep({ step, startUrl, vars = {}, timeout = D
   return { action: "request", target: `${method} ${targetUrl.pathname}`, status: "pass", detail: "" };
 }
 
+// Playwright's timeout errors bury the actual cause ("<div id=…> intercepts pointer events",
+// "element is not visible") in a multi-line retry log; single-line consumers kept only
+// "Timeout 6000ms exceeded" and the report read like the element did not exist (field issue
+// #17). Keep the first line AND name the diagnosable cause on it.
+export function distillPlaywrightFailure(message) {
+  const text = String(message || "");
+  const firstLine = text.split("\n", 1)[0].trim();
+  const cause = text.match(/(<[^>\n]{1,120}>[^\n]{0,80}intercepts pointer events)/)
+    || text.match(/element is (?:not visible|outside of the viewport|not enabled|not stable)[^\n]*/)
+    || text.match(/waiting for element to be visible, enabled and stable[^\n]*/);
+  if (!cause || firstLine.includes(cause[0])) return firstLine;
+  const reason = cause[0].includes("intercepts pointer events") ? `click intercepted by ${cause[0].replace(/\s*intercepts pointer events.*/, "").trim()}` : cause[0].trim();
+  return `${firstLine} — ${reason}`;
+}
+
 export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout = DEFAULT_TIMEOUT }) {
   const raw = normalizeFlowStep(step);
   const action = raw.action;
   const target = substituteFlowValue(raw.target, vars);
   const value = substituteFlowValue(raw.value, vars);
-  const timeout = Number(raw.params.timeoutMs) || defaultTimeout;
+  const timeout = Number(raw.params.timeoutMs ?? raw.params.timeout) || defaultTimeout;
   let status = "pass";
   let detail = "";
   try {
@@ -154,7 +179,7 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
     } else if (action === "back") {
       await page.goBack({ waitUntil: "domcontentloaded" });
     } else if (action === "wait_for") {
-      if (!await waitForScreen(page, target, timeout)) throw new Error(`‘${target}’ never appeared within ${timeout}ms`);
+      if (!await waitForScreen(page, target, timeout)) throw new Error(`‘${target}’ never appeared within ${timeout}ms${await visibleLabelsHint(page)}`);
     } else if (action === "wait") {
       await page.waitForTimeout(timeout);
     } else if (action === "assert_screen") {
@@ -187,13 +212,18 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
     await settle(page);
   } catch (error) {
     status = "fail";
-    detail = error.message || String(error);
+    detail = distillPlaywrightFailure(error.message || String(error));
   }
   return { action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task };
 }
 
-export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright, device = "", viewport = "" }) {
-  const startUrl = url || flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
+export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright, device = "", viewport = "", urlIsFallback = false }) {
+  // A gate points at ONE target url, but each Flow declares the page it starts on. With
+  // urlIsFallback the Flow's own `url:` wins (field issue #15: six flows silently replayed
+  // against the gate homepage); an explicit caller url (CLI positional) still overrides.
+  const startUrl = urlIsFallback
+    ? (flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "") || url)
+    : (url || flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : ""));
   if (!startUrl) throw new Error("Web Flow needs `url:` (or an http(s) `app:` value)");
   if (logPath) fs.rmSync(logPath, { force: true });
   const setup = flow.setup || [];
@@ -204,7 +234,7 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
   const browser = await pw.chromium.launch({ headless: true });
   const context = await browser.newContext(webContextOptions({ device, viewport, devices: pw.devices }));
   const page = await context.newPage();
-  const timeout = Number(flow.timeoutMs) || DEFAULT_TIMEOUT;
+  const timeout = Number(flow.timeoutMs ?? flow.timeout) || DEFAULT_TIMEOUT;
   page.setDefaultTimeout(timeout);
   const vars = flowVariables(flow);
   let index = 0;
@@ -250,5 +280,5 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
     await requestPhase(teardown);
     await browser.close().catch(() => {});
   }
-  return log.finish();
+  return log.finish({ url: startUrl });
 }

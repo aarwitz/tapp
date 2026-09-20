@@ -47,7 +47,7 @@ export const FLOW_ACTIONS = Object.freeze([
   { action: "swipe", target: "up | down | left | right", passes: "the gesture was performed" },
   { action: "back", target: "(none)", passes: "the platform back navigation was performed" },
   { action: "wait", target: "milliseconds (fixed pause; prefer wait_for)", passes: "always" },
-  { action: "wait_for", target: "label / text (+ timeoutMs)", passes: "the element appeared before the timeout" },
+  { action: "wait_for", target: "label / text (+ per-step timeoutMs/timeout; flow-level timeoutMs sets the default)", passes: "the element appeared before the timeout" },
   { action: "assert_screen", target: "the detected SCREEN TITLE (navigation bar / heading), not arbitrary text", passes: "the current screen's title equals the target" },
   { action: "assert_exists", target: "label / text", passes: "an element with that text or id is present" },
   { action: "assert_absent", target: "label / text", passes: "no element with that text or id is present" },
@@ -172,10 +172,12 @@ export class FlowLog {
     }
   }
 
-  finish() {
+  finish(extra = {}) {
     const passed = this.failed === 0 && this.executed > 0;
-    // Keep `passed` first for marker consumers that stream-match the payload.
-    this.emit(`OCQA_FLOW_RESULT:${JSON.stringify({ passed, name: this.flow.name || "flow", kind: this.kind, ...(this.contract ? { contract: this.contract, criticality: this.criticality } : {}), total: this.flow.steps.length, executed: this.executed, failed: this.failed })}`);
-    return { passed, name: this.flow.name || "flow", kind: this.kind, ...(this.contract ? { contract: this.contract, criticality: this.criticality } : {}), total: this.flow.steps.length, executed: this.executed, failed: this.failed, logPath: this.logPath, lines: this.lines };
+    // Keep `passed` first for marker consumers that stream-match the payload. `extra` carries
+    // run context worth diagnosing from the log alone (e.g. the URL the flow actually opened —
+    // field issue #15 was six flows silently replayed against the wrong page).
+    this.emit(`OCQA_FLOW_RESULT:${JSON.stringify({ passed, name: this.flow.name || "flow", kind: this.kind, ...(this.contract ? { contract: this.contract, criticality: this.criticality } : {}), total: this.flow.steps.length, executed: this.executed, failed: this.failed, ...extra })}`);
+    return { passed, name: this.flow.name || "flow", kind: this.kind, ...(this.contract ? { contract: this.contract, criticality: this.criticality } : {}), total: this.flow.steps.length, executed: this.executed, failed: this.failed, ...extra, logPath: this.logPath, lines: this.lines };
   }
 }

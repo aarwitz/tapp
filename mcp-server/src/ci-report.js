@@ -6,7 +6,8 @@
 // summary (when GITHUB_STEP_SUMMARY is set), a machine-readable JSON report, and — the point —
 // an exit code CI can gate a merge on.
 //
-//   node src/ci-report.js --markers <ocqa-markers.txt>
+//   node src/ci-report.js --markers <ocqa-markers.txt>   # or --flows-only: no exploration ran
+//                                                         # (deliberate; suites are the whole surface)
 //                         [--baseline <baseline.json>]      # prior run's findings[] (or a full report)
 //                         [--flow-log <log> ...]            # run-flow.sh logs (repeatable)
 //                         [--json-out <report.json>]        # full report incl. findings for the next baseline
@@ -31,7 +32,7 @@
 import fs from "fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { buildQaReport, computeRegression, computeContentCollapse, computeReachabilityLoss, evaluateGate, GATE_EXIT } from "./report.js";
+import { buildQaReport, buildFlowsOnlyReport, computeRegression, computeContentCollapse, computeReachabilityLoss, evaluateGate, GATE_EXIT } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { proposeSelectorMaintenance, validateWebMaintenanceProposal } from "./maintenance-proposal.js";
@@ -55,13 +56,14 @@ function parseArgs(argv) {
     else if (a === "--pr-plan") args.prPlan = argv[++i];
     else if (a === "--project-dir") args.projectDir = argv[++i];
     else if (a === "--maintenance-url") args.maintenanceUrl = argv[++i];
+    else if (a === "--flows-only") args.flowsOnly = true;
     else {
       console.error(`Unknown argument: ${a}`);
       process.exit(2);
     }
   }
-  if (!args.markers) {
-    console.error("Required: --markers <ocqa-markers.txt>");
+  if (!args.markers && !args.flowsOnly) {
+    console.error("Required: --markers <ocqa-markers.txt> (or --flows-only for a gate with no exploration)");
     process.exit(2);
   }
   if (!["gate", "absolute", "any", "high", "medium"].includes(args.failOn)) {
@@ -126,7 +128,7 @@ function parseFlowLog(logPath) {
   const name = logPath.split("/").pop().replace(/\.log$/, "");
   if (!fs.existsSync(logPath)) return { name, passed: false, total: 0, failed: 0, steps: [], missing: true, modelObserved: false, deterministicFailed: false };
   const steps = [];
-  let total = 0, executed = 0, failed = 0, passed = false, sawResult = false, flowName = null, kind = "flow", contract = "", criticality = "";
+  let total = 0, executed = 0, failed = 0, passed = false, sawResult = false, flowName = null, kind = "flow", contract = "", criticality = "", url = "";
   for (const raw of fs.readFileSync(logPath, "utf8").split(/\r?\n/)) {
     const line = raw.trim();
     if (line.startsWith("OCQA_FLOW_STEP:{")) {
@@ -145,6 +147,7 @@ function parseFlowLog(logPath) {
         if (o.kind) kind = o.kind;
         if (o.contract) contract = o.contract;
         if (o.criticality) criticality = o.criticality;
+        if (o.url) url = o.url; // the page the flow actually opened (diagnosable from the report)
         sawResult = true;
       } catch { /* ignore malformed */ }
     }
@@ -160,7 +163,7 @@ function parseFlowLog(logPath) {
   // default deterministic gate. evaluateGate reads these flags, never the raw action string.
   const modelObserved = steps.some((s) => s.action === "assert_ai");
   const deterministicFailed = steps.some((s) => s.action !== "assert_ai" && s.status === "fail");
-  return { name: flowName || name, kind, ...(contract ? { contract, criticality } : {}), passed, total, executed, failed, steps, modelObserved, deterministicFailed };
+  return { name: flowName || name, kind, ...(contract ? { contract, criticality } : {}), ...(url ? { url } : {}), passed, total, executed, failed, steps, modelObserved, deterministicFailed };
 }
 
 function loadBaseline(baselinePath) {
@@ -459,6 +462,7 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
     for (const f of flows) {
       const firstFail = f.steps.find((s) => s.status === "fail");
       lines.push(`- ${f.passed ? "✅" : "❌"} **${f.name}** — ${f.steps.filter((s) => s.status === "pass").length}/${f.total} steps` +
+        (f.url ? ` — \`${f.url}\`` : "") +
         (firstFail ? ` — failed at \`${firstFail.action} ${firstFail.target}\`${firstFail.detail ? `: ${firstFail.detail}` : ""}` : "") +
         (f.missing ? " — log missing (flow did not run)" : ""));
     }
@@ -509,7 +513,9 @@ function renderMarkdown(report, regression, flows, scenarios, contracts, prPlan,
 }
 
 const args = parseArgs(process.argv.slice(2));
-const report = buildQaReport(args.markers, { platform: args.platform || "ios", target: args.label || null });
+const report = args.flowsOnly
+  ? buildFlowsOnlyReport({ platform: args.platform || "ios", target: args.label || null })
+  : buildQaReport(args.markers, { platform: args.platform || "ios", target: args.label || null });
 if (!report) {
   // Required evidence could not be obtained — this is inconclusive (fails closed), not a gate FAIL
   // and not a usage error. See the outcome model in report.js (GATE_EXIT).
@@ -517,7 +523,7 @@ if (!report) {
   process.exit(GATE_EXIT.inconclusive);
 }
 let currentUiMap = null;
-if (args.htmlDir) {
+if (args.htmlDir && !args.flowsOnly) {
   try {
     const map = buildUiMapFromMarkers({ markersPath: args.markers, platform: args.platform || "ios", target: args.label || "", runId: path.basename(args.htmlDir) });
     currentUiMap = map;
@@ -545,7 +551,10 @@ if (baseline?.targetKey && baseline.targetKey !== args.targetKey) {
 if (args.targetKey) report.targetKey = args.targetKey;
 // Content-collapse findings are cross-run by nature — merge them into the current findings
 // BEFORE the regression diff so they count as new-vs-baseline and drive the gate normally.
-const collapsed = [
+// A flows-only run carries no exploration evidence: cross-run collapse/reachability and the
+// findings regression are exploration comparisons and would read "everything resolved" — skip
+// them rather than lie.
+const collapsed = args.flowsOnly ? [] : [
   ...computeContentCollapse(report.screenElementCounts, baseline?.screenElementCounts),
   ...computeReachabilityLoss(report, baseline),
 ];
@@ -560,7 +569,7 @@ if (collapsed.length) {
   // No score/verdict to mutate — exploration is scoreless; the gate renders the outcome.
   report.headline = `${collapsed.length} screen(s) regressed vs. baseline (content collapsed or became unreachable).`;
 }
-const regression = computeRegression(report.findings, baseline?.findings ?? null);
+const regression = args.flowsOnly ? null : computeRegression(report.findings, baseline?.findings ?? null);
 // A baseline captured at a different device/viewport is a layout comparison, not a regression
 // signal: a phone run legitimately hides desktop nav links, so its "resolved" list lies. Keep
 // the diff (new findings still gate) but stamp the mismatch so every consumer can see it.

@@ -552,6 +552,21 @@ class ExplorerTests: XCTestCase {
         }
     }
 
+    /// What WAS on screen when a wait/assert missed — so a failure report points at the fix
+    /// (wrong screen? renamed label? error state?) without a separate `tapp tree` run (#20/#22).
+    private func visibleLabelsHint(limit: Int = 8) -> String {
+        let labels = readUITree(app)
+            .filter { isStaticTextType($0.type) || isInteractable($0.type) }
+            .map { normalizeVisibleText($0.label) }
+            .filter { $0.count >= 2 }
+        var seen = Set<String>(); var top: [String] = []
+        for label in labels where !seen.contains(label) {
+            seen.insert(label); top.append(label)
+            if top.count >= limit { break }
+        }
+        return top.isEmpty ? "" : " — visible: \(top.joined(separator: " · "))"
+    }
+
     private func sessionWaitFor(_ target: String, timeoutMs: Int) -> Bool {
         guard !target.isEmpty else { return false }
         let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000.0)
@@ -767,6 +782,10 @@ class ExplorerTests: XCTestCase {
             print("OCQA_FLOW_RESULT:{\"passed\":false,\"total\":0,\"failed\":0,\"error\":\"no OCQA_FLOW_JSON with steps\"}")
             return
         }
+        // Per-flow wait default (field issue #20): a splash that prefetches for ~8s makes the
+        // fixed 6s wait_for fail on a healthy app. Steps may still override individually.
+        let flowDefaultTimeoutMs = (flow["timeoutMs"] as? Int) ?? (flow["timeout"] as? Int) ?? 6000
+
         // Variable substitution: $TEST_EMAIL/$TEST_PASSWORD from creds, plus any OCQA_FLOW_VARS.
         var vars: [String: String] = ["TEST_EMAIL": resolve("OCQA_TEST_EMAIL", fallback: "test@example.com"),
                                       "TEST_PASSWORD": resolve("OCQA_TEST_PASSWORD", fallback: "TestPass123!")]
@@ -802,7 +821,7 @@ class ExplorerTests: XCTestCase {
             let (action, step) = normalizeFlowStep(raw)
             let target = subst((step["target"] as? String) ?? "")
             let value = subst((step["value"] as? String) ?? "")
-            let timeoutMs = (step["timeoutMs"] as? Int) ?? 6000
+            let timeoutMs = (step["timeoutMs"] as? Int) ?? (step["timeout"] as? Int) ?? flowDefaultTimeoutMs
             var status = "pass"
             var detail = ""
 
@@ -818,7 +837,14 @@ class ExplorerTests: XCTestCase {
                 let password = subst((step["password"] as? String) ?? "$TEST_PASSWORD")
                 let result = sessionLogin(email: email, password: password)
                 status = result.status == "ok" ? "pass" : "fail"
-                if status == "fail" { detail = result.detail.isEmpty ? result.status : result.detail }
+                if status == "fail" {
+                    detail = result.detail.isEmpty ? result.status : result.detail
+                    // Firebase's "error accessing the keychain" on a simulator is stale keychain
+                    // state, not bad credentials — name the one-line fix (field issue #21).
+                    if detail.lowercased().contains("accessing the keychain") {
+                        detail += " — simulator keychain is stale; `xcrun simctl erase <udid>` (or Device ▸ Erase All Content and Settings) usually fixes Firebase keychain errors"
+                    }
+                }
             case "swipe":
                 switch target.lowercased() { case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp() }
             case "back":
@@ -827,7 +853,7 @@ class ExplorerTests: XCTestCase {
                 Thread.sleep(forTimeInterval: Double(timeoutMs) / 1000.0)
             case "wait_for":
                 status = sessionWaitFor(target, timeoutMs: timeoutMs) ? "pass" : "fail"
-                if status == "fail" { detail = "‘\(target)’ never appeared within \(timeoutMs)ms" }
+                if status == "fail" { detail = "‘\(target)’ never appeared within \(timeoutMs)ms\(visibleLabelsHint())" }
             case "assert_screen":
                 let ok = pollUntil(timeoutMs: timeoutMs) { (detectTitle(readUITree(app)) ?? "").caseInsensitiveCompare(value.isEmpty ? target : value) == .orderedSame }
                 status = ok ? "pass" : "fail"
@@ -835,7 +861,7 @@ class ExplorerTests: XCTestCase {
             case "assert_exists":
                 let ok = sessionWaitFor(target, timeoutMs: timeoutMs)
                 status = ok ? "pass" : "fail"
-                if !ok { detail = "‘\(target)’ not found" }
+                if !ok { detail = "‘\(target)’ not found\(visibleLabelsHint())" }
             case "assert_absent":
                 waitForUIStability(timeout: 1.5)
                 let present = elementPresent(target)

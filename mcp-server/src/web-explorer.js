@@ -460,12 +460,35 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
       try {
         await page.getByText(requested, { exact: false }).first().waitFor({ state: "visible", timeout: boundedTimeout });
       } catch {
-        throw new Error(`Timed out waiting for visible text “${requested}”`);
+        // The timeout is exactly when the screenshot matters most (field issue #22): the page
+        // may have rendered an error state. Capture what IS there and hand it to the caller.
+        const error = new Error(`Timed out waiting for visible text “${requested}”`);
+        error.timeoutEvidence = {
+          image: screenshot ? await page.screenshot({ type: "png", fullPage: !!fullPage }).catch(() => null) : null,
+          visible: await page.locator("body").innerText({ timeout: 1000 })
+            .then((text) => [...new Set(String(text).split(/\n+/).map((l) => l.trim()).filter((l) => l.length >= 2 && l.length <= 60))].slice(0, 8))
+            .catch(() => []),
+          url: page.url(),
+        };
+        throw error;
       }
       stability = await waitForWebStability(page, { timeoutMs: Math.min(5_000, boundedTimeout) });
     }
     const observed = await page.evaluate(() => {
       const visible = (element) => element.offsetParent !== null;
+      // A control's name is what a screen reader would read: ALL descendant text, shadow roots
+      // included, with spaces between the pieces. Custom card buttons render their title/price
+      // inside nested divs (or a shadow root) — plain textContent ran the pieces together and
+      // came back empty for shadow DOM, so `assert_exists: "$2,000"` had nothing to match
+      // (field issue #19).
+      const accessibleText = (node) => {
+        let out = "";
+        for (const child of (node.shadowRoot || node).childNodes) {
+          if (child.nodeType === Node.TEXT_NODE) out += child.textContent + " ";
+          else if (child.nodeType === Node.ELEMENT_NODE) out += accessibleText(child) + " ";
+        }
+        return out;
+      };
       const controls = [...document.querySelectorAll("button, a[href], input, textarea, select, summary, [role=button], [role=tab], [role=checkbox], [role=switch]")]
         .filter((element) => element.type !== "hidden" && visible(element))
         .slice(0, 80)
@@ -474,7 +497,7 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
           const field = ["input", "textarea", "select"].includes(tag);
           const secure = element.type === "password";
           const role = element.getAttribute("role") || (tag === "a" ? "link" : tag === "button" || tag === "summary" ? "button" : "");
-          const label = (element.labels?.[0]?.textContent || element.getAttribute("aria-label") || element.textContent || element.placeholder || element.name || element.id || "").trim().slice(0, 120);
+          const label = (element.labels?.[0]?.textContent || element.getAttribute("aria-label") || accessibleText(element).replace(/\s+/g, " ").trim() || element.placeholder || element.name || element.id || "").trim().slice(0, 120);
           const box = element.getBoundingClientRect();
           return {
             // `type` stays faithful so an agent follows links and presses buttons, not vice versa.

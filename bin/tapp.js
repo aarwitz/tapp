@@ -860,6 +860,14 @@ switch (command) {
         if (!snap.settled) console.error("⚠️ Page still showed a loading or changing state when the bounded wait ended.");
       } catch (error) {
         console.error(`❌ ${error.message || String(error)}`);
+        const evidence = error.timeoutEvidence;
+        if (evidence?.image) {
+          const out = typeof flags.out === "string" ? path.resolve(flags.out) : path.join(tappHome, "shots", `web-timeout-${Date.now()}.png`);
+          fs.mkdirSync(path.dirname(out), { recursive: true });
+          fs.writeFileSync(out, evidence.image);
+          console.error(`📸 Screenshot at timeout: ${out}`);
+        }
+        if (evidence?.visible?.length) console.error(`👀 Visible instead: ${evidence.visible.join(" · ")}`);
         process.exit(1);
       }
       break;
@@ -1473,6 +1481,13 @@ switch (command) {
     const python = run("python3", ["--version"]);
     report.python3 = { ok: python.code === 0, version: python.code === 0 ? python.stdout : null };
     python.code === 0 ? sayOk("python3", `${python.stdout} (used by Flows)`) : sayBad("python3", "not found — Flow replay needs python3 + pyyaml (everything else works)");
+    // Hosted macOS runners ship python3 WITHOUT PyYAML (field issue #16) — check the module,
+    // not just the interpreter, so `doctor` catches it before a Flow dies mid-CI.
+    if (python.code === 0) {
+      const pyyaml = run("python3", ["-c", "import yaml"]);
+      report.pyyaml = { ok: pyyaml.code === 0 };
+      pyyaml.code === 0 ? sayOk("PyYAML", "importable (YAML Flow replay)") : sayBad("PyYAML", "missing — `python3 -m pip install pyyaml` (YAML Flow replay needs it; JSON Flows work without)");
+    }
 
     const { storagePreflight } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
     const storage = storagePreflight(tappHome);

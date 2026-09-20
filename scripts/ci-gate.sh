@@ -16,7 +16,8 @@
 #   tapp ci        # in an initialized repo: reads .tapp/application-model.json for platform/target
 #                      # omit --url with --project-dir to detect/build/start/stop one owned web target
 #                      # bundle id is detected from the .app when omitted
-#                      [--actions N]              # exploration budget (default 40)
+#                      [--actions N]              # exploration budget (default 40); 0 = flows-only
+#                                                 # gate (replay reviewed suites, no exploration)
 #                      [--timeout S]              # exploration watchdog (default 600)
 #                      [--flows <glob>]           # Flow YAMLs to replay (default: <app repo>/.tapp/flows/*.yml if --project-dir given)
 #                      [--scenarios <glob>]       # Multi-actor Scenario YAMLs (web; default: <app repo>/.tapp/scenarios/*.yml)
@@ -83,7 +84,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$PLATFORM" == "ios" || "$PLATFORM" == "android" || "$PLATFORM" == "web" ]] || { echo "❌ --platform must be ios|android|web" >&2; exit 2; }
 [[ "$PLATFORM" == "ios" && -n "$VIEWPORT" ]] && { echo "❌ --viewport applies to web gates only; on ios --device selects the simulator" >&2; exit 2; }
-[[ "$ACTIONS" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --actions must be a positive integer" >&2; exit 2; }
+[[ "$ACTIONS" =~ ^[0-9]+$ ]] || { echo "❌ --actions must be a non-negative integer (0 = flows-only gate: replay reviewed suites, no exploration)" >&2; exit 2; }
 [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || { echo "❌ --timeout must be a positive integer" >&2; exit 2; }
 [[ "$FAIL_ON" == "gate" || "$FAIL_ON" == "absolute" || "$FAIL_ON" == "any" || "$FAIL_ON" == "high" || "$FAIL_ON" == "medium" ]] || { echo "❌ --fail-on must be gate|absolute|any|high|medium" >&2; exit 2; }
 if [[ -n "$PROJECT_DIR" ]]; then
@@ -328,6 +329,11 @@ if [[ "${#CONTRACT_FILES[@]}" -gt 0 ]]; then
   done
 fi
 
+if [[ "$ACTIONS" == "0" && "${#FLOW_FILES[@]}" -eq 0 && "${#SCENARIO_FILES[@]}" -eq 0 && "${#CONTRACT_COMPILED_FILES[@]}" -eq 0 ]]; then
+  echo "❌ --actions 0 is a flows-only gate, but no Flows, Scenarios, or Contracts were selected — nothing would be verified. Commit suites under .tapp/ or pass --flows/--scenarios/--contracts." >&2
+  exit 2
+fi
+
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || { echo "❌ Required: --app <path/to/App.app> (a simulator build)" >&2; exit 2; }
 if [[ -z "$BUNDLE_ID" ]]; then
   BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" 2>/dev/null || true)"
@@ -366,16 +372,23 @@ step "Install $BUNDLE_ID"
 xcrun simctl install "$UDID" "$APP_PATH" || { echo "❌ simctl install failed — is $APP_PATH a SIMULATOR build?" >&2; exit 1; }
 
 # ── Autonomous exploration (quick-capture builds the harness itself if needed).
-step "Explore ($ACTIONS actions, ${TIMEOUT}s watchdog)"
-set +e
+# --actions 0 = flows-only: the reviewed suites are the whole deterministic surface. No
+# explorer touches the app — the point, for targets wired to production backends (#11).
 CAPTURE_ROOT="${TAPP_HOME:-$ROOT}/captures"
 mkdir -p "$CAPTURE_ROOT"
 CAPTURE_DIR="$(mktemp -d "$CAPTURE_ROOT/ci.XXXXXX")"
-TAPP_CAPTURE_DIR="$CAPTURE_DIR" OCQA_PR_TARGET_JSON="$IOS_PR_TARGET_JSON" "$ROOT/scripts/quick-capture.sh" explore "$BUNDLE_ID" --actions "$ACTIONS" --timeout "$TIMEOUT"
-set -e
-MARKERS="$CAPTURE_DIR/ocqa-markers.txt"
-[[ -f "$MARKERS" ]] || { echo "❌ Exploration produced no markers ($MARKERS)" >&2; exit 1; }
-echo "Markers: $MARKERS"
+MARKERS=""
+if [[ "$ACTIONS" == "0" ]]; then
+  step "Explore — skipped (flows-only gate)"
+else
+  step "Explore ($ACTIONS actions, ${TIMEOUT}s watchdog)"
+  set +e
+  TAPP_CAPTURE_DIR="$CAPTURE_DIR" OCQA_PR_TARGET_JSON="$IOS_PR_TARGET_JSON" "$ROOT/scripts/quick-capture.sh" explore "$BUNDLE_ID" --actions "$ACTIONS" --timeout "$TIMEOUT"
+  set -e
+  MARKERS="$CAPTURE_DIR/ocqa-markers.txt"
+  [[ -f "$MARKERS" ]] || { echo "❌ Exploration produced no markers ($MARKERS)" >&2; exit 1; }
+  echo "Markers: $MARKERS"
+fi
 
 # ── Replay committed Flows (each failure becomes a gate reason).
 FLOW_LOG_ARGS=()
@@ -417,6 +430,8 @@ PR_PLAN_ARGS=()
 [[ -n "$PR_PLAN_PATH" ]] && PR_PLAN_ARGS=(--pr-plan "$PR_PLAN_PATH")
 TARGET_KEY_ARGS=()
 [[ -n "$TARGET_KEY" ]] && TARGET_KEY_ARGS=(--target-key "$TARGET_KEY")
-node "$ROOT/mcp-server/src/ci-report.js" --markers "$MARKERS" --fail-on "$FAIL_ON" \
+MODE_ARGS=(--markers "$MARKERS")
+[[ "$ACTIONS" == "0" ]] && MODE_ARGS=(--flows-only)
+node "$ROOT/mcp-server/src/ci-report.js" ${MODE_ARGS[@]+"${MODE_ARGS[@]}"} --fail-on "$FAIL_ON" \
   --html-dir "$CAPTURE_DIR" --label "$BUNDLE_ID" \
   ${BASELINE_ARGS[@]+"${BASELINE_ARGS[@]}"} ${JSON_ARGS[@]+"${JSON_ARGS[@]}"} ${MD_ARGS[@]+"${MD_ARGS[@]}"} ${PR_PLAN_ARGS[@]+"${PR_PLAN_ARGS[@]}"} ${TARGET_KEY_ARGS[@]+"${TARGET_KEY_ARGS[@]}"} ${FLOW_LOG_ARGS[@]+"${FLOW_LOG_ARGS[@]}"}

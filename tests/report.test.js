@@ -646,3 +646,26 @@ test("evaluateGate is a pure function: identical GateRun across repeated calls",
   };
   assert.deepEqual(evaluateGate(evidence), evaluateGate(evidence));
 });
+
+test("an explicitly small exploration budget scales the coverage floor to the request", () => {
+  const oneActionRun = (performed) => buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    ...(performed ? ['OCQA_ACTION:{"type":"tap","target":"Settings"}'] : []),
+    'OCQA_PROGRESS:{"action":1,"max":1,"states":1}',
+    `OCQA_COMPLETE:{"actions":${performed ? 1 : 0},"states":1,"issues":0,"stop":"action-budget"}`,
+  ]), { platform: "ios" });
+  // Issue #18: a --actions 1 run that performed its one action is conclusive evidence of one
+  // action — not "couldn't see enough".
+  assert.equal(oneActionRun(true).inconclusive, false);
+  // The floor's crash-detection job survives: undershooting even a tiny request stays inconclusive.
+  assert.equal(oneActionRun(false).inconclusive, true);
+  assert.equal(oneActionRun(false).stopReason, "coverage-floor-not-met");
+  // A default-budget run keeps the full native floor.
+  const thin = buildQaReport(markersFile([
+    'OCQA_STATE:{"screen":"Home","elements":30}',
+    'OCQA_ACTION:{"type":"tap","target":"Settings"}',
+    'OCQA_PROGRESS:{"action":1,"max":40,"states":1}',
+    'OCQA_COMPLETE:{"actions":1,"states":1,"issues":0,"stop":"navigation-trap"}',
+  ]), { platform: "ios" });
+  assert.equal(thin.inconclusive, true, "a 1-of-40 run is still below the floor");
+});
