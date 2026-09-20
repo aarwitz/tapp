@@ -217,13 +217,29 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
   return { action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task };
 }
 
+// The gate targets ONE deployment; a Flow's `url:` names a PAGE of the app, not a deployment.
+// Under a gate url, keep the Flow's path/query/hash but rebase a differing origin onto the
+// gate's: committed Flows carry the origin they were recorded against (a dev port, the prod
+// domain) while the gate may run an ephemeral server — and six flows replaying the gate
+// homepage instead of their own pages was field issue #15.
+export function resolveGateFlowUrl(declared, gateUrl) {
+  if (!declared) return gateUrl || "";
+  if (!gateUrl) return declared;
+  try {
+    const page = new URL(declared);
+    const gate = new URL(gateUrl);
+    if (page.origin === gate.origin) return declared;
+    return new URL(page.pathname + page.search + page.hash, gate.origin).href;
+  } catch {
+    return declared;
+  }
+}
+
 export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright, device = "", viewport = "", urlIsFallback = false }) {
-  // A gate points at ONE target url, but each Flow declares the page it starts on. With
-  // urlIsFallback the Flow's own `url:` wins (field issue #15: six flows silently replayed
-  // against the gate homepage); an explicit caller url (CLI positional) still overrides.
-  const startUrl = urlIsFallback
-    ? (flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "") || url)
-    : (url || flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : ""));
+  // urlIsFallback = the caller is a gate: the Flow's own page wins, rebased onto the gate's
+  // deployment (see resolveGateFlowUrl). An explicit caller url (CLI positional) still overrides.
+  const declaredUrl = flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
+  const startUrl = urlIsFallback ? resolveGateFlowUrl(declaredUrl, url) : (url || declaredUrl);
   if (!startUrl) throw new Error("Web Flow needs `url:` (or an http(s) `app:` value)");
   if (logPath) fs.rmSync(logPath, { force: true });
   const setup = flow.setup || [];

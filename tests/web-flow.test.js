@@ -120,6 +120,13 @@ test("a gate-level url is a FALLBACK: the Flow's own url wins, and the result re
   await runWebFlow({ flow: flowWithoutUrl, url: "http://example.test/fallback", urlIsFallback: true, playwright });
   assert.deepEqual(opened, ["http://example.test/fallback"], "a Flow without url still gets the gate url");
 
+  // A Flow recorded against another deployment (dev port, prod domain) keeps its PAGE but runs
+  // on the gate's deployment: the gate may have started an ephemeral server.
+  opened.length = 0;
+  const recordedElsewhere = { name: "checkout", url: "http://localhost:4173/checkout?step=2", steps: [{ assert_screen: "Home" }] };
+  await runWebFlow({ flow: recordedElsewhere, url: "http://127.0.0.1:9999/", urlIsFallback: true, playwright });
+  assert.deepEqual(opened, ["http://127.0.0.1:9999/checkout?step=2"], "a differing origin is rebased onto the gate deployment");
+
   opened.length = 0;
   await runWebFlow({ flow, url: "http://example.test/override", playwright });
   assert.deepEqual(opened, ["http://example.test/override"], "an explicit caller url (CLI) still overrides");

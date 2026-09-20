@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { runQaAndroid, runQaWeb, startManagedWebTarget, stopManagedWebTarget } from "../mcp-server/src/index.js";
 import { runAndroidFlow } from "../mcp-server/src/android-flow.js";
 import { inferFlowPlatform, loadFlowFile } from "../mcp-server/src/flow-runtime.js";
-import { runWebFlow } from "../mcp-server/src/web-flow.js";
+import { runWebFlow, resolveGateFlowUrl } from "../mcp-server/src/web-flow.js";
 import { runWebScenario, validateScenario } from "../mcp-server/src/scenario-runtime.js";
 import { compileReleaseContract, loadReleaseContractFile } from "../mcp-server/src/release-contract.js";
 import { prExplorationTargetsFromPlan } from "../mcp-server/src/pr-selection.js";
@@ -161,7 +161,7 @@ try {
   const logPath = path.join(os.tmpdir(), `tapp-ci-scenario-${path.basename(scenarioPath).replace(/\.ya?ml$/i, "")}-${Date.now()}.log`);
   const evidenceDir = path.join(captureDir, "scenarios", path.basename(scenarioPath).replace(/\.ya?ml$/i, ""));
   try {
-    await runWebScenario({ scenario, url: scenario.url || args.url, logPath, screenshotDir: evidenceDir });
+    await runWebScenario({ scenario, url: resolveGateFlowUrl(scenario.url, args.url), logPath, screenshotDir: evidenceDir });
   } catch (error) {
     fs.writeFileSync(logPath, `OCQA_FLOW_RESULT:${JSON.stringify({ passed: false, name: scenario.name, kind: "scenario", total: scenario.steps.length, executed: 0, failed: 1, error: error.message || String(error) })}\n`);
   }
@@ -172,7 +172,7 @@ try {
   const logPath = path.join(os.tmpdir(), `tapp-ci-contract-${stem}-${Date.now()}.log`);
   const evidenceDir = path.join(captureDir, "contracts", stem);
   try {
-    if (execution.kind === "scenario") await runWebScenario({ scenario: execution, url: execution.url || args.url, logPath, screenshotDir: evidenceDir });
+    if (execution.kind === "scenario") await runWebScenario({ scenario: execution, url: resolveGateFlowUrl(execution.url, args.url), logPath, screenshotDir: evidenceDir });
     else if (args.platform === "web") await runWebFlow({ flow: execution, url: args.url, urlIsFallback: true, logPath, screenshotDir: evidenceDir });
     else await runAndroidFlow({ flow: execution, appId: args.appId, apkPath: undefined, serial: args.serial, logPath, screenshotDir: evidenceDir });
   } catch (error) {
