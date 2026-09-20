@@ -10,7 +10,52 @@ permissions:
   contents: read
   pull-requests: write
 
+# A newer push to the same branch supersedes the running one — the 11-minute macOS job was the
+# single largest line on the Actions bill, and most of it was runs made obsolete mid-flight.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Decide which expensive runtime jobs a change can possibly affect. macOS minutes bill at 10×
+  # and the Android emulator job is the longest Linux job; neither learns anything from a
+  # changelog, landing-page, or version-only commit. `[ci full]` in the commit subject forces
+  # every job; a PR or a first/force push (no base to diff against) also runs everything.
+  changes:
+    name: Which runtimes did this change touch?
+    runs-on: ubuntu-latest
+    outputs:
+      ios: ${{ steps.filter.outputs.ios }}
+      android: ${{ steps.filter.outputs.android }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+          SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          run_all=false
+          case "$SUBJECT" in *"[ci full]"*) run_all=true ;; esac
+          if [ "$run_all" = false ] && { [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; }; then
+            run_all=true
+          fi
+          if [ "$run_all" = true ]; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"; echo "android=true" >> "$GITHUB_OUTPUT"
+            echo "running every runtime job (forced or no base to diff against)"; exit 0
+          fi
+          changed=$(git diff --name-only "$BASE" "$HEAD")
+          printf 'changed files:\n%s\n' "$changed"
+          shared='^(action\.yml|package\.json|package-lock\.json|bin/|scripts/(flow_lib\.py|run-flow\.sh|flow-platform\.js|platform-gate\.js|ci-gate\.sh|compile-flow\.js)|mcp-server/src/(index|flow-runtime|task-runtime|scenario-runtime|product-operations|product-execution|managed-operation|application-model|ui-map|focused-navigation|ci-report|ci-setup|report|project-config|project-paths|release-contract)\.js|\.github/workflows/ci\.yml)'
+          ios='^(Harness/|DemoApp/|generate-demoapp-xcodeproj\.rb|generate-xcodeproj\.rb|scripts/quick-capture\.sh|mcp-server/src/ios)'
+          android='^(AndroidCorpus/|scripts/run-android-flow\.js|scripts/android-corpus-e2e\.sh|mcp-server/src/android)'
+          touches() { printf '%s\n' "$changed" | grep -Eq "$1"; }
+          if touches "$shared" || touches "$ios"; then echo "ios=true" >> "$GITHUB_OUTPUT"; else echo "ios=false" >> "$GITHUB_OUTPUT"; echo "iOS simulator job skipped: no iOS-relevant change"; fi
+          if touches "$shared" || touches "$android"; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; echo "Android job skipped: no Android-relevant change"; fi
+
   unit:
     name: Unit, protocol & CLI tests (node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -24,7 +69,18 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm ci
       - name: Production dependency audit
-        run: npm audit --omit=dev --audit-level=high
+        # A registry outage is not a vulnerability. Since 2026-09-19 npm's audit endpoint answers
+        # "audit endpoint returned an error" (400, the quick endpoint is being retired) for trees
+        # that passed days earlier, which turned every push red. Real findings still fail the job.
+        run: |
+          set +e
+          out=$(npm audit --omit=dev --audit-level=high 2>&1); code=$?
+          printf '%s\n' "$out"
+          if [ "$code" -ne 0 ] && printf '%s' "$out" | grep -q "audit endpoint returned an error"; then
+            echo "::warning::npm audit endpoint unavailable — production advisories were not checked on this run"
+            exit 0
+          fi
+          exit "$code"
       # Verdict/report/regression unit tests, engine import-safety, target resolution,
       # CLI smoke, and a real MCP initialize + tools/list handshake over stdio.
       - run: npm test
@@ -41,6 +97,8 @@ jobs:
 
   action-ios:
     name: Composite Action — iOS simulator
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -100,6 +158,8 @@ jobs:
 
   android-corpus:
     name: Android driver + committed Flows
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

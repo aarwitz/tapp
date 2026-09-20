@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.17.11
+
+**Typing into SwiftUI fields no longer races the keyboard** (field report from a coaching app's
+pricing screen, 2026-09-19).
+
+- **`type` waits for keyboard focus before it types**: the harness tapped a field and called
+  `typeText` in the same breath. SwiftUI `TextField`s inside a `ScrollView` take focus a few hundred
+  milliseconds after the tap, so the run died on XCTest's *Failed to synthesize event: Neither
+  element nor any descendant has keyboard focus* — sometimes (the login screen never showed it; a
+  pricing screen showed it 4 runs out of 5). `focusForTyping` now taps, polls `hasKeyboardFocus`
+  for up to 1.2 s, and retries twice with coordinate taps before giving up. The session, Flow and
+  login paths all go through it.
+- **A field that never takes focus is a step failure, not a run abort**: `type` now reports
+  `‘Session rate’ was found (frame …) but never took keyboard focus after 3 taps — no keyboard
+  appeared` as the step detail (session protocol: `status: "focus_failed"` + `detail`) and the
+  flow continues to its scoreboard instead of tearing the test down.
+- **A run the harness abandons mid-way is FAILED, not "PASSED 16/16"**: when XCTest aborts after
+  some steps (an assertion, the test time budget, a crash) there is no final result marker, and
+  `flow run` used to shrink `total` to the steps that happened to run and print a green pass.
+  The report now keeps the declared step count, appends a `harness` failure step carrying the
+  XCTest reason, and exits 1 — the same treatment 0.17.10 gave runs that died before step 1.
+
 ## 0.17.10
 
 **First field-report batch through the feedback channel** (public issues aarwitz/tapp#1–#9, filed

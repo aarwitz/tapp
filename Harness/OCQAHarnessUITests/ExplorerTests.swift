@@ -387,7 +387,8 @@ class ExplorerTests: XCTestCase {
                     app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y)).tap()
                 } else { status = "bad_args" }
             case "type":
-                status = sessionType(cmd["text"] as? String ?? "", id: cmd["id"] as? String) ? "ok" : "not_found"
+                status = sessionType(cmd["text"] as? String ?? "", id: cmd["id"] as? String) ? "ok" : (lastTypeFailure.isEmpty ? "not_found" : "focus_failed")
+                if status == "focus_failed" { loginDetail = lastTypeFailure }
             case "swipe":
                 switch (cmd["direction"] as? String ?? "up") {
                 case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp()
@@ -578,10 +579,12 @@ class ExplorerTests: XCTestCase {
         // credential the server rejects with no visible cause.
         if let id = id, !id.isEmpty {
             for field in [app.textFields[id], app.secureTextFields[id], app.textViews[id]] where field.exists {
-                replaceText(on: field, with: text); lastTypedInto = fieldDesc(field); return true
+                guard replaceText(on: field, with: text) else { return false }
+                lastTypedInto = fieldDesc(field); return true
             }
             if let field = resolveFieldByHint(id) {
-                replaceText(on: field, with: text); lastTypedInto = fieldDesc(field); return true
+                guard replaceText(on: field, with: text) else { return false }
+                lastTypedInto = fieldDesc(field); return true
             }
             return false
         }
@@ -590,8 +593,7 @@ class ExplorerTests: XCTestCase {
         if app.keyboards.firstMatch.exists {
             if let focused = focusedField() {
                 lastTypedInto = fieldDesc(focused)
-                replaceText(on: focused, with: text)
-                return true
+                return replaceText(on: focused, with: text)
             }
             app.typeText(text)
             lastTypedInto = "focused field"
@@ -599,7 +601,8 @@ class ExplorerTests: XCTestCase {
         }
         // Nothing focused and no usable id — last resort: the first text field or text view.
         for first in [app.textFields.firstMatch, app.textViews.firstMatch] where first.exists {
-            replaceText(on: first, with: text); lastTypedInto = fieldDesc(first); return true
+            guard replaceText(on: first, with: text) else { return false }
+            lastTypedInto = fieldDesc(first); return true
         }
         return false
     }
@@ -809,7 +812,7 @@ class ExplorerTests: XCTestCase {
                 if status == "fail" { detail = "could not tap ‘\(target)’" }
             case "type":
                 status = sessionType(value, id: target.isEmpty ? nil : target) ? "pass" : "fail"
-                if status == "fail" { detail = "no field ‘\(target)’ to type into" }
+                if status == "fail" { detail = lastTypeFailure.isEmpty ? "no field ‘\(target)’ to type into" : lastTypeFailure }
             case "login":
                 let email = subst((step["email"] as? String) ?? "$TEST_EMAIL")
                 let password = subst((step["password"] as? String) ?? "$TEST_PASSWORD")
@@ -4718,9 +4721,62 @@ class ExplorerTests: XCTestCase {
         print("OCQA_PROGRESS:{\"action\":\(action),\"max\":\(maxActions),\"states\":\(states)}")
     }
 
-    // Replace existing field contents to avoid repeatedly appending test text.
-    private func replaceText(on element: XCUIElement, with text: String) {
-        element.tap()
+    /// Why the last replaceText could not type — surfaced as the step's detail so a flow says
+    /// "the field never took keyboard focus" instead of dying on an XCTest assertion.
+    private var lastTypeFailure = ""
+
+    /// Give a field keyboard focus and PROVE it before typing. `element.tap()` returning is not
+    /// proof: SwiftUI fields inside a ScrollView regularly report an accessibility frame that
+    /// lags the visible layout (content above them resolved and shifted), so the first tap lands
+    /// on empty space, `typeText` then fails XCTest's "Neither element nor any descendant has
+    /// keyboard focus" assertion and the whole run dies. Strategy: tap, poll for focus, and on a
+    /// miss re-resolve the element (fresh snapshot) and try a coordinate tap at its centre, then
+    /// a tap nudged to the top of the frame. Three attempts, ~4 s worst case.
+    private func focusForTyping(_ element: XCUIElement) -> Bool {
+        func focused() -> Bool { (element.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
+        func settleUntilFocused() -> Bool {
+            let deadline = Date().addingTimeInterval(1.2)
+            repeat {
+                if focused() { return true }
+                Thread.sleep(forTimeInterval: 0.15)
+            } while Date() < deadline
+            return focused()
+        }
+        for attempt in 0..<3 {
+            switch attempt {
+            case 0:
+                if element.isHittable { element.tap() } else { element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            case 1:
+                element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            default:
+                // Frame may be stale by a few rows: tap just inside its top edge, which stays
+                // within the visible control when content shifted up.
+                element.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.2)).tap()
+            }
+            if settleUntilFocused() {
+                if attempt > 0 { print("OCQA_STATE:type_focus_recovered attempt=\(attempt + 1)") }
+                return true
+            }
+            let f = element.frame
+            print("OCQA_STATE:type_focus_miss attempt=\(attempt + 1) frame=\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height)) keyboard=\(app.keyboards.count) focusedElsewhere=\(focusedField().map { fieldDesc($0) } ?? "none")")
+        }
+        return false
+    }
+
+    // Replace existing field contents to avoid repeatedly appending test text. Returns false
+    // (and records `lastTypeFailure`) instead of letting XCTest abort the run when the field
+    // cannot be focused.
+    @discardableResult
+    private func replaceText(on element: XCUIElement, with text: String) -> Bool {
+        lastTypeFailure = ""
+        guard focusForTyping(element) else {
+            let f = element.frame
+            lastTypeFailure = "‘\(fieldDesc(element))’ was found (frame \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))) but never took keyboard focus after 3 taps"
+                + (app.keyboards.count == 0 ? " — no keyboard appeared" : "")
+                + (focusedField().map { " — focus is on ‘\(fieldDesc($0))’" } ?? "")
+            print("OCQA_STATE:type_focus_failed detail=\(escapeJSON(lastTypeFailure))")
+            return false
+        }
 
         if let existing = element.value as? String,
            !existing.isEmpty,
@@ -4730,5 +4786,6 @@ class ExplorerTests: XCTestCase {
         }
 
         element.typeText(text)
+        return true
     }
 }

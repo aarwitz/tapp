@@ -92,6 +92,7 @@ def report(path, as_json=False):
     result = None
     name = "flow"
     kind = "flow"
+    declared_total = None
     for line in log.splitlines():
         line = line.strip()
         if line.startswith("OCQA_FLOW_STEP:"):
@@ -106,6 +107,9 @@ def report(path, as_json=False):
             km = re.search(r"\bkind=([^ ]+)", line)
             if km:
                 kind = km.group(1)
+            tm = re.search(r"\btotal=(\d+)", line)
+            if tm:
+                declared_total = int(tm.group(1))
         elif line.startswith("OCQA_FLOW_RESULT:{"):
             try:
                 result = json.loads(line[len("OCQA_FLOW_RESULT:"):])
@@ -129,6 +133,16 @@ def report(path, as_json=False):
         steps.append({"index": 1, "action": "harness", "target": "", "status": "fail",
                       "detail": abort_reason or "the harness exited before the first step; see flow.log"})
         failed = max(failed, 1)
+    elif result is None and steps:
+        # The harness died MID-run (an XCTest assertion, the test time budget, a crash): there is
+        # no final OCQA_FLOW_RESULT line. This used to be reported as "PASSED 16/16" because
+        # `total` silently became the number of steps that happened to run before the death.
+        abort_reason = harness_abort_reason(log)
+        total = declared_total or total
+        steps.append({"index": len(steps) + 1, "action": "harness", "target": "", "status": "fail",
+                      "detail": (abort_reason or "the harness exited") + f" — run ended after step {executed} of {total}"})
+        failed += 1
+        passed = False
 
     if as_json:
         print(json.dumps({"name": name, "kind": kind, "passed": passed, "total": total, "executed": executed, "failed": failed,
