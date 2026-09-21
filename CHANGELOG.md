@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Releases now use GitHub Actions trusted publishing from the public mirror without an npm token. For the next release, bump the version in `package.json`, `package-lock.json`, and `server.json` and update `CHANGELOG.md`, commit on private `main`, then run `tools/sync-public.sh` to guard and push the allowlisted public snapshot. In the public checkout, run `git tag vX.Y.Z && git push origin vX.Y.Z`; that tag starts `publish-npm.yml`, which verifies the version, runs the unit tests, and publishes to npm with OIDC and provenance. After npm publication succeeds, create the GitHub Release for the tag; `publish-mcp.yml` then verifies the npm version and registers the MCP server.
+
 ## 0.17.12
 
 **The flows-first gate exists** (field issues #11–#22 batch). ⚠️ Gate policy v5.
