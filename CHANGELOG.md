@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.14
 
 - **`tapp audit <url>` — a read-only structural audit.** Flows hold known-good behaviour fixed;
   they cannot find a control that was *never* alive, because nobody writes a test for a button

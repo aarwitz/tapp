@@ -11,6 +11,7 @@ npx -y @aarwitz/tapp@latest explore [target]
 npx -y @aarwitz/tapp@latest focus "Save storefront settings visible above keyboard" [target]
 npx -y @aarwitz/tapp@latest open [target]
 npx -y @aarwitz/tapp@latest tree [target] --json
+npx -y @aarwitz/tapp@latest audit https://example.com --json   # read-only: never clicks, safe against production
 npx -y @aarwitz/tapp@latest shot
 npx -y @aarwitz/tapp@latest report latest
 npx -y @aarwitz/tapp@latest doctor

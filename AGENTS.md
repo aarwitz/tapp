@@ -133,6 +133,11 @@ advisory). Report the finding counts and coverage; do not invent a scalar or a s
   (e.g. `["--uitesting"]` if the app has a test bypass), and/or `appLaunchEnv` (e.g. a staging
   backend URL). If the result shows `inputFieldsEncountered` and you have no credentials, **ask
   the user** for them rather than re-running blind.
+- `tapp audit <url>` is the read-only pass: it renders the page and reads the tree but never
+  clicks, so it is the one analysis safe to point at production. It finds controls that were
+  never alive — dead in-page anchors, `aria-controls` naming nothing, placeholder links, buttons
+  with no handler/form/link — which Flows structurally cannot find, because nobody writes a test
+  for a button they believe does nothing. Exit 1 when it finds any.
 - Credential surfaces are catalogue-only without credentials, on every platform: with no
   `testEmail`/`testPassword` supplied, exploration records a login/signup form's fields but does
   not type into them, submit them, or open recovery/third-party-auth flows — a bare-app run may

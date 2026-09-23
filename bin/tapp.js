@@ -2038,6 +2038,9 @@ Primitives — an agent's eyes and hands:
                            (web: --tap TEXT · --wait-for TEXT · --out FILE)
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
                            (web: --tap TEXT · --wait-for TEXT)
+  tapp audit <url>         Read-only structural audit — dead anchors, placeholder links, buttons
+                           with nothing behind them. Never clicks, so it is safe against
+                           production (exit 1 when dead controls are found)
 
 Repository & release:
   tapp init [repo]         Detect targets and write the application model + reviewable release plan
