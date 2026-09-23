@@ -283,6 +283,7 @@ function safeCommandUsage(verb) {
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
     feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
+    audit: "tapp audit <url> [--json] [--device NAME] [--viewport WxH]\n  Read-only: renders the page and reads the tree, never clicks — safe to point at production.\n  Exit codes: 0 no dead controls · 1 dead controls found · 2 usage/infrastructure",
     doctor: "tapp doctor [--json]\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
     install: "tapp install",
     mcp: "tapp mcp",
@@ -302,7 +303,7 @@ if (["--help", "-h"].includes(command)) {
 const knownCommands = new Set([
   "help", "version", "--version", "-v", "mcp", "init", "focus", "explore", "qa", "open",
   "tree", "shot", "screenshot", "apps", "build", "flow", "task", "contract", "scenario", "map",
-  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install", "feedback",
+  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install", "feedback", "audit",
 ]);
 if (!knownCommands.has(command)) {
   console.error(`❌ Unknown command: ${command}`);
@@ -1150,8 +1151,47 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp flow example\n       tapp flow steps [--json]\n       tapp flow run <flow.yml> [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml>");
+      console.error("usage: tapp flow example\n       tapp flow steps [--json]\n       tapp flow run <flow.yml|glob> [...more] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
       process.exit(2);
+    }
+    // Several Flows in one command (field issue #9): the shell usually expands the glob, but a
+    // quoted pattern arrives whole. Everyone writes this loop by hand otherwise.
+    const expandFlowPattern = (pattern) => {
+      if (!/[*?]/.test(pattern)) return [pattern];
+      const dir = path.dirname(pattern);
+      const rx = new RegExp(`^${path.basename(pattern).replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+      try {
+        return fs.readdirSync(dir).filter((name) => rx.test(name)).sort().map((name) => path.join(dir, name));
+      } catch { return []; }
+    };
+    const flowPaths = positionals.slice(1).flatMap(expandFlowPattern);
+    if (flowPaths.length > 1) {
+      const passThrough = Object.entries(flags).flatMap(([key, value]) =>
+        value === true ? [`--${key}`] : typeof value === "string" ? [`--${key}`, value] : []);
+      const rows = [];
+      for (const candidate of flowPaths) {
+        const name = path.basename(candidate).replace(/\.(ya?ml|json)$/i, "");
+        process.stderr.write(`▶️  ${name}\n`);
+        const child = spawnSync(process.execPath, [path.join(packageRoot, "bin", "tapp.js"), "flow", verb, candidate, ...passThrough], { encoding: "utf8", env: process.env });
+        const output = `${child.stdout || ""}\n${child.stderr || ""}`;
+        // Prefer the cause tapp already distilled; never the last line of a boxed error (#23).
+        const lines = output.split("\n");
+        const errorAt = lines.findIndex((line) => line.trim().startsWith("❌"));
+        // A validation error puts its reasons on the bullet lines under the ❌ headline; a
+        // headline alone ("Invalid web Flow — b-bad:") names no cause.
+        const headline = errorAt >= 0
+          ? [lines[errorAt], ...(/[:：]\s*$/.test(lines[errorAt]) ? [lines[errorAt + 1] || ""] : [])].map((line) => line.trim()).filter(Boolean).join(" ")
+          : "";
+        const cause = (output.match(/^\s*(?:\*\*)?First failure:.*$/m)?.[0] || headline || "")
+          .replace(/\*\*/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+        rows.push({ name, ok: (child.status ?? 1) === 0, cause });
+      }
+      const width = Math.max(...rows.map((row) => row.name.length));
+      console.log("");
+      for (const row of rows) console.log(`${row.name.padEnd(width)}  ${row.ok ? "PASS" : "FAIL"}${row.ok || !row.cause ? "" : `  ${row.cause}`}`);
+      const failed = rows.filter((row) => !row.ok).length;
+      console.log(`\n${rows.length - failed}/${rows.length} ${verb === "validate" ? "valid" : "passed"}`);
+      process.exit(failed ? 1 : 0);
     }
     const absolute = path.resolve(flowPath);
     if (!fs.existsSync(absolute)) {
@@ -1461,6 +1501,38 @@ switch (command) {
     }
     console.error("usage: tapp map build <ocqa-markers.txt> [--platform ios|android|web] [--out .tapp/ui-map.json]\n       tapp map inspect [ui-map.json]\n       tapp map diff <before.json> <after.json> [--comparable]");
     process.exit(2);
+  }
+
+  case "audit": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const url = positionals[0] || "";
+    if (!/^https?:\/\//i.test(url)) {
+      console.error("usage: tapp audit <http(s) url> [--json] [--device NAME] [--viewport WxH]\n       Read-only structural audit: never clicks, safe against production.");
+      process.exit(2);
+    }
+    try {
+      const { auditWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
+      const result = await auditWebPage({
+        url,
+        device: typeof flags.device === "string" ? flags.device : "",
+        viewport: typeof flags.viewport === "string" ? flags.viewport : "",
+      });
+      if (flags.json === true) {
+        console.log(JSON.stringify({ kind: "tapp-structural-audit", readOnly: true, ...result }, null, 2));
+      } else {
+        console.log(`🔎 Structural audit — ${result.url}\n   ${result.controlsExamined} control(s) examined · nothing was clicked`);
+        if (!result.findings.length) console.log("\n✅ No structurally dead controls found.");
+        else {
+          console.log("");
+          for (const finding of result.findings) console.log(`  ⚠️  ${finding.title}`);
+          console.log(`\n${result.findings.length} dead control(s). These are controls no Flow would cover — nobody writes a test for a button they believe does nothing.`);
+        }
+      }
+      process.exit(result.findings.length ? 1 : 0);
+    } catch (error) {
+      console.error(`❌ ${error.message || String(error)}`);
+      process.exit(2);
+    }
   }
 
   case "doctor": {

@@ -1175,3 +1175,97 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   }
   return { markersPath, outDir, actions, screens: screenCount, seedRoutes: normalizedSeeds, seedTargets: normalizedTargets };
 }
+
+// ---- Read-only structural audit (field issue #24) -------------------------------------
+// Flows hold known-good behaviour fixed; they cannot find a control that was NEVER alive,
+// because nobody writes a flow for a button they believe does nothing. This pass renders the
+// page and reads the tree — it never clicks — so it is the one analysis that can be pointed
+// at production, which is where dead controls actually live.
+export function auditFindingsFromControls(controls = []) {
+  const findings = [];
+  for (const control of controls) {
+    const where = control.label || control.identifier || control.selector || "(unlabelled)";
+    if (control.kind === "dead_anchor") {
+      findings.push({ type: "anchor_missing", severity: "medium",
+        title: `In-page link “${where}” points at #${control.fragment}, which is not on the page`, target: control.href });
+    } else if (control.kind === "placeholder_link") {
+      findings.push({ type: "placeholder_link", severity: "medium",
+        title: `Link “${where}” has no destination (href="${control.href}")`, target: control.href });
+    } else if (control.kind === "dangling_aria_controls") {
+      findings.push({ type: "dangling_aria_controls", severity: "medium",
+        title: `“${where}” declares aria-controls="${control.controls}", but no such element exists`, target: control.controls });
+    } else if (control.kind === "unwired_control") {
+      findings.push({ type: "unwired_control", severity: "medium",
+        title: `Button “${where}” has no click handler, form, or link behind it`, target: control.selector });
+    }
+  }
+  return findings;
+}
+
+// Collected inside the page: every structurally dead control, WITHOUT interacting with any.
+export async function auditWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, device = "", viewport = "" }) {
+  let target;
+  try { target = new URL(url); }
+  catch { throw new Error("Audit needs a valid http(s) URL"); }
+  if (!/^https?:$/.test(target.protocol)) throw new Error("Audit needs a valid http(s) URL");
+  const { chromium, devices } = await loadPlaywright();
+  const browser = await chromium.launch(webBrowserLaunchOptions(process.env, {}));
+  try {
+    const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
+    await installWebListenerTracking(context);
+    const page = await context.newPage();
+    const bounded = Math.max(1000, Math.min(60_000, Number(timeoutMs) || NAV_TIMEOUT_MS));
+    page.setDefaultTimeout(bounded);
+    const response = await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: bounded });
+    if (response && response.status() >= 400) throw new Error(`Could not open ${target.href}: HTTP ${response.status()}`);
+    await waitForWebStability(page, { timeoutMs: Math.min(5_000, bounded) });
+    const controls = await page.evaluate(() => {
+      const key = Symbol.for("tapp.clickListeners");
+      const visible = (el) => {
+        const style = window.getComputedStyle(el);
+        return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
+      };
+      const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+      const selectorFor = (el) => el.id ? `#${el.id}` : el.getAttribute("data-testid") ? `[data-testid="${el.getAttribute("data-testid")}"]` : el.tagName.toLowerCase();
+      const dead = [];
+      for (const el of document.querySelectorAll("a[href], button, [role=button], [aria-controls]")) {
+        if (!visible(el)) continue;
+        const label = name(el);
+        const href = el.getAttribute("href");
+        const ariaControls = el.getAttribute("aria-controls");
+        if (ariaControls && !document.getElementById(ariaControls)) {
+          dead.push({ kind: "dangling_aria_controls", label, selector: selectorFor(el), controls: ariaControls });
+          continue;
+        }
+        if (href != null) {
+          if (href === "#" || href.trim() === "" || /^javascript:\s*(void\(0\))?;?$/i.test(href)) {
+            dead.push({ kind: "placeholder_link", label, selector: selectorFor(el), href });
+          } else if (href.startsWith("#")) {
+            const fragment = decodeURIComponent(href.slice(1));
+            const found = fragment && (document.getElementById(fragment) || document.getElementsByName(fragment).length > 0);
+            if (!found) dead.push({ kind: "dead_anchor", label, selector: selectorFor(el), href, fragment });
+          }
+          continue;
+        }
+        // A button with nothing behind it: no listener on itself or an ancestor, no inline
+        // handler, and not a submit inside a form.
+        let wired = false;
+        for (let node = el; node && node !== document.body; node = node.parentElement) {
+          if ((node[key] && node[key].size > 0) || typeof node.onclick === "function" || node.hasAttribute("onclick")) { wired = true; break; }
+        }
+        if (!wired && el.matches("button[type=submit], input[type=submit]") && el.closest("form")) wired = true;
+        if (!wired && el.closest("label")) wired = true; // a label drives its own control
+        if (!wired) dead.push({ kind: "unwired_control", label, selector: selectorFor(el) });
+      }
+      return { dead, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title };
+    });
+    return {
+      url: page.url(),
+      title: controls.title,
+      controlsExamined: controls.controlCount,
+      findings: auditFindingsFromControls(controls.dead),
+    };
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}

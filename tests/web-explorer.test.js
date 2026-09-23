@@ -294,3 +294,37 @@ test("control labels read like a screen reader: nested and shadow-DOM text, spac
     server.close();
   }
 });
+
+test("the read-only audit finds structurally dead controls without clicking anything", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  // Field issue #24: these are controls that were never alive, so no Flow covers them —
+  // nobody writes a test for a button they believe does nothing.
+  const html = `<!doctype html><title>Coach</title><body>
+    <a href="#availability-section">View Availability</a>
+    <a href="#bio">Bio</a><div id="bio">Bio</div>
+    <a href="#">Placeholder</a>
+    <button id="dead-btn">Dead Button</button>
+    <button id="live-btn">Live Button</button>
+    <button aria-controls="missing-panel">Toggle</button>
+    <form><button type="submit">Submit</button></form>
+    <script>document.getElementById('live-btn').addEventListener('click', () => {});</script>
+  </body>`;
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(html); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { auditWebPage } = await import("../mcp-server/src/web-explorer.js");
+    const result = await auditWebPage({ url: `http://127.0.0.1:${server.address().port}/` });
+    const titles = result.findings.map((f) => f.title).join(" | ");
+    assert.match(titles, /View Availability.*availability-section/, "a fragment target absent from the DOM");
+    assert.match(titles, /Placeholder.*no destination/, "href=\"#\"");
+    assert.match(titles, /Dead Button.*no click handler/, "a button with nothing behind it");
+    assert.match(titles, /Toggle.*aria-controls/, "aria-controls pointing at nothing");
+    // Working controls must never be accused: a real anchor, a wired button, a form submit.
+    assert.doesNotMatch(titles, /Live Button|Submit|“Bio”/);
+    assert.equal(result.findings.length, 4, titles);
+  } finally {
+    server.close();
+  }
+});

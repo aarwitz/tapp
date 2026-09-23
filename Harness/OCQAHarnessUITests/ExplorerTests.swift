@@ -1389,6 +1389,10 @@ class ExplorerTests: XCTestCase {
         // say "navigation-trap" or "frontier-drained" instead of blessing a 15/20 run "completed".
         var explorationStopCause = "action-budget"
         var leftAppObservations = 0
+        // A loop the EXPLORER created by going back is its own traversal strategy, not an app
+        // defect (field issue #9: "Personal Info ↔ back" filed as a finding). Remember when we
+        // last navigated backwards so the loop detector can tell the two apart.
+        var lastExplorerBackStep = -99
         while actionCount < maxActions {
             // Subtract time spent paused for interactive input so human typing never eats the budget.
             if Date().timeIntervalSince(startTime) - totalWaitSeconds > timeoutSeconds {
@@ -1889,10 +1893,11 @@ class ExplorerTests: XCTestCase {
                     recent[recent.count - 3] == recent[recent.count - 6] &&
                     Set(recent.suffix(3)).count == 3 &&
                     Set(recentScreenTitles.suffix(3)).count == 3
-                if (hasLoop2 || hasLoop3) && !(authSucceeded && detectedInputs.contains { $0.secure }) {
+                let period = hasLoop2 ? 2 : 3
+                let explorerDroveTheLoop = actionCount - lastExplorerBackStep <= period * 2
+                if (hasLoop2 || hasLoop3) && !explorerDroveTheLoop && !(authSucceeded && detectedInputs.contains { $0.secure }) {
                     let loopKey = "nav_loop:\(titleStr)"
                     if actionCounts[loopKey] == nil {
-                        let period = hasLoop2 ? 2 : 3
                         issues.append((type: "navigation_loop", severity: "low", title: "Navigation loop detected (period \(period))", desc: "Exploration is cycling between the same \(period) screens"))
                         print("OCQA_ISSUE:{\"type\":\"navigation_loop\",\"severity\":\"low\",\"title\":\"Navigation loop\",\"screen\":\"\(escapedTitle)\",\"period\":\(period),\"step\":\(actionCount)}")
                         actionCounts[loopKey] = 1
@@ -1947,6 +1952,7 @@ class ExplorerTests: XCTestCase {
                 // tryGoBack does swipe-down as its last resort (sheet dismiss)
                 let preBackTitle = titleStr
                 let backWorked = tryGoBack()
+                lastExplorerBackStep = actionCount
                 actionCount += 1
                 Thread.sleep(forTimeInterval: 0.3)
                 let postElements = readUITree(app)
@@ -2214,6 +2220,7 @@ class ExplorerTests: XCTestCase {
                 // Scrolling done — try to go back and verify the screen actually changed
                 let preBackTitle = titleStr
                 let backResult = tryGoBack()
+                lastExplorerBackStep = actionCount
                 actionCount += 1
                 Thread.sleep(forTimeInterval: 0.3)
                 let postBackElements = readUITree(app)
@@ -2270,6 +2277,7 @@ class ExplorerTests: XCTestCase {
                     let swipeStart = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
                     let swipeEnd = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9))
                     swipeStart.press(forDuration: 0.1, thenDragTo: swipeEnd)
+                    lastExplorerBackStep = actionCount
                     actionCount += 1
                     print("OCQA_ACTION:{\"type\":\"swipe_dismiss\",\"reason\":\"escape_stuck\",\"step\":\(actionCount),\"screen\":\"\(escapedTitle)\",\"narrative\":\"\(escapeJSON(recoveryNarrative("swipe_dismiss", screen: titleStr)))\"}")
                     Thread.sleep(forTimeInterval: 0.5)

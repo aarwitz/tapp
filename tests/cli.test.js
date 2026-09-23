@@ -1014,3 +1014,17 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     proc.kill();
   }
 });
+
+test("flow run/validate accept several Flows (or a glob) and print one line per Flow", () => {
+  // Field issue #9: everyone was hand-writing the loop over .tapp/flows/*.yml.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-glob-"));
+  fs.writeFileSync(path.join(dir, "a-good.yml"), "name: a-good\nplatform: web\nurl: https://example.test/\nsteps:\n  - wait_for: Example\n");
+  fs.writeFileSync(path.join(dir, "b-bad.yml"), "name: b-bad\nplatform: web\nurl: https://example.test/\nsteps:\n  - click: Nope\n");
+  const run = spawnSync(process.execPath, [tappBin, "flow", "validate", path.join(dir, "*.yml")], { encoding: "utf8" });
+  assert.equal(run.status, 1, "a failing Flow fails the whole batch");
+  assert.match(run.stdout, /a-good\s+PASS/);
+  assert.match(run.stdout, /b-bad\s+FAIL/);
+  // The row must name the cause, never a truncated headline or a box border (#23).
+  assert.match(run.stdout, /unknown action 'click'/);
+  assert.match(run.stdout, /1\/2 valid/);
+});

@@ -314,3 +314,19 @@ test("quick-capture writes NO default credentials — the credential lock depend
   assert.equal(emailLines.length, 2, "both config writers pass the email through empty-default");
   assert.equal(passwordLines.length, 2, "both config writers pass the password through empty-default");
 });
+
+test("a verbose/full screen readout lists every control, not the first eight", () => {
+  const elements = Array.from({ length: 12 }, (_, i) => ({
+    type: "Button", role: "button", label: `Tab ${i + 1}`, isEnabled: true,
+    frame: { x: 0, y: i * 30, width: 80, height: 28 },
+  }));
+  // Field issue #9: the Controls line capped at 8, so the fifth tab's label was invisible and
+  // tapping by coordinate was the only way to reach it.
+  const capped = engine.formatScreen("Home", elements);
+  assert.match(capped, /… and 4 more/);
+  assert.doesNotMatch(capped, /Tab 12/);
+
+  const full = engine.formatScreen("Home", elements, { full: true });
+  assert.match(full, /Tab 12/);
+  assert.doesNotMatch(full, /… and \d+ more/);
+});

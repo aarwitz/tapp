@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **`tapp audit <url>` — a read-only structural audit.** Flows hold known-good behaviour fixed;
+  they cannot find a control that was *never* alive, because nobody writes a test for a button
+  they believe does nothing. `audit` renders the page and reads the tree — it never clicks — so
+  unlike `explore` it can be pointed at production, which is where dead controls actually live.
+  It reports in-page links whose fragment target is absent from the DOM, `aria-controls` naming
+  no element, placeholder links, and buttons with no handler, form, or link behind them.
+  Exit 0 clean · 1 dead controls found · 2 usage. `--json` for agents. (#24)
+
+- **Flow targets resolve inside same-origin iframes**: a modal rendered into an embedded
+  same-origin frame was visibly on screen but invisible to a top-document-only search, so
+  `wait_for` timed out on text the failure screenshot plainly showed. `tap`/`wait_for`/
+  `assert_*` now search the top document first, then each same-origin frame; cross-origin
+  third-party frames stay out of scope. The visible-labels hint reads frame text too. (#14)
+- **A Flow that fails reports its cause, not a box border**: Playwright wraps guidance
+  (“run `npx playwright install`”) in box-drawing art, and a scoreboard that kept one line of
+  the error kept `╚════╝`. The cause now comes first and carries the actionable command, and a
+  web Flow that dies before step 1 writes a structured report with a `harness` failure step
+  instead of only stderr text. (#23)
+- **`tapp flow run`/`validate` take several Flows or a glob**: `tapp flow run .tapp/flows/*.yml`
+  replays them in sequence and prints one line per Flow with the failure cause, exiting 1 if any
+  failed — the loop everyone was writing by hand. A quoted pattern is expanded too. (#9)
+- **A verbose session `tree` is actually verbose**: the documented `verbose: true` was read as
+  `full`, so it silently did nothing, and the control list capped at 8 entries regardless —
+  hiding the fifth tab's label behind a coordinate tap. Both spellings now work and a verbose
+  readout lists every control. (#9)
+- **A loop the explorer itself drove is not an app finding**: "Navigation loop (period 2)" was
+  filed for `Screen ↔ back` cycles the explorer created with its own back navigation. A loop is
+  only reported when the explorer did not navigate backwards into it. (#9)
+
 ## 0.17.13
 
 **A widget that loads late is not a dead link, and a finding that names a control shows it.**

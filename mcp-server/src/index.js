@@ -917,7 +917,7 @@ const SESSION_ACT_ARGS = Object.freeze({
   login: "{email?, password?} (defaults to the session's credentials)",
   swipe: "{direction: up|down|left|right}",
   back: "{}",
-  tree: "{verbose?: true}",
+  tree: "{verbose?: true} — verbose returns every element and the complete control list",
   screenshot: "{label?}",
 });
 export function sessionActUsageError(cmd = {}) {
@@ -1769,13 +1769,15 @@ function elementBreakdown(elements) {
 }
 
 /** Scannable "Read screen X — N elements (...)" readout, plus the tappable/typeable controls. */
-export function formatScreen(screenTitle, elements) {
+export function formatScreen(screenTitle, elements, { full = false } = {}) {
   const els = elements || [];
   const interactable = els.filter((e) => e.isEnabled !== false && (String(e.type).includes("Button") || String(e.type).includes("Link") || String(e.type).includes("rawValue: 9") || String(e.type).includes("TextField") || String(e.type).includes("rawValue: 49") || String(e.type).includes("rawValue: 50") || String(e.type).includes("Cell") || String(e.type).includes("rawValue: 75")));
   const allLabels = interactable
     .map((e) => (e.label || e.identifier || "").trim())
     .filter((s) => s && s.length <= 40 && !s.includes("."));
-  const labels = allLabels.slice(0, 8);
+  // A verbose/full readout must actually be full: the 8-item cap hid the fifth tab's label
+  // and left tapping by coordinate as the only way to reach it (field issue #9).
+  const labels = full ? allLabels : allLabels.slice(0, 8);
   const L = [`🌳 Read screen **${screenTitle || "Unknown"}** — ${els.length} elements (${elementBreakdown(els)})`];
   // A silently cut list reads as complete; say when it isn't.
   if (labels.length) L.push("", "**Controls:** " + labels.map((l) => `\`${l}\``).join(" · ")
@@ -4523,8 +4525,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
     const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
-    const screen = agentScreenProjection(r, { full: action === "tree" && args.full === true });
-    const result = richResult(head + "\n\n" + formatScreen(screen.screenTitle, screen.elements) + rec, { ...r, ...screen });
+    // `verbose` is the documented spelling (SESSION_ACT_ARGS.tree); `full` is the original.
+    // Accepting only `full` meant the documented flag silently did nothing (field issue #9).
+    const fullTree = action === "tree" && (args.full === true || args.verbose === true || cmd.verbose === true || cmd.full === true);
+    const screen = agentScreenProjection(r, { full: fullTree });
+    const result = richResult(head + "\n\n" + formatScreen(screen.screenTitle, screen.elements, { full: fullTree }) + rec, { ...r, ...screen });
     if (!ok) result.isError = true;
     return result;
   }

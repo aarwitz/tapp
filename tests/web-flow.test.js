@@ -151,3 +151,49 @@ test("a tap failure keeps Playwright's diagnosable cause on one line", async () 
   const notVisible = "locator.click: Timeout 6000ms exceeded.\nCall log:\n  - element is not visible";
   assert.match(distillPlaywrightFailure(notVisible), /element is not visible/);
 });
+
+test("a boxed launch error reports its cause, not the box's bottom border", async () => {
+  const { distillErrorMessage } = await import("../mcp-server/src/web-flow.js");
+  // Field issue #23: every row of an 11-Flow scoreboard read `╚════╝` because the summary
+  // kept the LAST line of Playwright's boxed install prompt and discarded the cause.
+  const boxed = [
+    "browserType.launch: Executable doesn't exist at /ms-playwright/chromium_headless_shell-1228/chrome-headless-shell",
+    "╔════════════════════════════════════════════════════════════╗",
+    "║ Looks like Playwright was just installed or updated.       ║",
+    "║ Please run the following command to download new browsers: ║",
+    "║                                                            ║",
+    "║     npx playwright install                                 ║",
+    "╚════════════════════════════════════════════════════════════╝",
+  ].join("\n");
+  const distilled = distillErrorMessage(boxed);
+  assert.match(distilled, /^browserType\.launch: Executable doesn't exist/);
+  assert.match(distilled, /fix: npx playwright install/);
+  assert.doesNotMatch(distilled, /[╔╚═║]/);
+  assert.equal(distillErrorMessage("Web Flow needs `url:`"), "Web Flow needs `url:`");
+});
+
+test("Flow targets resolve inside same-origin iframes, and cross-origin frames stay out of scope", async () => {
+  const { locateWebElement } = await import("../mcp-server/src/web-flow.js");
+  const searched = [];
+  const scopeFor = (name, hasTarget) => ({
+    getByTestId: () => ({ first: () => ({ count: async () => { searched.push(name); return hasTarget ? 1 : 0; }, isVisible: async () => hasTarget }) }),
+    locator: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+    getByLabel: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+    getByRole: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+    getByText: () => ({ first: () => ({ count: async () => 0, isVisible: async () => false }) }),
+  });
+  const main = { ...scopeFor("main", false), url: () => "https://app.test/coach" };
+  const sameOrigin = { ...scopeFor("same-origin-frame", true), url: () => "https://app.test/book-intro.html" };
+  const crossOrigin = { ...scopeFor("cross-origin-frame", true), url: () => "https://widget.vendor.test/embed" };
+  const page = {
+    ...main,
+    mainFrame: () => main,
+    frames: () => [main, crossOrigin, sameOrigin],
+  };
+  // Field issue #14: a modal rendered into a same-origin iframe was visibly on screen but
+  // invisible to a top-document-only search.
+  const found = await locateWebElement(page, "Book This Coach");
+  assert.ok(found, "the target inside the same-origin frame is found");
+  assert.ok(searched.includes("same-origin-frame"), "same-origin frames are searched");
+  assert.ok(!searched.includes("cross-origin-frame"), "a third-party frame is never asserted on");
+});

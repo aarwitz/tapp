@@ -10,9 +10,13 @@ const DEFAULT_TIMEOUT = 6000;
 // What WAS visible when a wait missed — points a failure report at the fix (renamed label,
 // error state, wrong page) without a separate `tapp tree` run (field issue #20).
 async function visibleLabelsHint(page, limit = 8) {
+  const collect = async (scope) => {
+    try { return String(await scope.locator("body").innerText({ timeout: 1000 })); } catch { return ""; }
+  };
   try {
-    const text = await page.locator("body").innerText({ timeout: 1000 });
-    const labels = [...new Set(String(text).split(/\n+/).map((l) => l.trim()).filter((l) => l.length >= 2 && l.length <= 60))].slice(0, limit);
+    // Include same-origin frames: the text a reader can see may live inside an embedded modal.
+    const texts = [await collect(page), ...(await Promise.all(sameOriginFrames(page).map(collect)))];
+    const labels = [...new Set(texts.join("\n").split(/\n+/).map((l) => l.trim()).filter((l) => l.length >= 2 && l.length <= 60))].slice(0, limit);
     return labels.length ? ` — visible: ${labels.join(" · ")}` : "";
   } catch { return ""; }
 }
@@ -31,19 +35,49 @@ function cssId(value) {
   return "#" + String(value).replace(/([^a-zA-Z0-9_-])/g, "\\$1");
 }
 
-export async function locateWebElement(page, target) {
+// A frame whose content the page's own origin may script. An `about:blank`/`srcdoc` frame
+// inherits its parent's origin. Cross-origin frames (third-party widgets) stay out of scope:
+// a Flow should not assert on content the page itself cannot read.
+function sameOriginFrames(page) {
+  if (typeof page.frames !== "function") return []; // non-Playwright page (tests, fakes)
+  let origin;
+  try { origin = new URL(page.url()).origin; } catch { return []; }
+  const main = typeof page.mainFrame === "function" ? page.mainFrame() : null;
+  return page.frames().filter((frame) => {
+    if (frame === main) return false;
+    const url = frame.url() || "";
+    if (!url || url === "about:blank" || url.startsWith("about:srcdoc")) return true;
+    try { return new URL(url).origin === origin; } catch { return false; }
+  });
+}
+
+function targetCandidates(scope, target) {
   const exact = { exact: true };
-  const candidates = [
-    page.getByTestId(target),
-    page.locator(cssId(target)),
-    page.getByLabel(target, exact),
-    page.getByRole("button", { name: target, exact: true }),
-    page.getByRole("link", { name: target, exact: true }),
-    page.getByText(target, exact),
-    page.getByLabel(target),
-    page.getByText(target),
+  return [
+    scope.getByTestId(target),
+    scope.locator(cssId(target)),
+    scope.getByLabel(target, exact),
+    scope.getByRole("button", { name: target, exact: true }),
+    scope.getByRole("link", { name: target, exact: true }),
+    scope.getByText(target, exact),
+    scope.getByLabel(target),
+    scope.getByText(target),
   ];
-  return firstVisible(candidates);
+}
+
+export async function locateWebElement(page, target) {
+  const top = await firstVisible(targetCandidates(page, target));
+  if (top) return top;
+  // A modal rendered into a same-origin <iframe> is visibly on screen but invisible to a
+  // top-document-only search, so `wait_for` timed out on text the screenshot plainly showed
+  // (field issue #14). Top document first, then each same-origin frame in document order.
+  for (const frame of sameOriginFrames(page)) {
+    try {
+      const inFrame = await firstVisible(targetCandidates(frame, target));
+      if (inFrame) return inFrame;
+    } catch { /* a frame can detach mid-search — keep looking */ }
+  }
+  return null;
 }
 
 async function screenCandidates(page) {
@@ -123,6 +157,21 @@ export async function runWebRequestStep({ step, startUrl, vars = {}, timeout = D
   const expected = Number(request.status ?? 200);
   if (response.status !== expected) throw new Error(`${method} ${targetUrl.pathname} returned ${response.status}; expected ${expected}`);
   return { action: "request", target: `${method} ${targetUrl.pathname}`, status: "pass", detail: "" };
+}
+
+// Playwright (and its install prompt) wrap guidance in box-drawing art spanning many lines.
+// Consumers that keep ONE line of an error — a scoreboard row, a CI table — kept the box's
+// bottom border `╚═══╝` and threw the cause away (field issue #23). Put the cause first and
+// carry any actionable instruction with it, so the first AND last line are both useful.
+export function distillErrorMessage(message) {
+  const lines = String(message || "").split("\n")
+    .map((line) => line.replace(/[╔╗╚╝═║│┌┐└┘─]/g, " ").trim())
+    .filter(Boolean);
+  if (!lines.length) return String(message || "").trim();
+  const headline = lines[0];
+  // A boxed Playwright prompt carries the fix as a bare command line inside the art.
+  const fix = lines.slice(1).find((line) => /^(npx|npm|pip3?|python3|yarn|pnpm) /.test(line));
+  return fix && !headline.includes(fix) ? `${headline} — fix: ${fix}` : headline;
 }
 
 // Playwright's timeout errors bury the actual cause ("<div id=…> intercepts pointer events",
