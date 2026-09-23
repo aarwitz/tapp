@@ -1136,8 +1136,24 @@ class ExplorerTests: XCTestCase {
         // --- Login preamble: if credentials are provided and login fields are visible, log in first ---
         if !ranExplicitLogin, !testEmail.isEmpty, !testPassword.isEmpty {
             waitForUIStability(timeout: 2.0) // let app fully settle
-            let allTextFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
-            let allSecureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+            var allTextFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+            var allSecureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+
+            if allSecureFields.count > 1 {
+                let existingAccountLabels = ["Back to login", "Back to Login", "Already have an account?", "Sign in instead", "Log in instead"]
+                for label in existingAccountLabels {
+                    let control = app.buttons[label].exists ? app.buttons[label] : app.staticTexts[label]
+                    if control.exists && control.isHittable {
+                        control.tap()
+                        print("OCQA_STATE:login_preamble_switched_from_signup")
+                        Thread.sleep(forTimeInterval: 0.8)
+                        waitForUIStability(timeout: 2.0)
+                        allTextFields = app.textFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+                        allSecureFields = app.secureTextFields.allElementsBoundByIndex.filter { $0.exists && $0.frame.width > 0 }
+                        break
+                    }
+                }
+            }
             print("OCQA_STATE:login_preamble_fields textFields=\(allTextFields.count) secureFields=\(allSecureFields.count)")
 
             let emailField = allTextFields.first { f in

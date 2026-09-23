@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, parseWebViewport, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webBrowserLaunchOptions, webContextOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin, webUnavailableShellPhrase } from "../mcp-server/src/web-explorer.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { captureElementEvidence, inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, parseWebViewport, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webAnchorStillMissing, webBrowserLaunchOptions, webContextOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin, webUnavailableShellPhrase } from "../mcp-server/src/web-explorer.js";
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-web-explorer-unit-"));
 
 test("focused web inspection rejects non-http targets before launching a browser", async () => {
   await assert.rejects(inspectWebPage({ url: "file:///private/app.html" }), /valid http\(s\) URL/);
@@ -78,6 +83,65 @@ test("placeholder links are findings unless they advertise real JavaScript contr
       target: "unlabeled:instagram-path",
     },
   ]);
+});
+
+test("an anchor target that mounts async within the recheck window is not a false positive", async () => {
+  const responses = ["missing", "missing", "present"];
+  const page = {
+    evaluate: async () => responses.shift() === "present" ? false : true,
+    waitForTimeout: async () => {},
+  };
+  assert.equal(await webAnchorStillMissing(page, "#tour-widget", { timeoutMs: 1_000, intervalMs: 1 }), false);
+});
+
+test("an anchor target that never mounts is reported only after the recheck window elapses", async () => {
+  let polls = 0;
+  const page = {
+    evaluate: async () => { polls += 1; return true; },
+    waitForTimeout: async () => {},
+  };
+  assert.equal(await webAnchorStillMissing(page, "#nowhere", { timeoutMs: 30, intervalMs: 10 }), true);
+  assert.ok(polls >= 2, "polled more than once across the recheck window");
+});
+
+test("an anchor href with no id (bare '#') is reported without polling — there is nothing to look up", async () => {
+  let called = false;
+  const page = { evaluate: async () => { called = true; return true; } };
+  assert.equal(await webAnchorStillMissing(page, "#", {}), true);
+  assert.equal(called, false);
+});
+
+test("element evidence is captured only after scrolling the real element into view", async () => {
+  const calls = [];
+  const element = {
+    count: async () => 1,
+    scrollIntoViewIfNeeded: async () => calls.push("scroll"),
+    screenshot: async ({ path: p }) => { calls.push("shot"); fs.writeFileSync(p, "fake-png"); },
+  };
+  const locator = { first: () => element };
+  const page = { waitForTimeout: async () => {}, screenshot: async () => { throw new Error("should not fall back"); } };
+  const name = await captureElementEvidence(page, locator, tmpDir, "evidence.png");
+  assert.equal(name, "evidence.png");
+  assert.deepEqual(calls, ["scroll", "shot"]);
+  assert.equal(fs.readFileSync(path.join(tmpDir, "evidence.png"), "utf8"), "fake-png");
+});
+
+test("element evidence falls back to a viewport shot when the element itself can't be screenshotted", async () => {
+  const element = {
+    count: async () => 1,
+    scrollIntoViewIfNeeded: async () => {},
+    screenshot: async () => { throw new Error("zero-size element"); },
+  };
+  const locator = { first: () => element };
+  const page = { waitForTimeout: async () => {}, screenshot: async ({ path: p }) => fs.writeFileSync(p, "fallback-png") };
+  const name = await captureElementEvidence(page, locator, tmpDir, "fallback.png");
+  assert.equal(name, "fallback.png");
+  assert.equal(fs.readFileSync(path.join(tmpDir, "fallback.png"), "utf8"), "fallback-png");
+});
+
+test("element evidence is skipped, not thrown, when the flagged element cannot be relocated", async () => {
+  const locator = { first: () => ({ count: async () => 0 }) };
+  assert.equal(await captureElementEvidence({}, locator, tmpDir, "unused.png"), null);
 });
 
 test("dead-control judgment ignores unrelated DOM churn and honors durable wiring or semantic change", () => {

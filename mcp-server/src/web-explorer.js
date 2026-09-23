@@ -25,6 +25,13 @@ const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const OUTBOUND_LINK_LIMIT = 10;
 const WATCH_ACTION_DELAY_MS = 350;
+// A page's visible signature (waitForWebStability's basis) can go quiet before an async-injected
+// widget (a third-party tour scheduler, a chat launcher, ...) has actually finished mounting its
+// target element — nothing about that wait shows a spinner. One snapshot cannot tell "genuinely
+// dead" from "hasn't finished loading"; give a real anchor-missing candidate a second look before
+// treating it as a confirmed defect.
+const ANCHOR_RECHECK_MS = 4_000;
+const ANCHOR_RECHECK_INTERVAL_MS = 400;
 const ERROR_TEXT_RE = /\b(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)\b/i;
 const STANDALONE_ERROR_TEXT_RE = /^(something went wrong|internal server error|an error occurred|failed to load|unhandled exception)(?:[.!:]|\s|$)/i;
 
@@ -80,6 +87,53 @@ export function shouldReportWebRequestFailure(errorText = "") {
 
 export function webPageAppearsBlank({ textLen = 0, controlCount = 0, visualContentCount = 0 } = {}) {
   return Number(textLen) === 0 && Number(controlCount) === 0 && Number(visualContentCount) === 0;
+}
+
+function webAnchorIdMissing(rawId) {
+  try {
+    const esc = window.CSS && CSS.escape ? CSS.escape(rawId) : rawId;
+    return !document.getElementById(rawId) && !document.querySelector(`a[name="${esc}"]`);
+  } catch {
+    return !document.getElementById(rawId);
+  }
+}
+
+// A single DOM snapshot cannot distinguish "this anchor target will never exist" from "the
+// script that creates it hasn't run yet". Poll for up to timeoutMs before accepting the miss —
+// cheap when the target is genuinely absent (every poll agrees), and it only spends the extra
+// time on pages that actually have a candidate anchor_missing finding.
+export async function webAnchorStillMissing(page, anchor, { timeoutMs = ANCHOR_RECHECK_MS, intervalMs = ANCHOR_RECHECK_INTERVAL_MS } = {}) {
+  const id = decodeURIComponent(String(anchor || "").slice(1));
+  if (!id) return true;
+  const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+  for (;;) {
+    const missing = await page.evaluate(webAnchorIdMissing, id).catch(() => true);
+    if (!missing) return false;
+    if (Date.now() >= deadline) return true;
+    await page.waitForTimeout(intervalMs);
+  }
+}
+
+// Evidence for a finding that names a specific control is worthless if the screenshot never
+// actually shows that control — a generic per-screen shot proves nothing about where the element
+// is on the page. Scroll it into view and shoot it directly; fall back to a viewport shot (still
+// scrolled to the element) if the element itself can't be screenshotted (zero-size, clipped).
+export async function captureElementEvidence(page, locator, outDir, name) {
+  try {
+    const target = locator.first();
+    if ((await target.count()) === 0) return null;
+    await target.scrollIntoViewIfNeeded({ timeout: 2_000 });
+    await page.waitForTimeout(120);
+    const evidencePath = path.join(outDir, name);
+    await target.screenshot({ path: evidencePath }).catch(() => page.screenshot({ path: evidencePath }));
+    return path.basename(evidencePath);
+  } catch {
+    return null;
+  }
+}
+
+function cssAttrEscape(value) {
+  return String(value).replace(/["\\]/g, (c) => "\\" + c);
 }
 
 async function installWebListenerTracking(context) {
@@ -612,13 +666,13 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   const deadline = Date.now() + timeoutSec * 1000;
   const issues = []; // emitted immediately; kept for counting only
-  const issue = (type, severity, title, screen, target, sourceUrl) => {
+  const issue = (type, severity, title, screen, target, sourceUrl, evidence) => {
     issues.push(type);
     // Findings belong to the page that CARRIED the defect. Async detectors default to the
     // current page; the post-crawl outbound audit passes the link's source page explicitly so
     // a bad footer link is never attributed to whatever page happened to be visited last.
     const pageUrl = sourceUrl || page.url();
-    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}) });
+    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}), ...(evidence ? { evidence } : {}) });
   };
 
   // Async defect listeners: attribute to whatever screen is current when they fire.
@@ -805,14 +859,33 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       for (const finding of webPlaceholderLinkFindings(info.placeholderLinks)) {
         if (placeholderLinksSeen.has(finding.target)) continue;
         placeholderLinksSeen.add(finding.target);
-        issue(finding.type, finding.severity, finding.title, screen, finding.target);
+        // Only a labeled link's evidence can be located with any confidence — an unlabeled
+        // link's `target` is a synthetic fingerprint, not text a locator can find on the page.
+        const evidence = finding.target.startsWith("unlabeled:")
+          ? null
+          : await captureElementEvidence(
+              page,
+              page.locator("a[href]").filter({ hasText: finding.target }),
+              outDir,
+              `evidence_${screenshotFor.size}_${slug(screen)}_${slug(finding.target)}.png`
+            );
+        issue(finding.type, finding.severity, finding.title, screen, finding.target, null, evidence);
       }
-      // Anchor links pointing at ids that do not exist are deterministic dead navigation.
+      // Anchor links pointing at ids that do not exist are deterministic dead navigation — but
+      // one snapshot can't tell "genuinely dead" from "the script that creates the target hasn't
+      // finished running yet" (an async-mounted widget shows no spinner while it loads).
       for (const anchor of info.missingAnchors || []) {
         const anchorTarget = `${key}${anchor}`;
         if (missingAnchorsSeen.has(anchorTarget)) continue;
         missingAnchorsSeen.add(anchorTarget);
-        issue("anchor_missing", "medium", `Anchor link "${anchor}" has no matching element on the page`, screen, anchorTarget);
+        if (!(await webAnchorStillMissing(page, anchor))) continue;
+        const evidence = await captureElementEvidence(
+          page,
+          page.locator(`a[href="${cssAttrEscape(anchor)}"]`),
+          outDir,
+          `evidence_${screenshotFor.size}_${slug(screen)}_${slug(anchor)}.png`
+        );
+        issue("anchor_missing", "medium", `Anchor link "${anchor}" has no matching element on the page`, screen, anchorTarget, null, evidence);
       }
     }
     return { key, screen, info };

@@ -175,7 +175,10 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
         // same screen are two findings, and fixing one while breaking another is a regression.
         const target = (typeof o.control === "string" && o.control) || (typeof o.target === "string" && o.target) || null;
         const url = typeof o.url === "string" && o.url.trim() ? o.url.trim() : null;
-        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, target, url, step: o.step ?? null });
+        // Element-scoped screenshot proving the specific control the finding names is actually
+        // visible — set only for web findings that name one (anchor_missing, placeholder_link).
+        const evidence = typeof o.evidence === "string" && o.evidence.trim() ? o.evidence.trim() : null;
+        rawIssues.push({ type: o.type, severity: sev, title: o.title, screen: o.screen || null, target, url, step: o.step ?? null, evidence });
       } catch {
         /* ignore malformed */
       }

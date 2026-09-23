@@ -84,6 +84,9 @@ export function writeHtmlReport(captureDir, { report, label = "", recordingWarni
   ${esc(f.title)}${f.screen ? ` <span class="dim">— on ${esc(f.screen)}</span>` : ""}${f.url ? ` <span class="dim">— ${esc(f.url)}</span>` : ""}
   ${f.aiAnalysis ? `<div class="ai">why: ${esc(f.aiAnalysis)}</div>` : ""}
   ${f.suggestedFix ? `<div class="ai">fix: ${esc(f.suggestedFix)}</div>` : ""}
+  ${f.evidence && fs.existsSync(path.join(captureDir, f.evidence))
+      ? `<a class="evidence" href="${esc(f.evidence)}"><img loading="lazy" src="${esc(f.evidence)}" alt="The specific control named above, scrolled into view"></a>`
+      : ""}
 </li>`
         )
         .join("\n")
@@ -129,6 +132,8 @@ ${r.conditionsNotReached?.length ? `<div><h2>Conditions not reached</h2><ul>${sc
   table.trace th, table.trace td { text-align: left; padding: 0.25rem 0.7rem 0.25rem 0; border-bottom: 1px solid #eceef1; }
   table.trace th { color: #57606a; font-weight: 600; }
   .ai { color: #57606a; font-size: 0.88rem; margin: 0.15rem 0 0 0.2rem; }
+  a.evidence { display: block; margin: 0.4rem 0 0 0.2rem; max-width: 360px; }
+  a.evidence img { width: 100%; border: 1px solid #d0d7de; border-radius: 6px; }
   .dim { color: #57606a; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
   figure { margin: 0; } figure img { width: 100%; border: 1px solid #d0d7de; border-radius: 6px; }
