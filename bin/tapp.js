@@ -1613,14 +1613,29 @@ switch (command) {
 
     try {
       const { chromium } = await import("playwright");
+      // Launch for real rather than stat the path executablePath() reports.
+      // They are not the same question: web Flows launch headless, Playwright
+      // may serve that from a separate binary, and executablePath() answers
+      // for the full browser either way — so a stat can say Web is ready while
+      // every launch fails on a binary nobody was asked to install. Whatever a
+      // future Playwright resolves headless to, opening and closing one is the
+      // only answer that stays true.
       let executable = "";
-      try { executable = chromium.executablePath(); } catch { /* report the missing browser below */ }
-      if (executable && fs.existsSync(executable)) {
+      try { executable = chromium.executablePath(); } catch { /* the launch below is the real check */ }
+      let launchError = "";
+      try {
+        const probe = await chromium.launch({ headless: true });
+        await probe.close();
+      } catch (error) {
+        launchError = String(error?.message || error).split("\n").find((line) => line.trim()) || "";
+      }
+      if (!launchError) {
         report.platforms.web = { available: true, chromium: executable };
-        sayOk("Web", `Playwright + Chromium (${executable})`);
+        sayOk("Web", `Playwright + Chromium${executable ? ` (${executable})` : ""}`);
       } else {
-        report.platforms.web = { available: false, reason: "Chromium browser missing (run: npx playwright install chromium)" };
+        report.platforms.web = { available: false, reason: "Chromium browser missing (run: npx playwright install chromium)", detail: launchError };
         say("  ⬜ Web — Playwright installed; Chromium browser missing (run: npx playwright install chromium)");
+        say(`     ${launchError}`);
       }
     } catch {
       report.platforms.web = { available: false, reason: "Playwright not installed" };

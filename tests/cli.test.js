@@ -163,6 +163,24 @@ test("tapp doctor does not call web ready when Playwright exists but Chromium is
   assert.doesNotMatch(run.stdout, /✅ Web/);
 });
 
+test("tapp doctor decides web readiness by launching, not by stat-ing a path", () => {
+  // executablePath() answers for the full browser; a headless Flow may be served
+  // from a separate binary. Statting the first while launching the second let
+  // doctor report web ready on a machine where every Flow failed to launch. The
+  // launch error is kept as evidence that a browser was actually opened.
+  const browsers = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-launch-probe-browsers-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-launch-probe-home-"));
+  const run = spawnSync("node", [tappBin, "doctor", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: browsers, TAPP_HOME: home },
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.platforms.web.available, false);
+  assert.match(report.platforms.web.detail || "", /browserType\.launch/);
+});
+
 test("tapp report latest picks the newest capture WITH exploration markers, skipping flow/scenario dirs", () => {
   // The captures directory fills with flow-*/scenario-* evidence dirs that have no ocqa-markers.txt.
   // `report` (latest) must resolve to the newest capture that actually has exploration markers, or it
