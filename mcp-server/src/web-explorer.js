@@ -139,12 +139,22 @@ function cssAttrEscape(value) {
 async function installWebListenerTracking(context) {
   await context.addInitScript(() => {
     const key = Symbol.for("tapp.clickListeners");
+    // Delegated handlers live on document/window, not on the control, so an
+    // element-only record says "nothing is listening" for a page where every
+    // button works. Keep their source text: it is the only way to tell which
+    // controls such a handler actually claims.
+    const delegatedKey = Symbol.for("tapp.delegatedClickHandlers");
     const add = EventTarget.prototype.addEventListener;
     const remove = EventTarget.prototype.removeEventListener;
     EventTarget.prototype.addEventListener = function tappTrackedAdd(type, listener, options) {
       if (type === "click" && this instanceof Element && listener) {
         if (!this[key]) Object.defineProperty(this, key, { value: new Set(), configurable: true });
         this[key].add(listener);
+      }
+      if (type === "click" && listener && (this === document || this === window)) {
+        const target = this === window ? window : document;
+        if (!target[delegatedKey]) Object.defineProperty(target, delegatedKey, { value: new Set(), configurable: true });
+        try { target[delegatedKey].add(String(listener).slice(0, 4000)); } catch { /* exotic handler */ }
       }
       return add.call(this, type, listener, options);
     };
@@ -1227,6 +1237,56 @@ export async function auditWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, device = "
       };
       const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80);
       const selectorFor = (el) => el.id ? `#${el.id}` : el.getAttribute("data-testid") ? `[data-testid="${el.getAttribute("data-testid")}"]` : el.tagName.toLowerCase();
+      // Some controls are wired in CSS, not JavaScript: a menu that opens while
+      // its trigger is hovered or focused has no listener to find, and calling
+      // it dead is wrong. Collect the selectors that some rule reacts to — the
+      // trigger side of any `X:hover Y` / `X:focus-within Y` rule whose
+      // declarations change whether Y can be seen. A rule that only restyles
+      // the trigger itself (`button:hover { background: … }`) is not behaviour
+      // and is ignored, which is why the descendant part must be present.
+      const REVEALS = /(^|;)\s*(display|visibility|opacity|height|max-height|transform|pointer-events|clip-path)\s*:/i;
+      const revealTriggers = [];
+      const collectTriggers = (rules) => {
+        for (const rule of rules || []) {
+          // A plain style rule also exposes .cssRules now that CSS nesting is
+          // supported — an empty list, which is truthy. Recursing on that and
+          // skipping the rule would walk straight past every selector there is.
+          if (rule.cssRules && rule.cssRules.length) collectTriggers(rule.cssRules);
+          const selector = rule.selectorText;
+          if (!selector || !REVEALS.test(rule.style?.cssText || "")) continue;
+          for (const part of selector.split(",")) {
+            const match = part.match(/^(.*?):(?:hover|focus-within|focus-visible|focus)\b(.+)$/);
+            if (!match) continue;
+            const trigger = match[1].trim();
+            if (trigger && match[2].trim()) revealTriggers.push(trigger);
+          }
+        }
+      };
+      for (const sheet of document.styleSheets) {
+        try { collectTriggers(sheet.cssRules); } catch { /* cross-origin sheet */ }
+      }
+      const opensSomethingOnHoverOrFocus = (el) => revealTriggers.some((trigger) => {
+        try { return el.matches(trigger) || Boolean(el.closest(trigger)); } catch { return false; }
+      });
+
+      // What a delegated handler on document/window claims. The dominant idiom is
+      // `e.target.closest(SELECTOR)` / `.matches(SELECTOR)`, so pull those
+      // selectors out and test controls against them. A handler we cannot read
+      // this way (an outside-click closer, say) claims nothing and is ignored,
+      // rather than excusing every unwired control on the page.
+      const delegatedSelectors = [];
+      for (const source of [
+        ...(document[Symbol.for("tapp.delegatedClickHandlers")] || []),
+        ...(window[Symbol.for("tapp.delegatedClickHandlers")] || []),
+      ]) {
+        for (const m of String(source).matchAll(/\.(?:closest|matches)\(\s*["'`]([^"'`]+)["'`]/g)) {
+          delegatedSelectors.push(m[1]);
+        }
+      }
+      const claimedByDelegate = (el) => delegatedSelectors.some((selector) => {
+        try { return el.matches(selector) || Boolean(el.closest(selector)); } catch { return false; }
+      });
+
       const dead = [];
       for (const el of document.querySelectorAll("a[href], button, [role=button], [aria-controls]")) {
         if (!visible(el)) continue;
@@ -1255,6 +1315,8 @@ export async function auditWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, device = "
         }
         if (!wired && el.matches("button[type=submit], input[type=submit]") && el.closest("form")) wired = true;
         if (!wired && el.closest("label")) wired = true; // a label drives its own control
+        if (!wired && opensSomethingOnHoverOrFocus(el)) wired = true;
+        if (!wired && claimedByDelegate(el)) wired = true;
         if (!wired) dead.push({ kind: "unwired_control", label, selector: selectorFor(el) });
       }
       return { dead, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title };

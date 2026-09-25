@@ -328,3 +328,70 @@ test("the read-only audit finds structurally dead controls without clicking anyt
     server.close();
   }
 });
+
+test("the audit does not accuse a control that is wired in CSS rather than JavaScript", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  // A menu that opens while its trigger is hovered or focused has no listener to
+  // find. Reported from the field: a live nav dropdown was called dead, which is
+  // the kind of wrong answer that makes people stop reading the findings.
+  const html = `<!doctype html><title>Nav</title><style>
+    .menu { display: none }
+    .group:hover .menu { display: block }
+    .group:focus-within .menu { display: block }
+    button:hover { background: #eee }
+  </style><body>
+    <div class="group"><button id="css-trigger">Menu</button><div class="menu"><a href="/a">One</a></div></div>
+    <button id="dead-btn">Dead Button</button>
+  </body>`;
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(html); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { auditWebPage } = await import("../mcp-server/src/web-explorer.js");
+    const result = await auditWebPage({ url: `http://127.0.0.1:${server.address().port}/` });
+    const titles = result.findings.map((f) => f.title).join(" | ");
+    assert.doesNotMatch(titles, /Menu/, "a hover/focus-driven trigger is wired, just not in JavaScript");
+    // And the exemption stays narrow: `button:hover { background }` restyles only
+    // itself, so it must not excuse every unwired button on the page.
+    assert.match(titles, /Dead Button.*no click handler/);
+    assert.equal(result.findings.length, 1, titles);
+  } finally {
+    server.close();
+  }
+});
+
+test("the audit does not accuse a control whose handler is delegated from the document", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  // Delegation puts the listener on document, not on the control, so an
+  // element-only search reports every delegated button as dead. Reported from
+  // the field: a help centre where all 26 controls are delegated came back as
+  // 26 findings, which is enough wrong answers to retire the command.
+  const html = `<!doctype html><title>Help</title><body>
+    <button data-topic="billing">Billing</button>
+    <button data-article="refunds">Refunds</button>
+    <button id="really-dead">Dead Button</button>
+    <script>
+      document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-topic]')) return;
+        if (e.target.closest('[data-article]')) return;
+      });
+      // An outside-click closer claims no control and must not excuse the dead one.
+      document.addEventListener('click', (e) => { if (!document.body.contains(e.target)) return; });
+    <\/script>
+  </body>`;
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(html); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { auditWebPage } = await import("../mcp-server/src/web-explorer.js");
+    const result = await auditWebPage({ url: `http://127.0.0.1:${server.address().port}/` });
+    const titles = result.findings.map((f) => f.title).join(" | ");
+    assert.doesNotMatch(titles, /Billing|Refunds/, "a delegated handler claims these");
+    assert.match(titles, /Dead Button.*no click handler/, "and the exemption must stay narrow");
+    assert.equal(result.findings.length, 1, titles);
+  } finally {
+    server.close();
+  }
+});

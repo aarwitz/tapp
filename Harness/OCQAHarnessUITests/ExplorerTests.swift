@@ -231,6 +231,11 @@ class ExplorerTests: XCTestCase {
         for query in queries {
             let element = query[identifier]
             if element.exists && element.isHittable {
+                if !waitForEnabled(element) {
+                    print("OCQA_ACTION:{\"type\":\"tap\",\"identifier\":\"\(identifier)\",\"status\":\"disabled\"}")
+                    Thread.sleep(forTimeInterval: 0.5)
+                    return
+                }
                 element.tap()
                 print("OCQA_ACTION:{\"type\":\"tap\",\"identifier\":\"\(identifier)\"}")
                 Thread.sleep(forTimeInterval: 0.5)
@@ -240,8 +245,12 @@ class ExplorerTests: XCTestCase {
         let predicate = NSPredicate(format: "label == %@", identifier)
         let match = app.descendants(matching: .any).matching(predicate).firstMatch
         if match.exists && match.isHittable {
-            match.tap()
-            print("OCQA_ACTION:{\"type\":\"tap\",\"label\":\"\(identifier)\"}")
+            if !waitForEnabled(match) {
+                print("OCQA_ACTION:{\"type\":\"tap\",\"label\":\"\(identifier)\",\"status\":\"disabled\"}")
+            } else {
+                match.tap()
+                print("OCQA_ACTION:{\"type\":\"tap\",\"label\":\"\(identifier)\"}")
+            }
         } else {
             print("OCQA_ACTION:{\"type\":\"tap\",\"identifier\":\"\(identifier)\",\"status\":\"not_found\"}")
         }
@@ -434,10 +443,27 @@ class ExplorerTests: XCTestCase {
     /// Returns "ok" if tapped, "not_hittable" if the element exists but couldn't be tapped (disabled,
     /// or covered by the keyboard even after dismissing it), or "not_found" if nothing matched. The
     /// distinction tells the caller whether to enter valid input first vs. that the target is absent.
+    /// A disabled control is still `exists` and still `isHittable`, so tapping one
+    /// succeeds and reports a normal action while nothing happens: the step passes and
+    /// the flow carries on against a screen that never advanced. Wait before calling it
+    /// disabled — a button guarded by form validation becomes enabled a moment after the
+    /// last field is filled, and failing on that would be its own kind of wrong answer.
+    private func waitForEnabled(_ element: XCUIElement, timeout: TimeInterval = 3) -> Bool {
+        if element.isEnabled { return true }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.isEnabled { return true }
+            Thread.sleep(forTimeInterval: 0.15)
+        }
+        return false
+    }
+
     private func sessionTapById(_ identifier: String) -> String {
         var existedButNotHittable = false
+        var existedButDisabled = false
         func tryTap(_ el: XCUIElement) -> Bool {
             guard el.exists else { return false }
+            if !waitForEnabled(el) { existedButDisabled = true; return false }
             if el.isHittable { el.tap(); return true }
             // Often covered by the keyboard (a submit button below filled fields) — dismiss + retry,
             // like Playwright auto-scrolls a target into view.
@@ -472,6 +498,9 @@ class ExplorerTests: XCTestCase {
         // label) — "Password" must reach the secureTextField or a later `type` lands in whatever
         // field still has keyboard focus.
         if let field = resolveFieldByHint(identifier), tryTap(field) { return "ok" }
+        // "disabled" outranks the others: the control was found and refused to act, which
+        // is a different answer from "it is not here" and needs a different fix.
+        if existedButDisabled { return "disabled" }
         return existedButNotHittable ? "not_hittable" : "not_found"
     }
 
@@ -827,8 +856,19 @@ class ExplorerTests: XCTestCase {
 
             switch action {
             case "tap":
-                status = sessionTapById(target) == "ok" ? "pass" : "fail"
-                if status == "fail" { detail = "could not tap ‘\(target)’" }
+                let tapStatus = sessionTapById(target)
+                status = tapStatus == "ok" ? "pass" : "fail"
+                if status == "fail" {
+                    // Name which of the three it was. "Disabled" in particular sends the
+                    // author somewhere completely different from "not found": the control
+                    // is right there, and something upstream in the flow has not satisfied
+                    // whatever guards it.
+                    switch tapStatus {
+                    case "disabled":     detail = "‘\(target)’ is on screen but disabled — an earlier step has not met whatever enables it"
+                    case "not_hittable": detail = "‘\(target)’ exists but could not be reached, even after dismissing the keyboard and scrolling"
+                    default:             detail = "could not find ‘\(target)’ on this screen"
+                    }
+                }
             case "type":
                 status = sessionType(value, id: target.isEmpty ? nil : target) ? "pass" : "fail"
                 if status == "fail" { detail = lastTypeFailure.isEmpty ? "no field ‘\(target)’ to type into" : lastTypeFailure }
@@ -4792,23 +4832,46 @@ class ExplorerTests: XCTestCase {
             } while Date() < deadline
             return focused()
         }
-        for attempt in 0..<3 {
+        // A field further down a form is usually UNDER the keyboard that the previous
+        // field opened, so every tap below lands on a key instead and three attempts
+        // report "never took keyboard focus" for a field that was simply unreachable.
+        // sessionTapById already dismisses and scrolls for taps; typing needs the same
+        // or no form taller than the keyboard can be filled at all.
+        func keyboardCovers(_ el: XCUIElement) -> Bool {
+            let keyboard = app.keyboards.firstMatch
+            guard keyboard.exists else { return false }
+            let f = el.frame, k = keyboard.frame
+            return f.intersects(k) || f.minY >= k.minY
+        }
+
+        for attempt in 0..<5 {
             switch attempt {
             case 0:
                 if element.isHittable { element.tap() } else { element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             case 1:
                 element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            default:
+            case 2:
                 // Frame may be stale by a few rows: tap just inside its top edge, which stays
                 // within the visible control when content shifted up.
                 element.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.2)).tap()
+            case 3:
+                // Get the keyboard out of the way and try where the field now sits.
+                dismissKeyboardIfPresent()
+                waitForAnimationsToSettle()
+                if element.isHittable { element.tap() } else { element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+            default:
+                // Still out of reach: bring it up the screen, then tap.
+                dismissKeyboardIfPresent()
+                app.swipeUp()
+                Thread.sleep(forTimeInterval: 0.25)
+                if element.isHittable { element.tap() } else { element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
             }
             if settleUntilFocused() {
                 if attempt > 0 { print("OCQA_STATE:type_focus_recovered attempt=\(attempt + 1)") }
                 return true
             }
             let f = element.frame
-            print("OCQA_STATE:type_focus_miss attempt=\(attempt + 1) frame=\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height)) keyboard=\(app.keyboards.count) focusedElsewhere=\(focusedField().map { fieldDesc($0) } ?? "none")")
+            print("OCQA_STATE:type_focus_miss attempt=\(attempt + 1) frame=\(Int(f.minX)),\(Int(f.minY)),\(Int(f.width))x\(Int(f.height)) keyboard=\(app.keyboards.count) covered=\(keyboardCovers(element)) focusedElsewhere=\(focusedField().map { fieldDesc($0) } ?? "none")")
         }
         return false
     }
@@ -4821,7 +4884,7 @@ class ExplorerTests: XCTestCase {
         lastTypeFailure = ""
         guard focusForTyping(element) else {
             let f = element.frame
-            lastTypeFailure = "‘\(fieldDesc(element))’ was found (frame \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))) but never took keyboard focus after 3 taps"
+            lastTypeFailure = "‘\(fieldDesc(element))’ was found (frame \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))) but never took keyboard focus, including after dismissing the keyboard and scrolling it into view"
                 + (app.keyboards.count == 0 ? " — no keyboard appeared" : "")
                 + (focusedField().map { " — focus is on ‘\(fieldDesc($0))’" } ?? "")
             print("OCQA_STATE:type_focus_failed detail=\(escapeJSON(lastTypeFailure))")

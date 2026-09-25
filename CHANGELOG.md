@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.17.16
+
+- **A tap on a disabled control fails instead of passing.** A disabled control is still
+  `exists` and still `isHittable`, so tapping one returned "ok" and the Flow carried on
+  against a screen that had not advanced — the worst kind of green, because the failure
+  then surfaces somewhere unrelated. Both tap paths wait for the control to become enabled
+  first (a button guarded by form validation enables a moment after the last field is
+  filled, and failing instantly would be its own wrong answer), then report `disabled`,
+  which outranks `not_found` and `not_hittable`: a control that is present and refusing
+  sends you somewhere completely different from one that is absent.
+
+- **Typing can reach a field the keyboard is covering.** A field further down a form sits
+  under the keyboard the field above it opened, so every tap aimed at it landed on a key
+  and the step reported "never took keyboard focus" — which reads like a selector problem
+  and is nothing of the kind. Taps already dismissed the keyboard and scrolled; typing now
+  does too, so a form taller than the keyboard can be filled at all.
+
+- **The audit no longer accuses a control whose handler is delegated from the document.**
+  The listener record only covered handlers added to an Element, so a page dispatching with
+  `document.addEventListener` + `e.target.closest(...)` looked like a page where nothing was
+  wired — 26 findings on one real help centre, all wrong. Handlers on `document`/`window`
+  are tracked and the selectors they claim are read from their source. A delegated handler
+  that claims nothing, such as an outside-click closer, still excuses nothing.
+
+- **A build installed over another says what it replaced.** Resolving a target from a
+  project directory builds and installs, and the clean install wipes the previous app's
+  data with it — so a simulator build deliberately pointed at a local server disappeared in
+  silence and the run continued against a different environment. It now names the bundle
+  being replaced, that its data goes too, and the bundle id to pass instead, which skips
+  building entirely.
+
+## 0.17.15
+
+- **`tapp audit` no longer accuses a control that is wired in CSS rather than JavaScript.**
+  A menu that opens while its trigger is hovered or focused has no listener to find, so 0.17.14
+  reported live nav dropdowns as dead. The audit now collects the trigger side of any
+  `X:hover Y` / `X:focus-within Y` rule whose declarations change whether `Y` can be seen, and
+  treats a control matching one as wired. The exemption stays narrow — the rule must affect
+  something other than the trigger, so `button:hover { background }` restyles only itself and
+  cannot excuse a genuinely dead button on the same page. A false accusation costs more than a
+  missed finding here: the command is only worth running while its findings are believed.
+
+- **`tapp doctor` decides web readiness by launching a browser rather than stat-ing a path.**
+  `executablePath()` answers for the full browser, while a headless Flow may be served from a
+  separate binary, so doctor could report web ready on a machine where every Flow failed to
+  launch. It now opens and closes a browser — the same question a Flow asks — and keeps the
+  launch error on the JSON report as `detail`.
+
 ## 0.17.14
 
 - **`tapp audit <url>` — a read-only structural audit.** Flows hold known-good behaviour fixed;

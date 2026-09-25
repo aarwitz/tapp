@@ -91,6 +91,7 @@ test("engine is import-safe and exports the shared surface", () => {
     "resolveAppTarget",
     "buildAppForSim",
     "installAppOnBootedSim",
+    "replacingInstalledBuildNotice",
     "listInstalledUserApps",
     "findXcodeContainer",
     "explorationEnvFromArgs",
@@ -102,6 +103,21 @@ test("engine is import-safe and exports the shared surface", () => {
   ]) {
     assert.equal(typeof engine[name], "function", `${name} exported`);
   }
+});
+
+test("a build that overwrites an installed app says so, and names the way to avoid it", async () => {
+  const engine = await import("../mcp-server/src/index.js");
+  // Reported from the field: `tapp open` with no target took the directory path,
+  // built, and replaced a simulator build that had been deliberately pointed at a
+  // local backend — silently, and the clean install wiped its data too. The run
+  // then tested a different configuration than the operator believed.
+  const notice = engine.replacingInstalledBuildNotice("com.example.app");
+  assert.match(notice, /Replacing the installed build of com\.example\.app/);
+  assert.match(notice, /data is wiped/, "the clean install destroys the old app's state — say it");
+  assert.match(notice, /pass the bundle id: com\.example\.app/, "name the non-destructive alternative");
+  // Nothing to say when there is no id to name.
+  assert.equal(engine.replacingInstalledBuildNotice(""), "");
+  assert.equal(engine.replacingInstalledBuildNotice(undefined), "");
 });
 
 test("agent-facing trees omit empty native hierarchy containers but retain actionable controls", () => {

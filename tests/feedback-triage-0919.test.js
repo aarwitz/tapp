@@ -17,9 +17,19 @@ test("type proves keyboard focus before typeText and retries with coordinate tap
   const focus = harness.match(/private func focusForTyping[\s\S]*?\n    }\n\n    \/\/ Replace existing field contents/)?.[0] || "";
   assert.ok(focus, "focusForTyping exists");
   assert.match(focus, /hasKeyboardFocus/);
-  assert.match(focus, /for attempt in 0\.\.<3/);
+  assert.match(focus, /for attempt in 0\.\.<\d+/, "bounded retries, never an unbounded wait");
   assert.match(focus, /coordinate\(withNormalizedOffset: CGVector\(dx: 0\.5, dy: 0\.5\)\)\.tap\(\)/);
   assert.match(focus, /OCQA_STATE:type_focus_miss/);
+  // A field further down a form sits under the keyboard the field above opened, so
+  // coordinate taps land on a key and it "never takes focus". Taps already dismissed
+  // and scrolled; typing has to as well or no form taller than the keyboard can be
+  // filled. Escalation order matters: tap first, and only disturb the screen after.
+  assert.match(focus, /dismissKeyboardIfPresent\(\)/, "typing must clear the keyboard before giving up");
+  assert.match(focus, /app\.swipeUp\(\)/, "and scroll the field into reach");
+  assert.ok(
+    focus.indexOf("dismissKeyboardIfPresent") > focus.indexOf("if element.isHittable { element.tap() }"),
+    "plain taps come first — dismissing the keyboard changes the screen, so it is a fallback"
+  );
   const replace = harness.match(/private func replaceText\(on element: XCUIElement, with text: String\) -> Bool[\s\S]*?\n    }\n}/)?.[0] || "";
   assert.ok(replace, "replaceText returns Bool");
   assert.match(replace, /guard focusForTyping\(element\) else/);

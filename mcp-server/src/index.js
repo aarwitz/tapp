@@ -471,10 +471,26 @@ export async function prepareAndroidInteractiveTarget({ projectDir = process.cwd
   return { ...built, appId, selectedTarget:selected };
 }
 
-export async function installAppOnBootedSim(appPath, { cleanInstall = true } = {}) {
+// Said before a build overwrites whatever is on the simulator. The clean install
+// below wipes the old app's data with it, so a build someone deliberately
+// configured — pointed at a local server, a staging key, a test account —
+// disappears without being mentioned. Naming it is the difference between "my run
+// is slow" and "my run is now testing something else entirely". Passing a bundle
+// id instead of a project path uses what is installed and never builds.
+export function replacingInstalledBuildNotice(bundleId) {
+  const id = String(bundleId || "").trim();
+  if (!id) return "";
+  return `Replacing the installed build of ${id} (its data is wiped too). To use what is already installed instead of building, pass the bundle id: ${id}`;
+}
+
+export async function installAppOnBootedSim(appPath, { cleanInstall = true, onStatus = () => {} } = {}) {
   const bid = await runCommand("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleIdentifier", path.join(appPath, "Info.plist")], { timeoutMs: 30_000 });
   const bundleId = (bid.stdout || "").trim();
   if (!bundleId) return { error: `Could not read CFBundleIdentifier from ${appPath}/Info.plist — is this a simulator .app build?` };
+  if (cleanInstall) {
+    const existing = await runCommand("xcrun", ["simctl", "get_app_container", "booted", bundleId, "app"], { timeoutMs: 15_000 });
+    if (existing.code === 0 && (existing.stdout || "").trim()) onStatus(replacingInstalledBuildNotice(bundleId));
+  }
   if (cleanInstall) {
     // Clean install: stale keychain items from a previous install leave apps half-signed-in
     // (Firebase Auth's "error accessing the keychain") — uninstall first for a fresh state.
@@ -496,7 +512,7 @@ export async function resolveAppTarget(input, { cwd = process.cwd(), onStatus = 
     const sim = await ensureBootedSim({ autoBoot: true });
     if (sim.error) return { error: sim.error };
     onStatus(`Installing ${path.basename(appPath)}…`);
-    const inst = await installAppOnBootedSim(appPath);
+    const inst = await installAppOnBootedSim(appPath, { onStatus });
     if (inst.error) return inst;
     return {
       bundleId: inst.bundleId,
@@ -522,7 +538,7 @@ export async function resolveAppTarget(input, { cwd = process.cwd(), onStatus = 
     const built = await buildAppForSim({ container, scheme, configuration });
     if (built.error) return built;
     onStatus(`Built ${path.basename(built.appPath)} (scheme ${built.scheme}) — installing…`);
-    const inst = await installAppOnBootedSim(built.appPath);
+    const inst = await installAppOnBootedSim(built.appPath, { onStatus });
     if (inst.error) return inst;
     return {
       bundleId: inst.bundleId,
