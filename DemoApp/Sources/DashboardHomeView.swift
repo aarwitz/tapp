@@ -21,6 +21,7 @@ private enum DashboardSheet: Identifiable {
 }
 
 struct DashboardHomeView: View {
+    @State private var showsShareSheet = false
     @State private var focus: DashboardFocus = .overview
     @State private var isLoading = true
     @State private var activeSheet: DashboardSheet?
@@ -80,6 +81,14 @@ struct DashboardHomeView: View {
             }
             .navigationTitle("Dashboard")
             .toolbar {
+                // The iOS share sheet is a SYSTEM-owned surface rendered inside the app process:
+                // its tree belongs to iOS and the extensions it hosts. It lives on the first
+                // screen so the explorer reaches it immediately and the catalogue-and-back-out
+                // behaviour stays cheap to regression-test.
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Share") { showsShareSheet = true }
+                        .accessibilityIdentifier("share-dashboard")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More") {
                         Button("Open release checklist") {
@@ -90,6 +99,9 @@ struct DashboardHomeView: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $showsShareSheet) {
+                ShareSheet(items: ["Tapp Demo App"])
             }
             .sheet(item: $activeSheet) { sheet in
                 switch sheet {

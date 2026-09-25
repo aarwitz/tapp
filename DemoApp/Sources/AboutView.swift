@@ -2,6 +2,10 @@ import SwiftUI
 
 struct AboutView: View {
     @State private var showsArchitecture = true
+    // The iOS share sheet is a SYSTEM-owned surface that renders inside the app process: its
+    // tree belongs to iOS and the extensions it hosts, not to this app. The corpus carries it
+    // so the explorer's catalogue-and-back-out behaviour stays regression-tested.
+    @State private var showsShareSheet = false
 
     var body: some View {
         ScrollView {
@@ -32,6 +36,15 @@ struct AboutView: View {
             .padding()
         }
         .navigationTitle("About")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Share") { showsShareSheet = true }
+                    .accessibilityIdentifier("share-demo-app")
+            }
+        }
+        .sheet(isPresented: $showsShareSheet) {
+            ShareSheet(items: ["Tapp Demo App"])
+        }
     }
 
     private func infoRow(_ label: String, value: String) -> some View {
@@ -43,4 +56,14 @@ struct AboutView: View {
                 .bold()
         }
     }
+}
+
+/// UIActivityViewController is deliberately unwrapped rather than SwiftUI's ShareLink: the
+/// explorer must meet the real `UIActivityContentView` the field report hit.
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

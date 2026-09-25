@@ -391,7 +391,32 @@ class ExplorerTests: XCTestCase {
                 }
             case "tap":
                 if let id = cmd["id"] as? String, !id.isEmpty {
+                    let beforeElements = readUITree(app)
+                    let beforeHash = computeHash(beforeElements)
+                    let beforeTitle = detectTitle(beforeElements) ?? "Unknown"
                     status = sessionTapById(id)
+                    if status == "ok" {
+                        waitForUIStability(timeout: 1.5)
+                        let afterElements = readUITree(app)
+                        // Nothing moved and the target is still sitting there: the tap landed on
+                        // something that is not the control the caller meant — classically a system
+                        // sheet ("Save Password?") whose buttons belong to SpringBoard, not the app
+                        // (field issue #6: three "ok" taps while the sheet stayed up).
+                        let unchanged = computeHash(afterElements) == beforeHash
+                            && (detectTitle(afterElements) ?? "Unknown") == beforeTitle
+                        if unchanged && elementPresent(id) {
+                            if tapSystemSheetButton(id) {
+                                waitForUIStability(timeout: 1.5)
+                                let recovered = readUITree(app)
+                                status = computeHash(recovered) == beforeHash ? "no_effect" : "ok"
+                            } else {
+                                status = "no_effect"
+                            }
+                            if status == "no_effect" {
+                                loginDetail = "‘\(id)’ is still on screen and nothing changed — the tap did not reach the control you meant; if this is a system sheet, tap by {x, y}"
+                            }
+                        }
+                    }
                 } else if let x = cmd["x"] as? Double, let y = cmd["y"] as? Double {
                     app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y)).tap()
                 } else { status = "bad_args" }
@@ -403,7 +428,8 @@ class ExplorerTests: XCTestCase {
                 case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp()
                 }
             case "back":
-                sessionBack()
+                status = sessionBack()
+                if status == "no_effect" { loginDetail = "the screen did not change — there may be no back destination here, or the Back control belongs to a different navigation stack (try tap {id: \"Back\"})" }
             case "wait":
                 let target = (cmd["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? (cmd["text"] as? String ?? "")
                 let waitMs = (cmd["timeoutMs"] as? Int) ?? 5000
@@ -750,14 +776,104 @@ class ExplorerTests: XCTestCase {
         return ("still_on_login", errTexts.prefix(2).joined(separator: " | "))
     }
 
-    private func sessionBack() {
-        let backButton = app.navigationBars.buttons.firstMatch
-        if backButton.exists && backButton.isHittable {
-            backButton.tap()
-        } else {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
-                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
+    /// Go back and PROVE it: a caller that believes a no-op navigated keeps driving the wrong
+    /// screen (field issue #10 — four "ok" backs in a row while the title never changed, then
+    /// every following tap failed `not_hittable` because the pushed screen was still on top).
+    /// Returns "ok" only when the screen actually changed; "no_effect" otherwise.
+    /// A surface the SYSTEM owns even though it renders inside the app process: the share sheet
+    /// (`UIActivityContentView`) and the app extensions it hosts, the photo picker's unavailable
+    /// view, and other remote-view hosts. Their content belongs to Apple or a third-party
+    /// extension, so an empty or unreadable accessibility tree there says nothing about the app
+    /// under test — scoring it produced this app's only "high" finding (field issue #4).
+    private func systemSurfaceName(_ elements: [SimpleElement], title: String) -> String? {
+        let markers = ["UIActivityContentView", "ActivityListView", "PUPickerUnavailableView",
+                       "RemoteViewBridge", "_UIRemoteView", "UIDocumentPickerViewController",
+                       "SFSafariView", "UIActivityGroupView"]
+        for element in elements {
+            let signature = element.type + " " + element.identifier + " " + element.label
+            if let hit = markers.first(where: { signature.contains($0) }) { return hit }
         }
+        // The share sheet hands off to an extension whose whole UI is out of process; the title
+        // is then the extension's name over a tree the app cannot see.
+        if title == "UIActivityContentView" { return "UIActivityContentView" }
+        return nil
+    }
+
+    /// Leave a system-owned surface. A share sheet is a presented sheet, not a pushed screen:
+    /// `back` does nothing and a mid-screen swipe scrolls its content instead of dismissing it.
+    /// Try its real affordances in order, and say honestly whether we actually got out.
+    private func dismissSystemSurface(currentTitle: String) -> Bool {
+        let stillThere = { () -> Bool in
+            let elements = self.readUITree(self.app)
+            return self.systemSurfaceName(elements, title: self.detectTitle(elements) ?? "Unknown") != nil
+        }
+        // 1. An explicit dismissal control, in the app and in SpringBoard (extensions live there).
+        for label in ["Close", "Cancel", "Done", "Dismiss"] {
+            for candidate in [app.buttons[label], XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons[label]] {
+                if candidate.exists && candidate.isHittable {
+                    candidate.tap()
+                    waitForUIStability(timeout: 1.5)
+                    if !stillThere() { return true }
+                }
+            }
+        }
+        // 2. Drag the sheet down by its top edge (the grabber), not from the middle.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        waitForUIStability(timeout: 1.5)
+        if !stillThere() { return true }
+        // 3. Tap the dimmed backdrop above the sheet.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.06)).tap()
+        waitForUIStability(timeout: 1.5)
+        if !stillThere() { return true }
+        // 4. Last resort: relaunch. The surface belongs to iOS; the app is still healthy.
+        app.terminate()
+        Thread.sleep(forTimeInterval: 0.8)
+        app.launch()
+        _ = app.wait(for: .runningForeground, timeout: 10)
+        waitForUIStability(timeout: 2.0)
+        return !stillThere()
+    }
+
+    /// iOS renders "Save Password?", location prompts and similar sheets in SpringBoard, not in
+    /// the app under test, so an app-scoped query silently matches something else. Tap the real
+    /// button when a system sheet is up (field issue #6).
+    private func tapSystemSheetButton(_ identifier: String) -> Bool {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for query in [springboard.buttons, springboard.staticTexts] {
+            let element = query[identifier]
+            if element.exists && element.isHittable { element.tap(); return true }
+        }
+        let matches = springboard.descendants(matching: .any)
+            .matching(NSPredicate(format: "label ==[c] %@", identifier)).allElementsBoundByIndex
+        if let match = matches.first(where: { $0.exists && $0.isHittable }) { match.tap(); return true }
+        return false
+    }
+
+    private func sessionBack() -> String {
+        let beforeElements = readUITree(app)
+        let beforeTitle = detectTitle(beforeElements) ?? "Unknown"
+        let beforeHash = computeHash(beforeElements)
+
+        // A NavigationStack inside a sheet has its own navigation bar; `navigationBars.firstMatch`
+        // can resolve the wrong one, so prefer an explicitly labelled, hittable Back control.
+        let labelled = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Back")).allElementsBoundByIndex
+        if let back = labelled.first(where: { $0.exists && $0.isHittable }) {
+            back.tap()
+        } else {
+            let backButton = app.navigationBars.buttons.firstMatch
+            if backButton.exists && backButton.isHittable {
+                backButton.tap()
+            } else {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
+            }
+        }
+        waitForUIStability(timeout: 1.5)
+        let afterElements = readUITree(app)
+        let afterTitle = detectTitle(afterElements) ?? "Unknown"
+        if afterTitle != beforeTitle || computeHash(afterElements) != beforeHash { return "ok" }
+        return "no_effect"
     }
 
     /// Replays an explicit, config-driven login flow (OCQA_LOGIN_STEPS) before exploration — for the
@@ -933,6 +1049,20 @@ class ExplorerTests: XCTestCase {
             print("OCQA_FLOW_STEP:{\"index\":\(idx),\"action\":\"\(escapeJSON(action))\",\"target\":\"\(escapeJSON(target.isEmpty ? value : target))\",\"assert\":\(isAssert),\"status\":\"\(status)\",\"detail\":\"\(escapeJSON(detail))\"\(taskEvidence)\(contractEvidence)}")
             if status == "fail" {
                 failed += 1
+                // Web and Android flows write flow-failure-N.png next to the log; iOS buried the
+                // evidence in the .xcresult, so seeing the failing screen needed a second run
+                // (field issue #8). Write the same file, and keep the XCTest attachment too.
+                let failureShot = app.screenshot()
+                let failureAttachment = XCTAttachment(screenshot: failureShot)
+                failureAttachment.name = "flow_failure_\(idx)"
+                failureAttachment.lifetime = .keepAlways
+                add(failureAttachment)
+                let evidenceDir = resolve("OCQA_FLOW_EVIDENCE_DIR")
+                if !evidenceDir.isEmpty {
+                    let destination = URL(fileURLWithPath: evidenceDir).appendingPathComponent("flow-failure-\(idx).png")
+                    try? FileManager.default.createDirectory(at: URL(fileURLWithPath: evidenceDir), withIntermediateDirectories: true)
+                    try? failureShot.pngRepresentation.write(to: destination)
+                }
                 // A failed step surfaces as a finding, with the same shape QA findings use.
                 let screen = detectTitle(readUITree(app)) ?? "Unknown"
                 print("OCQA_ISSUE:{\"type\":\"flow_assertion_failed\",\"severity\":\"high\",\"title\":\"\(escapeJSON("Step \(idx) (\(action)) failed: \(detail)"))\",\"screen\":\"\(escapeJSON(screen))\",\"step\":\(idx)}")
@@ -1433,6 +1563,7 @@ class ExplorerTests: XCTestCase {
         // defect (field issue #9: "Personal Info ↔ back" filed as a finding). Remember when we
         // last navigated backwards so the loop detector can tell the two apart.
         var lastExplorerBackStep = -99
+        var systemSurfaceEscapes = 0
         while actionCount < maxActions {
             // Subtract time spent paused for interactive input so human typing never eats the budget.
             if Date().timeIntervalSince(startTime) - totalWaitSeconds > timeoutSeconds {
@@ -1778,6 +1909,31 @@ class ExplorerTests: XCTestCase {
                     dontAskAgain: &dontAskAgain,
                     interactiveEnabled: &interactiveInputEnabled
                 )
+            }
+
+            // ---- System-owned surface: catalogue, back out, never score ----
+            // The share sheet and the extensions it hosts run inside the app process, so the
+            // left-app detector (which watches the frontmost process) cannot see them. Their
+            // tree is Apple's or a third party's, not the app's: report the handoff as an
+            // observation and leave, instead of filing blank/limited findings against it.
+            if let systemSurface = systemSurfaceName(elements, title: titleStr) {
+                let surfaceKey = "system_surface:\(systemSurface)"
+                if !reportedIssueKeys.contains(surfaceKey) {
+                    reportedIssueKeys.insert(surfaceKey)
+                    print("OCQA_ACTION:{\"type\":\"system_surface\",\"target\":\"\(escapeJSON(systemSurface))\",\"screen\":\"\(escapedTitle)\",\"step\":\(actionCount),\"narrative\":\"\(escapeJSON("Reached \(systemSurface), a system-owned surface — its content belongs to iOS, not the app under test. Backing out."))\"}")
+                }
+                actionCount += 1
+                systemSurfaceEscapes += 1
+                let escaped = dismissSystemSurface(currentTitle: titleStr)
+                // Never let a surface we refuse to explore eat the whole budget: a share sheet
+                // that will not dismiss is a dead end for the run, not a reason to keep trying.
+                if !escaped && systemSurfaceEscapes >= 3 {
+                    print("OCQA_STATE:system_surface_unrecoverable screen=\(escapedTitle) step=\(actionCount)")
+                    explorationStopCause = "system-surface-unrecoverable"
+                    break
+                }
+                emitProgress(action: actionCount, maxActions: maxActions, states: visitedStates.count)
+                continue
             }
 
             // Screenshot

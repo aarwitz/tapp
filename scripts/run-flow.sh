@@ -48,12 +48,15 @@ case "$FLOW" in
   *) FLOW_EVIDENCE_SOURCE="$EVIDENCE_DIR/flow-source.yml" ;;
 esac
 cp "$FLOW" "$FLOW_EVIDENCE_SOURCE"
-python3 - "$CFG" "$APP" "$FLOW_JSON" "$AI_RESP" "$AI_DIR" <<'PY'
+TAPP_FLOW_EVIDENCE_DIR_RESOLVED="$EVIDENCE_DIR" python3 - "$CFG" "$APP" "$FLOW_JSON" "$AI_RESP" "$AI_DIR" <<'PY'
 import json, os, sys
 cfg, app, flow_json, ai_resp, ai_dir = sys.argv[1:6]
 d = {
   "OCQA_BUNDLE_ID": app,
   "OCQA_FLOW_JSON": flow_json,
+  # Where the harness writes per-step failure screenshots, so iOS flow evidence matches web
+  # and android instead of living only inside the .xcresult (field issue #8).
+  "OCQA_FLOW_EVIDENCE_DIR": os.environ.get("TAPP_FLOW_EVIDENCE_DIR_RESOLVED", ""),
   "OCQA_TEST_EMAIL": os.environ.get("OCQA_TEST_EMAIL", "test@example.com"),
   "OCQA_TEST_PASSWORD": os.environ.get("OCQA_TEST_PASSWORD", "TestPass123!"),
 }
