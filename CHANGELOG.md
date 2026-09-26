@@ -14,6 +14,12 @@ simulator, in code 0.17.17 had just shipped.
   whose content scrolls sideways the drag landed in the content and navigated *forward*
   (`Dashboard` → `What's New`), reported again as a pop. With no back control, `back` now
   returns `no_effect` and says why — a caller who wants the gesture can ask for `swipe`.
+- **Recognising the back button does not depend on one fragile signal.** A leading
+  navigation-bar control counts as back when it is named after a screen the run has been on,
+  named after the current screen (a detail view that inherits its parent's title), or an
+  unlabelled chevron — and never when it is a named app action (share, delete, add, edit,
+  save …). Relying only on a navigation-title history worked on one iOS version and failed on
+  another, which is precisely the kind of single-signal check this release is about.
 - **It still recognises the standard iOS back button.** iOS labels a pushed screen's back
   control with the PARENT screen's title ("Todo List"), not "Back", so matching on the label
   alone rejected real back buttons and failed a committed release contract. A leading

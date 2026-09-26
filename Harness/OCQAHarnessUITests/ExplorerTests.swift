@@ -881,9 +881,18 @@ class ExplorerTests: XCTestCase {
             // The standard iOS back button: the navigation bar's leading control, labelled with
             // a screen we have already been on. A leading button named anything else (Share,
             // Delete) is an app action, not a back, and must never be tapped by `back`.
+            // The navigation bar's leading control. Recognising it cannot depend on the nav-bar
+            // identifier being readable (that varies by iOS version), so accept three shapes of
+            // the standard back button — named after a screen we have been on, named after the
+            // current screen (a detail view that inherits its parent's title), or a bare chevron
+            // with no label — while never accepting a named app action.
+            let appActionLabels: Set<String> = ["share", "delete", "remove", "add", "edit", "save",
+                                                "done", "cancel", "close", "more", "sign out",
+                                                "log out", "settings", "search", "filter", "menu"]
             let leading = app.navigationBars.buttons.allElementsBoundByIndex.first
             if let leading, leading.exists, leading.isHittable,
-               backTitleHistory.contains(leading.label) {
+               !appActionLabels.contains(leading.label.lowercased()),
+               backTitleHistory.contains(leading.label) || leading.label == beforeTitle || leading.label.isEmpty {
                 backControls = [leading]
             }
         }
@@ -893,6 +902,7 @@ class ExplorerTests: XCTestCase {
             // landed in the content and navigated FORWARD ("Dashboard" → "What's New"), which
             // `back` then reported as a successful pop. A caller who wants the gesture can ask
             // for it explicitly with `swipe`.
+            print("OCQA_STATE:back_check before=\(beforeTitle) control=none")
             return "no_effect"
         }
         let backLabel = back.label
@@ -905,6 +915,7 @@ class ExplorerTests: XCTestCase {
         let backControlGone = !(back.exists && back.isHittable)
         let afterElements = readUITree(app)
         let afterTitle = detectTitle(afterElements) ?? "Unknown"
+        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) control=\(backLabel) controlGone=\(backControlGone)")
         if backControlGone { return "ok" }
         // Navigation is a change of SCREEN, and the screen's identity is its title. A raw tree
         // hash is too sensitive to be evidence of it: a dashboard with delayed content or a
@@ -912,7 +923,6 @@ class ExplorerTests: XCTestCase {
         // look like a successful pop (observed on the corpus app). Fall back to the hash only
         // when neither read produced a title to compare.
         // Observability: a back that reports the wrong thing is invisible without this.
-        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) control=\(backLabel) controlGone=\(backControlGone) hashChanged=\(computeHash(afterElements) != beforeHash)")
         if afterTitle != beforeTitle { return "ok" }
         if beforeTitle == "Unknown" && afterTitle == "Unknown" {
             return computeHash(afterElements) != beforeHash ? "ok" : "no_effect"
