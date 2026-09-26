@@ -14,9 +14,16 @@ simulator, in code 0.17.17 had just shipped.
   whose content scrolls sideways the drag landed in the content and navigated *forward*
   (`Dashboard` → `What's New`), reported again as a pop. With no back control, `back` now
   returns `no_effect` and says why — a caller who wants the gesture can ask for `swipe`.
-- **A back is judged by the screen's identity, not a tree hash.** A dashboard with delayed
-  content changes its hash on its own, which made a no-op back look like a successful pop. The
-  title decides; the hash is a fallback only when neither read produced one.
+- **It still recognises the standard iOS back button.** iOS labels a pushed screen's back
+  control with the PARENT screen's title ("Todo List"), not "Back", so matching on the label
+  alone rejected real back buttons and failed a committed release contract. A leading
+  navigation-bar button named after a screen the run has actually been on is a back control; a
+  leading button named anything else is an app action.
+- **A pop is judged by the control disappearing, not by a title or a hash.** A tree hash moves
+  on its own when content loads late, and a detail screen with no title of its own reports its
+  PARENT's title — so both sides of a genuine pop read identically and a real navigation looked
+  like a no-op. Popping a screen removes its back button, which is true whatever the screen is
+  titled.
 - `back` inside a **Flow** goes through the same verified path, so a Flow step that did not
   navigate fails instead of silently passing and running the rest of the Flow against the wrong
   screen. Failures carry the visible-labels hint.

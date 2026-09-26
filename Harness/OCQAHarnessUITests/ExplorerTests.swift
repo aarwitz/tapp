@@ -377,6 +377,7 @@ class ExplorerTests: XCTestCase {
             let action = (cmd["action"] as? String ?? "").lowercased()
             var status = "ok"
             var loginDetail = ""
+            noteNavigationTitle() // navigation history, so `back` can recognise its control
 
             switch action {
             case "login":
@@ -483,6 +484,8 @@ class ExplorerTests: XCTestCase {
         }
         return false
     }
+
+    private var backTitleHistory: [String] = []
 
     private func sessionTapById(_ identifier: String) -> String {
         var existedButNotHittable = false
@@ -799,6 +802,17 @@ class ExplorerTests: XCTestCase {
         return nil
     }
 
+    /// iOS labels a pushed screen's back button with the PARENT screen's title ("Todo List"),
+    /// not "Back", so a back control cannot be recognised by its own label alone. Remember the
+    /// titles we have actually been on; a leading navigation-bar button named after one of them
+    /// is a genuine back control, while a custom leading action (Share, Delete) is not.
+    private func noteNavigationTitle() {
+        let title = app.navigationBars.firstMatch.identifier
+        guard !title.isEmpty, backTitleHistory.last != title else { return }
+        backTitleHistory.append(title)
+        if backTitleHistory.count > 20 { backTitleHistory.removeFirst() }
+    }
+
     /// Leave a system-owned surface. A share sheet is a presented sheet, not a pushed screen:
     /// `back` does nothing and a mid-screen swipe scrolls its content instead of dismissing it.
     /// Try its real affordances in order, and say honestly whether we actually got out.
@@ -862,7 +876,17 @@ class ExplorerTests: XCTestCase {
         // action is worse than one that does nothing.
         let isBackAffordance = NSPredicate(format:
             "label ==[c] 'Back' OR label BEGINSWITH[c] 'Back to' OR identifier ==[c] 'BackButton' OR identifier CONTAINS[c] 'back-button'")
-        let backControls = app.buttons.matching(isBackAffordance).allElementsBoundByIndex
+        var backControls = app.buttons.matching(isBackAffordance).allElementsBoundByIndex
+        if backControls.first(where: { $0.exists && $0.isHittable }) == nil {
+            // The standard iOS back button: the navigation bar's leading control, labelled with
+            // a screen we have already been on. A leading button named anything else (Share,
+            // Delete) is an app action, not a back, and must never be tapped by `back`.
+            let leading = app.navigationBars.buttons.allElementsBoundByIndex.first
+            if let leading, leading.exists, leading.isHittable,
+               backTitleHistory.contains(leading.label) {
+                backControls = [leading]
+            }
+        }
         guard let back = backControls.first(where: { $0.exists && $0.isHittable }) else {
             // No back affordance: say so, and do nothing. The edge-swipe fallback used to run
             // here and it was not a back — on a screen whose content scrolls sideways the drag
@@ -871,17 +895,24 @@ class ExplorerTests: XCTestCase {
             // for it explicitly with `swipe`.
             return "no_effect"
         }
+        let backLabel = back.label
         back.tap()
         waitForUIStability(timeout: 1.5)
+        // The control we tapped is the evidence: popping a screen removes its back button. A
+        // title comparison alone cannot see this — a detail screen with no title of its own
+        // reports its PARENT's title, so both sides of the pop read "Todo List" and a real
+        // navigation looked like a no-op.
+        let backControlGone = !(back.exists && back.isHittable)
         let afterElements = readUITree(app)
         let afterTitle = detectTitle(afterElements) ?? "Unknown"
+        if backControlGone { return "ok" }
         // Navigation is a change of SCREEN, and the screen's identity is its title. A raw tree
         // hash is too sensitive to be evidence of it: a dashboard with delayed content or a
         // relative timestamp changes hash on its own, which made a no-op back at a root screen
         // look like a successful pop (observed on the corpus app). Fall back to the hash only
         // when neither read produced a title to compare.
         // Observability: a back that reports the wrong thing is invisible without this.
-        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) hashChanged=\(computeHash(afterElements) != beforeHash)")
+        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) control=\(backLabel) controlGone=\(backControlGone) hashChanged=\(computeHash(afterElements) != beforeHash)")
         if afterTitle != beforeTitle { return "ok" }
         if beforeTitle == "Unknown" && afterTitle == "Unknown" {
             return computeHash(afterElements) != beforeHash ? "ok" : "no_effect"
@@ -977,6 +1008,7 @@ class ExplorerTests: XCTestCase {
             let taskName = (raw["__tappTask"] as? [String: Any])?["name"] as? String ?? ""
             // A step is either {action: value} sugar or {action:..., target/value/...}. Normalize.
             let (action, step) = normalizeFlowStep(raw)
+            noteNavigationTitle() // navigation history, so `back` can recognise its control
             let target = subst((step["target"] as? String) ?? "")
             let value = subst((step["value"] as? String) ?? "")
             let timeoutMs = (step["timeoutMs"] as? Int) ?? (step["timeout"] as? Int) ?? flowDefaultTimeoutMs
