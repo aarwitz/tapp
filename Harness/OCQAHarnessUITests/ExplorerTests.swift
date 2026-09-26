@@ -429,7 +429,7 @@ class ExplorerTests: XCTestCase {
                 }
             case "back":
                 status = sessionBack()
-                if status == "no_effect" { loginDetail = "the screen did not change — there may be no back destination here, or the Back control belongs to a different navigation stack (try tap {id: \"Back\"})" }
+                if status == "no_effect" { loginDetail = "no back control on this screen, or tapping it did not change the screen — this is a root screen, or its Back belongs to a different navigation stack (try tap {id: \"Back\"}, or `swipe` for a gesture)" }
             case "wait":
                 let target = (cmd["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? (cmd["text"] as? String ?? "")
                 let waitMs = (cmd["timeoutMs"] as? Int) ?? 5000
@@ -855,24 +855,37 @@ class ExplorerTests: XCTestCase {
         let beforeTitle = detectTitle(beforeElements) ?? "Unknown"
         let beforeHash = computeHash(beforeElements)
 
-        // A NavigationStack inside a sheet has its own navigation bar; `navigationBars.firstMatch`
-        // can resolve the wrong one, so prefer an explicitly labelled, hittable Back control.
-        let labelled = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Back")).allElementsBoundByIndex
-        if let back = labelled.first(where: { $0.exists && $0.isHittable }) {
-            back.tap()
-        } else {
-            let backButton = app.navigationBars.buttons.firstMatch
-            if backButton.exists && backButton.isHittable {
-                backButton.tap()
-            } else {
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
-                    .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)))
-            }
+        // ONLY a real back affordance counts. Tapping `navigationBars.buttons.firstMatch` meant
+        // that on a screen with no back button, `back` fired whatever toolbar action happened to
+        // come first — observed live: it tapped Share, opened the share sheet, saw the screen
+        // change and reported "ok". A back that performs an unrelated (possibly destructive)
+        // action is worse than one that does nothing.
+        let isBackAffordance = NSPredicate(format:
+            "label ==[c] 'Back' OR label BEGINSWITH[c] 'Back to' OR identifier ==[c] 'BackButton' OR identifier CONTAINS[c] 'back-button'")
+        let backControls = app.buttons.matching(isBackAffordance).allElementsBoundByIndex
+        guard let back = backControls.first(where: { $0.exists && $0.isHittable }) else {
+            // No back affordance: say so, and do nothing. The edge-swipe fallback used to run
+            // here and it was not a back — on a screen whose content scrolls sideways the drag
+            // landed in the content and navigated FORWARD ("Dashboard" → "What's New"), which
+            // `back` then reported as a successful pop. A caller who wants the gesture can ask
+            // for it explicitly with `swipe`.
+            return "no_effect"
         }
+        back.tap()
         waitForUIStability(timeout: 1.5)
         let afterElements = readUITree(app)
         let afterTitle = detectTitle(afterElements) ?? "Unknown"
-        if afterTitle != beforeTitle || computeHash(afterElements) != beforeHash { return "ok" }
+        // Navigation is a change of SCREEN, and the screen's identity is its title. A raw tree
+        // hash is too sensitive to be evidence of it: a dashboard with delayed content or a
+        // relative timestamp changes hash on its own, which made a no-op back at a root screen
+        // look like a successful pop (observed on the corpus app). Fall back to the hash only
+        // when neither read produced a title to compare.
+        // Observability: a back that reports the wrong thing is invisible without this.
+        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) hashChanged=\(computeHash(afterElements) != beforeHash)")
+        if afterTitle != beforeTitle { return "ok" }
+        if beforeTitle == "Unknown" && afterTitle == "Unknown" {
+            return computeHash(afterElements) != beforeHash ? "ok" : "no_effect"
+        }
         return "no_effect"
     }
 
@@ -1004,7 +1017,11 @@ class ExplorerTests: XCTestCase {
             case "swipe":
                 switch target.lowercased() { case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp() }
             case "back":
-                _ = tryGoBack()
+                // Same rule as the session (#10): a back that did not navigate is a failed step,
+                // not a silent pass — the rest of the Flow would otherwise run against the wrong
+                // screen and fail somewhere unrelated.
+                status = sessionBack() == "ok" ? "pass" : "fail"
+                if status == "fail" { detail = "back did not navigate: no back control on this screen, or tapping it did not change the screen\(visibleLabelsHint())" }
             case "wait":
                 Thread.sleep(forTimeInterval: Double(timeoutMs) / 1000.0)
             case "wait_for":

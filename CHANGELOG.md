@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.18
+
+**`back` never performs an action that isn't a back.** Found by a negative test against a real
+simulator, in code 0.17.17 had just shipped.
+
+- **It no longer taps an arbitrary toolbar button.** With no Back control, `back` fell through
+  to `navigationBars.buttons.firstMatch` — on a screen whose first toolbar item was **Share**,
+  it opened the share sheet, saw the screen change, and reported a successful pop. On a real app
+  that first button could be Delete or Sign out. Only a genuine back affordance (`Back`,
+  `Back to …`, `BackButton`) is accepted now.
+- **It no longer swipes blindly.** The edge-swipe fallback was not a back either: on a screen
+  whose content scrolls sideways the drag landed in the content and navigated *forward*
+  (`Dashboard` → `What's New`), reported again as a pop. With no back control, `back` now
+  returns `no_effect` and says why — a caller who wants the gesture can ask for `swipe`.
+- **A back is judged by the screen's identity, not a tree hash.** A dashboard with delayed
+  content changes its hash on its own, which made a no-op back look like a successful pop. The
+  title decides; the hash is a fallback only when neither read produced one.
+- `back` inside a **Flow** goes through the same verified path, so a Flow step that did not
+  navigate fails instead of silently passing and running the rest of the Flow against the wrong
+  screen. Failures carry the visible-labels hint.
+
 ## 0.17.17
 
 **The iOS session stops claiming outcomes it never verified** (field issues #4 #6 #8 #10).
