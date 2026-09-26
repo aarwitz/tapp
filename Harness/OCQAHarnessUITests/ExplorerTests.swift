@@ -906,17 +906,27 @@ class ExplorerTests: XCTestCase {
             return "no_effect"
         }
         let backLabel = back.label
+        // The CONTROLS on screen are the evidence a pop happened. Re-reading the tapped element
+        // does not work: XCUIElement is a lazy query, so `back.exists` after the tap re-resolves
+        // "the navigation bar's first button" against the NEW screen and finds whatever leads it
+        // there — so a successful pop looked like the control was still present. Titles do not
+        // work either: a detail view that inherits its parent's title reads the same on both
+        // sides. A pop replaces the screen's controls, and that is what we compare.
+        let controlLabels = { (elements: [SimpleElement]) -> Set<String> in
+            Set(elements.filter { self.isInteractable($0.type) && $0.isEnabled }
+                .map { self.normalizeVisibleText($0.label) }
+                .filter { !$0.isEmpty })
+        }
+        let beforeControls = controlLabels(beforeElements)
         back.tap()
         waitForUIStability(timeout: 1.5)
-        // The control we tapped is the evidence: popping a screen removes its back button. A
-        // title comparison alone cannot see this — a detail screen with no title of its own
-        // reports its PARENT's title, so both sides of the pop read "Todo List" and a real
-        // navigation looked like a no-op.
-        let backControlGone = !(back.exists && back.isHittable)
         let afterElements = readUITree(app)
         let afterTitle = detectTitle(afterElements) ?? "Unknown"
-        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) control=\(backLabel) controlGone=\(backControlGone)")
-        if backControlGone { return "ok" }
+        let afterControls = controlLabels(afterElements)
+        // Two or more controls differing is a screen change; one is ordinary content churn.
+        let changedControls = beforeControls.symmetricDifference(afterControls).count
+        print("OCQA_STATE:back_check before=\(beforeTitle) after=\(afterTitle) control=\(backLabel) changedControls=\(changedControls)")
+        if changedControls >= 2 { return "ok" }
         // Navigation is a change of SCREEN, and the screen's identity is its title. A raw tree
         // hash is too sensitive to be evidence of it: a dashboard with delayed content or a
         // relative timestamp changes hash on its own, which made a no-op back at a root screen

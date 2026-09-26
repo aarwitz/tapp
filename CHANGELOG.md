@@ -25,11 +25,14 @@ simulator, in code 0.17.17 had just shipped.
   alone rejected real back buttons and failed a committed release contract. A leading
   navigation-bar button named after a screen the run has actually been on is a back control; a
   leading button named anything else is an app action.
-- **A pop is judged by the control disappearing, not by a title or a hash.** A tree hash moves
-  on its own when content loads late, and a detail screen with no title of its own reports its
-  PARENT's title — so both sides of a genuine pop read identically and a real navigation looked
-  like a no-op. Popping a screen removes its back button, which is true whatever the screen is
-  titled.
+- **A pop is judged by the screen's controls changing.** Every cheaper signal is wrong for a
+  concrete reason: a tree hash moves on its own when content loads late; a detail view that
+  inherits its parent's title reads identically on both sides of a pop; and re-reading the
+  tapped element does not work at all, because `XCUIElement` is a lazy query — `exists` after
+  the tap re-resolves "the navigation bar's first button" against the NEW screen and finds
+  whatever leads it there, so a successful pop looked like the control was still present. A pop
+  replaces the screen's controls, and two or more changing is the evidence (one is content
+  churn).
 - `back` inside a **Flow** goes through the same verified path, so a Flow step that did not
   navigate fails instead of silently passing and running the rest of the Flow against the wrong
   screen. Failures carry the visible-labels hint.
