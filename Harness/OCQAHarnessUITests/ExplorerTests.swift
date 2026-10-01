@@ -5172,12 +5172,23 @@ class ExplorerTests: XCTestCase {
             // deleting only the prefix, then prove it is empty before inserting new text.
             element.typeKey("a", modifierFlags: .command)
             element.typeText(XCUIKeyboardKey.delete.rawValue)
-            if hasContent(), let remaining = element.value as? String {
-                // Some simulator keyboard configurations ignore Command-A. Clear on both
-                // sides of the cursor in that case; backspace alone leaves the suffix intact.
-                let count = remaining.utf16.count
-                element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count)
-                    + String(repeating: XCUIKeyboardKey.forwardDelete.rawValue, count: count))
+            // Command-A and forward delete are hardware-keyboard keys, and the simulator's
+            // hardware keyboard is disconnected by default — which is how CI runs. XCUITest
+            // cannot press a key the software keyboard does not have: the selection never
+            // happens, and forwardDelete's raw value (U+F728, a private-use character) is
+            // INSERTED as literal text. Clearing a 54-character field therefore left it holding
+            // 54 unrenderable glyphs and reported "could not be cleared". Backspace IS on the
+            // software keyboard, so clear with backspace alone, re-anchoring the caret past the
+            // end of the visible text each pass to reach a suffix that was scrolled out of view.
+            var passes = 0
+            while hasContent(), passes < 4 {
+                passes += 1
+                guard let remaining = element.value as? String else { break }
+                element.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+                element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue,
+                                        count: remaining.utf16.count + 2))
+                // An empty field reports its placeholder, so this compares unequal once cleared.
+                if (element.value as? String) == remaining { break }
             }
             let deadline = Date().addingTimeInterval(1.0)
             while hasContent() && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }

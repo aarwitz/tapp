@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.21
+
+- **Replacing a prefilled field works on a simulator without a hardware keyboard.** Clearing the
+  old value used forward delete, which only exists on a hardware keyboard; the simulator's is
+  disconnected by default, so XCUITest inserted that key's raw value as literal text and left the
+  field holding unrenderable glyphs. A `login` or `type` step onto a field that already had
+  content failed with "Field contents could not be cleared". Clearing now uses backspace alone and
+  re-anchors the caret past the end of the visible text, so a value scrolled out of view is still
+  reached.
+- **No platform is labelled "beta" anywhere any more.** The label was dropped from the README and
+  the site on 2026-09-14 but survived in the CLI's macOS-required error, the `tapp_explore` tool
+  description and its argument help, the error naming the three target kinds, and the report's
+  "not checked" list. Every real requirement ("requires Playwright installed") and real limit
+  ("only the first few visible buttons per page are probed") is unchanged.
+- **The browser workspace shares one design system** with the hosted Studio, so the two surfaces
+  no longer drift apart visually.
+- **Maintainers:** `tools/bump-version.sh` bumps the five files that must agree on the version and
+  verifies them; the public sync refuses a stale, dirty or diverged mirror checkout and retries a
+  commit that was made but never pushed; and `release-public.yml` runs the whole release from one
+  button, so no one needs an npm token or push rights on the mirror.
+
 ## 0.17.20
 
 - **Login screens without a navigation bar work in sessions and Flows** (#28). Reading an

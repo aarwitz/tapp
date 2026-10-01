@@ -163,7 +163,7 @@ const engineImport = () => import(path.join(packageRoot, "mcp-server", "src", "i
 
 function requireMacFor(what) {
   if (process.platform === "darwin") return;
-  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: npx -y @aarwitz/tapp@latest explore https://localhost:3000`);
+  console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). Web runs anywhere: npx -y @aarwitz/tapp@latest explore https://localhost:3000`);
   process.exit(1);
 }
 

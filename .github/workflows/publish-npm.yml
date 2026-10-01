@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write # the release step below turns the tag into a real GitHub release
   id-token: write
 
 jobs:
@@ -41,3 +41,26 @@ jobs:
         env:
           TAPP_SKIP_REAL_BROWSER_TESTS: '1'
       - run: npm publish --provenance --access public
+
+      # Several releases reached npm with no GitHub release behind the tag, so every workflow
+      # `tapp ci install` generated referenced an action version that did not resolve (public
+      # issue #12). The tag that triggered this run becomes a real release here, from the
+      # changelog section for that version.
+      - name: Create the GitHub release from the changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          notes="$(awk -v want="## $version" '$0 == want {f=1; next} f && /^## /{exit} f' CHANGELOG.md)"
+          if [[ -z "${notes//[[:space:]]/}" ]]; then
+            notes="See CHANGELOG.md for $version."
+          fi
+          printf '%s\n' "$notes" > "$RUNNER_TEMP/notes.md"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists; leaving it alone"
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --title "Tapp $version" --notes-file "$RUNNER_TEMP/notes.md"
+          fi

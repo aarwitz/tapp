@@ -1,4 +1,4 @@
-// Web exploration driver (beta) — the second platform behind the OCQA marker protocol.
+// Web exploration driver — the second platform behind the OCQA marker protocol.
 //
 // Drives a real browser via Playwright and emits the SAME OCQA_* marker lines the iOS
 // XCUITest harness emits, into the same captures/<id>/ocqa-markers.txt layout — so the

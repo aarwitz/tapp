@@ -362,7 +362,7 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       "privacy or API data minimization",
       "brand and SEO consistency",
       "visual credibility or asset quality (vision review; needs an API key)",
-      "only the first few visible buttons per page are probed (web beta)",
+      "only the first few visible buttons per page are probed (web)",
       "content & reachability regressions require a baseline",
     ];
     if (outbound?.mailtoSkipped === "egress-policy") notChecked.push("mailto address domains (MX lookups are skipped by the public-egress policy)");

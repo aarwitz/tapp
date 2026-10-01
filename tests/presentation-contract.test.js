@@ -88,6 +88,39 @@ test("platform claims name the exact current target boundary", () => {
   assert.match(landing, /"operatingSystem": "macOS, Windows, Linux"/);
 });
 
+// The 2026-09-14 decision covers every surface a user or an agent reads, not only the two files
+// the check above happened to cover. README and landing were corrected then; the label survived
+// for weeks in the CLI, the MCP tool descriptions, the report's "not checked" list and the
+// platform tables, because nothing tested them. Each entry here is a surface someone reads.
+test("no shipped surface labels a platform beta", () => {
+  // This test ships in the public tree, where the private-only docs below do not exist, so each
+  // surface is checked only if present. (The publication guard exists to catch a shipped test that
+  // hard-codes a private path; it caught exactly that here.)
+  const surfaces = [
+    "AGENTS.md",                      // the public agent playbook
+    "README.md",
+    "bin/tapp.js",                    // CLI output
+    "mcp-server/src/index.js",        // MCP tool descriptions + errors an agent reads
+    "mcp-server/src/report.js",       // the report's own prose
+    "mcp-server/src/web-explorer.js",
+    "docs/ROLLOUT-STATUS.md",         // private-only
+    "docs/flows-architecture.md",     // private-only
+  ].filter((relative) => fs.existsSync(new URL(`../${relative}`, import.meta.url)));
+  // The six public surfaces are always present; a path typo must not silently empty the list.
+  assert.ok(surfaces.length >= 6, `expected at least the public surfaces, got ${surfaces.length}`);
+  // A platform maturity label, in the shapes it actually took: "(beta)", "web beta", "beta web".
+  const platform = "(?:web|ios|android|windows|browser|desktop)";
+  for (const relative of surfaces) {
+    const source = read(relative);
+    assert.doesNotMatch(source, /\(beta\)/i, `${relative} labels a platform beta`);
+    assert.doesNotMatch(
+      source,
+      new RegExp(`\\b(?:${platform}\\s+beta|beta\\s+${platform})\\b`, "i"),
+      `${relative} labels a platform beta`
+    );
+  }
+});
+
 test("runtapp.com remains the canonical product website", () => {
   const landing = readLanding("index.html");
   assert.equal(readLanding("CNAME").trim(), "runtapp.com");

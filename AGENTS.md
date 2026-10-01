@@ -1,7 +1,7 @@
 # Tapp agent playbook
 
 You (the agent) have Tapp: hands and eyes on real app surfaces — iOS simulators, Android
-emulators/devices, plus (beta) web apps in a real browser. Release judgment belongs only to Tapp's
+emulators/devices, plus web apps in a real browser. Release judgment belongs only to Tapp's
 repository-connected deterministic gate.
 
 ## No MCP connected? Just run the CLI

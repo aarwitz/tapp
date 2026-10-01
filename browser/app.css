@@ -176,24 +176,35 @@ dialog { width:min(720px,calc(100vw - 40px)); max-height:min(760px,calc(100vh - 
 }
 
 /* Desktop-parity dark product skin. The component structure remains shared by
-   local and hosted Tapp; this palette follows the native Command Center. */
+   local and hosted Tapp; the palette comes from tokens.css so the hosted Studio,
+   the local Studio, and the macOS Command Center read as one product. */
 :root {
   color-scheme:dark;
-  --ink:#edf2f8; --muted:#929ba8; --faint:#687280; --line:#303844; --paper:#171c24; --wash:#20262f;
-  --green:#58a6ff; --green-2:#4f9cf3; --green-3:#7bb8ff; --lime:#102d4d; --amber:#e2a826;
-  --amber-bg:#302817; --red:#ff5c57; --red-bg:#392125; --blue:#58a6ff; --sidebar:#0c1118;
-  --shadow:0 18px 55px rgba(0,0,0,.28); --small-shadow:0 8px 24px rgba(0,0,0,.18);
+  --ink:var(--tapp-text); --muted:var(--tapp-text-soft); --faint:var(--tapp-text-faint);
+  --line:var(--tapp-border); --paper:var(--tapp-panel); --wash:var(--tapp-panel-2);
+  --green:var(--tapp-blue); --green-2:var(--tapp-blue-hover); --green-3:#7bb8ff;
+  --lime:var(--tapp-selected); --amber:var(--tapp-amber); --amber-bg:var(--tapp-amber-bg);
+  --red:var(--tapp-red); --red-bg:var(--tapp-red-bg); --blue:var(--tapp-blue);
+  --sidebar:var(--tapp-sidebar); --shadow:var(--tapp-shadow); --small-shadow:var(--tapp-shadow-small);
 }
-body { background:#0d1117; }
-.topbar { background:rgba(13,17,23,.96); border-color:var(--line); }
+body { background:var(--tapp-bg); font-family:var(--tapp-font); }
+code { font-family:var(--tapp-font-mono); }
+.topbar { background:rgba(7,16,23,.96); border-color:var(--tapp-border-strong); }
 .brand-mark { width:auto; background:transparent; color:var(--green); font-family:inherit; font-size:24px; }
 .mode-pill,.status-chip,.repository-switcher,.source-card,.panel,.decision-card,.target-card,.field,
 .live-frame-shell,.live-controls,.coverage-summary,.transition-list,.plan-item,.pipeline article,
 .evidence-card,.search-input,.github-repositories,.github-repositories button,.manual-action input,
 .run-row,.finding-row,.live-control { background:var(--paper); color:var(--ink); border-color:var(--line); }
 .source-onboarding { min-height:calc(100vh - 64px); }
-.source-card:hover,.source-card.dragging { border-color:var(--green-2); box-shadow:0 20px 56px rgba(0,0,0,.36); }
-.source-card.dragging,.target-card.selected,.run-row.selected,.finding-row.selected { background:#132237; }
+.source-card:hover,.source-card.dragging { border-color:var(--green-2); box-shadow:0 20px 56px rgba(0,0,0,.46); }
+.source-card.dragging,.target-card.selected,.run-row.selected,.finding-row.selected { background:var(--tapp-selected); }
+/* Controls match the Command Center: compact, 8px radius, muted surface. */
+button { border-radius:var(--tapp-radius); }
+button.primary { background:var(--tapp-blue); color:#fff; }
+button.primary:hover { background:var(--tapp-blue-hover); }
+button.secondary { color:var(--tapp-text-control); background:var(--tapp-control); border-color:var(--tapp-border); }
+button.secondary:hover,button.quiet:hover { background:var(--tapp-panel-3); }
+button.quiet { border-color:var(--tapp-border); color:var(--muted); }
 .platform-row span,.button-link { background:#131a23; border-color:#385a7c; color:var(--green); }
 button.primary { background:var(--green); color:#07111d; }
 button.primary:hover { background:#79b8ff; }

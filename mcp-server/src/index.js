@@ -2729,7 +2729,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       title: "Explore (autonomous)",
       description:
         "Autonomously explore iOS (appBundleId), Android (androidAppId), OR a web app " +
-        "(url — beta, requires Playwright installed) and return a structured EXPLORATION OBSERVATION. " +
+        "(url — requires Playwright installed) and return a structured EXPLORATION OBSERVATION. " +
         "Exploration OBSERVES — it surfaces findings + coverage + evidence; it does NOT render a ship " +
         "verdict or score. To gate a merge, run the deterministic gate (contracts + baseline via CI). " +
         "Use when the user wants to find bugs / observe what breaks — this " +
@@ -2756,7 +2756,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           apkPath: { type: "string", description: "Android: optional APK to install before testing." },
           androidSerial: { type: "string", description: "Android: optional adb device serial; defaults to the first authorized device." },
           clearData: { type: "boolean", default: true, description: "Android: clear app data before launch for a repeatable starting state." },
-          url: { type: "string", description: "Web (beta): URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
+          url: { type: "string", description: "Web: URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
           watch: { type: "boolean", default: false, description: "Web only: open Tapp's controlled Chromium window and show a cursor/HUD for each exploration action. Evidence screenshots exclude the overlay." },
           device: { type: "string", description: "Web only: render as a Playwright device profile (e.g. \"iPhone 13\") — viewport, user agent, touch" },
           viewport: { type: "string", description: "Web only: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\"); overrides the device profile's viewport" },
@@ -3616,7 +3616,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const wantsAndroid = isNonEmptyString(args.androidAppId);
     const targets = [wantsWeb, wantsAndroid, isNonEmptyString(args.appBundleId)].filter(Boolean).length;
     if (targets !== 1) {
-      return errorResult("Provide exactly one of appBundleId (iOS), androidAppId (Android), or url (web beta)");
+      return errorResult("Provide exactly one of appBundleId (iOS), androidAppId (Android), or url (web)");
     }
     if (args.watch === true && !wantsWeb) return errorResult("watch is currently available for web exploration only");
 
