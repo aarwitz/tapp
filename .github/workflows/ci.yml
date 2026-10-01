@@ -120,6 +120,15 @@ jobs:
           flows: ".tapp/flows/demoapp-smoke.yml DemoApp/.tapp/flows/menu-to-daily-summary.yml"
           contracts: "DemoApp/.tapp/contracts/*.contract.ts"
           comment-on-pr: "false"
+      - name: Preserve installed apps, asynchronous controls, and iOS flow screenshots
+        run: TAPP_RUN_IOS_REGRESSIONS=1 node --test tests/ios-inspection-e2e.test.js
+      - name: Upload iOS regression evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tapp-ios-regression-evidence
+          path: ${{ runner.temp }}/tapp-home/captures
+          retention-days: 7
 
   action-web:
     name: Composite Action — web + multi-actor contract

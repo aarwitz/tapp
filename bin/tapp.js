@@ -222,7 +222,7 @@ function printEngineError(r) {
     console.error("  Available targets:");
     for (const choice of choices) {
       const selector = choice.name || choice.id || choice.sourcePath;
-      console.error(`    ${choice.platform ? `${choice.platform} · ` : ""}${choice.name || choice.id}${choice.sourcePath ? ` (${choice.sourcePath})` : ""}${selector ? ` — use --target ${JSON.stringify(selector)}` : ""}`);
+      console.error(`    ${choice.platform ? `${choice.platform} · ` : ""}${choice.name || choice.id}${choice.sourcePath ? ` (${choice.sourcePath})` : ""}${choice.command ? ` — ${choice.command}` : selector ? ` — use --target ${JSON.stringify(selector)}` : ""}`);
     }
   }
   if (r.details?.remediation) console.error(`  Next: ${r.details.remediation}`);
@@ -250,8 +250,28 @@ async function promptForInitTarget(details) {
 
 // Turn whatever the user gave us (nothing / repo dir / .app / bundle id) into an installed
 // bundle id, narrating build/install progress on stderr.
-async function resolveTargetOrExit(engine, input) {
-  const resolved = await engine.resolveAppTarget(input || "", { onStatus: (s) => console.error(`⏳ ${s}`) });
+async function resolveTargetOrExit(engine, input, { inspect = false } = {}) {
+  let resolved = inspect
+    ? await engine.resolveInstalledAppTarget(input || "")
+    : await engine.resolveAppTarget(input || "", { onStatus: (s) => console.error(`⏳ ${s}`) });
+  if (inspect && resolved.details?.choices?.length && process.stdin.isTTY && process.stderr.isTTY && !process.env.CI) {
+    const { createInterface } = await import("node:readline/promises");
+    const terminal = createInterface({ input: process.stdin, output: process.stderr });
+    const choices = resolved.details.choices;
+    console.error(`\n${resolved.error}`);
+    choices.forEach((choice, index) => console.error(`  ${index + 1}) ${choice.name} (${choice.bundleId})`));
+    try {
+      while (true) {
+        const answer = String(await terminal.question(`Select 1-${choices.length} (or q to cancel): `)).trim();
+        if (/^(q|quit|cancel)$/i.test(answer)) break;
+        const selected = Number(answer);
+        if (Number.isInteger(selected) && selected >= 1 && selected <= choices.length) {
+          resolved = await engine.resolveInstalledAppTarget(choices[selected - 1].bundleId);
+          break;
+        }
+      }
+    } finally { terminal.close(); }
+  }
   if (resolved.error) {
     printEngineError(resolved);
     process.exit(1);
@@ -266,11 +286,11 @@ function safeCommandUsage(verb) {
     focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
     open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
-    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
+    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  iOS: inspects an installed app; never builds or installs. Use tapp build explicitly first if needed.\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
     shot: "tapp shot [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow steps [--json]\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    flow: "tapp flow example\ntapp flow steps [--json]\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--launch-arg ARG] [--launch-env JSON]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
     scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
@@ -962,7 +982,7 @@ switch (command) {
       console.error(`❌ ${sim.error}`);
       process.exit(1);
     }
-    const bundleId = await resolveTargetOrExit(engine, positionals[0]);
+    const bundleId = await resolveTargetOrExit(engine, positionals[0], { inspect: true });
     const r = await engine.captureUiTree(bundleId);
     if (r.error) {
       console.error(`❌ ${r.error}`);
@@ -1230,6 +1250,11 @@ switch (command) {
     const evidenceDir = path.join(tappHome, "captures", `flow-${platform}-${token}`);
     fs.mkdirSync(path.dirname(flowLog), { recursive: true });
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
+    if (platform === "ios") {
+      const launch = iosLaunchOptions(flags, rest);
+      if (launch.appLaunchArgs) env.OCQA_APP_LAUNCH_ARGS_JSON = JSON.stringify(launch.appLaunchArgs);
+      if (launch.appLaunchEnv) env.OCQA_APP_LAUNCH_ENV_JSON = JSON.stringify(launch.appLaunchEnv);
+    }
     if (typeof flags.email === "string") env.OCQA_TEST_EMAIL = flags.email;
     if (typeof flags.password === "string") env.OCQA_TEST_PASSWORD = flags.password;
     if (typeof flags.device === "string") env.TAPP_WEB_DEVICE = flags.device;

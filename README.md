@@ -163,8 +163,8 @@ configuration and existing-file collisions, and never commits, pushes, enables b
 or creates GitHub resources. Review and pin the generated Tapp release reference to its immutable
 commit SHA before production.
 
-Every verb takes whatever you have: nothing (auto-detects the repo you're in, or the app
-already on the simulator), a repo directory, a `path/to/App.app`, or a bundle id:
+`open` and `explore` accept a repo directory, a `path/to/App.app`, a bundle id, or no target
+(auto-detecting the repository or installed app):
 
 ```bash
 npx -y @aarwitz/tapp@latest open [target]   # launch the app → screen summary + screenshot file
@@ -173,6 +173,14 @@ npx -y @aarwitz/tapp@latest shot            # screenshot the booted simulator
 npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator (names + bundle ids)
 npx -y @aarwitz/tapp@latest build [dir]     # just build + install (scheme auto-detected)
 ```
+
+On iOS, `tree` inspects an installed app and never builds, uninstalls, or replaces it. With no
+target, it uses the repository's recorded iOS target or the sole installed app. If the choice
+is ambiguous, it lists the installed apps for you to select. Pass a bundle id to inspect a
+specific sandbox build; run `tapp build` explicitly when you intend to replace it.
+
+iOS Flow evidence includes `flow-final.png` on passing and failing replays, plus
+`flow-failure-N.png` at a failed step, alongside the log, JSON report, and XCTest result bundle.
 
 Web: `npx -y @aarwitz/tapp@latest explore http://localhost:3000` *(one-time setup:
 `npm i -g playwright && npx playwright install chromium`)*. Add `--watch` to open Tapp's controlled,

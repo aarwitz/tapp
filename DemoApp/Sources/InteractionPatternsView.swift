@@ -1,5 +1,34 @@
 import SwiftUI
 
+/// One date control with a stable tree shape. The launch environment selects the observable
+/// response so exploration can distinguish content/selection changes from a truly inert button.
+struct ContentResponseFixture: View {
+    let mode: String
+    @State private var selected = false
+    @State private var day = "THU, OCT 1"
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Button("FR, 2") {
+                    switch mode {
+                    case "immediate": day = "FRI, OCT 2"
+                    case "delayed":
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { day = "FRI, OCT 2" }
+                    case "selected": selected = true
+                    default: break // Deliberately dead: the detector must still find this.
+                    }
+                }
+                .accessibilityIdentifier("choose-date")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                Text("TIMES — \(day)")
+                Text(day == "THU, OCT 1" ? "09:00 · 10:00" : "11:00 · 12:00")
+            }
+            .navigationTitle("Date Response")
+        }
+    }
+}
+
 // MARK: - Context Menu List
 
 /// List whose cells navigate on tap AND expose a .contextMenu on long-press.

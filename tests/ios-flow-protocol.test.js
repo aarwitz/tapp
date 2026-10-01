@@ -159,7 +159,7 @@ test("iOS loop detection requires a cycle across distinct structural states", ()
 test("iOS unresponsive findings come from confirmed control taps, not recovery streaks", () => {
   assert.doesNotMatch(source, /title\":\"Unresponsive UI\".*repeated_state_count/);
   assert.match(source, /Control may be unresponsive/);
-  assert.match(source, /contentSignature\(post2\) == preContentSig/);
+  assert.match(source, /observeControlResponse\(previousContent: preContentSig\)/);
 });
 
 test("iOS recovery does not spend a second action after exhausting the requested budget", () => {

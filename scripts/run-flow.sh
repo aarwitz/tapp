@@ -98,6 +98,7 @@ TEST_RUNNER_OCQA_CONFIG_PATH="$CFG" xcodebuild test-without-building \
 [ -n "$RESPONDER_PID" ] && { kill "$RESPONDER_PID" 2>/dev/null; wait "$RESPONDER_PID" 2>/dev/null; }
 
 cp "$LOG" "$EVIDENCE_DIR/flow.log"
+grep '^OCQA_EVIDENCE_WARNING:' "$LOG" >&2 || true
 python3 "$ROOT/scripts/flow_lib.py" report --json "$LOG" > "$EVIDENCE_DIR/flow-report.json"
 echo ""
 python3 "$ROOT/scripts/flow_lib.py" report "$LOG"

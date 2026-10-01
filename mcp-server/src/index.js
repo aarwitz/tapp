@@ -137,7 +137,9 @@ function runCommand(command, args = [], options = {}) {
       const timeoutMessage = timedOut ? `\nProcess timed out after ${timeoutMs}ms` : "";
       resolve({
         code: timedOut ? 124 : (code ?? 1),
-        stdout: clampOutput(stdout),
+        // Structured inventories are parsed internally; diagnostic truncation would corrupt
+        // their JSON/plist before the caller sees it (large hosted simulator inventories).
+        stdout: options.rawStdout ? stdout : clampOutput(stdout),
         stderr: clampOutput(`${stderr}${timeoutMessage}`.trim()),
         timedOut,
       });
@@ -147,7 +149,7 @@ function runCommand(command, args = [], options = {}) {
       clearTimeout(timer);
       resolve({
         code: 1,
-        stdout: clampOutput(stdout),
+        stdout: options.rawStdout ? stdout : clampOutput(stdout),
         stderr: clampOutput(`${stderr}\n${error.message}`.trim()),
         timedOut: false,
       });
@@ -205,7 +207,7 @@ function summarizeCapture(runPath) {
 
 
 async function listSimulators() {
-  const res = await runCommand("xcrun", ["simctl", "list", "devices", "-j"]);
+  const res = await runCommand("xcrun", ["simctl", "list", "devices", "-j"], { rawStdout: true });
   if (res.code !== 0) return { error: res.stderr || "simctl failed", simulators: [] };
   let data;
   try {
@@ -280,12 +282,12 @@ function notInstalledError(bundleId, booted) {
 // and the tapp_build MCP tool.
 
 export async function listInstalledUserApps() {
-  const r = await runCommand("xcrun", ["simctl", "listapps", "booted"], { timeoutMs: 30_000 });
+  const r = await runCommand("xcrun", ["simctl", "listapps", "booted"], { timeoutMs: 30_000, rawStdout: true });
   if (r.code !== 0) return { error: "Could not list installed apps", details: { stderr: r.stderr } };
   // simctl emits an old-style plist; plutil converts it.
   const tmp = path.join(os.tmpdir(), `tapp-apps-${Date.now().toString(36)}.plist`);
   fs.writeFileSync(tmp, r.stdout);
-  const conv = await runCommand("plutil", ["-convert", "json", "-o", "-", tmp], { timeoutMs: 30_000 });
+  const conv = await runCommand("plutil", ["-convert", "json", "-o", "-", tmp], { timeoutMs: 30_000, rawStdout: true });
   try { fs.rmSync(tmp, { force: true }); } catch {}
   let data;
   try {
@@ -500,6 +502,65 @@ export async function installAppOnBootedSim(appPath, { cleanInstall = true, onSt
   const inst = await runCommand("xcrun", ["simctl", "install", "booted", appPath], { timeoutMs: 3 * 60 * 1000 });
   if (inst.code !== 0) return { error: `Install failed: ${(inst.stderr || "").trim().slice(0, 300)}` };
   return { bundleId };
+}
+
+// Inspection must never enter the build/install resolver. Even a clean install of the same
+// bundle id can replace a staging binary and destroy its data (public issue #25).
+export async function resolveInstalledAppTarget(input, { cwd = process.cwd(), listApps = listInstalledUserApps, isInstalled = appInstalledOnBootedSim } = {}) {
+  const target = String(input || "").trim();
+  let bundleId = "";
+  let dir = cwd;
+  if (target) {
+    const candidate = path.resolve(cwd, target);
+    if (!target.includes("/") && target.includes(".") && !fs.existsSync(candidate)) {
+      // Explicit ids may name system apps too; the user-app picker intentionally omits them.
+      if (!await isInstalled(target)) return { error: `${target} is not installed on the booted simulator. Install the intended build first; tree will not replace it.` };
+      return { bundleId: target, via: "using the installed app", targetResolution: { kind: "installed-application", bundleId: target } };
+    }
+    else if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory() && !/\.(app|xcodeproj|xcworkspace)$/.test(candidate)) dir = candidate;
+    else return { error: "tree inspects an installed app. Pass its bundle id, or run npx -y @aarwitz/tapp@latest build explicitly before inspecting it." };
+  }
+  const listed = await listApps();
+  if (listed.error) return listed;
+  const apps = listed.apps;
+  if (!bundleId) {
+    const modelPath = existingProjectArtifactPath(dir, "application-model.json");
+    if (fs.existsSync(modelPath)) {
+      let model;
+      try {
+        model = JSON.parse(fs.readFileSync(modelPath, "utf8"));
+        if (model.kind !== "tapp-application-model" || !Array.isArray(model.targets)) throw new Error("invalid application model");
+      } catch (error) {
+        return { error: `Cannot read ${modelPath}: ${error.message}. Pass an installed bundle id explicitly.` };
+      }
+      const targets = model.targets.filter((item) => item.platform === "ios");
+      const selected = targets.find((item) => item.id === model.application?.defaultTargetId)
+        || (targets.length === 1 ? targets[0] : null);
+      bundleId = String(selected?.runtime?.bundleId || "").trim();
+      // A repository with multiple/unconfirmed targets must not silently fall back to an
+      // unrelated app just because it is the only one installed on this simulator.
+      if (!bundleId) return installedAppChoices(apps, "The repository has no unambiguous installed iOS target. Pass the app's bundle id.");
+    } else if (target) {
+      return installedAppChoices(apps, "This repository has no recorded iOS bundle id. Pass the installed app's bundle id; tree does not build it.");
+    } else if (apps.length === 1) {
+      bundleId = apps[0].bundleId;
+    }
+  }
+  if (bundleId) {
+    if (!apps.some((item) => item.bundleId === bundleId)) return { error: `${bundleId} is not installed on the booted simulator. Install the intended build first; tree will not replace it.` };
+    return { bundleId, via: "using the installed app", targetResolution: { kind: "installed-application", bundleId } };
+  }
+  return installedAppChoices(apps, apps.length ? "Choose the installed app to inspect." : "No user app is installed. Install the intended build first; tree does not build or install apps.");
+}
+
+function installedAppChoices(apps, error) {
+  return {
+    error,
+    details: {
+      reason: apps.length ? "target-selection-required" : "app-not-installed",
+      choices: apps.map((app) => ({ platform: "ios", name: app.name, bundleId: app.bundleId, selector: app.bundleId, command: `npx -y @aarwitz/tapp@latest tree ${app.bundleId}` })),
+    },
+  };
 }
 
 export async function resolveAppTarget(input, { cwd = process.cwd(), onStatus = () => {}, scheme = "", configuration = "Debug" } = {}) {

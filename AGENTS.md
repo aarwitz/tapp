@@ -24,6 +24,11 @@ npx -y @aarwitz/tapp@latest explore app.apk --platform android --app-id com.acme
 npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
 ```
 
+On iOS, `tree` only uses an installed app: it never builds, uninstalls, or replaces it. With
+no target it uses the repository's recorded iOS target or the sole installed app; ambiguity
+requires a choice. Pass a bundle id to inspect a particular sandbox build. To replace a build,
+run `tapp build` explicitly first.
+
 If repository onboarding detects multiple application targets, target detection is deterministic but
 the choice is the user's. Explicit `init --explore` asks even when the model has a saved default; a
 later bare `explore` may consume that default. In a human TTY, Tapp displays a numbered selector and

@@ -11,6 +11,31 @@ import { resolveJavaRuntime, storagePreflight } from "../mcp-server/src/environm
 
 const engine = await import("../mcp-server/src/index.js");
 
+test("large simulator and installed-app inventories remain parseable", { skip: process.platform === "win32" }, (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-large-inventory-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  // Hosted macOS runners have enough runtimes/devices to exceed the diagnostic output cap.
+  const devices = Array.from({ length: 1200 }, (_, index) => ({
+    name: `iPhone fixture ${index}`, udid: `device-${index}`, state: index === 1199 ? "Booted" : "Shutdown", isAvailable: true,
+  }));
+  const apps = Object.fromEntries(Array.from({ length: 1200 }, (_, index) => [
+    `com.example.app${index}`, { ApplicationType: "User", CFBundleDisplayName: `App ${index}` },
+  ]));
+  fs.writeFileSync(path.join(dir, "devices.json"), JSON.stringify({ devices: { "com.apple.CoreSimulator.SimRuntime.iOS-26-4": devices } }));
+  fs.writeFileSync(path.join(dir, "apps.json"), JSON.stringify(apps));
+  fs.writeFileSync(path.join(dir, "xcrun"), `#!/usr/bin/env node\nconst fs = require('fs'); process.stdout.write(fs.readFileSync(process.env.TAPP_INVENTORY_FIXTURE + (process.argv.includes('listapps') ? '/apps.json' : '/devices.json')));\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, "plutil"), `#!/usr/bin/env node\nprocess.stdout.write(require('fs').readFileSync(process.argv.at(-1)));\n`, { mode: 0o755 });
+  const script = `const e = await import(${JSON.stringify(new URL("../mcp-server/src/index.js", import.meta.url).href)}); console.log(JSON.stringify({ sim: await e.ensureBootedSim(), apps: await e.listInstalledUserApps() }));`;
+  const result = JSON.parse(execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+    encoding: "utf8", env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}`, TAPP_INVENTORY_FIXTURE: dir },
+  }));
+  assert.equal(result.sim.error, undefined);
+  assert.equal(result.sim.booted.udid, "device-1199");
+  assert.equal(result.apps.error, undefined);
+  assert.equal(result.apps.apps.length, 1200);
+  assert.equal(result.apps.apps.at(-1).bundleId, "com.example.app1199");
+});
+
 test("storage preflight blocks a full evidence volume before it can become a false app crash", () => {
   const result = storagePreflight(process.cwd(), { statfs: () => ({ bavail: 10, bsize: 4096 }) });
   assert.equal(result.ok, false);
@@ -89,6 +114,7 @@ test("engine is import-safe and exports the shared surface", () => {
     "ensureBootedSim",
     "captureScreenshotImage",
     "resolveAppTarget",
+    "resolveInstalledAppTarget",
     "buildAppForSim",
     "installAppOnBootedSim",
     "replacingInstalledBuildNotice",
@@ -118,6 +144,55 @@ test("a build that overwrites an installed app says so, and names the way to avo
   // Nothing to say when there is no id to name.
   assert.equal(engine.replacingInstalledBuildNotice(""), "");
   assert.equal(engine.replacingInstalledBuildNotice(undefined), "");
+});
+
+test("tree resolves an installed app without building the Xcode repository beside it", async (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-inspect-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "App.xcodeproj"));
+  const apps = [{ bundleId: "com.example.sandbox", name: "Sandbox" }];
+  const result = await engine.resolveInstalledAppTarget("", { cwd, listApps: async () => ({ apps }) });
+  assert.equal(result.bundleId, "com.example.sandbox");
+  assert.equal(result.targetResolution.kind, "installed-application");
+  assert.deepEqual(fs.readdirSync(cwd), ["App.xcodeproj"]);
+});
+
+test("tree preserves model intent and reports ambiguous or missing installed targets", async (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-inspect-model-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, ".tapp"));
+  const apps = [{ bundleId: "com.example.staging", name: "Staging" }, { bundleId: "com.example.other", name: "Other" }];
+  const opts = { cwd, listApps: async () => ({ apps }) };
+  const ambiguous = await engine.resolveInstalledAppTarget("", opts);
+  assert.equal(ambiguous.details.reason, "target-selection-required");
+  assert.deepEqual(ambiguous.details.choices.map((choice) => choice.command), ["npx -y @aarwitz/tapp@latest tree com.example.staging", "npx -y @aarwitz/tapp@latest tree com.example.other"]);
+  const model = { kind: "tapp-application-model", application: { defaultTargetId: "staging" }, targets: [
+    { id: "staging", platform: "ios", runtime: { bundleId: "com.example.staging" } },
+    { id: "other", platform: "ios", runtime: { bundleId: "com.example.other" } },
+  ] };
+  const writeModel = () => fs.writeFileSync(path.join(cwd, ".tapp/application-model.json"), JSON.stringify(model));
+  writeModel();
+  assert.equal((await engine.resolveInstalledAppTarget("", opts)).bundleId, "com.example.staging");
+  assert.equal((await engine.resolveInstalledAppTarget(cwd, opts)).bundleId, "com.example.staging");
+  model.targets[0].runtime.bundleId = "com.example.missing";
+  writeModel();
+  assert.match((await engine.resolveInstalledAppTarget("", opts)).error, /not installed/);
+  delete model.application.defaultTargetId;
+  writeModel();
+  assert.equal((await engine.resolveInstalledAppTarget("", { ...opts, listApps: async () => ({ apps: [apps[1]] }) })).details.reason, "target-selection-required");
+  fs.writeFileSync(path.join(cwd, ".tapp/application-model.json"), "broken");
+  assert.match((await engine.resolveInstalledAppTarget("", opts)).error, /Cannot read/);
+});
+
+test("tree never installs an artifact or falls back from a mistyped explicit target", async (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-inspect-artifact-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(cwd, "Sandbox.app"));
+  const opts = { cwd, listApps: async () => ({ apps: [] }), isInstalled: async () => false };
+  assert.match((await engine.resolveInstalledAppTarget("Sandbox.app", opts)).error, /installed app/);
+  assert.match((await engine.resolveInstalledAppTarget("com.example.missing", opts)).error, /not installed/);
+  assert.equal((await engine.resolveInstalledAppTarget("", opts)).details.reason, "app-not-installed");
+  assert.equal((await engine.resolveInstalledAppTarget("com.apple.Preferences", { ...opts, isInstalled: async () => true })).bundleId, "com.apple.Preferences");
 });
 
 test("agent-facing trees omit empty native hierarchy containers but retain actionable controls", () => {

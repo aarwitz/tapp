@@ -56,6 +56,19 @@ test("flow run --actor resolves credentials from configured env-var bindings", (
   assert.match(unset.stderr, /TAPP_TEST_COACH_EMAIL/);
 });
 
+test("iOS Flow launch configuration is validated before starting a harness", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-launch-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const flow = path.join(dir, "smoke.yml");
+  fs.writeFileSync(flow, "name: smoke\nplatform: ios\napp: com.example.app\nsteps:\n  - assert_exists: Home\n");
+  const result = spawnSync(process.execPath, [tappBin, "flow", "run", flow, "--launch-env", "[]"], {
+    encoding: "utf8", env: { ...process.env, TAPP_HOME: path.join(dir, "home") },
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--launch-env must be a JSON object/);
+  assert.doesNotMatch(result.stdout + result.stderr, /Building.*harness|requires macOS/);
+});
+
 test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
   // Core leads with the user journey while keeping contract replay and the gate visible.

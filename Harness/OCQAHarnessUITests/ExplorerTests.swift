@@ -994,6 +994,9 @@ class ExplorerTests: XCTestCase {
         // Per-flow wait default (field issue #20): a splash that prefetches for ~8s makes the
         // fixed 6s wait_for fail on a healthy app. Steps may still override individually.
         let flowDefaultTimeoutMs = (flow["timeoutMs"] as? Int) ?? (flow["timeout"] as? Int) ?? 6000
+        // XCTest runs teardown blocks even when a step aborts unexpectedly. Keep the final
+        // visible frame inspectable for both successful and failing replays (public issue #26).
+        addTeardownBlock { [self] in recordFlowScreenshot(name: "flow-final") }
 
         // Variable substitution: $TEST_EMAIL/$TEST_PASSWORD from creds, plus any OCQA_FLOW_VARS.
         var vars: [String: String] = ["TEST_EMAIL": resolve("OCQA_TEST_EMAIL", fallback: "test@example.com"),
@@ -1121,17 +1124,7 @@ class ExplorerTests: XCTestCase {
                 // Web and Android flows write flow-failure-N.png next to the log; iOS buried the
                 // evidence in the .xcresult, so seeing the failing screen needed a second run
                 // (field issue #8). Write the same file, and keep the XCTest attachment too.
-                let failureShot = app.screenshot()
-                let failureAttachment = XCTAttachment(screenshot: failureShot)
-                failureAttachment.name = "flow_failure_\(idx)"
-                failureAttachment.lifetime = .keepAlways
-                add(failureAttachment)
-                let evidenceDir = resolve("OCQA_FLOW_EVIDENCE_DIR")
-                if !evidenceDir.isEmpty {
-                    let destination = URL(fileURLWithPath: evidenceDir).appendingPathComponent("flow-failure-\(idx).png")
-                    try? FileManager.default.createDirectory(at: URL(fileURLWithPath: evidenceDir), withIntermediateDirectories: true)
-                    try? failureShot.pngRepresentation.write(to: destination)
-                }
+                recordFlowScreenshot(name: "flow-failure-\(idx)")
                 // A failed step surfaces as a finding, with the same shape QA findings use.
                 let screen = detectTitle(readUITree(app)) ?? "Unknown"
                 print("OCQA_ISSUE:{\"type\":\"flow_assertion_failed\",\"severity\":\"high\",\"title\":\"\(escapeJSON("Step \(idx) (\(action)) failed: \(detail)"))\",\"screen\":\"\(escapeJSON(screen))\",\"step\":\(idx)}")
@@ -1141,11 +1134,27 @@ class ExplorerTests: XCTestCase {
             waitForAnimationsToSettle()
         }
 
-        let shot = app.screenshot()
-        let att = XCTAttachment(screenshot: shot); att.name = "flow_final"; att.lifetime = .keepAlways; add(att)
         let contractResult = contractName.isEmpty ? "" : ",\"contract\":\"\(escapeJSON(contractName))\",\"criticality\":\"\(escapeJSON(contractCriticality))\""
         print("OCQA_FLOW_RESULT:{\"passed\":\(failed == 0),\"name\":\"\(escapeJSON(flow["name"] as? String ?? "flow"))\",\"kind\":\"\(escapeJSON(evidenceKind))\"\(contractResult),\"total\":\(steps.count),\"executed\":\(executed),\"failed\":\(failed)}")
         if failed > 0 { XCTFail("Flow had \(failed) failed step(s)") }
+    }
+
+    private func recordFlowScreenshot(name: String) {
+        // Screen capture also works after an app crash and includes system sheets covering it.
+        let shot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: shot)
+        attachment.name = name.replacingOccurrences(of: "-", with: "_")
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let evidenceDir = resolve("OCQA_FLOW_EVIDENCE_DIR")
+        guard !evidenceDir.isEmpty else { return }
+        do {
+            let directory = URL(fileURLWithPath: evidenceDir)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try shot.pngRepresentation.write(to: directory.appendingPathComponent("\(name).png"), options: .atomic)
+        } catch {
+            print("OCQA_EVIDENCE_WARNING:Could not write \(name).png: \(error.localizedDescription); screenshot retained in result.xcresult")
+        }
     }
 
     /// Accepts both sugar (`{ tap: "Sign In" }`) and explicit (`{ action: "tap", target: "Sign In" }`).
@@ -1569,9 +1578,20 @@ class ExplorerTests: XCTestCase {
             return
         }
 
-        // Trigger the interruption monitor on any pending system alerts
-        app.tap()
-        Thread.sleep(forTimeInterval: 0.3)
+        // Dismiss an observed system alert directly. A blind app.tap() here used to press
+        // whichever app control occupied the center BEFORE the first screen was recorded,
+        // so the explorer could then flag its own second tap as unresponsive (issue #27).
+        let startupAlert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        if startupAlert.exists {
+            for label in ["Allow While Using App", "Allow Once", "OK", "Allow", "Don't Allow"] {
+                let button = startupAlert.buttons[label]
+                if button.exists && button.isHittable {
+                    button.tap()
+                    waitForAnimationsToSettle()
+                    break
+                }
+            }
+        }
 
         // Record the TRUE initial screen (e.g. a "Get Started" welcome sheet) before
         // navigateToRootScreen() below auto-dismisses it. Without this, grounding (AI-generate,
@@ -2677,7 +2697,8 @@ class ExplorerTests: XCTestCase {
                 dismissKeyboardIfNeeded()
             }
 
-            let preContentSig = contentSignature(elements)
+            // Compare with the screen immediately before the action, after keyboard dismissal.
+            let preContentSig = contentSignature(readUITree(app))
             let actionDesc = performSmartAction(
                 on: target,
                 in: app,
@@ -2798,8 +2819,8 @@ class ExplorerTests: XCTestCase {
                 // value change) is likely a dead control — exactly the "clicking a button does
                 // nothing" case. We compare a content signature (labels + values) so controls that
                 // only change a value (counters, toggles) are never falsely flagged, exclude
-                // selection/value controls, and require a second confirming read to rule out a
-                // merely-delayed update. NATIVE buttons only (rawValue:9): web buttons/links live
+                // selection/value controls, and observe unchanged controls for a bounded window
+                // to allow asynchronous updates. NATIVE buttons only (rawValue:9): web buttons/links live
                 // inside a WKWebView, whose dynamic DOM changes aren't reliably reflected in the
                 // accessibility tree, so we can't measure their responsiveness this way.
                 let isButton = target.type.contains("rawValue: 9")
@@ -2816,12 +2837,11 @@ class ExplorerTests: XCTestCase {
                     && !isInsideSelectionContainer(target)
                     && !isSystemHandoffControl(humanLabel)
                     && app.state == .runningForeground && !reportedIssueKeys.contains(noOpKey) {
-                    let post1 = readUITree(app)
-                    if !post1.isEmpty, contentSignature(post1) == preContentSig {
-                        // Confirm it's genuinely inert, not just a delayed update.
-                        Thread.sleep(forTimeInterval: 0.6)
-                        let post2 = readUITree(app)
-                        if app.state == .runningForeground, !post2.isEmpty, contentSignature(post2) == preContentSig {
+                    let remaining = timeoutSeconds - (Date().timeIntervalSince(startTime) - totalWaitSeconds)
+                    // A shortened observation is inconclusive, never evidence of a dead control.
+                    if remaining >= 8.0 {
+                        let response = observeControlResponse(previousContent: preContentSig)
+                        if response == .unchanged {
                             reportedIssueKeys.insert(noOpKey)
                             // A dead NAVIGATION control (Back/Close/Done/Cancel) is worse than a dead
                             // feature button: it strands the user on the screen (and strands this
@@ -2832,7 +2852,7 @@ class ExplorerTests: XCTestCase {
                             let issueTitle = isNavControl
                                 ? "Navigation control does nothing: '\(humanLabel)' — users may be stuck on this screen"
                                 : "Control may be unresponsive: '\(humanLabel)'"
-                            let issueDesc = "Tapping '\(humanLabel)' on '\(titleStr)' produced no visible change (no navigation, content, or state change)."
+                            let issueDesc = "Tapping '\(humanLabel)' on '\(titleStr)' produced no observable navigation, content, selection, or enabled-state change within 8 seconds."
                             issues.append((type: "unresponsive_element", severity: sev, title: issueTitle, desc: issueDesc))
                             print("OCQA_ISSUE:{\"type\":\"unresponsive_element\",\"severity\":\"\(sev)\",\"title\":\"\(escapeJSON(issueTitle))\",\"screen\":\"\(escapedTitle)\",\"control\":\"\(escapeJSON(humanLabel))\",\"step\":\(actionCount)}")
                         }
@@ -3326,7 +3346,28 @@ class ExplorerTests: XCTestCase {
     /// text). Used to tell a genuinely dead button ("nothing happened") from one that only changed
     /// a value.
     private func contentSignature(_ elements: [SimpleElement]) -> String {
-        elements.map { "\($0.type)|\($0.identifier)|\($0.label)|\($0.value)" }.sorted().joined(separator: "~")
+        elements.map { "\($0.type)|\($0.identifier)|\($0.label)|\($0.value)|\($0.isSelected)|\($0.isEnabled)" }.sorted().joined(separator: "~")
+    }
+
+    private enum ControlResponse { case changed, unchanged, unobserved }
+
+    /// Stable element counts only establish that animations settled; they say nothing about a
+    /// pending network response. Exit immediately on a semantic change, but require the full
+    /// observation window before reporting a no-op. Missing trees and ongoing loading cannot
+    /// establish that a control is inert.
+    private func observeControlResponse(previousContent: String, timeout: TimeInterval = 8.0) -> ControlResponse {
+        guard !previousContent.isEmpty else { return .unobserved }
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            guard app.state == .runningForeground else { return .unobserved }
+            let current = readUITree(app)
+            guard !current.isEmpty else { return .unobserved }
+            if contentSignature(current) != previousContent { return .changed }
+            if Date() >= deadline {
+                return hasIndeterminateLoadingIndicator() ? .unobserved : .unchanged
+            }
+            Thread.sleep(forTimeInterval: min(0.25, max(0, deadline.timeIntervalSinceNow)))
+        }
     }
 
     /// Machine identifiers sometimes leak into a11y titles — mangled runtime type names

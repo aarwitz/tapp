@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.17.19
+
+- **iOS `tree` preserves the installed app and its data** (#25). Inspection resolves the
+  repository's recorded iOS bundle id or the sole installed app; ambiguous targets produce an
+  explicit choice. It never builds, installs, or uninstalls the app. Use `tapp build` explicitly
+  when a replacement is intended.
+- **iOS Flow evidence includes the final frame** (#26). Both passing and failing replays write
+  `flow-final.png`, and failed steps retain `flow-failure-N.png`. Final capture runs during
+  XCTest teardown so an aborted step can still leave evidence. Write failures are reported,
+  with the XCTest attachment retained as a fallback.
+- **Asynchronous content and selection changes count as a response** (#27). Exploration
+  already compared text and values; it now observes unchanged controls for up to eight seconds
+  and includes selection/enabled state. A missing tree, ongoing loading, or insufficient run
+  budget cannot establish a dead control. Immediate changes return without the extra wait.
+- **Exploration no longer taps the center of the app before recording its launch screen.**
+  That startup tap could activate a working control, then make the explorer's recorded tap look
+  unresponsive. Startup now dismisses only an observed system-alert control.
+- **iOS Flow replay forwards `--launch-arg` and `--launch-env`** to the app, matching exploration.
+- **Large simulator and installed-app inventories remain readable.** Machine-readable command
+  output is preserved through JSON/plist parsing; the diagnostic text limit previously cut
+  large hosted-runner inventories into invalid JSON and blocked CLI inspection/exploration.
+- Simulator regressions cover installed binary/data preservation, immediate and delayed date
+  content, selection-only changes, a genuinely dead button, and passing/failing Flow PNGs.
+
 ## 0.17.18
 
 **`back` never performs an action that isn't a back.** Found by a negative test against a real
