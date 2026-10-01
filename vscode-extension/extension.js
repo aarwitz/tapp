@@ -167,7 +167,7 @@ async function getSaved(bundleId) {
     const raw = await extCtx.secrets.get(`tapp.saved.${bundleId}`);
     return raw ? JSON.parse(raw) : {};
   } catch {
-    return {};
+    throw new Error("Saved credentials could not be read from VS Code SecretStorage. No form was submitted; retry after unlocking storage, or provide credentials or an actor explicitly.");
   }
 }
 
@@ -308,21 +308,37 @@ function activate(ctx) {
 
   registerTool(ctx, "tapp_ios_login", async (input) => {
     const b = getBridge();
+    if (b.opening) await b.opening;
+    if (!b.sessionActive) return textResult(`❌ ${b.sessionError || "No app is open — call tapp_open_ios_app first."}`);
     const bundleId = b.bundleId;
     let email = input.email ? String(input.email) : null;
     let password = input.password ? String(input.password) : null;
     const agentProvided = !!(email && password);
     let usedSaved = false;
+    let actor = input.actor ? String(input.actor) : null;
 
-    // No credentials from the agent → saved values first ("never type it twice"), else
-    // prompt the human directly. Values go straight to the app; the model never sees them.
-    if (!email || !password) {
+    if (!agentProvided && !actor) {
+      const actors = await b.actors();
+      if (actors.length === 1) actor = actors[0];
+      else if (actors.length > 1) {
+        actor = await vscode.window.showQuickPick(actors, { title: "Tapp — choose the actor to sign in as", ignoreFocusOut: true });
+        if (!actor) return textResult("🙅 Actor selection cancelled; no form was submitted.");
+      }
+    }
+    if (actor) {
+      const r = await b.login(email, password, actor);
+      return textResult(r.error ? `❌ ${r.error}` : r.text);
+    }
+
+    // Explicit partial credentials must never be overwritten or paired with an unrelated
+    // saved identity. Named actors take precedence and resolve only in the engine.
+    if (!email && !password) {
       const saved = await getSaved(bundleId);
       if (saved.email && saved.password) {
         email = saved.email;
         password = saved.password;
         usedSaved = true;
-        vscode.window.showInformationMessage(`Tapp: signing in with saved credentials for ${bundleId} (${saved.email}). Run “Tapp: Forget saved values” to clear.`);
+        vscode.window.showInformationMessage(`Tapp: signing in with saved credentials for ${bundleId}. Run “Tapp: Forget saved values” to clear.`);
       }
     }
     if (!email) {

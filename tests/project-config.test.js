@@ -3,7 +3,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { configureActor, credentialBindingsFromValue, readProjectConfig, validateProjectConfig } from "../mcp-server/src/project-config.js";
+import { configureActor, credentialBindingsFromValue, readProjectConfig, resolveActorCredentials, validateProjectConfig } from "../mcp-server/src/project-config.js";
+
+test("actor login resolves environment bindings with explicit overrides and fails before partial credentials escape", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-actor-login-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  configureActor(root, { name: "coach", credentials: { email: { env: "COACH_EMAIL" }, password: { env: "COACH_PASSWORD" } } });
+  const env = { COACH_EMAIL: "coach@example.test", COACH_PASSWORD: "fixture-password" };
+  assert.deepEqual(resolveActorCredentials(root, { actor: "coach", env }), { email: env.COACH_EMAIL, password: env.COACH_PASSWORD });
+  assert.deepEqual(resolveActorCredentials(root, { actor: "coach", email: "explicit@example.test", env }), { email: "explicit@example.test", password: env.COACH_PASSWORD });
+  assert.throws(() => resolveActorCredentials(root, { actor: "coach", env: { COACH_EMAIL: env.COACH_EMAIL } }), /requires \$COACH_PASSWORD/);
+  assert.throws(() => resolveActorCredentials(root, { actor: "missing", env }), /not configured/);
+});
 
 test("project actor configuration stores only secret bindings and never overwrites silently", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-project-config-"));

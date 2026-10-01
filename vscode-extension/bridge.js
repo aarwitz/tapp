@@ -19,7 +19,7 @@ function exec(cmd, args, timeoutMs = 60_000) {
 // caches tag-resolved installs (`@latest` can serve a stale engine forever), and the
 // tool contract (tapp_build shape, target resolution) must match what the bridge expects.
 // Bump together with the extension version. TAPP_ENGINE_SPEC overrides for development.
-const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.19";
+const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.20";
 
 class TappBridge {
   constructor({ cwd, command, args } = {}) {
@@ -29,10 +29,30 @@ class TappBridge {
     this.client = null;
     this.sessionActive = false;
     this.bundleId = null;
+    this.connecting = null;
+    this.opening = null;
+    this.callQueue = Promise.resolve();
+    this.sessionError = null;
   }
 
   async ensure() {
     if (this.client) return this.client;
+    if (!this.connecting) {
+      this.connecting = this.connectClient().then((client) => {
+        this.client = client;
+        client.onclose = () => {
+          if (this.client !== client) return;
+          this.client = null;
+          this.sessionActive = false;
+          this.sessionError = "The Tapp engine connection closed; reopen the app with tapp_open_ios_app to start a new session.";
+        };
+        return client;
+      }).finally(() => { this.connecting = null; });
+    }
+    return this.connecting;
+  }
+
+  async connectClient() {
     const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
     const { StdioClientTransport } = await import("@modelcontextprotocol/sdk/client/stdio.js");
     const transport = new StdioClientTransport({
@@ -44,13 +64,18 @@ class TappBridge {
     });
     const client = new Client({ name: "tapp-vscode", version: "0.1.0" });
     await client.connect(transport);
-    this.client = client;
     return client;
   }
 
   async call(name, args = {}, timeoutMs = 10 * 60 * 1000) {
-    const client = await this.ensure();
-    return client.callTool({ name, arguments: args }, undefined, { timeout: timeoutMs });
+    // The native session has one command/ack channel. Concurrent tool invocations must
+    // share one engine and reach it in order instead of overwriting each other's command.
+    const pending = this.callQueue.then(async () => {
+      const client = await this.ensure();
+      return client.callTool({ name, arguments: args }, undefined, { timeout: timeoutMs });
+    });
+    this.callQueue = pending.catch(() => {});
+    return pending;
   }
 
   textOf(res) {
@@ -109,6 +134,13 @@ class TappBridge {
   }
 
   async openTarget(target, workspaceDir, focus) {
+    if (this.opening) return { error: "An app is already opening; wait for that call to finish." };
+    this.opening = this.startTarget(target, workspaceDir, focus);
+    try { return await this.opening; }
+    finally { this.opening = null; }
+  }
+
+  async startTarget(target, workspaceDir, focus) {
     const r = await this.resolveBundleId(target, workspaceDir);
     if (r.error) return { error: r.error };
     if (this.sessionActive) {
@@ -123,13 +155,15 @@ class TappBridge {
     const s = await this.call("tapp_session_start", sessionArgs, 5 * 60 * 1000);
     if (this.isError(s)) return { error: this.textOf(s) };
     this.sessionActive = true;
+    this.sessionError = null;
     this.bundleId = r.bundleId;
     return { text: this.textOf(s), bundleId: r.bundleId };
   }
 
   async act(cmd) {
-    if (!this.sessionActive) return { error: "No app is open — call tapp_open_ios_app first." };
-    const res = await this.call("tapp_session_act", cmd, 2 * 60 * 1000);
+    if (this.opening) await this.opening;
+    if (!this.sessionActive) return { error: this.sessionError || "No app is open — call tapp_open_ios_app first." };
+    const res = await this.call("tapp_session_act", cmd, cmd.action === "login" ? 4 * 60 * 1000 : 2 * 60 * 1000);
     if (this.isError(res)) return { error: this.textOf(res) };
     return { text: this.textOf(res) };
   }
@@ -145,8 +179,14 @@ class TappBridge {
     return this.act({ action: "tree" });
   }
 
-  async login(email, password) {
-    return this.act({ action: "login", email, password });
+  async login(email, password, actor) {
+    return this.act({ action: "login", ...(email ? { email } : {}), ...(password ? { password } : {}), ...(actor ? { actor } : {}) });
+  }
+
+  async actors() {
+    const res = await this.call("tapp_actor_config", { operation: "read" });
+    if (this.isError(res)) throw new Error(this.textOf(res));
+    return Object.keys(res.structuredContent?.actors || {});
   }
 
   async screenshot() {
@@ -252,6 +292,7 @@ class TappBridge {
       try { await this.client.close(); } catch { /* shutting down */ }
       this.client = null;
     }
+    this.sessionActive = false;
   }
 }
 

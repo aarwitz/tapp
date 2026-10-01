@@ -24,19 +24,13 @@ APP="${2:-}"
 
 UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((x["udid"] for v in d["devices"].values() for x in v if x.get("state")=="Booted"), ""))')"
 [ -z "$UDID" ] && { echo "❌ No booted simulator."; exit 2; }
-# When run through the installed `tapp` CLI, the harness cache lives under TAPP_HOME.
-XCTR=""
-TAPP_RUNTIME_HOME="${TAPP_HOME:-}"
-[ -n "$TAPP_RUNTIME_HOME" ] && XCTR="$(find "$TAPP_RUNTIME_HOME/harness-derived/Build/Products" -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && XCTR="$(find "$HOME/Library/Developer/Xcode/DerivedData/OCQAHarness-"*/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && XCTR="$(find /tmp/tapp-harness-derived/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && XCTR="$(find /tmp/harness-build/Build/Products -name '*.xctestrun' 2>/dev/null | head -1)"
-[ -z "$XCTR" ] && { echo "❌ Harness not built. Run: tapp install"; exit 2; }
+# CLI, MCP, sessions, and doctor share the same source/toolchain-validated descriptor.
+XCTR="$(bash "$ROOT/scripts/quick-capture.sh" prepare-harness)" || exit 2
 
 NAME="$(python3 -c "import sys,json;print(json.loads(sys.argv[1]).get('name','flow'))" "$FLOW_JSON")"
 echo "▶️  Running flow \"$NAME\" against $APP …"
 
-TOKEN="$(date +%s)"
+TOKEN="$$-$(date +%s)"
 CFG="/tmp/ocqa-flow-$TOKEN.json"
 AI_RESP="/tmp/ocqa-flow-ai-$TOKEN.json"
 AI_DIR="/tmp/ocqa-flow-ai-$TOKEN"
@@ -83,10 +77,15 @@ if [ "$?" -ne 0 ]; then
 fi
 
 LOG="${FLOW_LOG:-/tmp/ocqa-flow-$TOKEN.log}"
+python3 - "$FLOW_JSON" > "$LOG" <<'PY'
+import json, sys
+flow = json.loads(sys.argv[1])
+print("OCQA_FLOW_PLAN:" + json.dumps({"name": flow.get("name", "flow"), "total": len(flow.get("steps", []))}))
+PY
 # assert_ai judge sidecar (only when a key is present) — same file-channel as vision escalation.
 RESPONDER_PID=""
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-  mkdir -p "$AI_DIR"; : > "$LOG"
+  mkdir -p "$AI_DIR"
   python3 "$ROOT/scripts/flow_ai_judge.py" "$LOG" "$AI_RESP" > "/tmp/ocqa-flow-judge-$TOKEN.log" 2>&1 &
   RESPONDER_PID=$!
 fi
@@ -94,10 +93,17 @@ fi
 TEST_RUNNER_OCQA_CONFIG_PATH="$CFG" xcodebuild test-without-building \
   -xctestrun "$XCTR" -destination "platform=iOS Simulator,id=$UDID" \
   -only-testing:"OCQAHarnessUITests/ExplorerTests/testReplayFlow" \
-  -resultBundlePath "$RESULT_BUNDLE" > "$LOG" 2>&1
+  -resultBundlePath "$RESULT_BUNDLE" >> "$LOG" 2>&1
+XCODE_STATUS=$?
 [ -n "$RESPONDER_PID" ] && { kill "$RESPONDER_PID" 2>/dev/null; wait "$RESPONDER_PID" 2>/dev/null; }
 
 cp "$LOG" "$EVIDENCE_DIR/flow.log"
+# XCTest can put the actionable failure only in the result bundle. Keep that summary
+# beside the log so both the CLI and MCP report readers surface it before generic status.
+if [ "$XCODE_STATUS" -ne 0 ] && [ -d "$RESULT_BUNDLE" ]; then
+  xcrun xcresulttool get test-results summary --path "$RESULT_BUNDLE" > "$EVIDENCE_DIR/xctest-summary.json" 2> "$EVIDENCE_DIR/xcresulttool.log" || true
+  cp "$EVIDENCE_DIR/xctest-summary.json" "$LOG.xctest-summary.json"
+fi
 grep '^OCQA_EVIDENCE_WARNING:' "$LOG" >&2 || true
 python3 "$ROOT/scripts/flow_lib.py" report --json "$LOG" > "$EVIDENCE_DIR/flow-report.json"
 echo ""

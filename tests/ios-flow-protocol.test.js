@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const source = fs.readFileSync("Harness/OCQAHarnessUITests/ExplorerTests.swift", "utf8");
 const cliSource = fs.readFileSync("bin/tapp.js", "utf8");
@@ -11,6 +14,73 @@ const hasDemoSettingsSource = fs.existsSync(demoSettingsPath);
 const demoSettingsSource = hasDemoSettingsSource ? fs.readFileSync(demoSettingsPath, "utf8") : "";
 const runFlowSource = fs.readFileSync("scripts/run-flow.sh", "utf8");
 const quickCaptureSource = fs.readFileSync("scripts/quick-capture.sh", "utf8");
+
+test("SDK/runtime mismatch uses one validated descriptor and preserves pre-step XCTest diagnostics", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-harness-cache-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const bin = path.join(dir, "bin");
+  fs.mkdirSync(bin);
+  const writeTool = (name, code) => fs.writeFileSync(path.join(bin, name), `#!/usr/bin/env node\n${code}`, { mode: 0o755 });
+  writeTool("xcode-select", 'console.log("/Fake/Xcode.app/Contents/Developer")');
+  writeTool("xcrun", `
+const args = process.argv.slice(2);
+if (args.includes('--show-sdk-version')) console.log('27.0');
+else if (args[0] === 'xcresulttool') console.log(JSON.stringify({ testFailures:[{ failureText:'Failed to launch: fixture executable is missing' }] }));
+else console.log(JSON.stringify({devices:{'com.apple.CoreSimulator.SimRuntime.iOS-26-5':[{udid:'FIXTURE-SIM',name:'iPhone fixture',state:'Booted'}]}}));
+`);
+  writeTool("xcodebuild", `
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(2);
+if (args[0] === '-version') { console.log('Xcode 27.0\\nBuild version ' + (process.env.FAKE_XCODE_BUILD || 'A')); process.exit(0); }
+fs.appendFileSync(path.join(process.env.TAPP_HOME,'calls.jsonl'), JSON.stringify(args)+'\\n');
+if (args[0] === 'build-for-testing') {
+  if (process.env.FAKE_BUILD_FAIL) process.exit(65);
+  fs.writeFileSync(path.join(process.env.TAPP_HOME,'harness-derived/Build/Products/Harness_iphonesimulator27.0.xctestrun'),'built with SDK 27.0');
+} else {
+  fs.mkdirSync(args[args.indexOf('-resultBundlePath')+1], {recursive:true});
+  console.log("Test Case '-[ExplorerTests testReplayFlow]' failed (7.397 seconds)");
+  console.log('error: Concrete launch failure from raw XCTest output');
+  process.exit(65);
+}
+`);
+  const products = path.join(dir, "harness-derived/Build/Products");
+  fs.mkdirSync(products, { recursive: true });
+  fs.writeFileSync(path.join(products, "Old_iphonesimulator26.5.xctestrun"), "stale");
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, TAPP_HOME: dir };
+  const capture = (mode, extra = {}) => spawnSync("bash", ["scripts/quick-capture.sh", mode], { encoding: "utf8", env: { ...env, ...extra } });
+  const ready = capture("prepare-harness");
+  assert.equal(ready.status, 0, ready.stderr);
+  const selected = path.join(products, "Harness_iphonesimulator27.0.xctestrun");
+  assert.equal(ready.stdout.trim(), selected);
+  assert.deepEqual(fs.readdirSync(products), [path.basename(selected)]);
+  assert.equal(capture("harness-path").stdout.trim(), selected, "doctor and runner select the same SDK descriptor on OS 26.5");
+  assert.equal(capture("prepare-harness").stdout.trim(), selected);
+  const calls = () => fs.readFileSync(path.join(dir, "calls.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(calls().length, 1, "warm compatible cache avoids a rebuild");
+  assert.equal(capture("harness-path", { FAKE_XCODE_BUILD: "B" }).status, 1, "Xcode upgrade invalidates cache");
+  assert.equal(capture("prepare-harness", { FAKE_XCODE_BUILD: "B" }).status, 0);
+  assert.equal(calls().length, 2);
+
+  const flow = path.join(dir, "startup.json");
+  fs.writeFileSync(flow, JSON.stringify({ name: "startup", platform: "ios", app: "test.app", steps: Array.from({ length: 15 }, () => ({ wait_for: "Email" })) }));
+  const evidence = path.join(dir, "evidence");
+  const log = path.join(dir, "flow.log");
+  const replay = spawnSync("bash", ["scripts/run-flow.sh", flow], { encoding: "utf8", env: { ...env, FAKE_XCODE_BUILD: "B", FLOW_LOG: log, TAPP_FLOW_EVIDENCE_DIR: evidence } });
+  assert.equal(replay.status, 1, replay.stderr);
+  assert.match(replay.stdout, /0\/15 executed/);
+  assert.match(replay.stdout, /fixture executable is missing/);
+  const command = calls().at(-1);
+  assert.equal(command[command.indexOf("-xctestrun") + 1], selected);
+  const report = JSON.parse(fs.readFileSync(path.join(evidence, "flow-report.json"), "utf8"));
+  assert.equal(report.total, 15);
+  assert.equal(report.executed, 0);
+  assert.match(report.abortReason, /fixture executable is missing/);
+  fs.rmSync(log + ".xctest-summary.json");
+  const fallback = spawnSync("python3", ["scripts/flow_lib.py", "report", "--json", log], { encoding: "utf8" });
+  assert.match(JSON.parse(fallback.stdout).abortReason, /Concrete launch failure/, "generic Test Case failed never masks a specific log error");
+  assert.notEqual(capture("prepare-harness", { FAKE_XCODE_BUILD: "C", FAKE_BUILD_FAIL: "1" }).status, 0);
+  assert.equal(capture("harness-path", { FAKE_XCODE_BUILD: "C" }).status, 1, "failed rebuild cannot reuse a stale descriptor");
+});
 
 test("iOS Flow normalization ignores compiler metadata instead of executing it", () => {
   const normalizer = source.match(/private func normalizeFlowStep[\s\S]*?\n    }\n\n    private func pollUntil/)?.[0] || "";
@@ -24,8 +94,7 @@ test("iOS Flow evidence preserves reusable Task provenance", () => {
 });
 
 test("iOS Flow replay refreshes a stale harness cache before execution", () => {
-  const flowCommand = cliSource.match(/case "flow":[\s\S]*?case "scenario":/)?.[0] || "";
-  assert.match(flowCommand, /ensureIOSHarness\(\)/);
+  assert.match(runFlowSource, /quick-capture\.sh" prepare-harness/);
 });
 
 test("iOS session and Flow login share one cold-launch-tolerant field finder", () => {

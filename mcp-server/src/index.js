@@ -649,6 +649,18 @@ export async function resolveAppTarget(input, { cwd = process.cwd(), onStatus = 
 let activeSession = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+export function sessionFailureReason(log = "", credentials = {}) {
+  for (const pattern of [/Failed to get matching snapshot:[^\n]*/, /Failed to synthesize event:[^\n]*/, /error:\s*[^\n]+/, /Error Domain=[^\n]+/, /Test Case '[^']*' failed[^\n]*/]) {
+    const match = String(log).match(pattern);
+    if (match) {
+      let message = match[0].trim();
+      for (const secret of Object.values(credentials).filter((value) => typeof value === "string" && value)) message = message.split(secret).join("[redacted]");
+      return message.slice(0, 1200);
+    }
+  }
+  return "The XCTest session process exited; reopen the app to start a new session.";
+}
+
 function consumeSessionStdout(chunk) {
   if (!activeSession) return;
   activeSession.buffer += chunk;
@@ -765,9 +777,9 @@ async function startSession(bundleId, extraEnv = {}) {
   while (!activeSession.ready && Date.now() < deadline && !activeSession.ended) await sleep(300);
   if (activeSession.ended) {
     // Surface the real failure from the harness output instead of a shrug.
-    const errLine = ((activeSession.buffer || "").match(/error:\s*([^\n]+)/) || [])[1];
+    const errLine = sessionFailureReason(activeSession.buffer, activeSession.creds);
     activeSession = null;
-    return { error: `Session process exited before it became ready${errLine ? ` — ${errLine.trim()}` : " (build/launch failed?)."}` };
+    return { error: `Session process exited before it became ready — ${errLine}` };
   }
   if (!activeSession.ready) { return { error: "Session did not become ready within the time limit." }; }
 
@@ -1014,9 +1026,14 @@ export function sessionActUsageError(cmd = {}) {
 async function sessionAct(cmd) {
   const startedAt = Date.now();
   const done = (result) => ({ ...result, durationMs: Date.now() - startedAt });
-  if (!activeSession || activeSession.ended) return done({ error: "No active session. Call tapp_session_start first." });
+  if (!activeSession) return done({ error: "No active session. Call tapp_session_start first." });
+  if (activeSession.ended) return done({ error: sessionFailureReason(activeSession.buffer, activeSession.creds) });
   const usage = sessionActUsageError(cmd);
   if (usage) return done({ status: "usage", detail: usage, ...treeSnapshot(), recordedSteps: activeSession.recording.length });
+  if (cmd.action === "login") {
+    if (cmd.email) activeSession.creds.email = cmd.email;
+    if (cmd.password) activeSession.creds.password = cmd.password;
+  }
   let coordinateResolvedTarget = "";
   if (cmd.action === "tap" && !cmd.id && Number.isFinite(cmd.x) && Number.isFinite(cmd.y)) {
     coordinateResolvedTarget = semanticTargetAtPoint(activeSession.latestTree?.elements, cmd.x, cmd.y);
@@ -1176,6 +1193,10 @@ async function sessionAct(cmd) {
   const td = Date.now() + 5_000;
   while (activeSession.treeVersion === beforeVer && Date.now() < td && !activeSession.ended) await sleep(150);
   const snap = treeSnapshot();
+  if (status === "timeout" && activeSession.ended) {
+    status = "harness_failed";
+    detail = sessionFailureReason(activeSession.buffer, activeSession.creds);
+  }
   if (status === "ok") recordStep(cmd, snap); // record only successful acts
   return done({ status, typedInto, detail, ...snap, recordedSteps: activeSession ? activeSession.recording.length : 0, ...(coordinateResolvedTarget ? { coordinateResolvedTarget } : {}) });
 }
@@ -3272,6 +3293,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           action: { type: "string", enum: ["login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot"] },
           email: { type: "string", description: "login: email/username to sign in with" },
           password: { type: "string", description: "login: password to sign in with" },
+          actor: { type: "string", description: "login: configured actor; explicit email/password override its environment bindings" },
           id: { type: "string", description: "Element accessibility id or visible/partial label (for tap/type/wait)" },
           x: { type: "number", description: "Tap X coordinate (points), if not using id" },
           y: { type: "number", description: "Tap Y coordinate (points), if not using id" },
@@ -4585,6 +4607,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (action === "login") {
       if (isNonEmptyString(args.email)) cmd.email = args.email.trim();
       if (isNonEmptyString(args.password)) cmd.password = args.password;
+      if (isNonEmptyString(args.actor)) {
+        try {
+          const { resolveActorCredentials } = await import("./project-config.js");
+          Object.assign(cmd, resolveActorCredentials(workspaceRoot, { actor: args.actor.trim(), email: cmd.email, password: cmd.password }));
+        } catch (error) { return errorResult(error.message); }
+      }
     }
     if (action === "wait") cmd.timeoutMs = Math.max(500, Math.min(60_000, asInteger(args.timeoutMs, 5000)));
     const r = await sessionAct(cmd);

@@ -1,4 +1,67 @@
 import SwiftUI
+import UIKit
+
+// Deterministic fixture for prefilled credentials and a cursor placed mid-value (#28).
+struct LoginResponseFixture: View {
+    @State private var email = "a.previously.saved.address.with.a.long.suffix@example.test"
+    @State private var password = "previous-password"
+    @State private var signedIn = false
+    @State private var failed = false
+
+    private func submit() {
+        signedIn = email == "qa@tapp.test" && password == "test-secret"
+        failed = !signedIn
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            if signedIn {
+                Text("Authenticated fixture").accessibilityIdentifier("login-success")
+            } else {
+                Text("Prefilled sign in").font(.title)
+                MidCursorEmailField(text: $email).frame(height: 44)
+                SecureField("Password", text: $password)
+                    .accessibilityIdentifier("Password")
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(submit)
+                Button("Sign In", action: submit)
+                if failed { Text("Invalid fixture credentials").accessibilityIdentifier("login-failed") }
+            }
+        }.padding(30)
+    }
+}
+
+private struct MidCursorEmailField: UIViewRepresentable {
+    @Binding var text: String
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.placeholder = "Email"
+        field.accessibilityIdentifier = "Email"
+        field.borderStyle = .roundedRect
+        field.autocapitalizationType = .none
+        field.autocorrectionType = .no
+        field.delegate = context.coordinator
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        return field
+    }
+    func updateUIView(_ field: UITextField, context: Context) {
+        context.coordinator.parent = self
+        if field.text != text { field.text = text }
+    }
+    class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: MidCursorEmailField
+        init(_ parent: MidCursorEmailField) { self.parent = parent }
+        @objc func changed(_ field: UITextField) { parent.text = field.text ?? "" }
+        func textFieldDidBeginEditing(_ field: UITextField) {
+            DispatchQueue.main.async {
+                if let middle = field.position(from: field.beginningOfDocument, offset: (field.text?.utf16.count ?? 0) / 2) {
+                    field.selectedTextRange = field.textRange(from: middle, to: middle)
+                }
+            }
+        }
+    }
+}
 
 /// One date control with a stable tree shape. The launch environment selects the observable
 /// response so exploration can distinguish content/selection changes from a truly inert button.

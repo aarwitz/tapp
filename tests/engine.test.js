@@ -11,6 +11,13 @@ import { resolveJavaRuntime, storagePreflight } from "../mcp-server/src/environm
 
 const engine = await import("../mcp-server/src/index.js");
 
+test("an ended native session surfaces its XCTest cause instead of a missing-session or timeout summary", () => {
+  const log = "error: Failed to get matching snapshot: No matches found for NavigationBar\nTest Case '-[ExplorerTests testInteractiveSession]' failed (7.397 seconds)";
+  assert.equal(engine.sessionFailureReason(log), "Failed to get matching snapshot: No matches found for NavigationBar");
+  assert.match(engine.sessionFailureReason(""), /process exited/);
+  assert.equal(engine.sessionFailureReason("error: Snapshot contained qa@example.test", { email: "qa@example.test" }), "error: Snapshot contained [redacted]");
+});
+
 test("large simulator and installed-app inventories remain parseable", { skip: process.platform === "win32" }, (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-large-inventory-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

@@ -1,4 +1,4 @@
-// Real simulator regressions for public issues #25–#27. DemoApp must already be built and
+// Real simulator regressions for public issues #25–#28. DemoApp must already be built and
 // installed; CI's iOS Action does that first. Run locally with TAPP_RUN_IOS_REGRESSIONS=1.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -8,6 +8,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const { TappBridge } = createRequire(import.meta.url)("../vscode-extension/bridge.js");
 
 const enabled = process.platform === "darwin" && process.env.TAPP_RUN_IOS_REGRESSIONS === "1";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,10 +34,54 @@ function container(kind) {
   return result.stdout.trim();
 }
 
-test("installed inspection, content response, and flow evidence on iOS", { skip: !enabled, timeout: 900_000 }, async (t) => {
+test("iOS login, installed inspection, content response, and flow evidence", { skip: !enabled, timeout: 900_000 }, async (t) => {
   fs.mkdirSync(path.join(tappHome, "captures"), { recursive: true });
   evidence = fs.mkdtempSync(path.join(tappHome, "captures", "ios-issue-regressions-"));
   console.log(`iOS regression evidence: ${evidence}`);
+
+  await t.test("extension open then login replaces prefilled credentials on a screen without a navigation bar", async () => {
+    const previous = process.env.OCQA_APP_LAUNCH_ENV_JSON;
+    process.env.OCQA_APP_LAUNCH_ENV_JSON = JSON.stringify({ TAPP_DEMO_LOGIN_CASE: "prefilled" });
+    const bridge = new TappBridge({ cwd: root, command: process.execPath, args: [cli, "mcp"] });
+    try {
+      const opening = bridge.openTarget(app, root);
+      const login = bridge.login("qa@tapp.test", "test-secret");
+      const [opened, signedIn] = await Promise.all([opening, login]);
+      fs.writeFileSync(path.join(evidence, "interactive-login.json"), JSON.stringify({ opened, signedIn }, null, 2));
+      assert.equal(opened.error, undefined, opened.error);
+      assert.match(opened.text, /Prefilled sign in/);
+      assert.equal(signedIn.error, undefined, signedIn.error);
+      assert.match(signedIn.text, /Authenticated fixture/);
+      const screenshot = await bridge.screenshot();
+      assert.ok(screenshot.image, screenshot.error);
+      fs.writeFileSync(path.join(evidence, "interactive-login.jpg"), screenshot.image.data);
+    } finally {
+      await bridge.dispose();
+      if (previous === undefined) delete process.env.OCQA_APP_LAUNCH_ENV_JSON;
+      else process.env.OCQA_APP_LAUNCH_ENV_JSON = previous;
+    }
+  });
+
+  await t.test("actor Flow runs from the first wait through login on a screen without a navigation bar", () => {
+    const cwd = path.join(evidence, "login-repository");
+    fs.mkdirSync(path.join(cwd, ".tapp"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".tapp/project.json"), JSON.stringify({ kind: "tapp-project-config", schemaVersion: 1,
+      actors: { coach: { credentials: { email: { env: "TAPP_FIXTURE_EMAIL" }, password: { env: "TAPP_FIXTURE_PASSWORD" } } } } }));
+    const flow = path.join(cwd, "login.json");
+    fs.writeFileSync(flow, JSON.stringify({ name: "prefilled-login", platform: "ios", app, steps: [
+      { wait_for: "Email" }, { login: {} }, { assert_exists: "Authenticated fixture" },
+    ] }));
+    const prior = { email: process.env.TAPP_FIXTURE_EMAIL, password: process.env.TAPP_FIXTURE_PASSWORD };
+    process.env.TAPP_FIXTURE_EMAIL = "qa@tapp.test";
+    process.env.TAPP_FIXTURE_PASSWORD = "test-secret";
+    try {
+      const result = run(["flow", "run", flow, "--actor", "coach", "--launch-env", JSON.stringify({ TAPP_DEMO_LOGIN_CASE: "prefilled" })], { cwd, name: "actor-login-flow" });
+      assert.match(result.stdout, /3\/3 steps/);
+    } finally {
+      if (prior.email === undefined) delete process.env.TAPP_FIXTURE_EMAIL; else process.env.TAPP_FIXTURE_EMAIL = prior.email;
+      if (prior.password === undefined) delete process.env.TAPP_FIXTURE_PASSWORD; else process.env.TAPP_FIXTURE_PASSWORD = prior.password;
+    }
+  });
 
   await t.test("bare tree in an Xcode repository preserves the installed binary and app data", () => {
     const cwd = path.join(evidence, "repository");

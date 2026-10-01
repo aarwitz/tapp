@@ -2,7 +2,7 @@
   "name": "tapp",
   "displayName": "Tapp",
   "description": "The Tapp Agent Skill for iOS, Android, and web, plus Copilot tools and an auto-refreshing iOS simulator preview.",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "publisher": "lidi-solutions",
   "icon": "media/tapp-icon.png",
   "license": "MIT",
@@ -114,8 +114,8 @@
         "toolReferenceName": "iosLogin",
         "canBeReferencedInPrompt": true,
         "icon": "$(key)",
-        "userDescription": "Sign in — prompts you for credentials if the agent doesn't have them",
-        "modelDescription": "Sign in to the open iOS app IN ONE CALL: finds the email + password fields, fills both, submits, and verifies — with all keyboard/secure-field handling done internally. ALWAYS use this for login instead of type/tap sequences (iOS wipes secure fields when editing re-begins). `email`/`password` are OPTIONAL: omit them when you don't know the credentials and tapp will prompt the user directly in VS Code — the values go straight to the app and are never shown to you. Requires tapp_open_ios_app first. On failure, the result includes the on-screen error text.",
+        "userDescription": "Sign in \u2014 prompts you for credentials if the agent doesn't have them",
+        "modelDescription": "Sign in to the open iOS app IN ONE CALL: finds the email + password fields, fills both, submits, and verifies \u2014 with all keyboard/secure-field handling done internally. ALWAYS use this for login instead of type/tap sequences (iOS wipes secure fields when editing re-begins). `email`/`password` are OPTIONAL: omit them when you don't know the credentials and tapp will prompt the user directly in VS Code \u2014 the values go straight to the app and are never shown to you. Requires tapp_open_ios_app first. On failure, the result includes the on-screen error text. Pass actor to use repository actor environment bindings. When omitted without complete credentials, the sole configured actor is used, or the user chooses among multiple actors. Saved values are used only when no actor and no explicit credential are supplied.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -126,6 +126,10 @@
             "password": {
               "type": "string",
               "description": "Password to sign in with"
+            },
+            "actor": {
+              "type": "string",
+              "description": "Configured test actor from .tapp/project.json; environment bindings take precedence over saved Keychain values. Explicit credentials override actor bindings."
             }
           },
           "required": []
@@ -138,7 +142,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(comment-discussion)",
         "userDescription": "Prompts you for a value and types it into the app",
-        "modelDescription": "Fill a field in the open iOS app with a value provided BY THE USER: VS Code prompts them directly, waits for their answer, and types it into the field — the value never passes through you. Use this whenever the app shows a field whose real value only the user knows (verification codes, search terms, personal data, any credential-like input). `id` is the field's accessibility id, label, or placeholder from the tree; `prompt` is what to ask the user; set `secure` for passwords/codes (masked input). Requires tapp_open_ios_app first.",
+        "modelDescription": "Fill a field in the open iOS app with a value provided BY THE USER: VS Code prompts them directly, waits for their answer, and types it into the field \u2014 the value never passes through you. Use this whenever the app shows a field whose real value only the user knows (verification codes, search terms, personal data, any credential-like input). `id` is the field's accessibility id, label, or placeholder from the tree; `prompt` is what to ask the user; set `secure` for passwords/codes (masked input). Requires tapp_open_ios_app first.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -193,7 +197,7 @@
         "canBeReferencedInPrompt": true,
         "icon": "$(hand-pointing)",
         "userDescription": "Tap a control in the open iOS app",
-        "modelDescription": "Tap an element in the open iOS app by accessibility id or visible label (case-insensitive contains match as fallback), and get the resulting screen back. Read the previous result's elements before tapping — never tap from memory. Requires tapp_open_ios_app first.",
+        "modelDescription": "Tap an element in the open iOS app by accessibility id or visible label (case-insensitive contains match as fallback), and get the resulting screen back. Read the previous result's elements before tapping \u2014 never tap from memory. Requires tapp_open_ios_app first.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -238,7 +242,7 @@
         "toolReferenceName": "exploreIosApp",
         "canBeReferencedInPrompt": true,
         "icon": "$(beaker)",
-        "userDescription": "Autonomous iOS exploration → findings, coverage, and evidence",
+        "userDescription": "Autonomous iOS exploration \u2192 findings, coverage, and evidence",
         "modelDescription": "Explore the iOS app like a user with no authored test and return an observation: deterministic/advisory findings, coverage, an evidence page, screenshots, and a full exploration recording. Takes a few minutes. `target` is optional (same resolution as tapp_open_ios_app). Exploration is not a release gate and returns no score or ship verdict. Report inconclusive coverage and the checked/not-checked scope honestly; use the Tapp CI gate for a merge decision.",
         "inputSchema": {
           "type": "object",

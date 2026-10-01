@@ -102,13 +102,8 @@ function bootBestSimulator(preferredName = "iPhone 16 Pro") {
 }
 
 function harnessXctestrun() {
-  const dir = path.join(tappHome, "harness-derived", "Build", "Products");
-  try {
-    const found = fs.readdirSync(dir).find((f) => f.endsWith(".xctestrun"));
-    return found ? path.join(dir, found) : null;
-  } catch {
-    return null;
-  }
+  const result = run("bash", [path.join(packageRoot, "scripts/quick-capture.sh"), "harness-path"]);
+  return result.code === 0 && result.stdout ? result.stdout : null;
 }
 
 // Flags/positionals for the zero-config verbs (qa/open/tree/shot). `--key value` or bare `--key`.
@@ -170,17 +165,6 @@ function requireMacFor(what) {
   if (process.platform === "darwin") return;
   console.error(`❌ ${what} requires macOS (Xcode + iOS simulator). The web beta runs anywhere: npx -y @aarwitz/tapp@latest explore https://localhost:3000`);
   process.exit(1);
-}
-
-function ensureIOSHarness() {
-  const result = spawnSync("bash", [path.join(packageRoot, "scripts", "quick-capture.sh"), "build-harness"], {
-    stdio: "inherit",
-    env: process.env,
-  });
-  if ((result.status ?? 1) !== 0) {
-    console.error("❌ Could not prepare the iOS test harness.");
-    process.exit(result.status ?? 1);
-  }
 }
 
 function requestedPlatform(flags, target = "") {
@@ -1291,7 +1275,6 @@ switch (command) {
       invocation = [process.execPath, [path.join(packageRoot, "scripts", "run-android-flow.js"), absolute, target.appId, target.apkPath || "", target.serial || ""]];
     } else {
       requireMacFor("iOS Flow replay");
-      ensureIOSHarness();
       invocation = ["bash", [path.join(packageRoot, "scripts", "run-flow.sh"), absolute, typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : flow.app || ""]];
     }
     const result = spawnSync(invocation[0], invocation[1], { stdio: "inherit", env });

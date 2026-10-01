@@ -67,44 +67,58 @@ cleanup_stale_recorders() {
   sleep 1
 }
 
+harness_fingerprint() {
+  # SDK names in .xctestrun filenames describe the BUILD SDK, not the simulator OS.
+  # Record the source/project and selected toolchain, then reuse the exact build product.
+  {
+    find "$(dirname "$HARNESS_PROJECT")" -type f \( -name '*.swift' -o -name project.pbxproj -o -name '*.xcscheme' -o -name '*.plist' \) -print0 \
+      | sort -z | xargs -0 shasum
+    xcode-select -p
+    xcodebuild -version
+    xcrun --sdk iphonesimulator --show-sdk-version
+  } | shasum | cut -c1-40
+}
+
+cached_harness_path() {
+  local marker="$HARNESS_DERIVED/.last-sim-udid"
+  [[ -f "$marker" ]] || return 1
+  [[ "$(sed -n 1p "$marker")" == "$UDID" ]] || return 1
+  [[ "$(sed -n 2p "$marker")" == "$(harness_fingerprint)" ]] || return 1
+  local selected="$(sed -n 3p "$marker")"
+  [[ -n "$selected" && "$selected" != */* && "$selected" == *.xctestrun ]] || return 1
+  [[ -f "$HARNESS_DERIVED/Build/Products/$selected" ]] || return 1
+  printf '%s\n' "$HARNESS_DERIVED/Build/Products/$selected"
+}
+
 ensure_harness_built() {
   local sim_name="${1:-iPhone 16 Pro}"
   local udid="${UDID:-}"
   local marker="$HARNESS_DERIVED/.last-sim-udid"
-  local last_udid="" last_fp=""
-  if [[ -f "$marker" ]]; then
-    last_udid=$(sed -n 1p "$marker" 2>/dev/null || true)
-    last_fp=$(sed -n 2p "$marker" 2>/dev/null || true)
-  fi
-  # Fingerprint the harness source so a package update actually reaches users — without this,
-  # a warm cache serves the OLD harness forever (npm normalizes mtimes, so hash the content).
-  local src_file="$(dirname "$HARNESS_PROJECT")/OCQAHarnessUITests/ExplorerTests.swift"
-  local src_fp=$(shasum "$src_file" 2>/dev/null | cut -c1-12)
-  local xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
-
-  # Reuse the cached harness ONLY if it was built for the currently-booted simulator AND from
-  # the same harness sources. A harness built for a different sim can fail to launch the
-  # interactive session; a stale-source harness silently lacks shipped fixes.
-  if [[ -n "$xctestrun" && ( -z "$udid" || "$udid" == "$last_udid" ) && "$src_fp" == "$last_fp" ]]; then
+  local xctestrun
+  if xctestrun=$(cached_harness_path); then
     echo "Harness already built for this sim: $xctestrun" >&2
     return 0
   fi
-  if [[ -n "$xctestrun" && "$src_fp" != "$last_fp" ]]; then
-    echo "Harness sources changed — rebuilding for $sim_name..." >&2
-  elif [[ -n "$xctestrun" ]]; then
-    echo "Booted simulator changed ($last_udid -> $udid) — rebuilding harness for $sim_name..." >&2
-  else
-    echo "Building harness for $sim_name..." >&2
-  fi
+  echo "Preparing harness for $sim_name (source, simulator, or Xcode cache changed)..." >&2
+  local src_fp=$(harness_fingerprint)
+  mkdir -p "$HARNESS_DERIVED/Build/Products"
+  rm -f "$marker"
+  # Xcode leaves old SDK descriptors beside the new one. Only the descriptor emitted by
+  # this successful build may become current; never select an arbitrary directory entry.
+  find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f -delete
   xcodebuild build-for-testing \
     -project "$HARNESS_PROJECT" \
     -scheme OCQAHarnessUITests \
     -destination "platform=iOS Simulator,id=$UDID" \
     -derivedDataPath "$HARNESS_DERIVED" \
     2>&1 | tail -5 >&2
-  # Record which sim + harness sources this build came from so the next run detects both
-  # a simulator switch and a package update.
-  printf '%s\n%s\n' "$udid" "$src_fp" > "$marker"
+  local products=()
+  while IFS= read -r product; do products+=("$product"); done < <(find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f)
+  if [[ ${#products[@]} -ne 1 ]]; then
+    echo "ERROR: Harness build produced ${#products[@]} test descriptors; no cache was selected." >&2
+    return 1
+  fi
+  printf '%s\n%s\n%s\n' "$udid" "$src_fp" "$(basename "${products[0]}")" > "$marker"
 }
 
 run_harness_test() {
@@ -189,7 +203,7 @@ run_harness_test() {
 }
 CONF
 
-  local xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
+  local xctestrun=$(cached_harness_path)
   if [[ -z "$xctestrun" ]]; then
     echo "ERROR: No xctestrun found. Run: tapp install" >&2
     return 1
@@ -226,15 +240,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-mkdir -p "$CAPTURE_DIR"
 UDID=$(get_booted_sim)
 SIM_NAME=$(get_sim_name)
 
 if [[ -z "$UDID" ]]; then
-  echo "ERROR: No booted simulator found. Boot one first:"
-  echo "  xcrun simctl boot 'iPhone 16 Pro'"
+  echo "ERROR: No booted simulator found. Boot one first:" >&2
+  echo "  xcrun simctl boot 'iPhone 16 Pro'" >&2
   exit 1
 fi
+if [[ "$MODE" == "harness-path" ]]; then
+  cached_harness_path
+  exit $?
+elif [[ "$MODE" == "prepare-harness" ]]; then
+  ensure_harness_built "$SIM_NAME"
+  cached_harness_path
+  exit $?
+fi
+mkdir -p "$CAPTURE_DIR"
 echo "Simulator: $SIM_NAME ($UDID)"
 echo "Output: $CAPTURE_DIR"
 echo ""
@@ -452,7 +474,7 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
   "OCQA_TEST_PASSWORD": "${OCQA_TEST_PASSWORD:-}"$sess_args_line$sess_env_line
 }
 CONF
-    xctestrun=$(find "$HARNESS_DERIVED/Build/Products" -name "*.xctestrun" 2>/dev/null | head -1)
+    xctestrun=$(cached_harness_path)
     if [[ -z "$xctestrun" ]]; then
       echo "ERROR: No xctestrun. Run: tapp install" >&2
       exit 1
@@ -470,7 +492,7 @@ CONF
     # for a fast first tool call later. No capture output.
     ensure_harness_built "$SIM_NAME"
     rmdir "$CAPTURE_DIR" 2>/dev/null || true
-    echo "Harness ready: $(find "$HARNESS_DERIVED/Build/Products" -name '*.xctestrun' 2>/dev/null | head -1)"
+    echo "Harness ready: $(cached_harness_path)"
     ;;
 
   *)

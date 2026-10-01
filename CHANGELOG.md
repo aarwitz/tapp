@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.20
+
+- **Login screens without a navigation bar work in sessions and Flows** (#28). Reading an
+  absent navigation bar previously raised an XCTest failure before the first action. The
+  navigation-history helper now checks existence, and ended sessions surface the XCTest cause.
+- **Credential replacement selects and clears the full field**, verifies it is empty, and
+  checks that the email retains the requested value. A cursor in the middle of a prefilled
+  address no longer leaves a suffix behind. Failed replacement stops sign-in before submission.
+- **VS Code login prioritizes configured actors over saved credentials.** An explicit `actor`
+  resolves environment bindings inside the engine; otherwise a sole configured actor is used
+  or the user selects among several. Explicit credentials win. Partial explicit credentials
+  never get replaced by saved values, and a SecretStorage read failure does not submit the form.
+- **Concurrent extension tools share one engine connection and execute in order.** Login waits
+  for an in-progress open, and a closed engine connection reports that the session was lost.
+- **All iOS runners and `doctor` use the same validated harness descriptor.** The cache tracks
+  source/project contents, simulator identity, and the selected Xcode/SDK. Stale SDK descriptors
+  cannot win an arbitrary directory scan; SDK and simulator OS versions need not match.
+- **Pre-step Flow failures retain the authored step count and underlying XCTest error**, using
+  `xctest-summary.json` from the result bundle when available and specific log errors as fallback.
+
 ## 0.17.19
 
 - **iOS `tree` preserves the installed app and its data** (#25). Inspection resolves the

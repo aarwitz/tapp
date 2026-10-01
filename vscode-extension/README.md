@@ -43,6 +43,13 @@ call. If no route has been observed, it returns the exact source evidence instea
 The skill chooses the smallest operation, asks you to select when a repository contains multiple
 application targets, and keeps exploration findings separate from gate decisions.
 
+For sign-in, `tapp_ios_login` accepts an `actor` from `.tapp/project.json`. The engine resolves
+its environment-variable bindings; start VS Code with those variables available. Without a
+named actor or complete explicit credentials, the sole configured actor is used, or VS Code
+asks you to choose among several. Explicit email/password values take precedence. Saved
+SecretStorage credentials are used only when no actor and no explicit credential are supplied;
+a storage or actor lookup failure stops before the form is submitted.
+
 ## Requirements
 
 - Node 18 or newer.

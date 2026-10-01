@@ -10,6 +10,7 @@ Usage:
   flow_lib.py report --json <harness.log>            # prints machine JSON {passed,total,failed,steps}
 """
 import json
+import os
 import re
 import sys
 
@@ -73,23 +74,34 @@ def raw_json(path):
 ABORT_PATTERNS = [
     r"Failed to synthesize event: [^\n]*",
     r"Neither element nor any descendant has keyboard focus[^\n]*",
-    r"Test Case '[^']*' failed \([^)]*\)",
     r"Error Domain=[^\n]*",
     r"Unable to (?:find|launch|boot)[^\n]*",
     r"App state is [^\n]*",
     r"Timed out [^\n]*",
     r"Testing failed:[^\n]*",
     r"error: [^\n]*",
+    r"Test Case '[^']*' failed \([^)]*\)",
     r"\*\* TEST (?:EXECUTE )?FAILED \*\*",
 ]
 
 
-def harness_abort_reason(log):
+def harness_abort_reason(log, path=None):
     """First XCTest/xcodebuild line that explains why a run ended before step 1."""
+    if path:
+        for summary_path in [path + ".xctest-summary.json", os.path.join(os.path.dirname(path), "xctest-summary.json")]:
+            try:
+                with open(summary_path, encoding="utf-8") as summary_file:
+                    summary = json.load(summary_file)
+                messages = [failure["failureText"] for failure in summary.get("testFailures", [])
+                            if isinstance(failure.get("failureText"), str) and failure["failureText"].strip()]
+                if messages:
+                    return " | ".join(dict.fromkeys(messages))[:1200]
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass
     for pat in ABORT_PATTERNS:
         m = re.search(pat, log)
         if m:
-            return m.group(0).strip()[:300]
+            return m.group(0).strip()[:1200]
     return None
 
 
@@ -102,7 +114,14 @@ def report(path, as_json=False):
     declared_total = None
     for line in log.splitlines():
         line = line.strip()
-        if line.startswith("OCQA_FLOW_STEP:"):
+        if line.startswith("OCQA_FLOW_PLAN:"):
+            try:
+                plan = json.loads(line[len("OCQA_FLOW_PLAN:"):])
+                name = plan.get("name", name)
+                declared_total = plan.get("total", declared_total)
+            except (ValueError, TypeError, AttributeError):
+                pass
+        elif line.startswith("OCQA_FLOW_STEP:"):
             try:
                 steps.append(json.loads(line[len("OCQA_FLOW_STEP:"):]))
             except Exception:
@@ -124,7 +143,7 @@ def report(path, as_json=False):
             except Exception:
                 pass
 
-    total = (result or {}).get("total", len(steps))
+    total = (result or {}).get("total", declared_total if declared_total is not None else len(steps))
     failed = (result or {}).get("failed", sum(1 for s in steps if s.get("status") == "fail"))
     passed = (result or {}).get("passed", failed == 0 and bool(steps))
 
@@ -136,7 +155,7 @@ def report(path, as_json=False):
     # failure of the first step so the scoreboard says why instead of looking like a crash.
     abort_reason = None
     if not steps and not passed:
-        abort_reason = harness_abort_reason(log)
+        abort_reason = harness_abort_reason(log, path)
         steps.append({"index": 1, "action": "harness", "target": "", "status": "fail",
                       "detail": abort_reason or "the harness exited before the first step; see flow.log"})
         failed = max(failed, 1)
@@ -144,7 +163,7 @@ def report(path, as_json=False):
         # The harness died MID-run (an XCTest assertion, the test time budget, a crash): there is
         # no final OCQA_FLOW_RESULT line. This used to be reported as "PASSED 16/16" because
         # `total` silently became the number of steps that happened to run before the death.
-        abort_reason = harness_abort_reason(log)
+        abort_reason = harness_abort_reason(log, path)
         total = declared_total or total
         steps.append({"index": len(steps) + 1, "action": "harness", "target": "", "status": "fail",
                       "detail": (abort_reason or "the harness exited") + f" — run ended after step {executed} of {total}"})

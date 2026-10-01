@@ -4,6 +4,24 @@ import { TAPP_DIRECTORY, projectArtifactDirectory } from "./project-paths.js";
 
 export const PROJECT_CONFIG_RELATIVE_PATH = `${TAPP_DIRECTORY}/project.json`;
 
+// Resolve a named actor entirely inside the engine. Never return these values as tool
+// output or fall back to another identity when a binding is absent.
+export function resolveActorCredentials(projectDir, { actor, email, password, env = process.env } = {}) {
+  const loaded = readProjectConfig(projectDir);
+  if (loaded.errors.length) throw new Error(`Invalid ${loaded.relativePath}: ${loaded.errors.join("; ")}`);
+  const configured = loaded.config.actors?.[actor];
+  if (!configured) throw new Error(`Actor '${actor}' is not configured in ${loaded.relativePath}`);
+  const credentials = { email, password };
+  for (const key of ["email", "password"]) {
+    if (typeof credentials[key] === "string" && credentials[key]) continue;
+    const binding = configured.credentials?.[key]?.env;
+    if (!binding) throw new Error(`Actor '${actor}' has no ${key} environment binding`);
+    if (!env[binding]) throw new Error(`Actor '${actor}' requires $${binding} in the Tapp process environment`);
+    credentials[key] = env[binding];
+  }
+  return credentials;
+}
+
 const ACTOR_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]{0,127}$/;
 const CREDENTIAL_NAME = /^[a-z][A-Za-z0-9_-]{0,63}$/;

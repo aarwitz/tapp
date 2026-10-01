@@ -715,8 +715,11 @@ class ExplorerTests: XCTestCase {
         guard let emailF = emailField else { return ("no_login_form", "no email/username field visible") }
         guard let passF = passwordField else { return ("no_login_form", "no password field visible") }
 
-        replaceText(on: emailF, with: email)
-        replaceText(on: passF, with: password)
+        guard replaceText(on: emailF, with: email) else { return ("input_failed", lastTypeFailure) }
+        guard (emailF.value as? String) == email else {
+            return ("input_failed", "Email field did not retain the requested value; sign-in was not submitted")
+        }
+        guard replaceText(on: passF, with: password) else { return ("input_failed", lastTypeFailure) }
 
         func formGone(within seconds: TimeInterval) -> Bool {
             let deadline = Date().addingTimeInterval(seconds)
@@ -760,7 +763,7 @@ class ExplorerTests: XCTestCase {
             // behavior). Detect and re-fill before submitting.
             let pv = (passF.value as? String) ?? ""
             if pv.isEmpty || pv == (passF.placeholderValue ?? "§none§") {
-                replaceText(on: passF, with: password)
+                guard replaceText(on: passF, with: password) else { return ("input_failed", lastTypeFailure) }
                 dismissKeyboardIfPresent()
             }
             submit = submitButton() ?? submit
@@ -807,7 +810,9 @@ class ExplorerTests: XCTestCase {
     /// titles we have actually been on; a leading navigation-bar button named after one of them
     /// is a genuine back control, while a custom leading action (Share, Delete) is not.
     private func noteNavigationTitle() {
-        let title = app.navigationBars.firstMatch.identifier
+        let bar = app.navigationBars.firstMatch
+        guard bar.exists else { return }
+        let title = bar.identifier
         guard !title.isEmpty, backTitleHistory.last != title else { return }
         backTitleHistory.append(title)
         if backTitleHistory.count > 20 { backTitleHistory.removeFirst() }
@@ -5090,6 +5095,7 @@ class ExplorerTests: XCTestCase {
     /// a tap nudged to the top of the frame. Three attempts, ~4 s worst case.
     private func focusForTyping(_ element: XCUIElement) -> Bool {
         func focused() -> Bool { (element.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
+        if focused() { return true }
         func settleUntilFocused() -> Bool {
             let deadline = Date().addingTimeInterval(1.2)
             repeat {
@@ -5157,11 +5163,28 @@ class ExplorerTests: XCTestCase {
             return false
         }
 
-        if let existing = element.value as? String,
-           !existing.isEmpty,
-           existing.lowercased() != "optional" {
-            let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count)
-            element.typeText(deleteString)
+        func hasContent() -> Bool {
+            guard let value = element.value as? String else { return false }
+            return !value.isEmpty && value != element.placeholderValue
+        }
+        if hasContent() {
+            // A tap may put the cursor in the middle. Select the complete field instead of
+            // deleting only the prefix, then prove it is empty before inserting new text.
+            element.typeKey("a", modifierFlags: .command)
+            element.typeText(XCUIKeyboardKey.delete.rawValue)
+            if hasContent(), let remaining = element.value as? String {
+                // Some simulator keyboard configurations ignore Command-A. Clear on both
+                // sides of the cursor in that case; backspace alone leaves the suffix intact.
+                let count = remaining.utf16.count
+                element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: count)
+                    + String(repeating: XCUIKeyboardKey.forwardDelete.rawValue, count: count))
+            }
+            let deadline = Date().addingTimeInterval(1.0)
+            while hasContent() && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+            guard !hasContent() else {
+                lastTypeFailure = "Field contents could not be cleared; replacement was not entered"
+                return false
+            }
         }
 
         element.typeText(text)
