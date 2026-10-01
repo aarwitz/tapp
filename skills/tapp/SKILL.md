@@ -43,7 +43,7 @@ than starting another broad exploration. If `.tapp/ui-map.json` does not exist y
 with `init . --explore`; source alone can locate a surface but cannot authorize unobserved taps.
 Targets may be a repository path, Xcode container, `.app`, iOS bundle id, APK plus Android app id,
 or owned HTTP(S) URL. Never explore a third-party web property without authorization: exploration
-clicks and types.
+clicks and types. For production or a site you do not own use `audit` / `tapp_audit` — read-only.
 
 ## Navigate like a source-connected expert
 

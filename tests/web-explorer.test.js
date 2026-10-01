@@ -301,7 +301,7 @@ test("the read-only audit finds structurally dead controls without clicking anyt
   const http = await import("node:http");
   // Field issue #24: these are controls that were never alive, so no Flow covers them —
   // nobody writes a test for a button they believe does nothing.
-  const html = `<!doctype html><title>Coach</title><body>
+  const html = `<!doctype html><title>Coach</title><meta name="viewport" content="width=device-width"><body>
     <a href="#availability-section">View Availability</a>
     <a href="#bio">Bio</a><div id="bio">Bio</div>
     <a href="#">Placeholder</a>
@@ -336,7 +336,7 @@ test("the audit does not accuse a control that is wired in CSS rather than JavaS
   // A menu that opens while its trigger is hovered or focused has no listener to
   // find. Reported from the field: a live nav dropdown was called dead, which is
   // the kind of wrong answer that makes people stop reading the findings.
-  const html = `<!doctype html><title>Nav</title><style>
+  const html = `<!doctype html><title>Nav</title><meta name="viewport" content="width=device-width"><style>
     .menu { display: none }
     .group:hover .menu { display: block }
     .group:focus-within .menu { display: block }
@@ -369,7 +369,7 @@ test("the audit does not accuse a control whose handler is delegated from the do
   // element-only search reports every delegated button as dead. Reported from
   // the field: a help centre where all 26 controls are delegated came back as
   // 26 findings, which is enough wrong answers to retire the command.
-  const html = `<!doctype html><title>Help</title><body>
+  const html = `<!doctype html><title>Help</title><meta name="viewport" content="width=device-width"><body>
     <button data-topic="billing">Billing</button>
     <button data-article="refunds">Refunds</button>
     <button id="really-dead">Dead Button</button>

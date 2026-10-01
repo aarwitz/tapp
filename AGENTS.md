@@ -138,11 +138,17 @@ advisory). Report the finding counts and coverage; do not invent a scalar or a s
   (e.g. `["--uitesting"]` if the app has a test bypass), and/or `appLaunchEnv` (e.g. a staging
   backend URL). If the result shows `inputFieldsEncountered` and you have no credentials, **ask
   the user** for them rather than re-running blind.
-- `tapp audit <url>` is the read-only pass: it renders the page and reads the tree but never
-  clicks, so it is the one analysis safe to point at production. It finds controls that were
-  never alive — dead in-page anchors, `aria-controls` naming nothing, placeholder links, buttons
-  with no handler/form/link — which Flows structurally cannot find, because nobody writes a test
-  for a button they believe does nothing. Exit 1 when it finds any.
+- `tapp audit <url>` / `tapp_audit` is the read-only pass: it renders the page and reads it but never
+  clicks, types, submits, or hovers, so it is the one analysis safe to point at production or at a
+  site you do not own. It finds controls that were never alive (dead in-page anchors,
+  `aria-controls` naming nothing, placeholder links, buttons with no handler/form/link — which Flows
+  structurally cannot find, because nobody writes a test for a button they believe does nothing),
+  images that failed to load, same-origin assets answering 404, 5xx/failed requests and uncaught JS
+  exceptions during load, same-origin links answering 404/410/5xx, mixed content, and a page wider
+  than its viewport. `--pages N` crawls same-origin links (robots.txt honoured, `--delay` between
+  pages); several URLs or `--urls FILE` batch sites. It writes a capture in the explore layout
+  (screenshots, per-finding evidence, `report.html`). Exit 1 when it finds anything. No findings
+  means the page is served without structural defects — not that the product works.
 - Credential surfaces are catalogue-only without credentials, on every platform: with no
   `testEmail`/`testPassword` supplied, exploration records a login/signup form's fields but does
   not type into them, submit them, or open recovery/third-party-auth flows — a bare-app run may

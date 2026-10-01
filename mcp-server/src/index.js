@@ -2810,6 +2810,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: "tapp_audit",
+      title: "Audit (read-only)",
+      description:
+        "Read-only audit of a web page or site: renders it and reads it, NEVER clicks, types, submits or hovers — " +
+        "the one analysis safe to point at production or at a site you do not own. Finds controls that were never " +
+        "alive (dead in-page anchors, placeholder links, aria-controls naming nothing, buttons with no handler/form/link), " +
+        "images that failed to load, same-origin assets answering 404, 5xx/failed requests and uncaught JS exceptions " +
+        "during load, same-origin links answering 404/410/5xx, mixed content, and a page wider than its viewport. " +
+        "pages > 1 crawls same-origin links breadth-first with robots.txt honoured. Writes a capture (screenshots, " +
+        "per-finding evidence, report.html) like an explore run. Returns {kind:'tapp-structural-audit', readOnly:true, " +
+        "pagesAudited, findingCounts, pages:[{url,title,controlsExamined,linksChecked,findings}], checkedFor, notChecked, capture}. " +
+        "An observation, never a verdict; absence of findings says the page is served without structural defects, not that the product works.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
+          url: { type: "string", description: "http(s) URL of the page to audit (the crawl start page when pages > 1)" },
+          pages: { type: "integer", default: 1, minimum: 1, maximum: 200, description: "How many same-origin pages to audit at most (1 = this page only)" },
+          delayMs: { type: "integer", default: 1000, minimum: 0, description: "Pause between pages when crawling — be polite to sites you do not own" },
+          linkCheckLimit: { type: "integer", default: 30, minimum: 0, description: "Same-origin links to HEAD-check per page" },
+          device: { type: "string", description: "Playwright device profile, e.g. 'iPhone 13' — audit the mobile rendering" },
+          viewport: { type: "string", description: "WIDTHxHEIGHT viewport override" },
+          capture: { type: "boolean", default: true, description: "Write a capture directory (screenshots, evidence, report.html)" },
+        },
+        required: ["url"],
+      },
+    },
+    {
       name: "tapp_init",
       title: "Inspect or explore a repository and create the Tapp application model and release plan",
       description:
@@ -3607,6 +3635,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     ];
     if (summary.videos.length) L.push(`Videos: ${summary.videos.join(", ")}`);
     return richResult(L.join("\n"), summary);
+  }
+
+  if (name === "tapp_audit") {
+    const unauthorized = ensureAuthorized(args);
+    if (unauthorized) return unauthorized;
+    if (!isNonEmptyString(args.url)) return errorResult("url is required");
+    try {
+      const { auditWebSite } = await import("./web-audit.js");
+      const site = await auditWebSite({
+        url: args.url,
+        pages: asInteger(args.pages, 1),
+        delayMs: asInteger(args.delayMs, 1000),
+        linkCheckLimit: asInteger(args.linkCheckLimit, 30),
+        device: isNonEmptyString(args.device) ? args.device : "",
+        viewport: isNonEmptyString(args.viewport) ? args.viewport : "",
+        capturesDir: args.capture === false ? "" : capturesDir,
+      });
+      const findings = site.pages.flatMap((p) => p.findings);
+      const c = site.findingCounts;
+      const lines = [
+        `🔎 Read-only audit of ${site.url} — ${site.pagesAudited} page(s), nothing clicked`,
+        findings.length
+          ? `${findings.length} defect(s): ${c.critical} critical · ${c.high} high · ${c.medium} medium · ${c.low} low`
+          : "✅ Nothing broken observed. Not a pass on behaviour — nothing was exercised.",
+        ...findings.slice(0, 25).map((f) => `  ${SEV[f.severity] || "·"} [${f.type}] ${f.title}${f.screen ? ` — on ${f.screen}` : ""}`),
+        ...(findings.length > 25 ? [`  … ${findings.length - 25} more in structuredContent`] : []),
+        ...(site.robotsBlocked?.length ? [`robots.txt kept ${site.robotsBlocked.length} page(s) out of the crawl`] : []),
+        ...(site.capture ? [`📁 ${site.capture.path}`, `📄 ${site.capture.report}`] : []),
+        "Next: to exercise the controls (clicks, forms) run tapp_explore — only on an environment you own.",
+      ];
+      return richResult(lines.join("\n"), site);
+    } catch (error) {
+      return errorResult(error.message || String(error));
+    }
   }
 
   if (name === "tapp_explore" || name === "tapp_run_qa") { // tapp_run_qa: deprecated alias

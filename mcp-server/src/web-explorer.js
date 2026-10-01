@@ -21,7 +21,7 @@ import { createRequire } from "module";
 import { execFileSync } from "child_process";
 
 const CLICK_SETTLE_MS = 700;
-const NAV_TIMEOUT_MS = 15_000;
+export const NAV_TIMEOUT_MS = 15_000;
 const BUTTONS_PER_PAGE = 4;
 const OUTBOUND_LINK_LIMIT = 10;
 const WATCH_ACTION_DELAY_MS = 350;
@@ -136,7 +136,7 @@ function cssAttrEscape(value) {
   return String(value).replace(/["\\]/g, (c) => "\\" + c);
 }
 
-async function installWebListenerTracking(context) {
+export async function installWebListenerTracking(context) {
   await context.addInitScript(() => {
     const key = Symbol.for("tapp.clickListeners");
     // Delegated handlers live on document/window, not on the control, so an
@@ -626,7 +626,7 @@ export function webScreenRole(screen, inputs = []) {
   return "screen";
 }
 
-function slug(s) {
+export function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "page";
 }
 
@@ -1212,122 +1212,106 @@ export function auditFindingsFromControls(controls = []) {
   return findings;
 }
 
-// Collected inside the page: every structurally dead control, WITHOUT interacting with any.
-export async function auditWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, device = "", viewport = "" }) {
-  let target;
-  try { target = new URL(url); }
-  catch { throw new Error("Audit needs a valid http(s) URL"); }
-  if (!/^https?:$/.test(target.protocol)) throw new Error("Audit needs a valid http(s) URL");
-  const { chromium, devices } = await loadPlaywright();
-  const browser = await chromium.launch(webBrowserLaunchOptions(process.env, {}));
-  try {
-    const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
-    await installWebListenerTracking(context);
-    const page = await context.newPage();
-    const bounded = Math.max(1000, Math.min(60_000, Number(timeoutMs) || NAV_TIMEOUT_MS));
-    page.setDefaultTimeout(bounded);
-    const response = await page.goto(target.href, { waitUntil: "domcontentloaded", timeout: bounded });
-    if (response && response.status() >= 400) throw new Error(`Could not open ${target.href}: HTTP ${response.status()}`);
-    await waitForWebStability(page, { timeoutMs: Math.min(5_000, bounded) });
-    const controls = await page.evaluate(() => {
-      const key = Symbol.for("tapp.clickListeners");
-      const visible = (el) => {
-        const style = window.getComputedStyle(el);
-        return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
-      };
-      const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80);
-      const selectorFor = (el) => el.id ? `#${el.id}` : el.getAttribute("data-testid") ? `[data-testid="${el.getAttribute("data-testid")}"]` : el.tagName.toLowerCase();
-      // Some controls are wired in CSS, not JavaScript: a menu that opens while
-      // its trigger is hovered or focused has no listener to find, and calling
-      // it dead is wrong. Collect the selectors that some rule reacts to — the
-      // trigger side of any `X:hover Y` / `X:focus-within Y` rule whose
-      // declarations change whether Y can be seen. A rule that only restyles
-      // the trigger itself (`button:hover { background: … }`) is not behaviour
-      // and is ignored, which is why the descendant part must be present.
-      const REVEALS = /(^|;)\s*(display|visibility|opacity|height|max-height|transform|pointer-events|clip-path)\s*:/i;
-      const revealTriggers = [];
-      const collectTriggers = (rules) => {
-        for (const rule of rules || []) {
-          // A plain style rule also exposes .cssRules now that CSS nesting is
-          // supported — an empty list, which is truthy. Recursing on that and
-          // skipping the rule would walk straight past every selector there is.
-          if (rule.cssRules && rule.cssRules.length) collectTriggers(rule.cssRules);
-          const selector = rule.selectorText;
-          if (!selector || !REVEALS.test(rule.style?.cssText || "")) continue;
-          for (const part of selector.split(",")) {
-            const match = part.match(/^(.*?):(?:hover|focus-within|focus-visible|focus)\b(.+)$/);
-            if (!match) continue;
-            const trigger = match[1].trim();
-            if (trigger && match[2].trim()) revealTriggers.push(trigger);
-          }
-        }
-      };
-      for (const sheet of document.styleSheets) {
-        try { collectTriggers(sheet.cssRules); } catch { /* cross-origin sheet */ }
-      }
-      const opensSomethingOnHoverOrFocus = (el) => revealTriggers.some((trigger) => {
-        try { return el.matches(trigger) || Boolean(el.closest(trigger)); } catch { return false; }
-      });
-
-      // What a delegated handler on document/window claims. The dominant idiom is
-      // `e.target.closest(SELECTOR)` / `.matches(SELECTOR)`, so pull those
-      // selectors out and test controls against them. A handler we cannot read
-      // this way (an outside-click closer, say) claims nothing and is ignored,
-      // rather than excusing every unwired control on the page.
-      const delegatedSelectors = [];
-      for (const source of [
-        ...(document[Symbol.for("tapp.delegatedClickHandlers")] || []),
-        ...(window[Symbol.for("tapp.delegatedClickHandlers")] || []),
-      ]) {
-        for (const m of String(source).matchAll(/\.(?:closest|matches)\(\s*["'`]([^"'`]+)["'`]/g)) {
-          delegatedSelectors.push(m[1]);
-        }
-      }
-      const claimedByDelegate = (el) => delegatedSelectors.some((selector) => {
-        try { return el.matches(selector) || Boolean(el.closest(selector)); } catch { return false; }
-      });
-
-      const dead = [];
-      for (const el of document.querySelectorAll("a[href], button, [role=button], [aria-controls]")) {
-        if (!visible(el)) continue;
-        const label = name(el);
-        const href = el.getAttribute("href");
-        const ariaControls = el.getAttribute("aria-controls");
-        if (ariaControls && !document.getElementById(ariaControls)) {
-          dead.push({ kind: "dangling_aria_controls", label, selector: selectorFor(el), controls: ariaControls });
-          continue;
-        }
-        if (href != null) {
-          if (href === "#" || href.trim() === "" || /^javascript:\s*(void\(0\))?;?$/i.test(href)) {
-            dead.push({ kind: "placeholder_link", label, selector: selectorFor(el), href });
-          } else if (href.startsWith("#")) {
-            const fragment = decodeURIComponent(href.slice(1));
-            const found = fragment && (document.getElementById(fragment) || document.getElementsByName(fragment).length > 0);
-            if (!found) dead.push({ kind: "dead_anchor", label, selector: selectorFor(el), href, fragment });
-          }
-          continue;
-        }
-        // A button with nothing behind it: no listener on itself or an ancestor, no inline
-        // handler, and not a submit inside a form.
-        let wired = false;
-        for (let node = el; node && node !== document.body; node = node.parentElement) {
-          if ((node[key] && node[key].size > 0) || typeof node.onclick === "function" || node.hasAttribute("onclick")) { wired = true; break; }
-        }
-        if (!wired && el.matches("button[type=submit], input[type=submit]") && el.closest("form")) wired = true;
-        if (!wired && el.closest("label")) wired = true; // a label drives its own control
-        if (!wired && opensSomethingOnHoverOrFocus(el)) wired = true;
-        if (!wired && claimedByDelegate(el)) wired = true;
-        if (!wired) dead.push({ kind: "unwired_control", label, selector: selectorFor(el) });
-      }
-      return { dead, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title };
-    });
-    return {
-      url: page.url(),
-      title: controls.title,
-      controlsExamined: controls.controlCount,
-      findings: auditFindingsFromControls(controls.dead),
+// The structural scan, run inside the page: every control that was never alive, WITHOUT
+// interacting with any. Each flagged element is tagged with data-tapp-audit="<n>" so evidence can be
+// shot of exactly that element (a bare tag-name selector would photograph the first match instead).
+export async function auditStructuralControls(page) {
+  return page.evaluate(() => {
+    const key = Symbol.for("tapp.clickListeners");
+    const visible = (el) => {
+      const style = window.getComputedStyle(el);
+      return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
     };
-  } finally {
-    await browser.close().catch(() => {});
-  }
+    const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const selectorFor = (el) => el.id ? `#${el.id}` : el.getAttribute("data-testid") ? `[data-testid="${el.getAttribute("data-testid")}"]` : el.tagName.toLowerCase();
+    // Some controls are wired in CSS, not JavaScript: a menu that opens while
+    // its trigger is hovered or focused has no listener to find, and calling
+    // it dead is wrong. Collect the selectors that some rule reacts to — the
+    // trigger side of any `X:hover Y` / `X:focus-within Y` rule whose
+    // declarations change whether Y can be seen. A rule that only restyles
+    // the trigger itself (`button:hover { background: … }`) is not behaviour
+    // and is ignored, which is why the descendant part must be present.
+    const REVEALS = /(^|;)\s*(display|visibility|opacity|height|max-height|transform|pointer-events|clip-path)\s*:/i;
+    const revealTriggers = [];
+    const collectTriggers = (rules) => {
+      for (const rule of rules || []) {
+        // A plain style rule also exposes .cssRules now that CSS nesting is
+        // supported — an empty list, which is truthy. Recursing on that and
+        // skipping the rule would walk straight past every selector there is.
+        if (rule.cssRules && rule.cssRules.length) collectTriggers(rule.cssRules);
+        const selector = rule.selectorText;
+        if (!selector || !REVEALS.test(rule.style?.cssText || "")) continue;
+        for (const part of selector.split(",")) {
+          const match = part.match(/^(.*?):(?:hover|focus-within|focus-visible|focus)\b(.+)$/);
+          if (!match) continue;
+          const trigger = match[1].trim();
+          if (trigger && match[2].trim()) revealTriggers.push(trigger);
+        }
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      try { collectTriggers(sheet.cssRules); } catch { /* cross-origin sheet */ }
+    }
+    const opensSomethingOnHoverOrFocus = (el) => revealTriggers.some((trigger) => {
+      try { return el.matches(trigger) || Boolean(el.closest(trigger)); } catch { return false; }
+    });
+
+    // What a delegated handler on document/window claims. The dominant idiom is
+    // `e.target.closest(SELECTOR)` / `.matches(SELECTOR)`, so pull those
+    // selectors out and test controls against them. A handler we cannot read
+    // this way (an outside-click closer, say) claims nothing and is ignored,
+    // rather than excusing every unwired control on the page.
+    const delegatedSelectors = [];
+    for (const source of [
+      ...(document[Symbol.for("tapp.delegatedClickHandlers")] || []),
+      ...(window[Symbol.for("tapp.delegatedClickHandlers")] || []),
+    ]) {
+      for (const m of String(source).matchAll(/\.(?:closest|matches)\(\s*["'`]([^"'`]+)["'`]/g)) {
+        delegatedSelectors.push(m[1]);
+      }
+    }
+    const claimedByDelegate = (el) => delegatedSelectors.some((selector) => {
+      try { return el.matches(selector) || Boolean(el.closest(selector)); } catch { return false; }
+    });
+
+    const dead = [];
+    for (const el of document.querySelectorAll("a[href], button, [role=button], [aria-controls]")) {
+      if (!visible(el)) continue;
+      const label = name(el);
+      const href = el.getAttribute("href");
+      const ariaControls = el.getAttribute("aria-controls");
+      if (ariaControls && !document.getElementById(ariaControls)) {
+        dead.push({ element: el, kind: "dangling_aria_controls", label, selector: selectorFor(el), controls: ariaControls });
+        continue;
+      }
+      if (href != null) {
+        if (href === "#" || href.trim() === "" || /^javascript:\s*(void\(0\))?;?$/i.test(href)) {
+          dead.push({ element: el, kind: "placeholder_link", label, selector: selectorFor(el), href });
+        } else if (href.startsWith("#")) {
+          const fragment = decodeURIComponent(href.slice(1));
+          const found = fragment && (document.getElementById(fragment) || document.getElementsByName(fragment).length > 0);
+          if (!found) dead.push({ element: el, kind: "dead_anchor", label, selector: selectorFor(el), href, fragment });
+        }
+        continue;
+      }
+      // A button with nothing behind it: no listener on itself or an ancestor, no inline
+      // handler, and not a submit inside a form.
+      let wired = false;
+      for (let node = el; node && node !== document.body; node = node.parentElement) {
+        if ((node[key] && node[key].size > 0) || typeof node.onclick === "function" || node.hasAttribute("onclick")) { wired = true; break; }
+      }
+      if (!wired && el.matches("button[type=submit], input[type=submit]") && el.closest("form")) wired = true;
+      if (!wired && el.closest("label")) wired = true; // a label drives its own control
+      if (!wired && opensSomethingOnHoverOrFocus(el)) wired = true;
+      if (!wired && claimedByDelegate(el)) wired = true;
+      if (!wired) dead.push({ element: el, kind: "unwired_control", label, selector: selectorFor(el) });
+    }
+
+    for (let i = 0; i < dead.length; i += 1) {
+      if (dead[i].element) { dead[i].element.setAttribute("data-tapp-audit", String(i + 1)); dead[i].selector = `[data-tapp-audit="${i + 1}"]`; delete dead[i].element; }
+    }
+    return { dead, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title };
+  });
 }
+
+export { auditWebPage, auditWebSite } from "./web-audit.js";

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.17.22
+
+- **`tapp audit` is now a complete read-only site check, built for sites you do not own.** It still
+  never clicks, types, submits, or hovers. On top of the structurally dead controls it already found
+  it now reports images that failed to load, same-origin assets answering 404, 5xx and failed
+  requests and uncaught JS exceptions during load, same-origin links answering 404/410/5xx
+  (HEAD, then GET when HEAD is refused; the first 30 per page), mixed content, a page wider than
+  its viewport, and a missing viewport meta tag. `--pages N` crawls same-origin links breadth-first
+  with robots.txt honoured and a pause between pages; several URLs or `--urls FILE` audit a batch;
+  `--json FILE` writes the result to a file. The browser identifies itself as
+  `tapp-audit/<version> (+https://runtapp.com)` on top of its normal user agent.
+- **An audit writes a capture.** `~/.tapp/captures/web-audit-<timestamp>/` holds a full-page
+  screenshot per page in the explore layout (`state_N_<page>.png`), an element-scoped evidence
+  shot for every finding that names an element, `ocqa-markers.txt`, `report.json`, `audit.json`
+  and `report.html` — so `tapp report`, the Studio and any tool that already reads an explore
+  capture reads an audit unchanged. The report states the audit's own scope: its "checked for"
+  list never borrows the exploration run's clicks, and the exploration coverage floor does not
+  mark an audit inconclusive.
+- **`tapp_audit` MCP tool** exposes the same audit to agents, with the same read-only guarantee.
+- Exit codes are unchanged: 0 nothing broken, 1 defects found, 2 usage or infrastructure.
+
 ## 0.17.21
 
 - **Replacing a prefilled field works on a simulator without a hardware keyboard.** Clearing the

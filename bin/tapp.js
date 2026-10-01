@@ -287,7 +287,7 @@ function safeCommandUsage(verb) {
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
     feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
-    audit: "tapp audit <url> [--json] [--device NAME] [--viewport WxH]\n  Read-only: renders the page and reads the tree, never clicks — safe to point at production.\n  Exit codes: 0 no dead controls · 1 dead controls found · 2 usage/infrastructure",
+    audit: "tapp audit <url> [<url>...] [--urls FILE] [--pages N] [--delay MS] [--links N] [--json [FILE]] [--no-capture] [--device NAME] [--viewport WxH]\n  Read-only: renders each page and reads it, never clicks — safe to point at production or a site you do not own.\n  Finds dead controls, broken images/assets/links, 5xx/failed requests, JS exceptions, mixed content, horizontal overflow.\n  --pages N crawls same-origin links (robots.txt honoured, --delay between pages). Writes a capture with screenshots, evidence and report.html.\n  Exit codes: 0 nothing broken · 1 defects found · 2 usage/infrastructure",
     doctor: "tapp doctor [--json]\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
     install: "tapp install",
     mcp: "tapp mcp",
@@ -1513,30 +1513,71 @@ switch (command) {
 
   case "audit": {
     const { flags, positionals } = parseVerbArgs(rest);
-    const url = positionals[0] || "";
-    if (!/^https?:\/\//i.test(url)) {
-      console.error("usage: tapp audit <http(s) url> [--json] [--device NAME] [--viewport WxH]\n       Read-only structural audit: never clicks, safe against production.");
+    const urls = [...positionals];
+    if (typeof flags.urls === "string") {
+      try {
+        for (const line of fs.readFileSync(flags.urls, "utf8").split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith("#")) urls.push(trimmed);
+        }
+      } catch (error) {
+        console.error(`❌ Could not read --urls ${flags.urls}: ${error.message}`);
+        process.exit(2);
+      }
+    }
+    if (!urls.length || urls.some((u) => !/^https?:\/\//i.test(u))) {
+      console.error(`usage: ${USAGE.audit}`);
       process.exit(2);
     }
+    const jsonMode = flags.json === true || typeof flags.json === "string";
+    const say = (line) => { if (!jsonMode || typeof flags.json === "string") console.log(line); };
     try {
-      const { auditWebPage } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
-      const result = await auditWebPage({
-        url,
+      const { auditWebSite } = await import(path.join(packageRoot, "mcp-server", "src", "web-explorer.js"));
+      const { auditCaptureId } = await import(path.join(packageRoot, "mcp-server", "src", "web-audit.js"));
+      const capturesDir = flags["no-capture"] === true ? "" : path.join(tappHome, "captures");
+      const common = {
+        pages: Math.max(1, Number(flags.pages) || 1),
+        delayMs: flags.delay !== undefined ? Math.max(0, Number(flags.delay) || 0) : undefined,
+        linkCheckLimit: flags.links !== undefined ? Math.max(0, Number(flags.links) || 0) : undefined,
         device: typeof flags.device === "string" ? flags.device : "",
         viewport: typeof flags.viewport === "string" ? flags.viewport : "",
-      });
-      if (flags.json === true) {
-        console.log(JSON.stringify({ kind: "tapp-structural-audit", readOnly: true, ...result }, null, 2));
-      } else {
-        console.log(`🔎 Structural audit — ${result.url}\n   ${result.controlsExamined} control(s) examined · nothing was clicked`);
-        if (!result.findings.length) console.log("\n✅ No structurally dead controls found.");
-        else {
-          console.log("");
-          for (const finding of result.findings) console.log(`  ⚠️  ${finding.title}`);
-          console.log(`\n${result.findings.length} dead control(s). These are controls no Flow would cover — nobody writes a test for a button they believe does nothing.`);
+        capturesDir,
+      };
+      const sites = [];
+      for (const [index, url] of urls.entries()) {
+        say(`🔎 Read-only audit — ${url}${common.pages > 1 ? ` (up to ${common.pages} pages)` : ""}`);
+        let site;
+        try {
+          site = await auditWebSite({ ...common, url, captureId: capturesDir ? `${auditCaptureId()}${urls.length > 1 ? `-${index + 1}` : ""}` : "",
+            onPage: (page, n) => say(`   ${n}. ${page.url} — ${page.controlsExamined} control(s), ${page.linksChecked.checked} link(s) checked, ${page.findings.length} finding(s)`) });
+        } catch (error) {
+          if (urls.length === 1) throw error;
+          site = { kind: "tapp-structural-audit", readOnly: true, url, error: error.message || String(error), pagesAudited: 0, findingCounts: { critical: 0, high: 0, medium: 0, low: 0, total: 0 }, pages: [], capture: null };
+          say(`   ❌ ${site.error}`);
+        }
+        sites.push(site);
+        if (!jsonMode) {
+          const findings = site.pages.flatMap((p) => p.findings);
+          if (!site.error && !findings.length) console.log("   ✅ Nothing broken observed. Nothing was clicked — this is not a pass on behaviour.");
+          for (const finding of findings) console.log(`   ${finding.severity === "high" || finding.severity === "critical" ? "🔴" : finding.severity === "medium" ? "🟠" : "🟡"} [${finding.type}] ${finding.title}`);
+          if (site.robotsBlocked?.length) console.log(`   robots.txt kept ${site.robotsBlocked.length} page(s) out of the crawl`);
+          if (site.capture) console.log(`   📁 ${site.capture.path}\n   📄 ${site.capture.report}`);
         }
       }
-      process.exit(result.findings.length ? 1 : 0);
+      const totalFindings = sites.reduce((n, site) => n + site.findingCounts.total, 0);
+      const payload = urls.length === 1 ? sites[0] : {
+        kind: "tapp-structural-audit", readOnly: true, sites,
+        totals: { sites: sites.length, pagesAudited: sites.reduce((n, site) => n + site.pagesAudited, 0), findings: totalFindings, failed: sites.filter((site) => site.error).length },
+      };
+      if (typeof flags.json === "string") {
+        fs.writeFileSync(flags.json, JSON.stringify(payload, null, 2));
+        console.log(`\n📄 Audit JSON: ${flags.json}`);
+      } else if (flags.json === true) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else if (urls.length > 1) {
+        console.log(`\n${totalFindings} finding(s) across ${sites.length} site(s).`);
+      }
+      process.exit(totalFindings ? 1 : sites.some((site) => site.error) ? 2 : 0);
     } catch (error) {
       console.error(`❌ ${error.message || String(error)}`);
       process.exit(2);
@@ -2046,9 +2087,10 @@ Primitives — an agent's eyes and hands:
                            (web: --tap TEXT · --wait-for TEXT · --out FILE)
   tapp tree [target]       Accessibility tree of the current screen (--json for every element)
                            (web: --tap TEXT · --wait-for TEXT)
-  tapp audit <url>         Read-only structural audit — dead anchors, placeholder links, buttons
-                           with nothing behind them. Never clicks, so it is safe against
-                           production (exit 1 when dead controls are found)
+  tapp audit <url>...      Read-only audit — dead controls, broken images/links/assets, failed
+                           requests, JS exceptions, mixed content, overflow. Never clicks, so it
+                           is safe against production or a prospect's site (exit 1 on defects)
+                           (--pages N crawls same-origin · --urls FILE batches · --json [FILE])
 
 Repository & release:
   tapp init [repo]         Detect targets and write the application model + reviewable release plan
