@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.23
+
+- Web exploration now records video, matching iOS's existing `exploration.webm`/`.mov` capture
+  convention — Playwright records natively (no ffmpeg transcode needed) and the file lands as
+  `exploration.webm` in the run's capture directory, so the existing capture summary and hosted
+  replay endpoint pick it up with no further changes. Outbound link checks run in their own
+  unrecorded browser context so third-party navigations don't pollute the video.
+
 ## 0.17.22
 
 - **`tapp audit` is now a complete read-only site check, built for sites you do not own.** It still

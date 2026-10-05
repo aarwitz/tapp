@@ -108,3 +108,29 @@ test("the public staging surface includes every agent exposure", { skip: !hasPri
     assert.match(sync, new RegExp(packaged.replaceAll(".", "\\.")), `${packaged} is guarded`);
   }
 });
+
+// The publish workflow ships in the public mirror, where it runs. `next` is the prerelease
+// channel the 0.17.0 RC campaign used: candidates on `next` while `latest` held the last stable.
+// An unconditional `npm publish` would make the first RC `latest` for every user, and leaves
+// `next` pointing at a superseded stable after a normal release — which is what happened between
+// 0.17.18 and 0.17.21 and was corrected by hand twice.
+test("publishing routes prereleases to next and never leaves next behind latest", () => {
+  const workflow = read(".github/workflows/publish-npm.yml");
+
+  // The publish must carry an explicit channel rather than defaulting everything to latest.
+  assert.match(workflow, /npm publish[^\n]*--tag "\$\{\{ steps\.release\.outputs\.channel \}\}"/,
+    "npm publish targets the computed dist-tag");
+  assert.doesNotMatch(workflow, /^\s*-\s*run:\s*npm publish --provenance --access public\s*$/m,
+    "no unconditional publish that would make a prerelease the latest release");
+
+  // A hyphen is what makes a semver version a prerelease.
+  assert.match(workflow, /if \[\[ "\$version" == \*-\* \]\]/, "prereleases are detected by semver");
+  assert.match(workflow, /channel=next/, "a prerelease publishes to next");
+  assert.match(workflow, /channel=latest/, "a stable release publishes to latest");
+
+  // After a stable release something must advance `next`, or it silently serves an older version.
+  assert.match(workflow, /npm dist-tag add "@aarwitz\/tapp@\$version" next/,
+    "a stable release moves next forward");
+  assert.match(workflow, /continue-on-error: true/,
+    "a dist-tag failure must not turn an already-published release red");
+});

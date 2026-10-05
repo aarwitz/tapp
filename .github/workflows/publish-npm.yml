@@ -21,7 +21,8 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - name: Match package version to tag
+      - name: Match package version to tag, and pick the dist-tag it publishes to
+        id: release
         shell: bash
         run: |
           set -euo pipefail
@@ -31,6 +32,19 @@ jobs:
             echo "package.json version $version does not match tag $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          # A semver prerelease (0.18.0-rc.1) belongs on `next`, which is what the 0.17.0 RC
+          # campaign used: candidates on `next` while `latest` stayed on the last stable. An
+          # unconditional publish would have made the first RC `latest` for every user.
+          if [[ "$version" == *-* ]]; then
+            echo "channel=next" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$version is a prerelease — publishing to next; latest stays put"
+          else
+            echo "channel=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "$version is a stable release — publishing to latest"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install npm with trusted publishing support
         run: npm install --global npm@11
@@ -40,7 +54,30 @@ jobs:
         run: npm test
         env:
           TAPP_SKIP_REAL_BROWSER_TESTS: '1'
-      - run: npm publish --provenance --access public
+      - run: npm publish --provenance --access public --tag "${{ steps.release.outputs.channel }}"
+
+      # `next` means "the newest thing published, prerelease or not". A stable release only moves
+      # `latest`, so without this `next` is left pointing at an older stable and `npm i pkg@next`
+      # silently serves a version BEHIND `latest` — which is what it did between 0.17.18 and
+      # 0.17.21, fixed by hand twice. A prerelease needs nothing here: it published to `next`.
+      #
+      # Non-fatal on purpose. The package is already published and immutable by this point, and
+      # whether npm's trusted-publishing credential covers a second registry write is not
+      # something to discover by turning a good release red. If it fails, the log says what to run.
+      - name: Keep next from trailing latest
+        if: steps.release.outputs.prerelease == 'false'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.release.outputs.version }}"
+          if npm dist-tag add "@aarwitz/tapp@$version" next; then
+            echo "next now points at $version"
+          else
+            echo "::warning::Could not move the next dist-tag. The publish itself succeeded." \
+                 "Run: npm dist-tag add @aarwitz/tapp@$version next"
+            exit 1
+          fi
 
       # Several releases reached npm with no GitHub release behind the tag, so every workflow
       # `tapp ci install` generated referenced an action version that did not resolve (public
@@ -61,6 +98,8 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME already exists; leaving it alone"
           else
+            prerelease=""
+            [[ "${{ steps.release.outputs.prerelease }}" == "true" ]] && prerelease="--prerelease"
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-              --title "Tapp $version" --notes-file "$RUNNER_TEMP/notes.md"
+              --title "Tapp $version" --notes-file "$RUNNER_TEMP/notes.md" $prerelease
           fi

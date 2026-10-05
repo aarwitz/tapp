@@ -668,7 +668,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   // phone run legitimately disagree about which nav links exist, and a baseline diff across
   // them must be able to say so instead of reporting "resolved".
   emit("CONTEXT", { ...(String(device || "").trim() ? { device: String(device).trim() } : {}), viewport: captureProfile.viewport, deviceScaleFactor: captureProfile.deviceScaleFactor ?? 1 });
-  const context = await browser.newContext(captureProfile);
+  // Playwright records natively (no ffmpeg transcode needed, unlike simctl's .mov output) —
+  // written to a Playwright-chosen filename in outDir, finalized only on context.close().
+  const context = await browser.newContext({ ...captureProfile, recordVideo: { dir: outDir, size: captureProfile.viewport } });
   await installWebListenerTracking(context);
   if (watch) await installWebWatchUi(context);
   const page = await context.newPage();
@@ -1127,7 +1129,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     outbound.total = outboundLinks.size;
     outbound.mailtos = mailtoLinks.size;
     if (outboundLinks.size) {
-      const auditPage = await context.newPage();
+      // A fresh, unrecorded context: outbound link checks navigate away to third-party sites and
+      // must not inherit the exploration context's recordVideo (noise, not exploration evidence).
+      const auditContext = await browser.newContext(captureProfile);
+      const auditPage = await auditContext.newPage();
       auditPage.setDefaultTimeout(8000);
       const targets = [...outboundLinks.entries()].slice(0, OUTBOUND_LINK_LIMIT);
       outbound.checked = targets.length;
@@ -1153,7 +1158,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         const phrase = webUnavailableShellPhrase(text);
         if (phrase) issue("outbound_unavailable", "medium", `Outbound link returns 200 but shows "${phrase}": ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
       }
-      await auditPage.close().catch(() => {});
+      await auditContext.close().catch(() => {});
     }
     if (mailtoLinks.size) {
       if (process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
@@ -1181,6 +1186,15 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       : "frontier-drained";
     emit("COMPLETE", { actions, screens: screenCount, credentialsProvided: !!(testEmail || testPassword), credentialsUsed: loginTried, timedOut, stop, outbound });
     fs.closeSync(markersFd);
+    // Video finalizes on context.close(), before browser.close() tears down the recorder —
+    // same "exploration.<ext>" name summarizeCapture() and the website replay already look for.
+    const video = page.video();
+    await context.close().catch(() => {});
+    if (video) {
+      await video.path()
+        .then((p) => fs.renameSync(p, path.join(outDir, "exploration.webm")))
+        .catch(() => {});
+    }
     await browser.close().catch(() => {});
   }
   return { markersPath, outDir, actions, screens: screenCount, seedRoutes: normalizedSeeds, seedTargets: normalizedTargets };
