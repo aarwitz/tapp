@@ -68,6 +68,7 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 | "Find/reach this named screen or control" | `tapp_session_start` with `focus`, or `tapp_focus`; plain CLI: `tapp focus` | screenshot-by-screenshot wandering |
 | "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
 | "Is my app broken? Find bugs" | `tapp_explore` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps; returns an observation (findings + evidence), not a ship verdict — gate a merge with the CI gate (`tapp ci` CLI / the GitHub Action) + a contract | a manual session (exploration is autonomous) |
+| "Is this live site / production / a prospect's site broken?" | `tapp_audit` (CLI `tapp audit <url> --pages N`) — read-only: dead controls, broken images/links/assets, failed requests, JS errors, mixed content, overflow; writes a capture with evidence | `tapp_explore` (it clicks, types and submits) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
 | "What's on screen right now?" | `tapp_screenshot` / `tapp_ui_tree` | relaunching the app |
 
@@ -209,3 +210,5 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   of retrying variations.
 - When you show a screenshot as proof, say what it proves and what it doesn't ("login works;
   I haven't verified checkout").
+- A clean `tapp_audit` means the page is served without structural defects. It says nothing about
+  behaviour, because nothing was clicked; never report it as "the site works".

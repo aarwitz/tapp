@@ -11,7 +11,8 @@ npx -y @aarwitz/tapp@latest explore [target]
 npx -y @aarwitz/tapp@latest focus "Save storefront settings visible above keyboard" [target]
 npx -y @aarwitz/tapp@latest open [target]
 npx -y @aarwitz/tapp@latest tree [target] --json
-npx -y @aarwitz/tapp@latest audit https://example.com --json   # read-only: never clicks, safe against production
+npx -y @aarwitz/tapp@latest audit https://example.com --pages 5 --json   # read-only: never clicks; safe on production or third-party sites
+#   several URLs or --urls FILE batch sites · --device "iPhone 13" audits the mobile rendering · --json FILE writes the result · exit 1 = defects found
 npx -y @aarwitz/tapp@latest shot
 npx -y @aarwitz/tapp@latest report latest
 npx -y @aarwitz/tapp@latest doctor

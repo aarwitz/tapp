@@ -1,6 +1,6 @@
 ---
 name: tapp
-description: Use Tapp to see, drive, explore, and verify real application surfaces on iOS simulators, Android emulators/devices, or the web. Use when a user asks an agent to test an app or UI change, find bugs, inspect or screenshot a screen, exercise a journey, create a replayable flow, gather release evidence, or run the deterministic Tapp gate. Also use when the user mentions Tapp, @aarwitz/tapp, tapp_* tools, .tapp artifacts, or asks whether agent-authored UI actually works.
+description: Use Tapp to see, drive, explore, and verify real application surfaces on iOS simulators, Android emulators/devices, or the web. Use when a user asks an agent to test an app or UI change, find bugs, inspect or screenshot a screen, exercise a journey, create a replayable flow, gather release evidence, run the deterministic Tapp gate, or check a live website, production, or a site they do not own without touching it (read-only audit). Also use when the user mentions Tapp, @aarwitz/tapp, tapp_* tools, .tapp artifacts, or asks whether agent-authored UI actually works.
 ---
 
 # Tapp
@@ -16,7 +16,8 @@ screen or journey works from source inspection alone.
 | Inspect controls on the current screen | `tree` / `tapp_ui_tree` |
 | Reach a named screen/control | `focus` / `tapp_focus` (source + observed UI Map fast path) |
 | Drive a specific journey | MCP session start → focus or act → end |
-| Find bugs autonomously | `explore` / `tapp_explore` |
+| Find bugs autonomously (owned app/environment; it clicks) | `explore` / `tapp_explore` |
+| Check production or a site you do not own (never clicks) | `audit` / `tapp_audit` |
 | Preserve a journey | record and save a Flow; replay it deterministically |
 | Decide whether a merge passes policy | `ci`; exploration never decides this |
 
@@ -42,8 +43,7 @@ For a focused request in an already-grounded repository, use the requested targe
 than starting another broad exploration. If `.tapp/ui-map.json` does not exist yet, ground it once
 with `init . --explore`; source alone can locate a surface but cannot authorize unobserved taps.
 Targets may be a repository path, Xcode container, `.app`, iOS bundle id, APK plus Android app id,
-or owned HTTP(S) URL. Never explore a third-party web property without authorization: exploration
-clicks and types. For production or a site you do not own use `audit` / `tapp_audit` — read-only.
+or owned HTTP(S) URL. Never explore a third-party web property: exploration clicks and types.
 
 ## Navigate like a source-connected expert
 

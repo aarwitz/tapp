@@ -43,6 +43,13 @@ call. If no route has been observed, it returns the exact source evidence instea
 The skill chooses the smallest operation, asks you to select when a repository contains multiple
 application targets, and keeps exploration findings separate from gate decisions.
 
+> Use Tapp to audit https://example.com — don't click anything.
+
+`tapp_audit_web` is the read-only check for production or a site you do not own: it renders and
+reads the page (dead controls, broken images, 404 assets and links, failed requests, JS errors,
+mixed content, overflow) and never clicks, types or submits. Add `pages` to crawl same-origin
+links or `device` for the mobile rendering. It writes a capture with evidence and a report.
+
 For sign-in, `tapp_ios_login` accepts an `actor` from `.tapp/project.json`. The engine resolves
 its environment-variable bindings; start VS Code with those variables available. Without a
 named actor or complete explicit credentials, the sole configured actor is used, or VS Code

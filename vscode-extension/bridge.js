@@ -199,6 +199,16 @@ class TappBridge {
   // Promise<{action, values?}> }. With onAwaitInput set, the engine runs the exploration in
   // interactive mode: the harness pauses at input screens, the engine mirrors each request to
   // <responsePath>.request, we prompt the human, and write the response the harness polls.
+  // Read-only web audit: no simulator, no session, no clicks — a plain MCP call.
+  async audit(url, { pages, device } = {}) {
+    const args = { url };
+    if (pages) args.pages = pages;
+    if (device) args.device = device;
+    const res = await this.call("tapp_audit", args, 15 * 60 * 1000);
+    if (this.isError(res)) return { error: this.textOf(res) };
+    return { text: this.textOf(res) };
+  }
+
   async explore(target, maxActions, workspaceDir, opts = {}) {
     const r = await this.resolveBundleId(target, workspaceDir);
     if (r.error) return { error: r.error };

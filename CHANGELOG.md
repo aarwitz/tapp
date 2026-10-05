@@ -1,7 +1,20 @@
 # Changelog
 
+## VS Code 0.3.10
+
+- **`tapp_audit_web`**: Copilot can audit a live web page or site read-only — dead controls, broken
+  images, 404 assets and links, failed requests, JS errors, mixed content, overflow — with `pages` to
+  crawl same-origin and `device` for the mobile rendering. Nothing is clicked, so it is the tool for
+  production or a site the user does not own. Bundles the skill with the audit routing below.
+
 ## 0.17.23
 
+- **Agents are told when to audit and when to explore.** The MCP server now sends connect-time
+  `instructions` (smallest-operation routing, audit-vs-explore, observation-not-verdict, honesty
+  rules); `tapp_explore`'s description points third-party and production URLs at `tapp_audit`; the
+  Agent Skill's trigger description, decision table and command reference, and AGENTS.md's tool
+  table and honesty rules carry the same rule. A clean audit is never to be reported as "the site
+  works".
 - Web exploration now records video, matching iOS's existing `exploration.webm`/`.mov` capture
   convention — Playwright records natively (no ffmpeg transcode needed) and the file lands as
   `exploration.webm` in the run's capture directory, so the existing capture summary and hosted

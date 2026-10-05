@@ -435,6 +435,16 @@ function activate(ctx) {
     return textResult(r.error ? `❌ ${r.error}` : r.text);
   }, (input) => `🔭 Exploring${input.target ? ` ${input.target}` : " the iOS app"}`);
 
+  registerTool(ctx, "tapp_audit_web", async (input) => {
+    const url = String(input.url || "").trim();
+    if (!/^https?:\/\//i.test(url)) return textResult("❌ tapp_audit_web needs an http(s) URL");
+    const r = await getBridge().audit(url, {
+      pages: Number.isFinite(Number(input.pages)) && Number(input.pages) > 1 ? Math.min(200, Math.floor(Number(input.pages))) : undefined,
+      device: input.device ? String(input.device) : undefined,
+    });
+    return textResult(r.error ? `❌ ${r.error}` : r.text);
+  }, (input) => `🔎 Read-only audit of ${input.url}${Number(input.pages) > 1 ? ` (up to ${input.pages} pages)` : ""} — nothing will be clicked`);
+
   registerTool(ctx, "tapp_build_ios_app", async (input) => {
     const ws = wsDir();
     if (!ws && !input.projectDir) return textResult(`❌ ${NO_WORKSPACE}`);

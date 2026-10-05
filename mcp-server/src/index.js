@@ -2512,6 +2512,19 @@ const server = new Server(
       prompts: {},
       tools: {},
     },
+    // Shown to the model by MCP clients at connect time: the routing rules that keep an agent from
+    // reaching for the wrong tool, in the order the mistakes actually happen.
+    instructions: [
+      "Tapp gives you hands and eyes on real iOS, Android and web app surfaces. Pick the smallest operation:",
+      "- see or screenshot one screen → tapp_open_app; what is on screen now → tapp_screenshot / tapp_ui_tree;",
+      "- reach a named screen or drive a journey → tapp_session_start (+ focus) then session_act;",
+      "- find bugs in an app or environment you own → tapp_explore (it clicks, types and submits; minutes);",
+      "- check production or a site you do not own → tapp_audit only (read-only: never clicks);",
+      "- a merge decision → the CI gate (tapp ci / GitHub Action), never exploration.",
+      "Results are observations with findings, coverage and evidence paths — never a score or ship verdict.",
+      "inconclusive:true is not a pass; say what blocked coverage. A clean audit says the page is served without structural defects, not that the product works.",
+      "Open returned screenshot paths with your image tool before describing a screen. Never claim a flow works that you did not drive or see.",
+    ].join("\n"),
   }
 );
 
@@ -2742,7 +2755,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "verdict/releaseScore. Web separates deterministic findings from advisory sampled control probes. " +
         "There is a coverage floor: if the app barely explored (crash on launch / sign-in wall) it reports " +
         "`inconclusive` — absence of findings is NEVER a pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
-        "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things. " +
+        "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things; for production or a site you do not own use tapp_audit (read-only). " +
         "Tapp explores autonomously and does NOT pause to prompt for input — " +
         "it fills forms with safe defaults. The result includes `inputFieldsEncountered` (and `inputHint`): if " +
         "the app showed login/form fields and the user hasn't given you values, ASK THE USER what to enter (offer " +
