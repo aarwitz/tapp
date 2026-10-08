@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.24
+
+- **Tool descriptions say what they are NOT for.** `tapp_ui_tree`, `tapp_session_start` and
+  `tapp_audit` name the neighbouring tool an agent reaches for by mistake (launch → `tapp_open_app`,
+  bugs → `tapp_explore`, third-party sites → `tapp_audit`, behaviour on an owned app → explore or a
+  session), the way `tapp_open_app` and `tapp_flow_run` already did.
+- **An inconclusive exploration leads with the step that unblocks it**: credentials or an actor for a
+  sign-in wall, a larger time budget when the budget ran out, `tapp_open_app` with launch args when
+  the app may not have launched — instead of the generic baseline/session suggestions.
+- README tells developers that a live site, production, or a site they do not own goes through the
+  read-only `audit`, not exploration.
+
 ## VS Code 0.3.10
 
 - **`tapp_audit_web`**: Copilot can audit a live web page or site read-only — dead controls, broken

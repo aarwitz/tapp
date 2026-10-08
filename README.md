@@ -70,6 +70,10 @@ you want inline screenshot results or when the agent must interactively tap, typ
 arbitrary multi-step journey in one persistent session. It is not required for the core
 skill-to-CLI workflow.
 
+**A live site, production, or a site you do not own:** the agent uses `tapp audit` / `tapp_audit`,
+which renders and reads the page but never clicks, types or submits. Exploration is for apps and
+environments you own.
+
 **No agent integration:** run the npm package directly from an app repository in one line:
 
 ```bash

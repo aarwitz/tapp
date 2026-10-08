@@ -1748,6 +1748,14 @@ export function qaNextSteps(report, surface = "mcp") {
     return next;
   }
   const next = [];
+  // An inconclusive run's only useful next step is the one that unblocks coverage; everything
+  // else below assumes there was a real exploration to build on.
+  if (report?.inconclusive) {
+    const reason = String(report.stopReason || "");
+    if (reason.startsWith("login-wall")) next.push("re-run with `testEmail`/`testPassword` (or an `actor` from .tapp/project.json) — the sign-in wall was not exercised");
+    else if (reason === "time-budget-exhausted") next.push("re-run with a larger `timeoutSeconds` or a smaller `maxActions` — the time budget ran out, not the app");
+    else next.push("check the app launches: `tapp_open_app` first (add `appLaunchArgs`/`appLaunchEnv` if it needs a test bypass), then re-run");
+  }
   if (report?.findings?.length) next.push("open a flagged screen with `tapp_open_app`");
   next.push("re-run with `baselineFindings` to gate a fix");
   next.push("drive it step-by-step via `tapp_session_start`");
@@ -2834,7 +2842,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "pages > 1 crawls same-origin links breadth-first with robots.txt honoured. Writes a capture (screenshots, " +
         "per-finding evidence, report.html) like an explore run. Returns {kind:'tapp-structural-audit', readOnly:true, " +
         "pagesAudited, findingCounts, pages:[{url,title,controlsExamined,linksChecked,findings}], checkedFor, notChecked, capture}. " +
-        "An observation, never a verdict; absence of findings says the page is served without structural defects, not that the product works.",
+        "An observation, never a verdict; absence of findings says the page is served without structural defects, not that the product works. " +
+        "NOT for exercising behaviour (forms, buttons, journeys) on an app you own — that is tapp_explore or a session.",
       inputSchema: {
         type: "object",
         properties: {
@@ -3166,7 +3175,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Dump the accessibility (UI) tree of the current screen of an installed iOS or Android app — " +
         "the inspection primitive (like Playwright's snapshot). Returns {screenTitle, elements:[{type,id,label," +
-        "enabled,hittable,x,y,w,h}]}. Use it to see what's on screen before/after acting.",
+        "enabled,hittable,x,y,w,h}]}. Use it to see what's on screen before/after acting. NOT for launching an app (tapp_open_app) or finding bugs (tapp_explore).",
       inputSchema: {
         type: "object",
         properties: {
@@ -3263,7 +3272,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         "Start a PERSISTENT interactive session against an installed iOS/Android app, a web URL, or an " +
         "unambiguous managed web target in the MCP workspace. The app " +
         "launches once and stays up, so you can drive a Playwright-style tap → inspect loop without a cold " +
-        "launch per action. Returns the initial screen {screenTitle, elements[]}. Drive it with " +
+        "launch per action. NOT for finding bugs autonomously (tapp_explore), a one-off screenshot (tapp_open_app), " +
+        "or a site you do not own (tapp_audit — a session clicks). Returns the initial screen {screenTitle, elements[]}. Drive it with " +
         "tapp_focus for any named destination (source + shortest observed route), then tapp_session_act only for remaining actions; finish with tapp_session_end. " +
         "For a focused user request, ALWAYS pass it in `focus` so the session reaches that surface before returning. Only one session at a time. Starts from a " +
         "fresh COLD launch (terminate + relaunch, for a deterministic starting screen): persisted data such as Keychain credentials survives, but the app opens on its " +

@@ -305,6 +305,17 @@ test("QA next steps match the package-only surface without leaking MCP calls", (
   assert.doesNotMatch(next.join(" "), /tapp_open_app|baselineFindings|tapp_session_start/);
 });
 
+test("an inconclusive exploration leads with the one step that unblocks coverage", () => {
+  const login = engine.qaNextSteps({ inconclusive: true, stopReason: "login-wall-no-credentials", findings: [] });
+  assert.match(login[0], /testEmail.*testPassword/);
+  const budget = engine.qaNextSteps({ inconclusive: true, stopReason: "time-budget-exhausted", findings: [] });
+  assert.match(budget[0], /timeoutSeconds/);
+  const launch = engine.qaNextSteps({ inconclusive: true, stopReason: "coverage-floor-not-met", findings: [] });
+  assert.match(launch[0], /tapp_open_app/);
+  const conclusive = engine.qaNextSteps({ inconclusive: false, findings: [] });
+  assert.doesNotMatch(conclusive.join(" "), /testEmail|timeoutSeconds|check the app launches/);
+});
+
 test("long Xcode output retains the final actionable compiler error", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-xcode-tail-"));
   const bin = path.join(dir, "bin");

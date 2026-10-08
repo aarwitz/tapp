@@ -30,7 +30,9 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   assert.match(skill, /fresh repository needs one grounding exploration/i);
   assert.match(skill, /MCP session start → focus or act → end/);
   assert.match(skill, /npx -y @aarwitz\/tapp@latest doctor/);
-  assert.ok(skill.split("\n").length < 100, "SKILL.md stays compact enough for agent context");
+  // 120 lines: the decision table and the navigation rules are the skill; raised from 100 on
+  // 2026-10-08 when the audit-vs-explore routing left no room for the next rule.
+  assert.ok(skill.split("\n").length < 120, "SKILL.md stays compact enough for agent context");
   assert.match(read("skills/tapp/references/commands.md"), /npx -y @aarwitz\/tapp@latest init \. --explore/);
   for (const relative of ["skills/tapp/SKILL.md", "skills/tapp/references/commands.md", "README.md", "AGENTS.md"]) {
     assert.doesNotMatch(read(relative), /npx -y @aarwitz\/tapp(?!@)/, `${relative} does not let npx reuse a stale global Tapp`);
