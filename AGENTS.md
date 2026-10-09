@@ -210,5 +210,10 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   of retrying variations.
 - When you show a screenshot as proof, say what it proves and what it doesn't ("login works;
   I haven't verified checkout").
+- The capture a command returns is the evidence; `~/.tapp/captures/` holds every project's history.
+  Every capture carries `provenance.json` (kind, platform, target, project) and every result that
+  hands back a capture path hands back that record. `tapp_list_captures` and `tapp report latest`
+  are scoped to the current project; pass `allProjects:true` only when the user asks for history,
+  and never present another project's capture as this project's evidence or borrow it as a fixture.
 - A clean `tapp_audit` means the page is served without structural defects. It says nothing about
   behaviour, because nothing was clicked; never report it as "the site works".

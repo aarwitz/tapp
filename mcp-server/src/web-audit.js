@@ -20,6 +20,7 @@ import {
 import { buildQaReport } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
+import { writeCaptureProvenance } from "./capture-provenance.js";
 
 const require = createRequire(import.meta.url);
 const VERSION = (() => { try { return require("../../package.json").version; } catch { return "0.0.0"; } })();
@@ -322,6 +323,7 @@ export async function auditWebSite({
   const { chromium, devices } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions(process.env, {}));
   const capture = capturesDir ? openCapture(capturesDir, captureId || auditCaptureId()) : null;
+  const provenance = capture ? writeCaptureProvenance(capture.dir, { kind: "audit", platform: "web", target: start.href }) : null;
   try {
     const contextOptions = webContextOptions({ device, viewport, devices });
     // Identify ourselves to sites we do not own; the default UA is kept so rendering is unchanged.
@@ -396,7 +398,7 @@ export async function auditWebSite({
     };
     if (capture) {
       finalizeCapture(capture, { startUrl: start.href, pages: results, findings, robotsBlocked, linksChecked: { total: linksTotal, checked: linksChecked } });
-      summary.capture = { id: capture.id, path: capture.dir, report: path.join(capture.dir, "report.html") };
+      summary.capture = { id: capture.id, path: capture.dir, report: path.join(capture.dir, "report.html"), provenance };
       fs.writeFileSync(path.join(capture.dir, "audit.json"), JSON.stringify(summary, null, 2));
     }
     return summary;

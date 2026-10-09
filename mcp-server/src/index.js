@@ -29,6 +29,7 @@ const workspaceRoot = (() => {
   catch { return path.resolve(process.cwd()); }
 })();
 const scriptsDir = path.join(repoRoot, "scripts");
+import { writeCaptureProvenance, readCaptureProvenance, captureBelongsToProject, provenanceLabel } from "./capture-provenance.js";
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
 // The old alias remains a read-only fallback; unset repository development stays local.
 const tappHome = (process.env.TAPP_HOME || "").trim();
@@ -168,16 +169,32 @@ function listCaptureRuns(limit = 10) {
     .map((d) => {
       const full = path.join(capturesDir, d.name);
       const stat = fs.statSync(full);
+      const provenance = readCaptureProvenance(full);
       return {
         id: d.name,
         path: full,
         relativePath: path.relative(repoRoot, full),
         modifiedAt: stat.mtime.toISOString(),
+        provenance,
+        thisProject: captureBelongsToProject(provenance, workspaceRoot),
       };
     })
     .sort((a, b) => (a.modifiedAt < b.modifiedAt ? 1 : -1));
 
   return entries.slice(0, Math.max(1, limit));
+}
+
+// The captures directory is shared by every project on the machine. The agent-facing listing
+// shows this project's captures only; other projects' captures and captures made before
+// provenance existed are counted, not shown, so an agent never mistakes another project's
+// history for evidence of this one (issue #29). Internal callers that diff "before/after" to find
+// a capture a command just created keep the unfiltered list above.
+function listProjectCaptures(limit = 10, { allProjects = false } = {}) {
+  const all = listCaptureRuns(1000);
+  const hiddenUnknown = allProjects ? 0 : all.filter((e) => !e.provenance).length;
+  const hiddenOtherProjects = allProjects ? 0 : all.filter((e) => e.provenance && !e.thisProject).length;
+  const visible = allProjects ? all : all.filter((e) => e.thisProject);
+  return { captures: visible.slice(0, Math.max(1, limit)), hiddenOtherProjects, hiddenUnknown };
 }
 
 function summarizeCapture(runPath) {
@@ -191,9 +208,12 @@ function summarizeCapture(runPath) {
     ? fs.readdirSync(screenshotsDir).filter((f) => f.endsWith(".png") || f.endsWith(".jpg") || f.endsWith(".jpeg")).length
     : 0;
 
+  const provenance = readCaptureProvenance(runPath);
   return {
     path: runPath,
     relativePath: path.relative(repoRoot, runPath),
+    provenance,
+    thisProject: captureBelongsToProject(provenance, workspaceRoot),
     hasMarkers: files.includes("ocqa-markers.txt"),
     hasFullOutput: files.includes("full-output.txt"),
     hasUITree: files.includes("uitree.json"),
@@ -1903,6 +1923,7 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
   const outDir = path.join(capturesDir, id);
+  const provenance = writeCaptureProvenance(outDir, { kind: "explore", platform: "web", target: url.trim(), projectDir: workspaceRoot });
   let webResult;
   try {
     const { exploreWeb } = await import("./web-explorer.js");
@@ -1937,7 +1958,7 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
     const { writeHtmlReport } = await import("./html-report.js");
     reportHtml = writeHtmlReport(outDir, { report, label: url.trim() });
   } catch { /* evidence page is best-effort */ }
-  const structured = { ...report, regression, platform: "web", uiMap, reportHtml, exploration: { seedRoutes: webResult.seedRoutes || [], targets: webResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
+  const structured = { ...report, regression, platform: "web", uiMap, reportHtml, exploration: { seedRoutes: webResult.seedRoutes || [], targets: webResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir), provenance } };
   const text = formatQaReport(report, { regression, bundleId: url.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
@@ -1950,6 +1971,7 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
   const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
   const id = "android-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
   const outDir = path.join(capturesDir, id);
+  const provenance = writeCaptureProvenance(outDir, { kind: "explore", platform: "android", target: appId.trim(), projectDir: workspaceRoot });
   let androidResult;
   try {
     const { exploreAndroid } = await import("./android-explorer.js");
@@ -1983,7 +2005,7 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
     const { writeHtmlReport } = await import("./html-report.js");
     reportHtml = writeHtmlReport(outDir, { report, label: appId.trim() });
   } catch {}
-  const structured = { ...report, regression, platform: "android", uiMap, reportHtml, exploration: { targets: androidResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir) } };
+  const structured = { ...report, regression, platform: "android", uiMap, reportHtml, exploration: { targets: androidResult.seedTargets || [] }, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir), provenance } };
   const text = formatQaReport(report, { regression, bundleId: appId.trim(), aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap, surface });
   return { structured, text };
 }
@@ -2006,6 +2028,7 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
 
   const { created, timedOut, captureStderr } = await runExploreStreaming(bundleId, actions, timeoutSec, env, onProgress);
   if (!created) return { error: "Exploration produced no capture run", details: { timedOut } };
+  const provenance = writeCaptureProvenance(created.path, { kind: "explore", platform: "ios", target: bundleId, projectDir: workspaceRoot });
 
   const report = buildQaReport(path.join(created.path, "ocqa-markers.txt"), { platform: "ios", target: bundleId });
   if (!report) {
@@ -2053,7 +2076,7 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
     reportHtml,
     recording,
     recordingWarning,
-    capture: { id: created.id, path: created.path, relativePath: created.relativePath },
+    capture: { id: created.id, path: created.path, relativePath: created.relativePath, provenance },
     timedOut,
     autoBooted: sim.autoBooted || false,
   };
@@ -2714,7 +2737,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "tapp_list_captures",
       title: "List captures",
-      description: "List recent capture runs from captures/",
+      description: "List recent capture runs for THIS project (the workspace the server runs in). The captures directory is shared by every project on the machine; other projects' captures and pre-provenance captures are counted but hidden unless allProjects is true. Each entry carries provenance {kind, platform, target, project}. Use the capture a command just returned as evidence; never cite a capture from another project as if it were this one.",
       inputSchema: {
         type: "object",
         properties: {
@@ -2724,6 +2747,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             maximum: 100,
             default: 10,
           },
+          allProjects: { type: "boolean", default: false, description: "Include captures from other projects and captures without provenance — only when the user explicitly asks for historical evidence" },
         },
       },
     },
@@ -3620,16 +3644,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (limit < 1 || limit > 100) {
       return errorResult("limit must be between 1 and 100", { received: limit });
     }
-    const captures = listCaptureRuns(limit);
-    const L = [`🗂️ Found **${captures.length}** capture run${captures.length === 1 ? "" : "s"}`];
+    const allProjects = args.allProjects === true;
+    const { captures, hiddenOtherProjects, hiddenUnknown } = listProjectCaptures(limit, { allProjects });
+    const L = [`🗂️ Found **${captures.length}** capture run${captures.length === 1 ? "" : "s"}${allProjects ? " across all projects" : ` for this project (${path.basename(workspaceRoot)})`}`];
     if (captures.length) {
       L.push("");
       for (const c of captures.slice(0, 12)) {
-        L.push(`- \`${c.id}\` · ${c.relativePath}`);
+        L.push(`- \`${c.id}\` · ${provenanceLabel(c.provenance)}`);
       }
       if (captures.length > 12) L.push(`- …and ${captures.length - 12} more`);
     }
-    return richResult(L.join("\n"), { captures });
+    if (hiddenOtherProjects || hiddenUnknown) {
+      L.push("", `Not shown: ${hiddenOtherProjects} capture(s) from other projects${hiddenUnknown ? ` and ${hiddenUnknown} with no provenance (made before tapp 0.17.25)` : ""}. They are not evidence of this project; pass allProjects:true only when the user asks for historical captures.`);
+    }
+    return richResult(L.join("\n"), { captures, hiddenOtherProjects, hiddenUnknown, project: path.basename(workspaceRoot) });
   }
 
   if (name === "tapp_capture_summary") {

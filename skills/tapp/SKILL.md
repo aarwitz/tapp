@@ -77,6 +77,10 @@ ship verdict. Report:
 - each important finding and its evidence/report path;
 - what Tapp explicitly did not check.
 
+Evidence is the capture the command just returned. `~/.tapp/captures/` is shared by every project on
+the machine; `tapp_list_captures` shows only this project's and labels each with its provenance. Never
+cite or reuse another project's capture, and never borrow one as a fixture — make a fresh one.
+
 If `inconclusive: true`, explain the blocker. A login wall or missing test data is not a pass. Ask for
 credentials or launch configuration instead of rerunning blindly. Do not infer content accuracy,
 privacy, brand consistency, or business guarantees from a generic crawl; those require a reviewed

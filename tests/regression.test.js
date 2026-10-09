@@ -52,6 +52,14 @@ test("reachability loss fires only with a comparable action budget", () => {
   assert.ok(losses.every((l) => l.type === "screen_unreachable" && l.severity === "high"));
 });
 
+test("reachability loss ignores exploration-order variance: one of seven screens unreached is not a collapse", () => {
+  const baseline = { screens: ["A", "B", "C", "D", "E", "F", "G"], actionsPerformed: 16 };
+  const variance = { screens: ["A", "B", "C", "D", "E", "F", "X"], actionsPerformed: 16 };
+  assert.deepEqual(computeReachabilityLoss(variance, baseline), []);
+  const collapse = { screens: ["A", "B"], actionsPerformed: 16 };
+  assert.equal(computeReachabilityLoss(collapse, baseline).length, 5, "2 of 7 reached is the stranded-explorer case the rule exists for");
+});
+
 test("REVIEW SCENARIO: fixing one control while breaking another on the same screen is a NEW regression", () => {
   const baseline = [{ type: "unresponsive_element", screen: "Settings", target: "Save", severity: "high", title: "dead Save" }];
   const current = [{ type: "unresponsive_element", screen: "Settings", target: "Delete Account", severity: "high", title: "dead Delete" }];

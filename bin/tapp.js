@@ -1233,6 +1233,10 @@ switch (command) {
     const flowLog = path.join(tappHome, "flows", `${token}.log`);
     const evidenceDir = path.join(tappHome, "captures", `flow-${platform}-${token}`);
     fs.mkdirSync(path.dirname(flowLog), { recursive: true });
+    {
+      const { writeCaptureProvenance } = await import(path.join(packageRoot, "mcp-server", "src", "capture-provenance.js"));
+      writeCaptureProvenance(evidenceDir, { kind: "flow", platform, target: path.relative(process.cwd(), absolute) || absolute });
+    }
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     if (platform === "ios") {
       const launch = iosLaunchOptions(flags, rest);
@@ -1445,6 +1449,10 @@ switch (command) {
     const evidenceDir = path.join(tappHome, "captures", `scenario-web-${token}`);
     const env = { ...process.env, FLOW_LOG: flowLog, TAPP_FLOW_EVIDENCE_DIR: evidenceDir };
     const url = typeof flags.url === "string" ? flags.url : scenario.url || scenario.app || "";
+    {
+      const { writeCaptureProvenance } = await import(path.join(packageRoot, "mcp-server", "src", "capture-provenance.js"));
+      writeCaptureProvenance(evidenceDir, { kind: "scenario", platform: "web", target: url || (path.relative(process.cwd(), absolute) || absolute) });
+    }
     const result = spawnSync(process.execPath, [path.join(packageRoot, "scripts", "run-web-scenario.js"), absolute, url], { stdio: "inherit", env });
     if (fs.existsSync(flowLog)) spawnSync("python3", [path.join(packageRoot, "scripts", "flow_lib.py"), "report", flowLog], { stdio: "inherit" });
     console.log(`\nEvidence: ${evidenceDir}`);
@@ -1993,7 +2001,13 @@ switch (command) {
     // of those made `tapp report` fail even though valid exploration captures existed. An explicitly
     // named capture is honored as-is so a non-exploration capture still gets a clear "no markers".
     const explicit = rest[0] && rest[0] !== "latest";
-    const wanted = explicit ? runs.find((r) => path.basename(r) === rest[0]) : runs.find(hasMarkers);
+    // `latest` means this project's latest: the directory holds every project's captures, and
+    // opening another project's evidence from here is exactly the mix-up issue #29 describes.
+    // Falls back to any exploration capture only when none carries this project's provenance.
+    const { readCaptureProvenance, captureBelongsToProject } = await import(path.join(packageRoot, "mcp-server", "src", "capture-provenance.js"));
+    const ours = (dir) => captureBelongsToProject(readCaptureProvenance(dir), process.cwd());
+    const wanted = explicit ? runs.find((r) => path.basename(r) === rest[0]) : (runs.find((r) => hasMarkers(r) && ours(r)) || runs.find(hasMarkers));
+    if (!explicit && wanted && !ours(wanted)) console.log("ℹ️  No exploration capture carries this project's provenance; showing the newest capture on this machine — it may belong to another project.");
     if (!wanted) {
       bad("No captures found", explicit ? `no capture named "${rest[0]}"` : "run an exploration first (no capture with exploration markers was found)");
       process.exit(1);

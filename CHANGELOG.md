@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.17.25
+
+- **Every capture knows which project made it** (public issue #29). A Copilot session working in
+  one repository had cited an older capture from another repository as evidence, because
+  `~/.tapp/captures/` is shared by every project on the machine and nothing said whose a capture
+  was. Explore, audit, flow and scenario captures now write `provenance.json` (kind, platform,
+  target, project directory/name/git remote, tool version, time); every result that hands back a
+  capture path hands back that record; `tapp_list_captures` lists this project's captures only
+  (other projects' and pre-provenance captures are counted, not shown, unless `allProjects` is
+  true) and labels each with its provenance; `tapp report latest` means this project's latest and
+  says so when it has to fall back. The skill and AGENTS.md carry the rule: the capture a command
+  returns is the evidence; never present another project's capture as this one's or borrow it as
+  a fixture.
+- **The hosted iOS gate no longer fails on exploration-order variance.** The reachability-loss
+  regression (a baseline screen never reached) now requires a real collapse — fewer than 60 % of
+  the baseline's screens reached at a comparable budget — instead of firing because one of seven
+  screens was skipped at 16 actions. The stranded-explorer case it was built for (two of seven
+  reached) still fails the gate. The iOS e2e harness budget per command is 10 minutes, because
+  the first explore on a hosted macOS runner builds the harness.
+
 ## 0.17.24
 
 - **Tool descriptions say what they are NOT for.** `tapp_ui_tree`, `tapp_session_start` and

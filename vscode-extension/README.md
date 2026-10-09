@@ -57,6 +57,11 @@ asks you to choose among several. Explicit email/password values take precedence
 SecretStorage credentials are used only when no actor and no explicit credential are supplied;
 a storage or actor lookup failure stops before the form is submitted.
 
+Captures from every project land in `~/.tapp/captures/`. The active workspace is the project
+boundary: Tapp labels each capture with the project that made it, lists only this project's by
+default, and Copilot should use the capture a command just returned — not an older one from another
+repository — as evidence.
+
 ## Requirements
 
 - Node 18 or newer.

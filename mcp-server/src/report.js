@@ -512,14 +512,20 @@ export function computeContentCollapse(currentCounts, baselineCounts) {
 // vanishing from the same-budget exploration usually means navigation regressed (a dead
 // back button trapping the explorer, a broken link, a crash short-circuiting a flow).
 // Found via subtle-bug seeding: a dead back button stranded the run on one screen and
-// SHIP-READY passed with 3 of 6 baseline screens missing. Guarded: only fires when the
-// current run had a comparable action budget (≥60% of baseline actions), so a legit
-// short run doesn't spray false losses.
+// SHIP-READY passed with 3 of 6 baseline screens missing. Two guards keep it honest:
+// - a comparable action budget (≥60% of baseline actions), so a legit short run doesn't spray
+//   false losses;
+// - a real collapse (fewer than 60% of the baseline's screens reached). Exploration order is not
+//   deterministic, and at a small budget a run routinely reaches 6 of 7 screens one time and a
+//   different 6 the next; that is variance, not a regression. The hosted iOS gate went red on
+//   exactly that (one of seven DemoApp screens unreached at 16 actions) on 2026-10-08.
 export function computeReachabilityLoss(current, baseline) {
-  if (!current?.screens || !baseline?.screens) return [];
+  if (!current?.screens || !baseline?.screens || !baseline.screens.length) return [];
   const baseActions = baseline.actionsPerformed || 0;
   if (baseActions > 0 && (current.actionsPerformed || 0) < baseActions * 0.6) return [];
   const reached = new Set(current.screens);
+  const reachedBaseline = baseline.screens.filter((s) => reached.has(s)).length;
+  if (reachedBaseline >= baseline.screens.length * 0.6) return [];
   return baseline.screens
     .filter((s) => !reached.has(s))
     .map((screen) => ({

@@ -583,7 +583,9 @@ test("[char] reachability loss vs a baseline blocks the merge", () => {
   ];
   const baseline = {
     findings: [], inconclusive: false,
-    screens: ["Home", "Feed", "Profile"], actionsPerformed: 3, // Profile no longer reached
+    // Baseline reached five screens; this run reached two. A collapse, not exploration-order
+    // variance (missing one of several screens at the same budget no longer fires).
+    screens: ["Home", "Feed", "Profile", "Settings", "Account"], actionsPerformed: 3,
     screenElementCounts: {},
   };
   const r = runGate({ markers, baseline });

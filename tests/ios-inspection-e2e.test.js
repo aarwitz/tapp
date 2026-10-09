@@ -20,7 +20,9 @@ let evidence;
 
 function run(args, { cwd = root, expected = 0, name } = {}) {
   const result = spawnSync(process.execPath, [cli, ...args], {
-    cwd, encoding: "utf8", timeout: 300_000, maxBuffer: 5_000_000,
+    // 10 minutes: the first explore on a hosted macOS runner builds the harness; 300s timed out
+    // on 2026-10-09 with the engine at 1/1 actions. The outer test budget is 900s per run.
+    cwd, encoding: "utf8", timeout: 600_000, maxBuffer: 5_000_000,
     env: { ...process.env, TAPP_HOME: tappHome },
   });
   fs.writeFileSync(path.join(evidence, `${name}.log`), `${result.stdout || ""}\n${result.stderr || ""}`);
