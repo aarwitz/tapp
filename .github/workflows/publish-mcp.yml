@@ -38,7 +38,19 @@ jobs:
           VERSION="$(jq -r '.version' server.json)"
           PACKAGE_VERSION="$(jq -r '.packages[0].version' server.json)"
           test "$VERSION" = "$PACKAGE_VERSION"
-          test "$(npm view "@aarwitz/tapp@$VERSION" version)" = "$VERSION"
+          # workflow_run fires the instant publish-npm.yml's job reports success, but registry
+          # indexing lags behind the publish by up to a few minutes (observed directly: two
+          # runs 404'd here before the version was queryable). Poll instead of checking once.
+          for attempt in $(seq 1 10); do
+            if [[ "$(npm view "@aarwitz/tapp@$VERSION" version 2>/dev/null || true)" == "$VERSION" ]]; then
+              break
+            fi
+            if [[ "$attempt" == 10 ]]; then
+              echo "::error::@aarwitz/tapp@$VERSION never appeared on the npm registry after 10 attempts" >&2
+              exit 1
+            fi
+            sleep 30
+          done
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             test "$GITHUB_REF_NAME" = "v$VERSION"
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
