@@ -217,3 +217,24 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   and never present another project's capture as this project's evidence or borrow it as a fixture.
 - A clean `tapp_audit` means the page is served without structural defects. It says nothing about
   behaviour, because nothing was clicked; never report it as "the site works".
+
+## File feedback on tapp itself — don't just work around it
+
+Tapp is still being hardened, and a rough edge in Tapp is not the same thing as a defect in the
+app under test. File it with `tapp_feedback` (or `npx -y @aarwitz/tapp@latest feedback "title"`)
+as soon as you notice, not after you've already found a workaround and moved on — draft only;
+`submit:true` needs the user's OK first, since filing posts a public GitHub issue. File when you
+see any of:
+
+- A command's documented or expected behavior doesn't match what happened (a flag silently
+  ignored, a field `null`/missing when it should be populated).
+- A crash, hang, or unexplained failure from the underlying platform tooling (simulator, emulator,
+  browser) rather than the app under test.
+- You had to invent a workaround to get a straightforward task done.
+- A result that technically succeeded but didn't do what it clearly should have (`ok` with no
+  actual state change, `inconclusive` for a reason that doesn't match the documented causes).
+- You're not sure whether something is a real app finding or a Tapp bug — file it rather than
+  silently deciding either way.
+
+One file per distinct issue. Lean toward filing when unsure: a closed non-issue costs nothing, a
+bug nobody ever reported stays a bug.

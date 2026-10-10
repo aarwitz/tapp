@@ -97,6 +97,16 @@ ids or visible labels, check `hittable`, tap a field before typing, and wait for
 content. Use coordinates only as a last resort. End the session when finished.
 
 Do not edit the app merely because testing found a defect unless the user also asked for a fix. State what the evidence proves and what remains untested.
-If tapp itself misbehaves, draft feedback with `npx -y @aarwitz/tapp@latest feedback "title"` or `tapp_feedback`; it is public — draft first, `--submit` only with the user's OK.
+
+## File feedback on tapp itself — don't just work around it
+
+A rough edge in Tapp (not the app under test) deserves its own report, filed the moment you
+notice — not after you've already found a workaround and moved on. Draft with `tapp_feedback` or
+`npx -y @aarwitz/tapp@latest feedback "title"` (draft only; `submit:true` needs the user's OK, it's
+public) whenever: documented/expected behavior doesn't match reality; the underlying platform
+tooling (simulator/emulator/browser) crashes or hangs, not the app under test; you had to invent a
+workaround to finish a straightforward task; a result reported `ok`/`inconclusive` but clearly
+shouldn't have; or you're unsure whether something is a real app finding or a Tapp bug. One report
+per issue; when unsure, file — a closed non-issue costs nothing, an unreported bug stays a bug.
 
 Read [references/commands.md](references/commands.md) only for exact CLI/MCP syntax, Flow replay, credentials, or platform prerequisites.
