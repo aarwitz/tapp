@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { auditScope, parseRobots, robotsAllows, auditCaptureId } from "../mcp-server/src/web-audit.js";
+import { auditScope, parseRobots, robotsAllows, auditCaptureId, dedupeSiteIssues } from "../mcp-server/src/web-audit.js";
 
 const browserTest = { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 90_000 };
 
@@ -21,6 +21,8 @@ async function serveSite() {
     "/": `<!doctype html><title>Acme Plumbing</title><meta name="viewport" content="width=device-width"><body>
       <nav><a href="/services">Services</a> <a href="/pricing">Pricing</a> <a href="/about">About us</a> <a href="https://example.com/off-site">Instagram</a></nav>
       <img src="/img/hero.jpg" alt="Our van">
+      <img src="/px.gif?u=1" width="1" height="1">
+      <img src="https://127.0.0.1:1/t.asp?pn=8&user=1">
       <link rel="stylesheet" href="/styles/missing.css">
       <button id="quote">Get a quote</button>
       <script>document.getElementById('quote').addEventListener('click', () => {});</script>
@@ -71,6 +73,20 @@ test("robots.txt: longest match wins, Allow beats Disallow at equal length, our 
   assert.equal(robotsAllows([], "/anything"), true);
 });
 
+test("the same defect on six pages is one issue with six pages", () => {
+  const f = (screen, type, target, severity = "medium") => ({ type, target, severity, title: `${type} ${target}`, screen });
+  const issues = dedupeSiteIssues([
+    f("/", "broken_link", "/menu-old"), f("/about", "broken_link", "/menu-old"), f("/contact", "broken_link", "/menu-old"),
+    f("/", "no_viewport_meta", "meta[name=viewport]", "low"), f("/about", "no_viewport_meta", "meta[name=viewport]", "low"),
+    f("/pricing", "broken_link", "/other", "high"),
+  ]);
+  assert.equal(issues.length, 3);
+  assert.equal(issues[0].target, "/other", "ordered by severity first");
+  assert.deepEqual(issues[1].pages, ["/", "/about", "/contact"]);
+  assert.equal(issues[1].occurrences, 3);
+  assert.equal(issues[2].type, "no_viewport_meta");
+});
+
 test("audit capture ids sort by time and read as web captures", () => {
   const id = auditCaptureId(new Date(2026, 9, 1, 9, 5, 7));
   assert.equal(id, "web-audit-20261001-090507");
@@ -88,6 +104,7 @@ test("one page: broken image, 404 asset, dead links, a page wider than its viewp
     assert.match(titles, /broken_image: Image failed to load: \/img\/hero\.jpg/, titles);
     assert.match(titles, /missing_asset: 404 asset: \/img\/hero\.jpg/, titles);
     assert.match(titles, /missing_asset: 404 asset: \/styles\/missing\.css/, titles);
+    assert.doesNotMatch(titles, /broken_image: .*(px\.gif|t\.asp)/, "tracking pixels are not broken pictures");
     assert.match(titles, /broken_link: Link “Pricing” → \/pricing answers 404/, titles);
     assert.doesNotMatch(titles, /Services|About us|Instagram|Get a quote/, "working links, off-site links and a wired button are never accused");
     assert.deepEqual(result.linksChecked, { total: 3, checked: 3 });

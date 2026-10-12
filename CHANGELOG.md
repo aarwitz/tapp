@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.17.27
+
+- **`tapp audit` stops calling wired controls dead.** A precision pass on 25 real small-business
+  sites (140 pages, read-only, mobile profile) found that nearly half of all findings were
+  `href="#"` links that had a click handler — menus, sliders, lightboxes — and that one
+  WordPress site's 104 "dead buttons" were Elementor accordion headers wired through jQuery's
+  delegation registry, where the selector lives in `jQuery._data`, not in handler source. Now a
+  placeholder or in-page link gets the same wiring test a button does before it is reported, and
+  the wiring test reads jQuery's registry for direct and delegated click handlers.
+- A link is only called broken after a `GET` confirms it: some servers answer 404 or 5xx to
+  `HEAD` for pages that load.
+- Icon-only controls are named by their image alt, `title`, `aria-labelledby` or inner SVG label;
+  a control with no name at all is reported as "unlabelled <a>", never by an evidence selector.
+- The site audit result carries `issues`: one entry per distinct defect across the site with the
+  pages it appears on, so a footer link answering 404 on six pages is one thing to fix.
+- **The wiring check says when it cannot see, instead of accusing.** Three site-builder patterns
+  make "no handler found" meaningless: scripts delayed until the first interaction (Perfmatters,
+  WP Rocket, Flying Scripts — detected by their script types, or by a jQuery tag with no jQuery),
+  pages that load scripts but attached no click handler at all by audit time (lazy hydration), and
+  a site-wide handler on `<body>`/`document` the audit cannot read with three or more controls
+  under it (Squarespace); Wix is treated as lazily hydrated outright. On such pages the
+  dead-control and placeholder-link checks are skipped and the report's "not checked" list says
+  why (`wiringUnverifiable` per page, `pagesWithUnverifiableWiring` per site). Native
+  `<summary>`/`<select>`/`<label>` controls, shadow-root hosts and third-party widget mounts
+  (accessibility overlays, chat bubbles) count as wired.
+- A failed image that is a 1×1 or beacon-style request is not a broken picture; a link fetch that
+  drops the connection is retried once before it is reported, and then only as low.
+- Measured on the 25-site pass: 369 findings → 64, every remaining finding sampled verified by
+  hand (see `docs/AUDIT-PRECISION-2026-10-12.md`).
+
 ## 0.17.26
 
 - **An iOS crash is attributed before it is reported** (public issue #30). The harness reports

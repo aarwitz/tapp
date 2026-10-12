@@ -144,15 +144,22 @@ export async function installWebListenerTracking(context) {
     // button works. Keep their source text: it is the only way to tell which
     // controls such a handler actually claims.
     const delegatedKey = Symbol.for("tapp.delegatedClickHandlers");
+    // How many click handlers the page attached anywhere: zero means its scripts have not run
+    // (deferred hydration), and "nothing is listening on this button" says nothing about the button.
+    const countKey = Symbol.for("tapp.clickListenerCount");
+    window[countKey] = 0;
     const add = EventTarget.prototype.addEventListener;
     const remove = EventTarget.prototype.removeEventListener;
     EventTarget.prototype.addEventListener = function tappTrackedAdd(type, listener, options) {
+      if (type === "click" && listener) window[countKey] += 1;
       if (type === "click" && this instanceof Element && listener) {
         if (!this[key]) Object.defineProperty(this, key, { value: new Set(), configurable: true });
         this[key].add(listener);
       }
-      if (type === "click" && listener && (this === document || this === window)) {
-        const target = this === window ? window : document;
+      // Delegation targets: document, window, and the two elements a site-wide handler sits on.
+      const global = this === document || this === window || (document.body && this === document.body) || this === document.documentElement;
+      if (type === "click" && listener && global) {
+        const target = this === window ? window : this === document ? document : this;
         if (!target[delegatedKey]) Object.defineProperty(target, delegatedKey, { value: new Set(), configurable: true });
         try { target[delegatedKey].add(String(listener).slice(0, 4000)); } catch { /* exotic handler */ }
       }
@@ -1208,7 +1215,10 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 export function auditFindingsFromControls(controls = []) {
   const findings = [];
   for (const control of controls) {
-    const where = control.label || control.identifier || control.selector || "(unlabelled)";
+    // Never name a control by its evidence selector; an unlabelled control is said to be one.
+    const where = control.label
+      || (control.identifier && /[#\[]/.test(control.identifier) ? control.identifier : "")
+      || `unlabelled <${control.tag || "control"}>`;
     if (control.kind === "dead_anchor") {
       findings.push({ type: "anchor_missing", severity: "medium",
         title: `In-page link “${where}” points at #${control.fragment}, which is not on the page`, target: control.href });
@@ -1236,8 +1246,24 @@ export async function auditStructuralControls(page) {
       const style = window.getComputedStyle(el);
       return style.visibility !== "hidden" && style.display !== "none" && el.getClientRects().length > 0;
     };
-    const name = (el) => (el.getAttribute("aria-label") || el.textContent || el.getAttribute("value") || "").replace(/\s+/g, " ").trim().slice(0, 80);
+    const name = (el) => {
+      const labelledBy = (el.getAttribute("aria-labelledby") || "").split(/\s+/).map((id) => id && document.getElementById(id)?.textContent).filter(Boolean).join(" ");
+      const inner = el.querySelector("img[alt], svg[aria-label], [title]");
+      const raw = el.getAttribute("aria-label") || labelledBy || el.textContent || el.getAttribute("title") || (inner && (inner.getAttribute("alt") || inner.getAttribute("aria-label") || inner.getAttribute("title"))) || el.getAttribute("value") || "";
+      return String(raw).replace(/\s+/g, " ").trim().slice(0, 80);
+    };
     const selectorFor = (el) => el.id ? `#${el.id}` : el.getAttribute("data-testid") ? `[data-testid="${el.getAttribute("data-testid")}"]` : el.tagName.toLowerCase();
+    // A short class is the best name an icon-only control has ("a.social-facebook").
+    const classHint = (el) => { const c = [...el.classList].find((x) => /^[a-z][a-z0-9_-]{2,30}$/i.test(x) && !/^(active|btn|button|link|icon|item|elementor|wp|fa|fas|fab|far)$/i.test(x)); return c ? `${el.tagName.toLowerCase()}.${c}` : ""; };
+    // Natively interactive without any script: the browser wires these itself.
+    const nativelyWired = (el) => Boolean(el.closest("summary, details, select, option, label, input, textarea, video[controls], audio[controls]"));
+    // A control that hosts a shadow root, or sits inside a third-party widget mount (accessibility
+    // overlays, chat bubbles), is wired by that widget's own script where no page-level record
+    // can see it.
+    const widgetWired = (el) => {
+      for (let node = el; node && node !== document.body; node = node.parentElement) if (node.shadowRoot) return true;
+      return Boolean(el.closest('[id*="userway" i], [class*="userway" i], [id*="accessib" i], [class*="accessib" i], [id*="acsb" i], [class*="acsb" i], [id*="chat" i][class*="widget" i], iframe'));
+    };
     // Some controls are wired in CSS, not JavaScript: a menu that opens while
     // its trigger is hovered or focused has no listener to find, and calling
     // it dead is wrong. Collect the selectors that some rule reacts to — the
@@ -1276,10 +1302,9 @@ export async function auditStructuralControls(page) {
     // this way (an outside-click closer, say) claims nothing and is ignored,
     // rather than excusing every unwired control on the page.
     const delegatedSelectors = [];
-    for (const source of [
-      ...(document[Symbol.for("tapp.delegatedClickHandlers")] || []),
-      ...(window[Symbol.for("tapp.delegatedClickHandlers")] || []),
-    ]) {
+    const delegatedKey = Symbol.for("tapp.delegatedClickHandlers");
+    const globalSources = [document, window, document.body, document.documentElement].flatMap((t) => [...((t && t[delegatedKey]) || [])]);
+    for (const source of globalSources) {
       for (const m of String(source).matchAll(/\.(?:closest|matches)\(\s*["'`]([^"'`]+)["'`]/g)) {
         delegatedSelectors.push(m[1]);
       }
@@ -1287,44 +1312,105 @@ export async function auditStructuralControls(page) {
     const claimedByDelegate = (el) => delegatedSelectors.some((selector) => {
       try { return el.matches(selector) || Boolean(el.closest(selector)); } catch { return false; }
     });
+    // jQuery registers one dispatcher per element and keeps `$(root).on("click", ".sel", fn)`'s
+    // selector in its own registry, so neither the per-element listener record nor the handler's
+    // source text says which controls it claims. WordPress/Elementor/Bootstrap sites wire menus,
+    // accordions, sliders and review widgets this way; read the registry directly.
+    const jq = window.jQuery && typeof window.jQuery._data === "function" ? window.jQuery : null;
+    const jqHandlers = (node) => {
+      let events;
+      try { events = jq._data(node, "events"); } catch { events = null; }
+      return events ? [...(events.click || []), ...(events.touchstart || []), ...(events.touchend || [])] : [];
+    };
+    const jqWired = (el) => {
+      if (!jq) return false;
+      for (let node = el; node; node = node.parentElement) {
+        for (const h of jqHandlers(node)) {
+          if (!h.selector) return true; // a direct handler on the control or an ancestor
+          try { if (el.matches(h.selector) || el.closest(h.selector)) return true; } catch { /* bad selector */ }
+        }
+      }
+      for (const h of jqHandlers(document)) {
+        if (!h.selector) continue;
+        try { if (el.matches(h.selector) || el.closest(h.selector)) return true; } catch { /* bad selector */ }
+      }
+      return false;
+    };
+    // Everything that makes a control "alive": the same test for a button and for a link whose
+    // href is a placeholder — a wired `<a href="#">` is a JavaScript control, not a dead link.
+    const isWired = (el) => {
+      if (nativelyWired(el) || widgetWired(el)) return true;
+      for (let node = el; node && node !== document.body; node = node.parentElement) {
+        if ((node[key] && node[key].size > 0) || typeof node.onclick === "function" || node.hasAttribute("onclick")) return true;
+      }
+      if (el.matches("button[type=submit], input[type=submit]") && el.closest("form")) return true;
+      if (el.closest("label")) return true; // a label drives its own control
+      if (opensSomethingOnHoverOrFocus(el)) return true;
+      if (claimedByDelegate(el)) return true;
+      if (jqWired(el)) return true;
+      return false;
+    };
 
+    // Some sites delay every script until the first user interaction (WP Rocket, Perfmatters,
+    // Flying Scripts). A read-only audit never interacts, so on such a page nothing is wired yet
+    // and every control would be called dead. Detect the pattern and skip the wiring-dependent
+    // checks; the report says they were not checked.
+    const deferredScripts = document.querySelectorAll('script[type="rocketlazyloadscript"], script[data-rocket-type], script[type="pmdelayedscript"], script[type="javascript/blocked"], script[data-type="lazy"], script[type="lazy"]').length;
+    const jqueryTagWithoutJquery = !window.jQuery && Boolean(document.querySelector('script[src*="jquery"]'));
+    const generator = (document.querySelector('meta[name="generator"]')?.getAttribute("content") || "").toLowerCase();
+    // Wix renders every control server-side and hydrates each component on its own schedule;
+    // what has a handler at audit time is not what has one for a visitor.
+    const lazyHydrationBuilder = generator.includes("wix") || Boolean(document.querySelector("#SITE_CONTAINER, [data-wix-site]"));
+    const scriptsDeferred = deferredScripts > 0 || jqueryTagWithoutJquery;
+    const clickListenerCount = window[Symbol.for("tapp.clickListenerCount")] || 0;
+    const inlineHandlers = document.querySelectorAll("[onclick]").length;
+    // A page with no scripts at all is static: a dead button there is dead. The hydration rule
+    // is for pages that load scripts and attached nothing by the time the audit looked.
+    const loadsScripts = document.querySelectorAll("script[src]").length > 0;
+    // A global click handler whose source exposes no selector: delegation we cannot read.
+    const opaqueGlobalHandlers = globalSources.filter((src) => !/\.(?:closest|matches)\(\s*["'`]/.test(String(src))).length;
     const dead = [];
     for (const el of document.querySelectorAll("a[href], button, [role=button], [aria-controls]")) {
       if (!visible(el)) continue;
       const label = name(el);
+      const identifier = /^[a-z]+$/.test(selectorFor(el)) ? (classHint(el) || selectorFor(el)) : selectorFor(el);
+      const tag = el.tagName.toLowerCase();
       const href = el.getAttribute("href");
       const ariaControls = el.getAttribute("aria-controls");
       if (ariaControls && !document.getElementById(ariaControls)) {
-        dead.push({ element: el, kind: "dangling_aria_controls", label, selector: selectorFor(el), controls: ariaControls });
+        dead.push({ element: el, kind: "dangling_aria_controls", label, identifier, tag, selector: identifier, controls: ariaControls });
         continue;
       }
       if (href != null) {
         if (href === "#" || href.trim() === "" || /^javascript:\s*(void\(0\))?;?$/i.test(href)) {
-          dead.push({ element: el, kind: "placeholder_link", label, selector: selectorFor(el), href });
+          if (!isWired(el)) dead.push({ element: el, kind: "placeholder_link", label, identifier, tag, selector: identifier, href });
         } else if (href.startsWith("#")) {
           const fragment = decodeURIComponent(href.slice(1));
           const found = fragment && (document.getElementById(fragment) || document.getElementsByName(fragment).length > 0);
-          if (!found) dead.push({ element: el, kind: "dead_anchor", label, selector: selectorFor(el), href, fragment });
+          if (!found && !isWired(el)) dead.push({ element: el, kind: "dead_anchor", label, identifier, tag, selector: identifier, href, fragment });
         }
         continue;
       }
       // A button with nothing behind it: no listener on itself or an ancestor, no inline
-      // handler, and not a submit inside a form.
-      let wired = false;
-      for (let node = el; node && node !== document.body; node = node.parentElement) {
-        if ((node[key] && node[key].size > 0) || typeof node.onclick === "function" || node.hasAttribute("onclick")) { wired = true; break; }
-      }
-      if (!wired && el.matches("button[type=submit], input[type=submit]") && el.closest("form")) wired = true;
-      if (!wired && el.closest("label")) wired = true; // a label drives its own control
-      if (!wired && opensSomethingOnHoverOrFocus(el)) wired = true;
-      if (!wired && claimedByDelegate(el)) wired = true;
-      if (!wired) dead.push({ element: el, kind: "unwired_control", label, selector: selectorFor(el) });
+      // handler, not a submit inside a form, not CSS-, delegation- or jQuery-wired.
+      if (!isWired(el)) dead.push({ element: el, kind: "unwired_control", label, identifier, tag, selector: identifier });
     }
 
     for (let i = 0; i < dead.length; i += 1) {
       if (dead[i].element) { dead[i].element.setAttribute("data-tapp-audit", String(i + 1)); dead[i].selector = `[data-tapp-audit="${i + 1}"]`; delete dead[i].element; }
     }
-    return { dead, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title };
+    // Whether "no handler found" means anything on this page. Deferred scripts, or a page that
+    // attached no click handler at all, make the check blind; three or more "dead" controls
+    // under a global handler we cannot read is the signature of unreadable delegation
+    // (Squarespace, Wix once hydrated), not of three dead buttons — a dead button is rare.
+    const wiringDependent = dead.filter((d) => d.kind !== "dangling_aria_controls");
+    let wiringUnverifiable = "";
+    if (scriptsDeferred) wiringUnverifiable = "the page defers its scripts until a user interacts";
+    else if (lazyHydrationBuilder && wiringDependent.length) wiringUnverifiable = "the site builder (Wix) hydrates controls lazily after rendering them";
+    else if (loadsScripts && clickListenerCount === 0 && inlineHandlers === 0 && wiringDependent.length) wiringUnverifiable = "the page attached no click handler at all at audit time (deferred hydration)";
+    else if (opaqueGlobalHandlers > 0 && wiringDependent.length >= 3) wiringUnverifiable = "a site-wide click handler the audit cannot read claims the controls";
+    const kept = wiringUnverifiable ? dead.filter((d) => d.kind === "dangling_aria_controls") : dead;
+    return { dead: kept, controlCount: document.querySelectorAll("a[href], button, [role=button]").length, title: document.title, scriptsDeferred, wiringUnverifiable: wiringUnverifiable || null };
   });
 }
 

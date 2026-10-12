@@ -361,6 +361,91 @@ test("the audit does not accuse a control that is wired in CSS rather than JavaS
   }
 });
 
+test("the audit does not accuse jQuery-delegated controls, wired placeholder links, or icon-only links it can name", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  // Precision pass 2026-10-12 on 25 real small-business sites: 47% of findings were href="#"
+  // links that had click handlers, and 104 "dead buttons" on one WordPress site were Elementor
+  // accordion headers wired through jQuery's delegation registry. Neither is a defect.
+  const html = `<!doctype html><title>WP</title><meta name="viewport" content="width=device-width"><body>
+    <script>
+      // a minimal jQuery-shaped registry: $(document).on("click", ".elementor-tab-title", fn)
+      window.jQuery = { _data: (node, key) => (node === document && key === "events") ? { click: [{ selector: ".elementor-tab-title", handler: () => {} }] } : undefined };
+    </script>
+    <div class="elementor-tab-title" role="button" tabindex="0">Do you provide free estimates?</div>
+    <a href="#" id="menu-toggle">Menu</a>
+    <a href="#" id="really-dead-link">Dead placeholder</a>
+    <a href="#" id="icon-only"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="Open cart"></a>
+    <button id="dead-btn">Dead Button</button>
+    <script>document.getElementById('menu-toggle').addEventListener('click', () => {});</script>
+  </body>`;
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(html); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { auditWebPage } = await import("../mcp-server/src/web-explorer.js");
+    const result = await auditWebPage({ url: `http://127.0.0.1:${server.address().port}/` });
+    const titles = result.findings.map((f) => f.title).join(" | ");
+    assert.doesNotMatch(titles, /free estimates/, "a jQuery-delegated accordion header is wired");
+    assert.doesNotMatch(titles, /“Menu”/, "an href=\"#\" link with a click handler is a control, not a dead link");
+    assert.match(titles, /Dead placeholder.*no destination/, "an href=\"#\" link with nothing behind it still is");
+    assert.match(titles, /“Open cart”.*no destination/, "an icon-only link is named by its image, not by a selector");
+    assert.match(titles, /Dead Button.*no click handler/);
+    assert.doesNotMatch(titles, /data-tapp-audit/, "evidence selectors never leak into titles");
+    assert.equal(result.findings.length, 3, titles);
+  } finally {
+    server.close();
+  }
+});
+
+test("the audit declares the wiring check unverifiable, rather than accusing, on deferred-script and hydration-less pages", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
+  let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
+  if (!chromium) { t.skip("playwright not installed"); return; }
+  const http = await import("node:http");
+  // Precision pass 2026-10-12: a Perfmatters site (every script type="pmdelayedscript" until a
+  // user interacts) produced 104 "dead buttons"; a Wix site attached no handler at all at audit
+  // time; a Squarespace site wires every button from one listener on <body>. None is a defect.
+  const pages = {
+    "/deferred": `<!doctype html><title>D</title><meta name="viewport" content="width=device-width"><body>
+      <script type="pmdelayedscript">document.getElementById('m').addEventListener('click', () => {});</script>
+      <button id="m">Menu</button><a href="#" id="p">Placeholder</a>
+      <button aria-controls="nope">Toggle</button></body>`,
+    "/nohandlers": `<!doctype html><title>W</title><meta name="viewport" content="width=device-width"><body>
+      <script src="/bundle.js" defer></script>
+      <div role="button" aria-label="Open navigation menu"></div><button>Previous</button><button>Next</button></body>`,
+    "/bodydelegate": `<!doctype html><title>S</title><meta name="viewport" content="width=device-width"><body>
+      <button>Sign Up</button><button>Menu</button><button>Search</button>
+      <script>document.body.addEventListener('click', function (e) { route(e.target); });</script></body>`,
+    "/live": `<!doctype html><title>L</title><meta name="viewport" content="width=device-width"><body>
+      <button id="ok">Works</button><button id="dead">Dead Button</button>
+      <script>document.getElementById('ok').addEventListener('click', () => {}); document.addEventListener('click', (e) => { track(e); });</script></body>`,
+  };
+  const server = http.createServer((q, r) => { r.writeHead(200, { "content-type": "text/html" }); r.end(pages[new URL(q.url, "http://x").pathname] || ""); });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { auditWebSite } = await import("../mcp-server/src/web-explorer.js");
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const page = async (p) => (await auditWebSite({ url: base + p, pages: 1 })).pages[0];
+    const deferred = await page("/deferred");
+    assert.match(deferred.wiringUnverifiable, /defers its scripts/);
+    assert.deepEqual(deferred.findings.map((f) => f.type), ["dangling_aria_controls"], "only the check that needs no wiring survives");
+    const wix = await page("/nohandlers");
+    assert.match(wix.wiringUnverifiable, /no click handler at all/);
+    assert.equal(wix.findings.length, 0);
+    const sqs = await page("/bodydelegate");
+    assert.match(sqs.wiringUnverifiable, /site-wide click handler/);
+    assert.equal(sqs.findings.length, 0);
+    // An opaque global handler plus ONE dead control is still a dead control: the rule needs three.
+    const live = await page("/live");
+    assert.equal(live.wiringUnverifiable, undefined);
+    assert.match(live.findings.map((f) => f.title).join(" | "), /Dead Button/);
+    const site = await auditWebSite({ url: base + "/deferred", pages: 1 });
+    assert.match(site.notChecked.join("\n"), /defers its scripts/, "the scope says what was not checked");
+  } finally {
+    server.close();
+  }
+});
+
 test("the audit does not accuse a control whose handler is delegated from the document", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 60_000 }, async (t) => {
   let chromium; try { ({ chromium } = await import("playwright")); } catch { t.skip("playwright not installed"); return; }
   if (!chromium) { t.skip("playwright not installed"); return; }

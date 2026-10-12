@@ -32,7 +32,7 @@ const LINK_CHECK_TIMEOUT_MS = 10_000;
 
 // What an audit does and does not look at. Spelled out so a report never borrows the exploration
 // run's "checked for" list and claims clicks that never happened.
-export function auditScope({ linksChecked = { total: 0, checked: 0 }, pages = 1 } = {}) {
+export function auditScope({ linksChecked = { total: 0, checked: 0 }, pages = 1, wiringUnverifiable = [] } = {}) {
   const checkedFor = [
     "controls that were never alive: dead in-page anchors, placeholder links, aria-controls naming nothing, buttons with no handler/form/link",
     "images that failed to load",
@@ -52,6 +52,10 @@ export function auditScope({ linksChecked = { total: 0, checked: 0 }, pages = 1 
     "app-specific business logic, content accuracy, privacy, brand, visual quality",
     pages > 1 ? `pages beyond the ${pages} audited` : "pages other than the one audited (pass --pages N to crawl same-origin links)",
   ];
+  if (wiringUnverifiable.length) {
+    const reasons = [...new Set(wiringUnverifiable)];
+    notChecked.unshift(`dead controls and placeholder links on ${wiringUnverifiable.length} page(s) where the check would accuse working controls: ${reasons.join("; ")}`);
+  }
   return { checkedFor, notChecked };
 }
 
@@ -105,6 +109,14 @@ async function auditPageHealth(page) {
       const src = img.getAttribute("src") || "";
       if (!src || src.startsWith("data:")) continue;
       if (img.complete && img.naturalWidth === 0) {
+        // A 1×1 (or hidden) image that failed is a tracking pixel the visitor never sees, not a
+        // broken picture on the page; a failed image lays out as a 16px placeholder box even when
+        // it was meant to be invisible, so a cross-origin, query-string, alt-less one is a beacon.
+        const box = img.getBoundingClientRect();
+        if (box.width <= 2 || box.height <= 2) continue;
+        let crossOrigin = false;
+        try { crossOrigin = new URL(src, location.href).origin !== location.origin; } catch { /* keep */ }
+        if (crossOrigin && /\?/.test(src) && !img.hasAttribute("alt")) continue;
         findings.push({ kind: "broken_image", src: src.slice(0, 160), alt: (img.getAttribute("alt") || "").slice(0, 80), selector: visible(img) ? tag(img) : null });
       }
     }
@@ -167,14 +179,25 @@ async function checkLinks(context, links, { limit, pageUrl }) {
       const pathOf = (() => { try { return new URL(href).pathname; } catch { return href; } })();
       try {
         let res = await context.request.fetch(href, { method: "HEAD", maxRedirects: 5, timeout: LINK_CHECK_TIMEOUT_MS, failOnStatusCode: false });
-        if ([405, 501, 403].includes(res.status())) {
+        // Some servers refuse HEAD outright, and some answer 404/5xx to HEAD for pages that GET
+        // fine. Only a GET is allowed to call a link broken.
+        if ([405, 501, 403, 404, 410].includes(res.status()) || res.status() >= 500) {
           res = await context.request.fetch(href, { method: "GET", maxRedirects: 5, timeout: LINK_CHECK_TIMEOUT_MS, failOnStatusCode: false });
         }
         const status = res.status();
         if (status === 404 || status === 410) findings.push({ type: "broken_link", severity: "medium", title: `Link ${where} → ${pathOf} answers ${status}`, target: href, url: href });
         else if (status >= 500) findings.push({ type: "broken_link", severity: "high", title: `Link ${where} → ${pathOf} answers ${status}`, target: href, url: href });
       } catch (error) {
-        findings.push({ type: "broken_link", severity: "low", title: `Link ${where} → ${pathOf} could not be fetched (${String(error?.message || error).split("\n")[0].slice(0, 80)})`, target: href, url: href });
+        // One dropped connection is not a broken link; a second is worth a low-severity note.
+        await new Promise((r) => setTimeout(r, 1000));
+        try {
+          const retry = await context.request.fetch(href, { method: "GET", maxRedirects: 5, timeout: LINK_CHECK_TIMEOUT_MS, failOnStatusCode: false });
+          const status = retry.status();
+          if (status === 404 || status === 410) findings.push({ type: "broken_link", severity: "medium", title: `Link ${where} → ${pathOf} answers ${status}`, target: href, url: href });
+          else if (status >= 500) findings.push({ type: "broken_link", severity: "high", title: `Link ${where} → ${pathOf} answers ${status}`, target: href, url: href });
+        } catch (again) {
+          findings.push({ type: "broken_link", severity: "low", title: `Link ${where} → ${pathOf} could not be fetched twice (${String(again?.message || again).split("\n")[0].slice(0, 80)})`, target: href, url: href });
+        }
       }
     }
   };
@@ -252,6 +275,8 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
       title: controls.title,
       controlsExamined: controls.controlCount,
       linksChecked: { total: links.total, checked: links.checked },
+      // Why the wiring-dependent checks were skipped on this page, if they were.
+      ...(controls.wiringUnverifiable ? { wiringUnverifiable: controls.wiringUnverifiable } : {}),
       findings,
       links: health.links,
     };
@@ -276,14 +301,14 @@ export function auditCaptureId(now = new Date()) {
   return `web-audit-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
 }
 
-function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, linksChecked }) {
+function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, linksChecked, wiringUnverifiable = [] }) {
   capture.emit("COMPLETE", { actions: 0, screens: pages.length, credentialsProvided: false, credentialsUsed: false, timedOut: false, stop: "audit-complete", readOnly: true, robotsBlocked });
   capture.close();
   const markers = path.join(capture.dir, "ocqa-markers.txt");
   const report = buildQaReport(markers, { platform: "web", target: startUrl });
   if (!report) return null;
   // The exploration report's coverage floor and wording assume clicks; an audit has none by design.
-  const scope = auditScope({ linksChecked, pages: pages.length });
+  const scope = auditScope({ linksChecked, pages: pages.length, wiringUnverifiable });
   const counts = report.deterministicFindingCounts || report.findingCounts || { critical: 0, high: 0, medium: 0, low: 0 };
   Object.assign(report, {
     kind: "tapp-structural-audit",
@@ -305,6 +330,25 @@ function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, li
   catch { /* the map is a convenience; the report and markers are the evidence */ }
   writeHtmlReport(capture.dir, { report, label: "Read-only audit" });
   return report;
+}
+
+// The same defect seen on several pages (site-wide navigation, a footer, a missing viewport
+// meta) is one issue. Keyed by type and target; the title is the first one seen.
+export function dedupeSiteIssues(findings = []) {
+  const byKey = new Map();
+  for (const f of findings) {
+    const key = `${f.type}|${f.target ?? f.title}`;
+    const page = f.screen || f.url || "";
+    const existing = byKey.get(key);
+    if (existing) {
+      if (page && !existing.pages.includes(page)) existing.pages.push(page);
+      existing.occurrences += 1;
+      continue;
+    }
+    byKey.set(key, { type: f.type, severity: f.severity, title: f.title, target: f.target ?? null, evidence: f.evidence || null, pages: page ? [page] : [], occurrences: 1 });
+  }
+  const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+  return [...byKey.values()].sort((a, b) => (rank[a.severity] ?? 4) - (rank[b.severity] ?? 4) || b.pages.length - a.pages.length);
 }
 
 // Audit a site: the start page and, with pages > 1, same-origin links discovered on audited pages
@@ -380,24 +424,31 @@ export async function auditWebSite({
     }
 
     const findings = results.flatMap((r) => r.findings);
+    const issues = dedupeSiteIssues(findings);
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
     for (const f of findings) if (f.severity in bySeverity) bySeverity[f.severity] += 1;
-    const scope = auditScope({ linksChecked: { total: linksTotal, checked: linksChecked }, pages: results.length });
+    const wiringUnverifiable = results.map((r) => r.wiringUnverifiable).filter(Boolean);
+    const scope = auditScope({ linksChecked: { total: linksTotal, checked: linksChecked }, pages: results.length, wiringUnverifiable });
     const summary = {
       kind: "tapp-structural-audit",
       readOnly: true,
       url: start.href,
       pagesAudited: results.length,
+      pagesWithUnverifiableWiring: wiringUnverifiable.length,
       pagesQueued: queue.length,
       robotsBlocked,
       findingCounts: { ...bySeverity, total: findings.length },
+      // One entry per distinct defect across the site, with the pages it appears on: a footer
+      // link that answers 404 on six pages is one thing to fix, and one line in an email.
+      issues,
+      issueCount: issues.length,
       checkedFor: scope.checkedFor,
       notChecked: scope.notChecked,
       pages: results,
       capture: null,
     };
     if (capture) {
-      finalizeCapture(capture, { startUrl: start.href, pages: results, findings, robotsBlocked, linksChecked: { total: linksTotal, checked: linksChecked } });
+      finalizeCapture(capture, { startUrl: start.href, pages: results, findings, robotsBlocked, linksChecked: { total: linksTotal, checked: linksChecked }, wiringUnverifiable });
       summary.capture = { id: capture.id, path: capture.dir, report: path.join(capture.dir, "report.html"), provenance };
       fs.writeFileSync(path.join(capture.dir, "audit.json"), JSON.stringify(summary, null, 2));
     }
