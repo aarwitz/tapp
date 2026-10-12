@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.17.26
+
+- **An iOS crash is attributed before it is reported** (public issue #30). The harness reports
+  `crash` when the app under test stops running; it cannot say why, and xcodebuild prints the full
+  system crash trace for any simulator process that dies. A SpringBoard death — which takes every
+  foreground app with it — therefore read as a critical app crash. After every iOS run whose
+  markers contain a crash, Tapp now cross-checks the real crash reports in
+  `~/Library/Logs/DiagnosticReports` with the rules the desktop app has used since a field
+  false-CRITICAL incident (bundle id in header, body or bundleInfo; procPath inside this simulator's app
+  container; the XCUITest runner never counts; EXC_GUARD is not a crash) and writes
+  `crash-attribution.json` into the capture. A confirmed app crash stays critical and carries its
+  `.ips` path and exception type. A simulator system process crash becomes
+  `simulator_system_crash` and a runner death `test_runner_crash`: medium, advisory, reported
+  but never counted toward the gate. With no report in the run window the observation stands,
+  marked unverified. Captures without the file are unchanged.
+
 ## 0.17.25
 
 - **Every capture knows which project made it** (public issue #29). A Copilot session working in

@@ -150,9 +150,55 @@ export function observationSummary(report) {
 
 // Turn a capture's OCQA markers into a scoreless observation with deduped findings and an
 // explicit coverage floor. Release judgment is applied later by evaluateGate.
+function readCrashAttribution(captureDir) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(captureDir, "crash-attribution.json"), "utf8"));
+    return parsed && typeof parsed === "object" && typeof parsed.verdict === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// The harness observes that the app stopped running; the crash reports say whose fault it was.
+// A simulator system process (SpringBoard) dying takes the app with it, and the XCUITest runner
+// dying is instrumentation failure — neither is a defect in the app under test, and reporting
+// either as a critical app crash is the false CRITICAL the desktop app fixed in 0.16 (issue #30).
+// With no report in the run window the harness observation stands, unverified and said so.
+export function reattributeCrashes(findings, attribution) {
+  for (const f of findings) {
+    if (f.type !== "crash") continue;
+    const r = attribution.reports || {};
+    if (attribution.verdict === "app") {
+      const report = r.app?.[0];
+      if (report) {
+        f.crashReport = report.path;
+        if (report.exceptionType) f.title = `${f.title} (${report.exceptionType})`;
+      }
+    } else if (attribution.verdict === "simulator-system") {
+      const report = r.simulatorSystem?.[0] || {};
+      f.type = "simulator_system_crash";
+      f.category = "environment";
+      f.severity = "medium";
+      f.authority = "advisory";
+      f.crashReport = report.path || null;
+      f.title = `Simulator system process ${report.procName || "(unknown)"} crashed${report.exceptionType ? ` (${report.exceptionType})` : ""} and took the app with it — not attributed to the app under test`;
+    } else if (attribution.verdict === "test-runner") {
+      f.type = "test_runner_crash";
+      f.category = "environment";
+      f.severity = "medium";
+      f.authority = "advisory";
+      f.title = "The XCUITest runner died mid-run (instrumentation failure) — the app under test is not known to have crashed";
+    } else {
+      f.attributionNote = "no crash report was found for this run window; the harness observation stands unverified";
+    }
+  }
+  return findings;
+}
+
 export function buildQaReport(markersFilePath, { platform = "ios", target = null } = {}) {
   const base = parseOcqaMarkers(markersFilePath);
   if (!base) return null;
+  const crashAttribution = platform === "ios" ? readCrashAttribution(path.dirname(markersFilePath)) : null;
 
   const raw = fs.readFileSync(markersFilePath, "utf8");
   const rawIssues = [];
@@ -264,6 +310,7 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
       ...(platform === "web" ? { evaluationTier: findingEvaluationTier(i, platform) } : {}),
     });
   }
+  if (crashAttribution) reattributeCrashes(findings, crashAttribution);
   findings.sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
 
   const screensExplored = screens.size || base.uniqueScreens.length;
@@ -278,9 +325,9 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
   const high = findings.filter((f) => f.severity === "high").length;
   const med = findings.filter((f) => f.severity === "medium").length;
   const low = findings.filter((f) => f.severity === "low").length;
-  const verdictFindings = platform === "web"
-    ? findings.filter((finding) => finding.evaluationTier !== "sampled")
-    : findings;
+  // Advisory-authority findings (an environment event re-attributed away from the app) are
+  // reported but never counted toward the gate's deterministic tally.
+  const verdictFindings = findings.filter((finding) => finding.authority !== "advisory" && (platform !== "web" || finding.evaluationTier !== "sampled"));
   const verdictCrit = verdictFindings.filter((f) => f.severity === "critical").length;
   const verdictHigh = verdictFindings.filter((f) => f.severity === "high").length;
   const verdictMed = verdictFindings.filter((f) => f.severity === "medium").length;

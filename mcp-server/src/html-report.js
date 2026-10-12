@@ -82,6 +82,8 @@ export function writeHtmlReport(captureDir, { report, label = "", recordingWarni
           (f) => `<li>
   <span class="sev" style="background:${SEV_COLOR[f.severity] || "#57606a"}">${esc(f.severity)}</span>
   ${esc(f.title)}${f.screen ? ` <span class="dim">— on ${esc(f.screen)}</span>` : ""}${f.url ? ` <span class="dim">— ${esc(f.url)}</span>` : ""}
+  ${f.crashReport ? `<div class="dim">crash report: ${esc(f.crashReport)}</div>` : ""}
+  ${f.attributionNote ? `<div class="dim">${esc(f.attributionNote)}</div>` : ""}
   ${f.aiAnalysis ? `<div class="ai">why: ${esc(f.aiAnalysis)}</div>` : ""}
   ${f.suggestedFix ? `<div class="ai">fix: ${esc(f.suggestedFix)}</div>` : ""}
   ${f.evidence && fs.existsSync(path.join(captureDir, f.evidence))

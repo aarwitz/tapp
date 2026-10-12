@@ -113,6 +113,52 @@ test("crash is always critical (severity coercion) and is a deterministic findin
   assert.equal(r.verdict, undefined, "no verdict — the gate judges (see evaluateGate tests)");
 });
 
+// Issue #30: the harness sees the app stop; the crash reports say whose fault it was.
+function crashRun(attribution) {
+  const p = markersFile([
+    ...CLEAN_RUN.slice(0, 5),
+    'OCQA_ISSUE:{"type":"crash","severity":"critical","title":"App crashed after tap on Home","screen":"Home","step":1}',
+    'OCQA_COMPLETE:{"actions":3,"states":2,"issues":1}',
+  ]);
+  if (attribution) fs.writeFileSync(path.join(path.dirname(p), "crash-attribution.json"), JSON.stringify({ schemaVersion: 1, ...attribution }));
+  return buildQaReport(p, { platform: "ios", target: "com.acme.app" });
+}
+
+test("a SpringBoard death is reported as an environment event, not a critical app crash", () => {
+  const r = crashRun({ verdict: "simulator-system", reports: { app: [], simulatorSystem: [{ path: "/tmp/SpringBoard.ips", procName: "SpringBoard", exceptionType: "EXC_BAD_ACCESS" }], other: [] } });
+  const f = r.findings[0];
+  assert.equal(f.type, "simulator_system_crash");
+  assert.equal(f.severity, "medium");
+  assert.equal(f.authority, "advisory");
+  assert.match(f.title, /SpringBoard crashed \(EXC_BAD_ACCESS\) and took the app with it — not attributed to the app under test/);
+  assert.equal(f.crashReport, "/tmp/SpringBoard.ips");
+  assert.equal(r.findingCounts.critical, 0);
+  assert.equal(r.deterministicFindingCounts.total, 0, "an environment event never counts toward the gate");
+  assert.equal(r.findingCounts.total, 1, "but it is still reported");
+});
+
+test("a confirmed app crash stays critical and carries its crash report", () => {
+  const r = crashRun({ verdict: "app", reports: { app: [{ path: "/tmp/AcmeApp.ips", procName: "AcmeApp", exceptionType: "EXC_CRASH" }], simulatorSystem: [], other: [] } });
+  assert.equal(r.findings[0].type, "crash");
+  assert.equal(r.findings[0].severity, "critical");
+  assert.equal(r.findings[0].crashReport, "/tmp/AcmeApp.ips");
+  assert.match(r.findings[0].title, /\(EXC_CRASH\)$/);
+  assert.equal(r.deterministicFindingCounts.critical, 1);
+});
+
+test("the XCUITest runner dying is instrumentation failure, and no report at all leaves the observation standing but marked unverified", () => {
+  const runner = crashRun({ verdict: "test-runner", reports: { app: [], simulatorSystem: [], other: [{ kind: "test-runner" }] } });
+  assert.equal(runner.findings[0].type, "test_runner_crash");
+  assert.equal(runner.deterministicFindingCounts.total, 0);
+  const none = crashRun({ verdict: "no-report", reports: { app: [], simulatorSystem: [], other: [] } });
+  assert.equal(none.findings[0].type, "crash");
+  assert.equal(none.findings[0].severity, "critical");
+  assert.match(none.findings[0].attributionNote, /unverified/);
+  const legacy = crashRun(null);
+  assert.equal(legacy.findings[0].type, "crash", "captures without an attribution file are unchanged");
+  assert.equal(legacy.findings[0].attributionNote, undefined);
+});
+
 test("findings dedup by type|screen — repeated detections count once", () => {
   const issue = 'OCQA_ISSUE:{"type":"error_message","severity":"high","title":"Error shown","screen":"Settings"}';
   const r = buildQaReport(markersFile([...CLEAN_RUN.slice(0, 5), issue, issue, issue]));

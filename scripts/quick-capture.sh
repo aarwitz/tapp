@@ -241,6 +241,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 UDID=$(get_booted_sim)
+RUN_START_TS=$(date +%s)
 SIM_NAME=$(get_sim_name)
 
 if [[ -z "$UDID" ]]; then
@@ -400,6 +401,12 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
       echo "WARNING: Exploration reached its ${EXPLORE_TIMEOUT}s time budget; evidence is partial" >&2
     fi
     echo "$OUTPUT" > "$CAPTURE_DIR/full-output.txt"
+
+    # A harness "crash" means the app stopped running; it does not say why. Cross-check the real
+    # crash reports so a SpringBoard death is not written up as the app's bug (issue #30).
+    if grep -q '"type":"crash"' "$CAPTURE_DIR/ocqa-markers.txt" 2>/dev/null; then
+      node "$PROJECT_ROOT/scripts/attribute-ios-crash.js" "$CAPTURE_DIR" "$APP_BUNDLE" "$UDID" "$RUN_START_TS" || true
+    fi
 
     COMPLETE_LINE=$(grep "OCQA_COMPLETE" "$CAPTURE_DIR/ocqa-markers.txt" | tail -1 || true)
     if [[ -n "$COMPLETE_LINE" ]]; then

@@ -20,6 +20,7 @@ test("npm package ships only the runtime script allowlist", () => {
   assert.deepEqual(
     pkg.files.filter((entry) => entry.startsWith("scripts/")).sort(),
     [
+      "scripts/attribute-ios-crash.js",
       "scripts/ci-gate.sh",
       "scripts/compile-contract.js",
       "scripts/compile-flow.js",
