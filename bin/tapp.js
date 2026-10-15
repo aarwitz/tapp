@@ -1346,7 +1346,7 @@ switch (command) {
       if (launch.appLaunchEnv) env.OCQA_APP_LAUNCH_ENV_JSON = JSON.stringify(launch.appLaunchEnv);
       // --device is a simulator name or UDID here (issue #31); the runner gets the UDID, and with
       // several simulators booted and none chosen the run refuses rather than guess.
-      const sim = await engine.ensureBootedSim({ device: typeof flags.device === "string" ? flags.device : "" });
+      const sim = await (await engineImport()).ensureBootedSim({ device: typeof flags.device === "string" ? flags.device : "" });
       if (sim.error) { console.error(`❌ ${sim.error}`); process.exit(2); }
       env.TAPP_UDID = sim.booted.udid;
     }
