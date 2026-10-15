@@ -251,13 +251,53 @@ async function listSimulators() {
   return { simulators: sims, booted: sims.filter((s) => s.booted) };
 }
 
+// Which simulator a run drives. Public issue #31: with two simulators booted, `--device` was
+// honoured for web only and every iOS path took whichever simulator simctl listed first — a
+// production build instead of the sandbox one, then another agent session's simulator. A
+// device is a name or UDID (`TAPP_UDID` is the environment default); with several booted and
+// none chosen the answer is the list, not a guess.
+export function selectSimulator(sims, device = "") {
+  const wanted = String(device || process.env.TAPP_UDID || "").trim();
+  const all = sims.simulators || [];
+  const booted = sims.booted || all.filter((s) => s.booted);
+  const describe = (list) => list.map((s) => `${s.name} (${s.udid})`).join(", ");
+  if (wanted) {
+    const lower = wanted.toLowerCase();
+    const match = all.find((s) => s.udid.toLowerCase() === lower)
+      || all.find((s) => s.name.toLowerCase() === lower)
+      || (() => { const p = booted.filter((s) => s.name.toLowerCase().startsWith(lower)); return p.length === 1 ? p[0] : null; })();
+    if (!match) return { error: `No simulator matches "${wanted}". Booted: ${booted.length ? describe(booted) : "none"}.` };
+    if (!match.booted) return { notBooted: match };
+    return { booted: match };
+  }
+  if (booted.length === 1) return { booted: booted[0] };
+  if (booted.length === 0) return { none: true };
+  return { error: `simulator-selection-required: ${booted.length} simulators are booted — ${describe(booted)}. Pass device (a name or UDID) or set TAPP_UDID so the run does not drive someone else's simulator.`, ambiguous: booted };
+}
+
+// The simulator the current engine process has chosen. Every simctl call and every spawned
+// harness script must address it by UDID: the `booted` alias means "whichever is first".
+let selectedSimUdid = null;
+function simTarget() { return selectedSimUdid || "booted"; }
+function simEnv() { return selectedSimUdid ? { TAPP_UDID: selectedSimUdid } : {}; }
+
 // Pre-flight for every iOS entry point: the #1 first-session failure is "no simulator
 // booted", and the harness's raw failure text is unactionable. Long-running tools
 // (run_qa) auto-boot the first available iPhone; fast tools return an instructive error
 // the agent can act on instead of a shrug.
-export async function ensureBootedSim({ autoBoot = false } = {}) {
+export async function ensureBootedSim({ autoBoot = false, device = "" } = {}) {
   const sims = await listSimulators();
-  if (sims.booted && sims.booted.length) return { booted: sims.booted[0] };
+  const choice = sims.error ? { none: true } : selectSimulator(sims, device);
+  if (choice.booted) { selectedSimUdid = choice.booted.udid; return { booted: choice.booted }; }
+  if (choice.error) return { error: choice.error };
+  if (choice.notBooted) {
+    if (!autoBoot) return { error: `${choice.notBooted.name} (${choice.notBooted.udid}) is not booted. Boot it with tapp_build (action boot) and retry.` };
+    await runCommand("xcrun", ["simctl", "boot", choice.notBooted.udid], { timeoutMs: 2 * 60 * 1000 });
+    const st = await runCommand("xcrun", ["simctl", "bootstatus", choice.notBooted.udid, "-b"], { timeoutMs: 3 * 60 * 1000 });
+    if (st.code !== 0) return { error: `Boot of ${choice.notBooted.name} failed — boot it manually with tapp_build (action boot).` };
+    selectedSimUdid = choice.notBooted.udid;
+    return { booted: { ...choice.notBooted, booted: true }, autoBooted: true };
+  }
   // A failed listing is NOT "no simulators" — surface the real reason (was silently
   // misdiagnosed as "No iOS simulators exist" when simctl errored in odd environments).
   if (sims.error) {
@@ -277,6 +317,7 @@ export async function ensureBootedSim({ autoBoot = false } = {}) {
   await runCommand("xcrun", ["simctl", "boot", candidate.udid], { timeoutMs: 2 * 60 * 1000 });
   const st = await runCommand("xcrun", ["simctl", "bootstatus", candidate.udid, "-b"], { timeoutMs: 3 * 60 * 1000 });
   if (st.code !== 0) return { error: `Auto-boot of ${candidate.name} failed — boot one manually with tapp_build (action boot).` };
+  selectedSimUdid = candidate.udid;
   return { booted: candidate, autoBooted: true };
 }
 
@@ -284,7 +325,7 @@ export async function ensureBootedSim({ autoBoot = false } = {}) {
 // never installed). Without this pre-flight the harness reports a misleading "crashed at launch"
 // and sessions die with an unactionable error — check cheaply up front instead.
 async function appInstalledOnBootedSim(bundleId) {
-  const r = await runCommand("xcrun", ["simctl", "get_app_container", "booted", bundleId, "app"], { timeoutMs: 15_000 });
+  const r = await runCommand("xcrun", ["simctl", "get_app_container", simTarget(), bundleId, "app"], { timeoutMs: 15_000 });
   return r.code === 0;
 }
 
@@ -302,7 +343,7 @@ function notInstalledError(bundleId, booted) {
 // and the tapp_build MCP tool.
 
 export async function listInstalledUserApps() {
-  const r = await runCommand("xcrun", ["simctl", "listapps", "booted"], { timeoutMs: 30_000, rawStdout: true });
+  const r = await runCommand("xcrun", ["simctl", "listapps", simTarget()], { timeoutMs: 30_000, rawStdout: true });
   if (r.code !== 0) return { error: "Could not list installed apps", details: { stderr: r.stderr } };
   // simctl emits an old-style plist; plutil converts it.
   const tmp = path.join(os.tmpdir(), `tapp-apps-${Date.now().toString(36)}.plist`);
@@ -510,16 +551,16 @@ export async function installAppOnBootedSim(appPath, { cleanInstall = true, onSt
   const bundleId = (bid.stdout || "").trim();
   if (!bundleId) return { error: `Could not read CFBundleIdentifier from ${appPath}/Info.plist — is this a simulator .app build?` };
   if (cleanInstall) {
-    const existing = await runCommand("xcrun", ["simctl", "get_app_container", "booted", bundleId, "app"], { timeoutMs: 15_000 });
+    const existing = await runCommand("xcrun", ["simctl", "get_app_container", simTarget(), bundleId, "app"], { timeoutMs: 15_000 });
     if (existing.code === 0 && (existing.stdout || "").trim()) onStatus(replacingInstalledBuildNotice(bundleId));
   }
   if (cleanInstall) {
     // Clean install: stale keychain items from a previous install leave apps half-signed-in
     // (Firebase Auth's "error accessing the keychain") — uninstall first for a fresh state.
-    await runCommand("xcrun", ["simctl", "terminate", "booted", bundleId], { timeoutMs: 30_000 });
-    await runCommand("xcrun", ["simctl", "uninstall", "booted", bundleId], { timeoutMs: 60_000 });
+    await runCommand("xcrun", ["simctl", "terminate", simTarget(), bundleId], { timeoutMs: 30_000 });
+    await runCommand("xcrun", ["simctl", "uninstall", simTarget(), bundleId], { timeoutMs: 60_000 });
   }
-  const inst = await runCommand("xcrun", ["simctl", "install", "booted", appPath], { timeoutMs: 3 * 60 * 1000 });
+  const inst = await runCommand("xcrun", ["simctl", "install", simTarget(), appPath], { timeoutMs: 3 * 60 * 1000 });
   if (inst.code !== 0) return { error: `Install failed: ${(inst.stderr || "").trim().slice(0, 300)}` };
   return { bundleId };
 }
@@ -762,11 +803,11 @@ function focusMetadata(result) {
   return metadata;
 }
 
-async function startSession(bundleId, extraEnv = {}) {
+async function startSession(bundleId, extraEnv = {}, { device = "" } = {}) {
   if (activeSession && !activeSession.ended) {
     return { error: "A session is already active; call tapp_session (action end) first.", screen: treeSnapshot() };
   }
-  const sim = await ensureBootedSim();
+  const sim = await ensureBootedSim({ device });
   if (sim.error) return { error: sim.error };
   if (!(await appInstalledOnBootedSim(bundleId))) return { error: notInstalledError(bundleId, sim.booted) };
   const token = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -777,7 +818,7 @@ async function startSession(bundleId, extraEnv = {}) {
   const captureScript = path.join(scriptsDir, "quick-capture.sh");
   const proc = spawn("bash", [captureScript, "session", bundleId], {
     cwd: repoRoot,
-    env: { ...process.env, ...extraEnv, OCQA_SESSION_CMD_PATH: cmdPath, OCQA_SESSION_RESULT_PATH: resultPath, OCQA_SESSION_TIMEOUT: "7200" },
+    env: { ...process.env, ...simEnv(), ...extraEnv, OCQA_SESSION_CMD_PATH: cmdPath, OCQA_SESSION_RESULT_PATH: resultPath, OCQA_SESSION_TIMEOUT: "7200" },
   });
   activeSession = {
     platform:"ios", proc, bundleId, seq: 0, cmdPath, resultPath, latestTree: null, treeVersion: 0, buffer: "", ready: false, ended: false,
@@ -1403,8 +1444,8 @@ export async function captureInteractiveSessionFrame(maxWidth = 900) {
 // Fast "just show me a screen": launch the app fresh (optionally bypassing login), grab a screenshot
 // while it's on screen, return the tree too, then close it. No exploration. Uses the session
 // machinery only to keep the app alive long enough to photograph it.
-export async function openApp(bundleId, extraEnv, maxWidth) {
-  const start = await startSession(bundleId, extraEnv);
+export async function openApp(bundleId, extraEnv, maxWidth, { device = "" } = {}) {
+  const start = await startSession(bundleId, extraEnv, { device });
   if (start.error) return { error: start.error };
   const img = await captureScreenshotImage(maxWidth);
   const result = { screenTitle: start.screenTitle ?? null, elements: start.elements ?? [], img };
@@ -1419,7 +1460,7 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
   const captureScript = path.join(scriptsDir, "quick-capture.sh");
   const cmdArgs = [captureScript, "explore", bundleId, "--actions", String(actions), "--timeout", String(timeout)];
   const before = new Set(listCaptureRuns(80).map((r) => r.id));
-  const proc = spawn("bash", cmdArgs, { cwd: repoRoot, env: { ...process.env, ...env } });
+  const proc = spawn("bash", cmdArgs, { cwd: repoRoot, env: { ...process.env, ...simEnv(), ...env } });
   proc.stdout.on("data", () => {});
   let captureStderr = "";
   proc.stderr.on("data", (chunk) => {
@@ -1509,7 +1550,7 @@ export async function captureScreenshotImage(maxWidth) {
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const png = `/tmp/tapp-shot-${stamp}.png`;
   const jpg = `/tmp/tapp-shot-${stamp}.jpg`;
-  const r = await runCommand("xcrun", ["simctl", "io", "booted", "screenshot", png], { timeoutMs: 30_000 });
+  const r = await runCommand("xcrun", ["simctl", "io", simTarget(), "screenshot", png], { timeoutMs: 30_000 });
   if (!fs.existsSync(png)) return { error: "Screenshot failed (is a simulator booted?)", stderr: r.stderr };
   await runCommand("sips", ["-Z", String(maxWidth), "-s", "format", "jpeg", "-s", "formatOptions", "60", png, "--out", jpg], { timeoutMs: 30_000 });
   const file = fs.existsSync(jpg) ? jpg : png;
@@ -2025,7 +2066,7 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
   return { structured, text };
 }
 
-export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surface = "mcp", onProgress = () => {} }) {
+export async function runQaIos({ bundleId, maxActions, timeout, args = {}, device = "", surface = "mcp", onProgress = () => {} }) {
   const { storagePreflight } = await import("./environment-preflight.js");
   const storage = storagePreflight(capturesDir);
   if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
@@ -2033,7 +2074,7 @@ export async function runQaIos({ bundleId, maxActions, timeout, args = {}, surfa
   if (!fs.existsSync(captureScript)) return { error: "Capture script not found", details: { captureScript } };
 
   // run_qa runs for minutes anyway — auto-boot rather than bounce the user.
-  const sim = await ensureBootedSim({ autoBoot: true });
+  const sim = await ensureBootedSim({ autoBoot: true, device });
   if (sim.error) return { error: sim.error };
   if (!(await appInstalledOnBootedSim(bundleId))) return { error: notInstalledError(bundleId, sim.booted) };
 
@@ -2668,7 +2709,7 @@ export const TOOLS = [
         platform: { ...PLATFORM, description: "goal: optional when no session is active" },
         clearData: { type: "boolean", default: true, description: "Android: clear app data before launch" },
         watch: { type: "boolean", default: false, description: "Web: show Tapp's controlled Chromium window and a cursor/HUD" },
-        device: { type: "string", description: "Web: Playwright device profile, e.g. \"iPhone 13\"" },
+        device: { type: "string", description: "Web: Playwright device profile, e.g. \"iPhone 13\". iOS: simulator name or UDID — required when more than one simulator is booted (TAPP_UDID is the environment default)" },
         viewport: { type: "string", description: "Web: viewport WIDTHxHEIGHT, e.g. \"390x844\"" },
         maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
         timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
@@ -2732,7 +2773,7 @@ export const TOOLS = [
         testEmail: { type: "string", description: "Value for $TEST_EMAIL" },
         testPassword: { type: "string", description: "Value for $TEST_PASSWORD" },
         actor: { type: "string", description: "Configured actor; resolves $TEST_EMAIL/$TEST_PASSWORD from its env-var bindings" },
-        device: { type: "string", description: "Web: Playwright device profile" },
+        device: { type: "string", description: "Web: Playwright device profile. iOS: simulator name or UDID — required when more than one simulator is booted" },
         viewport: { type: "string", description: "Web: viewport WIDTHxHEIGHT" },
       },
     },
@@ -2913,7 +2954,7 @@ export const TOOLS = [
         action: { type: "string", enum: ["start", "login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot", "save_flow", "draft_flow", "end"] },
         ...TARGET_PROPS,
         target: { type: "string", description: "start: managed-web target name/path when the workspace has several" },
-        device: { type: "string", description: "start (web): Playwright device profile" },
+        device: { type: "string", description: "start: web Playwright device profile, or iOS simulator name/UDID (required when more than one simulator is booted)" },
         viewport: { type: "string", description: "start (web): viewport WIDTHxHEIGHT" },
         clearData: { type: "boolean", default: true, description: "start (Android): clear app data" },
         testEmail: { type: "string" }, testPassword: { type: "string" },
@@ -3392,6 +3433,7 @@ async function handleTool(name, args = {}) {
       maxActions: args.maxActions,
       timeout: args.timeout,
       args,
+      device: isNonEmptyString(args.device) ? args.device.trim() : "",
       onProgress: (p) => {
         lastProgress = p;
         iosProgress(p);
@@ -4138,7 +4180,7 @@ async function handleTool(name, args = {}) {
       }
     }
     const maxWidth = Math.max(200, Math.min(1400, asInteger(args.maxWidth, 700)));
-    const r = await openApp(String(args.appBundleId).trim(), explorationEnvFromArgs(args), maxWidth);
+    const r = await openApp(String(args.appBundleId).trim(), explorationEnvFromArgs(args), maxWidth, { device: isNonEmptyString(args.device) ? args.device.trim() : "" });
     if (r.error) return errorResult(r.error, r.details || {});
     const content = [];
     content.push({ type: "text", text: `🚀 Launched \`${String(args.appBundleId).trim()}\`\n\n` + formatScreen(r.screenTitle, r.elements) });
@@ -4250,7 +4292,7 @@ async function handleTool(name, args = {}) {
       if (!isInsideDir(workspaceRoot, focusProjectDir) || !fs.statSync(focusProjectDir).isDirectory()) return errorResult("projectDir must be an existing directory inside the workspace");
     }
     const r = ios
-      ? await startSession(target, explorationEnvFromArgs(args))
+      ? await startSession(target, explorationEnvFromArgs(args), { device: isNonEmptyString(args.device) ? args.device.trim() : "" })
       : android
         ? await startAndroidSession(target, { serial: args.androidSerial, apkPath: args.apkPath, clearData: args.clearData !== false, testEmail: args.testEmail, testPassword: args.testPassword })
         : web

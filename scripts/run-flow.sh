@@ -22,7 +22,9 @@ APP="${2:-}"
 [ -z "$APP" ] && APP="$(python3 -c "import sys,json; print(json.loads(sys.argv[1]).get('app','') or '')" "$FLOW_JSON" 2>/dev/null)"
 [ -z "$APP" ] && { echo "❌ No bundleId (pass one or set 'app:' in the flow)"; exit 2; }
 
-UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((x["udid"] for v in d["devices"].values() for x in v if x.get("state")=="Booted"), ""))')"
+# TAPP_UDID names the simulator the caller chose (issue #31); without it, the first booted one.
+UDID="${TAPP_UDID:-}"
+[ -z "$UDID" ] && UDID="$(xcrun simctl list devices booted -j 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((x["udid"] for v in d["devices"].values() for x in v if x.get("state")=="Booted"), ""))')"
 [ -z "$UDID" ] && { echo "❌ No booted simulator."; exit 2; }
 # CLI, MCP, sessions, and doctor share the same source/toolchain-validated descriptor.
 XCTR="$(bash "$ROOT/scripts/quick-capture.sh" prepare-harness)" || exit 2

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.18.1
+
+- **`--device` chooses the iOS simulator** (public issue #31). With several simulators booted,
+  every iOS path — `explore`, `look`, `run FILE`, `tapp_explore`, `tapp_look`, `tapp_session` —
+  drove whichever one `simctl` listed first; `--device` was honoured for web only. A production
+  build got exercised instead of the sandbox one, and after that simulator was shut down the next
+  run silently drove a simulator another agent session was using. Now `device` (CLI and MCP) is
+  a simulator name or UDID for iOS, `TAPP_UDID` is the environment default, the harness scripts
+  address that UDID instead of the `booted` alias, and with more than one simulator booted and
+  none chosen the run refuses with the list (`simulator-selection-required`), the same way an
+  ambiguous repository target does. A chosen simulator that is shut down is booted for a long
+  run and reported for a short one — never swapped for another.
+
 ## 0.18.0
 
 - **The Studio looks like the Command Center.** `tapp app` (and the hosted Studio built from the

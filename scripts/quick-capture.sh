@@ -35,7 +35,9 @@ fi
 HARNESS_PROJECT="$PROJECT_ROOT/Harness/OCQAHarness.xcodeproj"
 DEFAULT_BUNDLE="io.github.aarwitz.tapp.demoapp"
 
+# TAPP_UDID names the simulator the caller chose (issue #31); without it, the first booted one.
 get_booted_sim() {
+  if [[ -n "${TAPP_UDID:-}" ]]; then echo "$TAPP_UDID"; return; fi
   xcrun simctl list devices booted -j 2>/dev/null \
     | python3 -c "
 import sys, json
@@ -49,13 +51,14 @@ for runtime, devices in d.get('devices', {}).items():
 }
 
 get_sim_name() {
-  xcrun simctl list devices booted -j 2>/dev/null \
-    | python3 -c "
-import sys, json
+  xcrun simctl list devices -j 2>/dev/null \
+    | TAPP_UDID="${TAPP_UDID:-}" python3 -c "
+import os, sys, json
 d = json.load(sys.stdin)
+want = os.environ.get('TAPP_UDID', '')
 for runtime, devices in d.get('devices', {}).items():
     for dev in devices:
-        if dev.get('state') == 'Booted':
+        if (want and dev.get('udid') == want) or (not want and dev.get('state') == 'Booted'):
             print(dev['name'])
             sys.exit(0)
 " 2>/dev/null

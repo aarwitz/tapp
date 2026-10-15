@@ -340,15 +340,15 @@ async function resolveTargetOrExit(engine, input, { inspect = false } = {}) {
 function safeCommandUsage(verb) {
   const usage = {
     workflows: "tapp plan workflows [repo] [--save FILE --confirm] [--workflow ID] [--json]",
-    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default)\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
     focus: "tapp explore --goal \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
-    open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  --sim: screenshot the booted simulator only (never builds or installs)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
+    open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  --sim: screenshot the booted simulator only (never builds or installs)\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
     tree: "tapp look --tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  iOS: inspects an installed app; never builds or installs.\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
     shot: "tapp look --sim [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp run FLOW.yml [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    flow: "tapp run FLOW.yml [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default) [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp validate TASK.yml [--platform PLATFORM] [--map FILE]\ntapp validate TASK.yml --compile --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp run TASK.yml --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp validate FILE.contract.ts [--platform PLATFORM] [--map FILE]\ntapp validate FILE.contract.ts --compile --platform PLATFORM [--out FILE]\ntapp run FILE.contract.ts --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
     scenario: "tapp validate SCENARIO.yml [--project-dir DIR]\ntapp run SCENARIO.yml --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
@@ -917,6 +917,7 @@ switch (command) {
           maxActions: flags.actions,
           timeout: flags.timeout,
           args: { testEmail: flags.email, testPassword: flags.password, baselineFindings, ...launchOptions },
+          device: typeof flags.device === "string" ? flags.device : "",
           surface: "cli",
           onProgress,
         });
@@ -1002,7 +1003,7 @@ switch (command) {
     }
     if (sim.autoBooted) console.error(`📱 Booted ${sim.booted.name}`);
     const bundleId = await resolveTargetOrExit(engine, positionals[0]);
-    const r = await engine.openApp(bundleId, {}, 1000);
+    const r = await engine.openApp(bundleId, {}, 1000, { device: typeof flags.device === "string" ? flags.device : "" });
     if (r.error) {
       console.error(`❌ ${r.error}`);
       process.exit(1);
@@ -1343,10 +1344,15 @@ switch (command) {
       const launch = iosLaunchOptions(flags, rest);
       if (launch.appLaunchArgs) env.OCQA_APP_LAUNCH_ARGS_JSON = JSON.stringify(launch.appLaunchArgs);
       if (launch.appLaunchEnv) env.OCQA_APP_LAUNCH_ENV_JSON = JSON.stringify(launch.appLaunchEnv);
+      // --device is a simulator name or UDID here (issue #31); the runner gets the UDID, and with
+      // several simulators booted and none chosen the run refuses rather than guess.
+      const sim = await engine.ensureBootedSim({ device: typeof flags.device === "string" ? flags.device : "" });
+      if (sim.error) { console.error(`❌ ${sim.error}`); process.exit(2); }
+      env.TAPP_UDID = sim.booted.udid;
     }
     if (typeof flags.email === "string") env.OCQA_TEST_EMAIL = flags.email;
     if (typeof flags.password === "string") env.OCQA_TEST_PASSWORD = flags.password;
-    if (typeof flags.device === "string") env.TAPP_WEB_DEVICE = flags.device;
+    if (typeof flags.device === "string" && platform === "web") env.TAPP_WEB_DEVICE = flags.device;
     if (typeof flags.viewport === "string") env.TAPP_WEB_VIEWPORT = flags.viewport;
     if (typeof flags.actor === "string" && flags.actor) {
       const { readProjectConfig } = await import(path.join(packageRoot, "mcp-server", "src", "project-config.js"));
