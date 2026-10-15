@@ -379,9 +379,18 @@ OCQA_COMPLETE:{\"actions\":0,\"states\":0,\"issues\":1,\"screens\":\"\",\"outcom
       wait "$HARNESS_PID" 2>/dev/null || true
       OUTPUT="$(cat "$local_output_file" 2>/dev/null || true)"
 
-      # Stop recording
+      # Stop recording. simctl's recorder finalizes the file on SIGINT, but on hosted runners it
+      # sometimes ignores the signal; an unbounded wait here held the whole run (and its caller)
+      # until the test budget expired, with the harness long finished. Escalate on a deadline.
       if [[ -n "$RECORD_PID" ]]; then
         kill -INT "$RECORD_PID" 2>/dev/null || true
+        for _ in $(seq 1 40); do kill -0 "$RECORD_PID" 2>/dev/null || break; sleep 0.5; done
+        if kill -0 "$RECORD_PID" 2>/dev/null; then
+          echo "WARNING: simulator recorder did not stop on SIGINT; terminating it (the recording may be truncated)" >&2
+          kill -TERM "$RECORD_PID" 2>/dev/null || true
+          for _ in $(seq 1 10); do kill -0 "$RECORD_PID" 2>/dev/null || break; sleep 0.5; done
+          kill -KILL "$RECORD_PID" 2>/dev/null || true
+        fi
         wait "$RECORD_PID" 2>/dev/null || true
       fi
       rm -f "$RECORDING_STARTED_PATH"

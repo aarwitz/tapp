@@ -65,7 +65,7 @@ repository — as evidence.
 
 ## Requirements
 
-- Node 18 or newer.
+- Node 20 or newer.
 - iOS: macOS, Xcode, and an installed simulator runtime.
 - Android: `adb` and a connected emulator/device.
 - Web: Playwright and Chromium.

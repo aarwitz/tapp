@@ -1526,7 +1526,11 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
     if (which === "closed") break;
     if (Date.now() > hardDeadline) { try { proc.kill("SIGTERM"); } catch {} timedOut = true; break; }
   }
-  await closed;
+  // 'close' needs every stdio pipe released; a grandchild (the simulator recorder) that survives
+  // the script holds them open, and waiting on it unconditionally turned a finished exploration
+  // into a hang. Give the script a bounded grace period, then carry on with what it wrote.
+  const closedInTime = await Promise.race([closed.then(() => true), sleep(20_000).then(() => false)]);
+  if (!closedInTime) { try { proc.kill("SIGKILL"); } catch {} }
   const created = listCaptureRuns(80).find((r) => !before.has(r.id))
     || (captureDir ? { id: path.basename(captureDir), path: captureDir, relativePath: path.relative(repoRoot, captureDir) } : null);
   return { created, timedOut, captureStderr };

@@ -11,7 +11,7 @@ gate evaluation do not require a model or Tapp cloud account.
 
 Requirements:
 
-- Node 18 or newer;
+- Node 20 or newer;
 - iOS: macOS, Xcode, and a simulator runtime;
 - Android: `adb` and a connected emulator/device;
 - web: Playwright and Chromium.

@@ -1711,8 +1711,8 @@ switch (command) {
     let healthy = true;
 
     const major = Number(process.versions.node.split(".")[0]);
-    report.node = { ok: major >= 18, version: process.versions.node };
-    major >= 18 ? sayOk("Node", `v${process.versions.node}`) : (sayBad("Node", `v${process.versions.node} (need >= 18)`), (healthy = false));
+    report.node = { ok: major >= 20, version: process.versions.node };
+    major >= 20 ? sayOk("Node", `v${process.versions.node}`) : (sayBad("Node", `v${process.versions.node} (need >= 20; Node 18 reached end of life in April 2025)`), (healthy = false));
 
     const python = run("python3", ["--version"]);
     report.python3 = { ok: python.code === 0, version: python.code === 0 ? python.stdout : null };

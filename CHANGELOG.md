@@ -2,6 +2,15 @@
 
 ## 0.18.1
 
+- **A finished iOS exploration no longer hangs on the simulator recorder.** `simctl io recordVideo`
+  sometimes ignores SIGINT on hosted runners; the capture script waited on it without bound and
+  the engine waited on the script, so a one-action exploration whose harness had long finished sat
+  until the caller's budget expired. The recorder is now stopped on a deadline (INT, then TERM,
+  then KILL — a truncated recording is reported, not a hung run), and the engine gives the script
+  a bounded grace period after its own deadline.
+- **Node 20 is the minimum.** Node 18 reached end of life in April 2025 and Playwright 1.64
+  requires Node 20; `engines.node` is `>=20`, `tapp doctor` says so, and hosted CI tests on
+  Node 20 and 22. Playwright moves from 1.61.1 to 1.64.0.
 - **`--device` chooses the iOS simulator** (public issue #31). With several simulators booted,
   every iOS path — `explore`, `look`, `run FILE`, `tapp_explore`, `tapp_look`, `tapp_session` —
   drove whichever one `simctl` listed first; `--device` was honoured for web only. A production
