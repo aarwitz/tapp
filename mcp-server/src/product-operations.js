@@ -20,6 +20,7 @@ import {
 import { baselinePathForTarget, existingBaselinePathForTarget, renderGithubWorkflow, selectApplicationTarget, writeCiInstallation, writeTargetBaseline } from "./ci-setup.js";
 import { executeReleaseContract, runProductProcess } from "./product-execution.js";
 import { projectArtifactDirectory } from "./project-paths.js";
+import { BUSINESS_WORKFLOW_PATH } from "./business-workflows.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const packageVersion = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8")).version;
@@ -209,7 +210,7 @@ function listRepositoryFlows(root) {
           steps = (block.match(/^\s{2}-\s/gm) || []).length;
         }
       } catch { /* Artifact remains inspectable; deterministic replay reports invalid syntax. */ }
-      return { id:`flow_${crypto.createHash("sha256").update(relativePath).digest("hex").slice(0, 16)}`, name, path:relativePath, platform, steps, status:"committed" };
+      return { id:`flow_${crypto.createHash("sha256").update(relativePath).digest("hex").slice(0, 16)}`, name, path:relativePath, platform, steps, sha256:crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"), status:"committed" };
     })
     .sort((left, right) => left.path.localeCompare(right.path));
 }
@@ -242,6 +243,7 @@ export function readProductProject({ projectDir, outDir = ".tapp" } = {}) {
     ci,
     baselines,
     flows: listRepositoryFlows(root),
+    businessWorkflowDefinition: readJson(path.join(root,BUSINESS_WORKFLOW_PATH)),
     evidence: listProductRuns(root),
     state: {
       inspected: !!model,

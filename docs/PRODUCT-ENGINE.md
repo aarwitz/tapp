@@ -7,6 +7,11 @@ operations is [`mcp-server/src/product-operations.js`](../mcp-server/src/product
 An interface may validate its transport and render a result; it must not redefine onboarding,
 review, trust, baseline, or gate semantics.
 
+The [business workflow layer](BUSINESS-WORKFLOWS.md) adds an owner-facing map over
+the existing proof. It shares discovery/planning/coverage in `business-workflows.js`
+and adapter orchestration in `business-workflow-runtime.js`. Its results are scoped
+observations; release authority stays with the deterministic gate.
+
 ## Product operation contract
 
 The shared engine owns these operations:

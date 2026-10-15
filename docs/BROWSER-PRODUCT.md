@@ -1,13 +1,21 @@
 # Browser Release Studio
 
-Status: current local-product contract as of 2026-08-08.
+Status: current product contract as of 2026-10-14 (shell and evidence panel reworked for desktop
+parity; the 2026-08-08 "paused track" framing is superseded by ADR-0006, "Three entry layers,
+two execution modes", in the private decision log).
 
-The browser Release Studio is an **optional local workspace**, not the current launch surface — the
-**npm package (CLI + MCP + the GitHub Action) is the current objective** (ADR-0005). The Studio, the
-VS Code extension, the desktop app, and the future managed SaaS are separate/paused tracks. Web is
-also one application target beside iOS and Android; it is not a separate QA product. CLI, MCP, VS
-Code, the Action, desktop, and future managed SaaS all adapt the shared product operations described
-in [`PRODUCT-ENGINE.md`](PRODUCT-ENGINE.md).
+The browser Release Studio is the one web UI. `browser/` is its only source; the hosted control
+plane (`saas/`) copies these assets at build time, so the self-host Studio (`tapp app`) and
+`app.runtapp.com` are the same interface with different execution modes. Its layout mirrors the
+macOS Command Center: wordmark and project menu, Overview / Runs / Findings / Coverage / Contracts /
+Settings, a project block, and an Overview that pairs a device feed with "tapp chat". The feed shows
+a live session frame or the newest screenshot the running exploration wrote; the chat is the
+engine's own progress log (phase changes, per-action narratives such as `Tapped "Place order"`,
+`Reached Checkout`, findings, completion). Nothing in either panel is generated after the fact, and
+there is no message input because no chat backend exists in the package. Web is one application
+target beside iOS and Android; it is not a separate QA product. CLI, MCP, VS Code, the Action,
+desktop, and the hosted Studio all adapt the shared product operations described in
+[`PRODUCT-ENGINE.md`](PRODUCT-ENGINE.md).
 
 ## Start locally
 

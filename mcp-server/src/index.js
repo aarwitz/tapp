@@ -272,11 +272,11 @@ export async function ensureBootedSim({ autoBoot = false } = {}) {
     return { error: "No iOS simulators exist on this Mac. Install a simulator runtime in Xcode (Settings → Platforms), then retry." };
   }
   if (!autoBoot) {
-    return { error: `No simulator is booted. Call tapp_boot_simulator (e.g. udid "${candidate.udid}" — ${candidate.name}) and retry.` };
+    return { error: `No simulator is booted. Call tapp_build (action boot) (e.g. udid "${candidate.udid}" — ${candidate.name}) and retry.` };
   }
   await runCommand("xcrun", ["simctl", "boot", candidate.udid], { timeoutMs: 2 * 60 * 1000 });
   const st = await runCommand("xcrun", ["simctl", "bootstatus", candidate.udid, "-b"], { timeoutMs: 3 * 60 * 1000 });
-  if (st.code !== 0) return { error: `Auto-boot of ${candidate.name} failed — boot one manually with tapp_boot_simulator.` };
+  if (st.code !== 0) return { error: `Auto-boot of ${candidate.name} failed — boot one manually with tapp_build (action boot).` };
   return { booted: candidate, autoBooted: true };
 }
 
@@ -292,7 +292,7 @@ function notInstalledError(bundleId, booted) {
   const name = booted && booted.name ? booted.name : "the booted simulator";
   return (
     `\`${bundleId}\` is not installed on ${name}. Install a simulator build first — ` +
-    `tapp_install_app with the .app path (CLI: xcrun simctl install booted path/to/App.app) — ` +
+    `tapp_build (action install) with the .app path (CLI: xcrun simctl install booted path/to/App.app) — ` +
     `or double-check the bundle id (xcrun simctl listapps booted).`
   );
 }
@@ -764,7 +764,7 @@ function focusMetadata(result) {
 
 async function startSession(bundleId, extraEnv = {}) {
   if (activeSession && !activeSession.ended) {
-    return { error: "A session is already active; call tapp_session_end first.", screen: treeSnapshot() };
+    return { error: "A session is already active; call tapp_session (action end) first.", screen: treeSnapshot() };
   }
   const sim = await ensureBootedSim();
   if (sim.error) return { error: sim.error };
@@ -781,7 +781,7 @@ async function startSession(bundleId, extraEnv = {}) {
   });
   activeSession = {
     platform:"ios", proc, bundleId, seq: 0, cmdPath, resultPath, latestTree: null, treeVersion: 0, buffer: "", ready: false, ended: false,
-    // Always-on recorder: each act appends a Flow step; tapp_flow_save snapshots it to a file.
+    // Always-on recorder: each act appends a Flow step; tapp_session (action save_flow) snapshots it to a file.
     recording: [],
     creds: { email: extraEnv.OCQA_TEST_EMAIL || "", password: extraEnv.OCQA_TEST_PASSWORD || "" },
     lastScreen: null,
@@ -811,7 +811,7 @@ async function startSession(bundleId, extraEnv = {}) {
 
 async function startAndroidSession(appId, { serial, apkPath, clearData = true, testEmail = "", testPassword = "" } = {}) {
   if (activeSession && !activeSession.ended) {
-    return { error: "A session is already active; call tapp_session_end first.", screen: treeSnapshot() };
+    return { error: "A session is already active; call tapp_session (action end) first.", screen: treeSnapshot() };
   }
   try {
     const { AndroidDriver } = await import("./android-driver.js");
@@ -887,23 +887,23 @@ async function firstVisibleWebLocator(page, target, { input = false } = {}) {
   return await fallback.isVisible().catch(() => false) ? fallback : null;
 }
 
-async function startWebSession(url, { testEmail = "", testPassword = "", device = "", viewport = "" } = {}) {
-  if (activeSession && !activeSession.ended) return { error: "A session is already active; call tapp_session_end first.", screen:treeSnapshot() };
+async function startWebSession(url, { testEmail = "", testPassword = "", device = "", viewport = "", recordVideoDir = "" } = {}) {
+  if (activeSession && !activeSession.ended) return { error: "A session is already active; call tapp_session (action end) first.", screen:treeSnapshot() };
   let browser;
   try {
     const parsed = new URL(String(url || ""));
     if (!/^https?:$/.test(parsed.protocol)) return { error:"Web session URL must be http(s)" };
-    const { loadPlaywright, webContextOptions } = await import("./web-explorer.js");
+    const { loadPlaywright, webContextOptions, webBrowserLaunchOptions } = await import("./web-explorer.js");
     const { chromium, devices } = await loadPlaywright();
-    browser = await chromium.launch({ headless:true });
-    const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
+    browser = await chromium.launch(webBrowserLaunchOptions());
+    const context = await browser.newContext({ ...webContextOptions({ device, viewport, devices }), ...(recordVideoDir ? {recordVideo:{dir:recordVideoDir}} : {}) });
     const page = await context.newPage();
     await page.goto(parsed.href, { waitUntil:"domcontentloaded", timeout:30_000 });
     await page.waitForLoadState("networkidle", { timeout:5_000 }).catch(() => {});
     const snapshot = await webSessionSnapshot(page);
     activeSession = {
       platform:"web", browser, context, page, latestTree:snapshot, treeVersion:1, recording:[],
-      creds:{ email:testEmail, password:testPassword },
+      creds:{ email:testEmail, password:testPassword }, credentialOrigin:parsed.origin,
       lastScreen:snapshot.screenTitle, ended:false,
     };
     return { ok:true, ...treeSnapshot(), url:snapshot.url };
@@ -1016,7 +1016,7 @@ function recordStep(cmd, result) {
   if (newScreen) activeSession.lastScreen = newScreen;
 }
 
-// Argument shapes tapp_session_act accepts, per action. A malformed call is answered here with
+// Argument shapes tapp_session accepts, per action. A malformed call is answered here with
 // the accepted shape and never reaches the driver, so it can neither time out nor disturb the
 // session (feedback #7: `{action:"wait", seconds:3}` used to wait on an empty target).
 const SESSION_ACT_ARGS = Object.freeze({
@@ -1046,11 +1046,14 @@ export function sessionActUsageError(cmd = {}) {
 async function sessionAct(cmd) {
   const startedAt = Date.now();
   const done = (result) => ({ ...result, durationMs: Date.now() - startedAt });
-  if (!activeSession) return done({ error: "No active session. Call tapp_session_start first." });
+  if (!activeSession) return done({ error: "No active session. Call tapp_session (action start) first." });
   if (activeSession.ended) return done({ error: sessionFailureReason(activeSession.buffer, activeSession.creds) });
   const usage = sessionActUsageError(cmd);
   if (usage) return done({ status: "usage", detail: usage, ...treeSnapshot(), recordedSteps: activeSession.recording.length });
   if (cmd.action === "login") {
+    if (activeSession.platform === "web" && process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1" && new URL(activeSession.page.url()).origin !== activeSession.credentialOrigin) {
+      return done({status:"blocked",detail:"The sign-in page is on another origin. Configure that authentication path before sending saved credentials.",...treeSnapshot()});
+    }
     if (cmd.email) activeSession.creds.email = cmd.email;
     if (cmd.password) activeSession.creds.password = cmd.password;
   }
@@ -1226,6 +1229,7 @@ async function endSession() {
   const s = activeSession;
   if (s.platform === "web") {
     activeSession = null;
+    await s.context?.close().catch(() => {});
     await s.browser.close().catch(() => {});
     if (s.managedRuntime) await stopManagedWebTarget(s.managedRuntime).catch(() => {});
     return { ok:true };
@@ -1426,6 +1430,7 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
   let captureDir = null;
   let pos = 0;
   let timedOut = false;
+  let lastProgress = { action: 0, max: actions, states: 0 };
   // Interactive runs pause for a human — time spent waiting is excluded from the harness's own
   // budget, so give the watchdog matching headroom.
   const interactiveGrace = env.OCQA_INTERACTIVE_INPUT === "1" ? 900 : 0;
@@ -1450,7 +1455,17 @@ async function runExploreStreaming(bundleId, actions, timeout, env, onProgress) 
           pos = size;
           for (const line of buf.toString("utf8").split("\n")) {
             if (line.startsWith("OCQA_PROGRESS:")) {
-              try { onProgress(JSON.parse(line.slice("OCQA_PROGRESS:".length))); } catch {}
+              try { lastProgress = JSON.parse(line.slice("OCQA_PROGRESS:".length)); onProgress(lastProgress); } catch {}
+            }
+            // Per-action narration for transcript hosts; the harness does not always write a
+            // narrative, so one is synthesized from the action itself.
+            if (line.startsWith("OCQA_ACTION:")) {
+              try {
+                const action = JSON.parse(line.slice("OCQA_ACTION:".length));
+                const target = action.identifier || action.label || action.target || (action.x !== undefined ? `(${action.x}, ${action.y})` : "");
+                const narrative = action.narrative || `${String(action.type || "action").replace(/^\w/, (c) => c.toUpperCase())} ${target}${action.status === "disabled" ? " (disabled)" : ""}`.trim();
+                onProgress({ ...lastProgress, narrative, ...(action.screen ? { screen: action.screen } : {}) });
+              } catch {}
             }
             // Surface harness pause requests to the host as a sidecar file next to the response
             // path — prompting hosts (VS Code extension) poll it, answer the human, and write
@@ -1506,12 +1521,12 @@ export async function captureScreenshotImage(maxWidth) {
 }
 
 // ---- Model backend (subscription proxy / BYO key) — mirrors Tapp/Services/ModelBackend.swift.
-// Used by AI-generate (tapp_flow_generate). Resolution: Tapp subscription token → proxy;
+// Used by AI-generate (tapp_session (action draft_flow)). Resolution: Tapp subscription token → proxy;
 // else ANTHROPIC_API_KEY → api.anthropic.com; else null (feature disabled).
 // Remote-AI opt-in for IMPLICIT model calls (post-run finding enrichment). A bare
 // ANTHROPIC_API_KEY is often ambient in dev shells — its mere presence must never silently
 // change data-handling behavior. A subscription token is an explicit tapp choice, and
-// explicitly-invoked AI tools (tapp_flow_generate, assert_ai) carry their own consent.
+// explicitly-invoked AI tools (tapp_session (action draft_flow), assert_ai) carry their own consent.
 export function remoteAiOptedIn(env = process.env) {
   if ((env.TAPP_SUBSCRIPTION_TOKEN || "").trim()) return true;
   return ["1", "true", "yes"].includes(String(env.TAPP_ENABLE_REMOTE_AI || "").trim().toLowerCase());
@@ -1764,7 +1779,7 @@ export function qaNextSteps(report, surface = "mcp") {
     const next = [];
     if (report?.findings?.length) next.push("inspect the evidence with `npx -y @aarwitz/tapp@latest report latest`");
     next.push("save this run with `--json <report.json>`, then re-run with `--baseline <report.json>` to compare a fix (`tapp ci` gates it)");
-    next.push("replay a committed journey with `npx -y @aarwitz/tapp@latest flow run <file>`");
+    next.push("replay a committed journey with `npx -y @aarwitz/tapp@latest run <file>`");
     return next;
   }
   const next = [];
@@ -1774,11 +1789,11 @@ export function qaNextSteps(report, surface = "mcp") {
     const reason = String(report.stopReason || "");
     if (reason.startsWith("login-wall")) next.push("re-run with `testEmail`/`testPassword` (or an `actor` from .tapp/project.json) — the sign-in wall was not exercised");
     else if (reason === "time-budget-exhausted") next.push("re-run with a larger `timeoutSeconds` or a smaller `maxActions` — the time budget ran out, not the app");
-    else next.push("check the app launches: `tapp_open_app` first (add `appLaunchArgs`/`appLaunchEnv` if it needs a test bypass), then re-run");
+    else next.push("check the app launches: `tapp_look` first (add `appLaunchArgs`/`appLaunchEnv` if it needs a test bypass), then re-run");
   }
-  if (report?.findings?.length) next.push("open a flagged screen with `tapp_open_app`");
+  if (report?.findings?.length) next.push("open a flagged screen with `tapp_look`");
   next.push("re-run with `baselineFindings` to gate a fix");
-  next.push("drive it step-by-step via `tapp_session_start`");
+  next.push("drive it step-by-step via `tapp_session (action start)`");
   return next;
 }
 
@@ -2547,10 +2562,10 @@ const server = new Server(
     // reaching for the wrong tool, in the order the mistakes actually happen.
     instructions: [
       "Tapp gives you hands and eyes on real iOS, Android and web app surfaces. Pick the smallest operation:",
-      "- see or screenshot one screen → tapp_open_app; what is on screen now → tapp_screenshot / tapp_ui_tree;",
-      "- reach a named screen or drive a journey → tapp_session_start (+ focus) then session_act;",
+      "- see or screenshot one screen → tapp_look; what is on screen now → tapp_look / tapp_look (tree: true);",
+      "- reach a named screen or drive a journey → tapp_session (action start) (+ focus) then session_act;",
       "- find bugs in an app or environment you own → tapp_explore (it clicks, types and submits; minutes);",
-      "- check production or a site you do not own → tapp_audit only (read-only: never clicks);",
+      "- check production or a site you do not own → tapp_explore (readOnly: true) only (read-only: never clicks);",
       "- a merge decision → the CI gate (tapp ci / GitHub Action), never exploration.",
       "Results are observations with findings, coverage and evidence paths — never a score or ship verdict.",
       "inconclusive:true is not a pass; say what blocked coverage. A clean audit says the page is served without structural defects, not that the product works.",
@@ -2599,7 +2614,7 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
           text:
             `${goal}.${target} Use the connected Tapp tools on the real UI surface. ` +
             "Use the smallest operation that satisfies the request; initialize/explore the source repo only for a general repository test. " +
-            "For a named screen/control, pass the exact request as session focus or call tapp_focus so Tapp uses source + its observed UI Map instead of wandering. " +
+            "For a named screen/control, pass the exact request as session focus or call tapp_explore (goal) so Tapp uses source + its observed UI Map instead of wandering. " +
             "If Tapp returns multiple target choices, ask me to select one instead of guessing. " +
             "Read visual evidence before describing it. Report findings, coverage, authority, inconclusive state, and checked/not-checked scope; " +
             "never turn exploration into a score or ship verdict. Do not edit the app unless I ask for a fix.",
@@ -2609,792 +2624,383 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
   };
 });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "tapp_feedback",
-      title: "Send feedback to the tapp maintainers",
-      description:
-        "Draft a public GitHub issue on aarwitz/tapp about tapp itself — a bug in tapp, an idea, or a " +
-        "question (not a finding about the app under test). Adds the tapp version, platform availability, " +
-        "and the latest capture id automatically and redacts home paths and tokens. Default is a DRAFT: " +
-        "returns the composed issue plus a prefilled github.com URL the user can open. Pass submit:true only " +
-        "after the user has agreed to file a public issue; filing uses this machine's authenticated GitHub CLI.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "Short, specific title" },
-          body: { type: "string", description: "What happened, what you expected, the exact command or tool call. No secrets or private source." },
-          type: { type: "string", enum: ["bug", "idea", "question"], description: "Default bug" },
-          capture: { type: "string", description: "Capture id to reference, 'latest' (default) or 'none'" },
-          submit: { type: "boolean", description: "File the issue now with gh (needs the user's consent). Default false = draft only." },
-        },
-        required: ["title"],
-      },
-    },
-    {
-      name: "tapp_health",
-      title: "Check Tapp readiness",
-      description: "Check Tapp workspace and toolchain availability",
-      inputSchema: {
-        type: "object",
-        properties: {},
-      },
-    },
-    {
-      name: "tapp_build",
-      title: "Build the iOS app",
-      description:
-        "Build the user's iOS app for the simulator from an Xcode project/workspace (auto-detects the " +
-        "container and scheme under projectDir, default cwd), install it on the booted simulator, and " +
-        "return the bundle id. Use before tapp_explore / tapp_open_app when the app isn't installed yet — " +
-        "no bundle id needed up front.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: {
-            type: "string",
-            description: "Required when TAPP_MCP_TOKEN is set",
-          },
-          projectDir: { type: "string", description: "Repo/dir to search for the .xcworkspace/.xcodeproj (default: cwd)" },
-          scheme: { type: "string", description: "Scheme to build (default: auto-detected)" },
-          configuration: { type: "string", default: "Debug" },
-          install: { type: "boolean", default: true, description: "Install on the booted simulator after building" },
-        },
-      },
-    },
-    {
-      name: "tapp_capture",
-      title: "Headless capture",
-      description: "Run headless capture workflows using scripts/quick-capture.sh",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: {
-            type: "string",
-            description: "Required when TAPP_MCP_TOKEN is set",
-          },
-          mode: {
-            type: "string",
-            enum: ["screenshot", "record", "explore", "tree"],
-            description: "Capture mode",
-          },
-          appBundleId: {
-            type: "string",
-            description: "Bundle ID (required for explore/tree)",
-          },
-          actions: {
-            type: "integer",
-            minimum: 1,
-            maximum: 1000,
-            description: "Action limit for explore",
-          },
-          duration: {
-            type: "integer",
-            minimum: 1,
-            maximum: 3600,
-            description: "Record duration in seconds",
-          },
-          testEmail: {
-            type: "string",
-            description: "Optional OCQA_TEST_EMAIL override",
-          },
-          testPassword: {
-            type: "string",
-            description: "Optional OCQA_TEST_PASSWORD override",
-          },
-          inputOverrides: {
-            type: "object",
-            description:
-              "Deterministic field values typed during explore. Map of field key -> value. " +
-              "Keys: 'id:<identifier>', 'label:<label>', or scoped 'screen:<title>|id:<identifier>'. " +
-              "Example: {\"id:email_field\": \"user@example.com\", \"id:zip\": \"90210\"}. " +
-              "Values replace the default 'test' input and are typed exactly as given on every run.",
-            additionalProperties: { type: "string" },
-          },
-        },
-        required: ["mode"],
-      },
-    },
-    {
-      name: "tapp_parse_markers",
-      title: "Parse capture markers",
-      description: "Parse OCQA markers from a capture run into structured summary",
-      inputSchema: {
-        type: "object",
-        properties: {
-          runId: {
-            type: "string",
-            description: "Capture run directory name under captures/",
-          },
-          runPath: {
-            type: "string",
-            description: "Absolute capture path override (must remain under captures/)",
-          },
-        },
-      },
-    },
-    {
-      name: "tapp_list_captures",
-      title: "List captures",
-      description: "List recent capture runs for THIS project (the workspace the server runs in). The captures directory is shared by every project on the machine; other projects' captures and pre-provenance captures are counted but hidden unless allProjects is true. Each entry carries provenance {kind, platform, target, project}. Use the capture a command just returned as evidence; never cite a capture from another project as if it were this one.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          limit: {
-            type: "integer",
-            minimum: 1,
-            maximum: 100,
-            default: 10,
-          },
-          allProjects: { type: "boolean", default: false, description: "Include captures from other projects and captures without provenance — only when the user explicitly asks for historical evidence" },
-        },
-      },
-    },
-    {
-      name: "tapp_capture_summary",
-      title: "Capture summary",
-      description: "Show summary metadata for a capture run",
-      inputSchema: {
-        type: "object",
-        properties: {
-          runId: {
-            type: "string",
-            description: "Capture run directory name under captures/",
-          },
-          runPath: {
-            type: "string",
-            description: "Absolute capture path override",
-          },
-        },
-      },
-    },
-    {
-      name: "tapp_explore",
-      title: "Explore (autonomous)",
-      description:
-        "Autonomously explore iOS (appBundleId), Android (androidAppId), OR a web app " +
-        "(url — requires Playwright installed) and return a structured EXPLORATION OBSERVATION. " +
-        "Exploration OBSERVES — it surfaces findings + coverage + evidence; it does NOT render a ship " +
-        "verdict or score. To gate a merge, run the deterministic gate (contracts + baseline via CI). " +
-        "Use when the user wants to find bugs / observe what breaks — this " +
-        "runs for MINUTES exploring the whole app. Do NOT use it just to view, screenshot, or reach a specific " +
-        "screen — use tapp_open_app (launch + screenshot) or a session for that. Tapp explores the app " +
-        "like a tester (taps, types, navigates, scrolls) and detects real issues — crashes, dead buttons, failed sign-ins, error screens, " +
-        "stuck/hung screens; on web also uncaught JS exceptions, failed/5xx requests, broken links and assets. " +
-        "Returns {kind:'tapp-exploration-run', headline, inconclusive, screensExplored, " +
-        "actionsPerformed, findingCounts, findings:[{type,severity,category,authority,title,screen}]} — NO " +
-        "verdict/releaseScore. Web separates deterministic findings from advisory sampled control probes. " +
-        "There is a coverage floor: if the app barely explored (crash on launch / sign-in wall) it reports " +
-        "`inconclusive` — absence of findings is NEVER a pass. For iOS the app must already be installed on a booted simulator (use tapp_list_simulators / " +
-        "tapp_boot_simulator first). For web, only point it at an app/environment you own — it CLICKS things; for production or a site you do not own use tapp_audit (read-only). " +
-        "Tapp explores autonomously and does NOT pause to prompt for input — " +
-        "it fills forms with safe defaults. The result includes `inputFieldsEncountered` (and `inputHint`): if " +
-        "the app showed login/form fields and the user hasn't given you values, ASK THE USER what to enter (offer " +
-        "to use defaults or skip), then re-run with testEmail/testPassword or inputOverrides for a real result.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          appBundleId: { type: "string", description: "iOS: bundle id of the installed app to test, e.g. com.acme.app. Provide exactly one of appBundleId | url." },
-          androidAppId: { type: "string", description: "Android: application id installed on a connected emulator/device, e.g. com.acme.app." },
-          apkPath: { type: "string", description: "Android: optional APK to install before testing." },
-          androidSerial: { type: "string", description: "Android: optional adb device serial; defaults to the first authorized device." },
-          clearData: { type: "boolean", default: true, description: "Android: clear app data before launch for a repeatable starting state." },
-          url: { type: "string", description: "Web: URL of the app to explore in a real browser (same-origin only; your own app/staging). Provide exactly one of appBundleId | url." },
-          watch: { type: "boolean", default: false, description: "Web only: open Tapp's controlled Chromium window and show a cursor/HUD for each exploration action. Evidence screenshots exclude the overlay." },
-          device: { type: "string", description: "Web only: render as a Playwright device profile (e.g. \"iPhone 13\") — viewport, user agent, touch" },
-          viewport: { type: "string", description: "Web only: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\"); overrides the device profile's viewport" },
-          maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
-          timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
-          testEmail: { type: "string", description: "Email for the login preamble, if the app has a sign-in" },
-          testPassword: { type: "string", description: "Password for the login preamble" },
-          interactive: { type: "boolean", description: "Host-with-a-human only (e.g. the VS Code extension): pause at input screens and wait for values via interactiveResponsePath. Plain agents: omit." },
-          interactiveResponsePath: { type: "string", description: "File path the prompting host answers on (requests appear at <path>.request)" },
-          visualReadyPath: { type: "string", description: "Local-client temp path written once the iOS target is foregrounded and settled, so previews exclude build/install footage" },
-          inputOverrides: {
-            type: "object",
-            additionalProperties: { type: "string" },
-            description:
-              "Deterministic field values typed during exploration. Map of field key -> value; keys are " +
-              "'id:<identifier>', 'label:<label>', or scoped 'screen:<title>|id:<identifier>'. " +
-              "Example: {\"id:email_field\": \"user@example.com\"}.",
-          },
-          appLaunchArgs: {
-            type: "array",
-            items: { type: "string" },
-            description: "Launch arguments passed to the app, e.g. [\"--uitesting\"] to enable a login bypass.",
-          },
-          appLaunchEnv: {
-            type: "object",
-            additionalProperties: { type: "string" },
-            description: "Launch environment for the app, e.g. {\"UI_TEST_BACKEND\": \"staging\"} to point it at a test backend.",
-          },
-          loginSteps: {
-            type: "array",
-            items: {},
-            description:
-              "Explicit login replay run BEFORE exploration, for custom login UIs the heuristic can't " +
-              "parse (the #1 reason a real app stays invisible). Each step is {action:'type'|'tap'|'wait', " +
-              "target:'<accessibility-id-or-label>', value?:'<text>', timeoutMs?:<for wait>} — or a shorthand " +
-              "string 'action:target[:value]'. $TEST_EMAIL/$TEST_PASSWORD are substituted from testEmail/" +
-              "testPassword. Example: [{\"action\":\"type\",\"target\":\"email_field\",\"value\":\"$TEST_EMAIL\"}," +
-              "{\"action\":\"type\",\"target\":\"password_field\",\"value\":\"$TEST_PASSWORD\"},{\"action\":\"tap\",\"target\":\"sign_in_button\"}].",
-          },
-          baselineFindings: {
-            type: "array",
-            items: { type: "object" },
-            description:
-              "Findings from a previous run (pass back the `findings` array a prior tapp_explore returned). " +
-              "When provided, the result adds a `regression` COMPARISON {counts:{new,persisting,resolved}, " +
-              "newFindings, resolved} vs. that baseline — an observation, not a gate signal. To gate a merge, " +
-              "run `npx -y @aarwitz/tapp@latest ci` (or the GitHub Action): it applies the deterministic policy and returns the " +
-              "pass/fail/inconclusive outcome.",
-          },
-        },
-      },
-    },
-    {
-      name: "tapp_audit",
-      title: "Audit (read-only)",
-      description:
-        "Read-only audit of a web page or site: renders it and reads it, NEVER clicks, types, submits or hovers — " +
-        "the one analysis safe to point at production or at a site you do not own. Finds controls that were never " +
-        "alive (dead in-page anchors, placeholder links, aria-controls naming nothing, buttons with no handler/form/link), " +
-        "images that failed to load, same-origin assets answering 404, 5xx/failed requests and uncaught JS exceptions " +
-        "during load, same-origin links answering 404/410/5xx, mixed content, and a page wider than its viewport. " +
-        "pages > 1 crawls same-origin links breadth-first with robots.txt honoured. Writes a capture (screenshots, " +
-        "per-finding evidence, report.html) like an explore run. Returns {kind:'tapp-structural-audit', readOnly:true, " +
-        "pagesAudited, findingCounts, pages:[{url,title,controlsExamined,linksChecked,findings}], checkedFor, notChecked, capture}. " +
-        "An observation, never a verdict; absence of findings says the page is served without structural defects, not that the product works. " +
-        "NOT for exercising behaviour (forms, buttons, journeys) on an app you own — that is tapp_explore or a session.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          url: { type: "string", description: "http(s) URL of the page to audit (the crawl start page when pages > 1)" },
-          pages: { type: "integer", default: 1, minimum: 1, maximum: 200, description: "How many same-origin pages to audit at most (1 = this page only)" },
-          delayMs: { type: "integer", default: 1000, minimum: 0, description: "Pause between pages when crawling — be polite to sites you do not own" },
-          linkCheckLimit: { type: "integer", default: 30, minimum: 0, description: "Same-origin links to HEAD-check per page" },
-          device: { type: "string", description: "Playwright device profile, e.g. 'iPhone 13' — audit the mobile rendering" },
-          viewport: { type: "string", description: "WIDTHxHEIGHT viewport override" },
-          capture: { type: "boolean", default: true, description: "Write a capture directory (screenshots, evidence, report.html)" },
-        },
-        required: ["url"],
-      },
-    },
-    {
-      name: "tapp_init",
-      title: "Inspect or explore a repository and create the Tapp application model and release plan",
-      description:
-        "Deterministically inspect repository targets, reviewed Tasks/contracts, actors, capabilities, entities, requirements, and the persistent UI Map. Returns an evidence-classified application model plus a compact grounded release-contract plan. `inspect` is read-only; `write` creates artifacts without overwriting; `refresh` updates source evidence; `explore` safely builds/starts a detected web target when url is omitted (or resolves native targets), runs the ordinary real-surface QA engine, tears managed runtimes down, merges its observed UI Map, then refreshes the model/plan while preserving explicit decisions and invalidating stale replay trust. Execution is deterministic/keyless and does not invoke AI unless remote AI was separately and explicitly enabled.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["inspect", "write", "refresh", "explore"], default: "inspect" },
-          projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional target filter" },
-          url: { type: "string", description: "Owned web runtime URL when already running; omit during web explore to build/start one safely detected target" },
-          target: { type: "string", description: "Explore target selector: web target name/path, or iOS repo directory, Xcode container, .app, or bundle id; defaults to projectDir" },
-          appBundleId: { type: "string", description: "iOS explore: already-installed bundle id, avoiding a build" },
-          androidAppId: { type: "string", description: "Android explore: required application id" },
-          apkPath: { type: "string", description: "Android explore: optional repo-relative APK to install" },
-          androidSerial: { type: "string", description: "Android explore: optional adb device serial" },
-          maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 40 },
-          timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600 },
-          testEmail: { type: "string", description: "Explore: actor/login email; never persisted in the model" },
-          testPassword: { type: "string", description: "Explore: actor/login password; never persisted in the model" },
-          watch: { type: "boolean", default: false, description: "Web explore only: show the controlled browser and Tapp's actions" },
-          maxContracts: { type: "integer", minimum: 1, maximum: 50, default: 15 },
-          outDir: { type: "string", description: "Repo-relative artifact directory; default .tapp" },
-        },
-      },
-    },
-    {
-      name: "tapp_actor_config",
-      title: "Inspect or configure named test actors without storing credential values",
-      description:
-        "Manage the repository-native .tapp/project.json actor/session contract used by init, release-contract generation, and CI. `read` is inspect-only. `set` writes an explicit actor role, isolation/provisioning policy, and credential-name to environment-variable-name bindings. The tool never accepts, returns, or persists credential values and never overwrites an actor unless replace is explicit.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["read", "set"], default: "read" },
-          projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
-          name: { type: "string", description: "Set: stable actor name" },
-          role: { type: "string", description: "Set: product role, such as member or admin" },
-          session: { type: "string", enum: ["default", "isolated"], default: "default" },
-          provisioning: { type: "string", enum: ["existing", "seeded", "api", "unknown"], default: "existing" },
-          credentialBindings: { type: "object", additionalProperties: { type: "string", pattern: "^[A-Z_][A-Z0-9_]{0,127}$" }, description: "Set: credential names mapped to environment-variable names, for example {email:'ALICE_EMAIL'}; values/secrets are forbidden" },
-          replace: { type: "boolean", default: false, description: "Explicitly replace an existing actor's non-secret configuration" },
-        },
-      },
-    },
-    {
-      name: "tapp_release_plan",
-      title: "Inspect or explicitly review a Tapp release plan",
-      description:
-        "Read the repository-native release plan, apply explicit approve/reject/defer decisions, generate grounded Task/contract drafts, deterministically validate drafts on a real target, or explicitly promote fully replay-validated drafts into reviewed repository-native artifacts. Review changes only decision metadata. Generation writes under .tapp/proposals, never overwrites, never invokes AI, and remains untrusted until real deterministic replay passes. Web validation can build/start/stop the detected managed target when url is omitted.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["read", "review", "generate", "validate", "promote"], default: "read" },
-          planPath: { type: "string", description: "Repo-relative plan path; default .tapp/release-plan.json" },
-          projectDir: { type: "string", description: "Generate: repo-relative project root containing the scoped .tapp Task directories" },
-          approve: { type: "array", items: { type: "string" }, description: "Plan item ids or names to approve" },
-          reject: { type: "array", items: { type: "string" }, description: "Plan item ids or names to reject" },
-          defer: { type: "array", items: { type: "string" }, description: "Plan item ids or names to defer" },
-          items: { type: "array", items: { type: "string" }, description: "Validate/promote only these plan item ids or names; defaults to every matching draft" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Validate: target platform; inferred when all selected drafts use one platform" },
-          url: { type: "string", description: "Validate web: already-running owned URL; omit to use Tapp's managed target lifecycle" },
-          target: { type: "string", description: "Validate managed web: target id, name, or source path when the repository has multiple browser targets" },
-          appBundleId: { type: "string", description: "Validate iOS: installed application bundle id" },
-          androidAppId: { type: "string", description: "Validate Android: installed application id" },
-          apkPath: { type: "string", description: "Validate Android: optional repo-relative APK" },
-          androidSerial: { type: "string", description: "Validate Android: optional adb serial" },
-          timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600 },
-        },
-      },
-    },
-    {
-      name: "tapp_ci_setup",
-      title: "Create a target-scoped baseline or reviewable CI installation",
-      description:
-        "Complete the local release-contract onboarding loop from the shared application model. `inspect` renders a target-aware GitHub workflow and machine-readable CI manifest without writing; `install` writes both with collision protection; `baseline` imports an existing successful conclusive portable-gate report into a platform/target-specific repository baseline. No network resources, commits, pushes, branch protection, or AI are used.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["inspect", "install", "baseline"], default: "inspect" },
-          projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
-          modelPath: { type: "string", description: "Repo-relative application model path; defaults to <projectDir>/.tapp/application-model.json" },
-          actionRef: { type: "string", description: "GitHub Action reference owner/repository@release-tag-or-sha; defaults to the current Tapp release tag" },
-          defaultBranch: { type: "string", default: "main" },
-          workflowPath: { type: "string", description: "Install: project-relative output; default .github/workflows/tapp.yml" },
-          manifestPath: { type: "string", description: "Install: project-relative output; default .tapp/ci.json" },
-          allowUnresolved: { type: "boolean", default: false, description: "Permit writing a draft whose manifest names unresolved target configuration" },
-          replace: { type: "boolean", default: false, description: "Explicitly replace an existing generated workflow/manifest or target baseline" },
-          reportPath: { type: "string", description: "Baseline: repo-relative successful conclusive portable-gate JSON report" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Baseline: select a target platform" },
-          target: { type: "string", description: "Baseline: application-model target id, name, or source path" },
-          baselinePath: { type: "string", description: "Baseline: optional project-relative target baseline output" },
-        },
-      },
-    },
-    {
-      name: "tapp_ui_map",
-      title: "Build, inspect, or diff the Tapp UI Map",
-      description:
-        "Use Tapp's first-class platform-neutral UI Map: evidence-grounded screen states, semantic controls, transitions, platform variants, provenance, and task/contract coverage hooks. " +
-        "QA runs create capture-local ui-map.json automatically. `read` returns one; `build` deterministically builds/merges a repository map from OCQA evidence; `diff` reports additions and absences without calling shallow-run absence a regression unless comparableFullSweep is explicitly true. No AI is used.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["read", "build", "diff"], default: "read" },
-          captureId: { type: "string", description: "Read/build from this Tapp capture's ocqa-markers.txt/ui-map.json" },
-          mapPath: { type: "string", description: "Repo-relative UI Map path for read, or build output (default .tapp/ui-map.json)" },
-          markersPath: { type: "string", description: "Repo-relative OCQA markers path for build when captureId is not supplied" },
-          beforePath: { type: "string", description: "Repo-relative baseline UI Map for diff" },
-          afterPath: { type: "string", description: "Repo-relative current UI Map for diff" },
-          platform: { type: "string", enum: ["ios", "android", "web"], default: "ios" },
-          target: { type: "string", description: "Bundle id, Android app id, or owned URL recorded as map provenance" },
-          replace: { type: "boolean", default: false, description: "Build: replace rather than merge existing repository map" },
-          comparableFullSweep: { type: "boolean", default: false, description: "Diff: only enable when both runs had comparable target/config/action budget; permits lost-reachability classification" },
-        },
-      },
-    },
-    {
-      name: "tapp_task",
-      title: "Inspect, validate, or compile a reusable deterministic Task",
-      description:
-        "Work with repository-native compositional Tasks in .tapp/tasks. Tasks define inputs, outputs, pre/postconditions, platform implementations, and the UI Map states/transitions they cover. " +
-        "Validation is deterministic and can ground selectors/coverage against ui-map.json. Compilation expands a Task into the shared keyless Flow contract with reviewable Task provenance; pass that returned flow to tapp_flow_run to replay it. No AI or API key is used.",
-      inputSchema: {
-        type: "object",
-        required: ["taskPath"],
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["read", "validate", "compile"], default: "validate" },
-          taskPath: { type: "string", description: "Repo-relative .tapp/tasks/*.yml|json file" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Implementation to validate/compile" },
-          inputs: { type: "object", additionalProperties: { type: "string" }, description: "Task inputs for compile. Secret inputs must be environment placeholders such as $TEST_PASSWORD, never plaintext." },
-          mapPath: { type: "string", description: "Optional repo-relative UI Map v1 used to ground states, edges, and semantic controls" },
-          updateMap: { type: "boolean", default: false, description: "Explicitly add the validated Task's coverage references to mapPath" },
-          outPath: { type: "string", description: "Compile: optional repo-relative JSON output; omitted returns the compiled Flow without writing" },
-        },
-      },
-    },
-    {
-      name: "tapp_release_contract",
-      title: "Inspect, validate, compile, or run a release contract",
-      description:
-        "Work with repository-native TypeScript release contracts in .tapp/contracts. Contracts express business guarantees through reusable Tasks, named actors, exact/eventual expectations, criticality, policy, and UI Map coverage. " +
-        "Compilation targets the same deterministic Flow/Scenario evidence contract; ordinary run is keyless and never invokes a model. Multi-actor isolated replay is currently web-only.",
-      inputSchema: {
-        type: "object",
-        required: ["contractPath"],
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["read", "validate", "compile", "run"], default: "validate" },
-          contractPath: { type: "string", description: "Repo-relative .tapp/contracts/*.contract.ts file" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Target platform; optional when the contract declares exactly one" },
-          mapPath: { type: "string", description: "Optional repo-relative UI Map v1 for coverage grounding" },
-          updateMap: { type: "boolean", default: false, description: "Explicitly add the reviewed contract coverage to mapPath" },
-          outPath: { type: "string", description: "Compile: optional repo-relative deterministic JSON output" },
-          url: { type: "string", description: "Run: web target URL override" },
-          appBundleId: { type: "string", description: "Run: iOS bundle id override" },
-          androidAppId: { type: "string", description: "Run: Android application id override" },
-          apkPath: { type: "string", description: "Run: optional Android APK" },
-          androidSerial: { type: "string", description: "Run: optional adb serial" },
-        },
-      },
-    },
-    {
-      name: "tapp_pr_plan",
-      title: "Plan PR coverage or explicitly adopt an observed coverage proposal",
-      description:
-        "Plan builds a deterministic reviewable PR plan from changed files, reviewed ownership, exact observed static-route evidence, UI Map coverage, reusable Tasks, and contract policy. It also emits bounded exploration targets for changed weakly covered UI states. Adopt is an explicit write: it appends one conclusively observed, review-only coverage proposal to the repository release plan, but generates or trusts nothing. No AI runs; plan is read-only and adopt never rewrites existing items.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          operation: { type: "string", enum: ["plan", "adopt"], default: "plan" },
-          changedFiles: {
-            type: "array", minItems: 1,
-            items: {
-              anyOf: [
-                { type: "string" },
-                {
-                  type: "object", required: ["filename"], additionalProperties: false,
-                  properties: {
-                    filename: { type: "string" },
-                    previous_filename: { type: "string" },
-                    patch: { type: "string", description: "Optional bounded unified patch from the PR provider; consumed locally and never copied into the plan" },
-                  },
-                },
-              ],
-            },
-            description: "Repository-relative PR paths or provider change objects with optional bounded patch evidence for reviewed symbol ownership",
-          },
-          projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional platform filter" },
-          mapPath: { type: "string", description: "Project-relative UI Map; defaults to .tapp/ui-map.json" },
-          prPlanPath: { type: "string", description: "Adopt: project-relative executed PR plan containing conclusive exploration evidence" },
-          item: { type: "string", description: "Adopt: stable exploration target id whose reviewable proposal should be appended" },
-          releasePlanPath: { type: "string", description: "Adopt: project-relative target; defaults to .tapp/release-plan.json" },
-        },
-      },
-    },
-    {
-      name: "tapp_flow_run",
-      title: "Run a deterministic E2E flow",
-      description:
-        "Replay a deterministic, authored end-to-end test (a Flow) against iOS (XCUITest), Android " +
-        "(ADB/UIAutomator), or web (Playwright), and return a scannable pass/fail report. A Flow is a list of steps + assertions " +
-        "(see docs/flows-architecture.md). Unlike tapp_explore (autonomous exploration), a Flow does EXACTLY " +
-        "what you specify, the same way every time — use it for regression tests and verifying a fix. Steps: " +
-        "{tap: X} · {type: {field: F, value: V}} · {swipe: up} · {back} · {wait_for: SCREEN}. Assertions " +
-        "(deterministic): {assert_screen: X} · {assert_exists: X} · {assert_absent: X} · {assert_text: {of, contains}}. " +
-        "Opt-in AI assertion: {assert_ai: '<claim about the current screen>'} (judged host-side; needs a key; " +
-        "skipped otherwise). Pass a flow inline via `flow`, or a repo-relative `flowPath` to a .yml/.json. " +
-        "A failed assertion fails the flow and is reported like a QA finding. $TEST_EMAIL/$TEST_PASSWORD and any " +
-        "flow `vars` are substituted; pass testEmail/testPassword for real credential values, or `actor` to " +
-        "resolve them from a configured actor's environment-variable bindings.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          flow: {
-            type: "object",
-            description:
-              "Inline Flow: {name, app, steps:[...], vars?}. Example: {name:'login', app:'com.acme.app', steps:[{tap:'Sign In'}, {type:{field:'Email', value:'$TEST_EMAIL'}}, {tap:'Continue'}, {assert_screen:'Home'}]}",
-          },
-          flowPath: { type: "string", description: "Alternative to `flow`: repo-relative path to a .yml/.json Flow (e.g. .tapp/flows/login.yml)" },
-          platform: { type: "string", enum: ["ios", "web", "android"], description: "Overrides Flow platform detection" },
-          appBundleId: { type: "string", description: "iOS: overrides the Flow's `app:` field" },
-          androidAppId: { type: "string", description: "Android: overrides the Flow's `app:` field" },
-          url: { type: "string", description: "Web start URL. Overrides the Flow's `url:` field." },
-          apkPath: { type: "string", description: "Android APK to install before replay." },
-          androidSerial: { type: "string", description: "Android adb device serial." },
-          testEmail: { type: "string", description: "Value for $TEST_EMAIL" },
-          testPassword: { type: "string", description: "Value for $TEST_PASSWORD" },
-          actor: { type: "string", description: "Configured actor name; resolves $TEST_EMAIL/$TEST_PASSWORD from the actor's env-var bindings (explicit testEmail/testPassword win)" },
-          device: { type: "string", description: "Web flows: replay in a Playwright device profile (e.g. \"iPhone 13\")" },
-          viewport: { type: "string", description: "Web flows: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\")" },
-        },
-      },
-    },
-    {
-      name: "tapp_scenario_run",
-      title: "Run a deterministic multi-actor Scenario",
-      description:
-        "Replay a repository-native system test whose named actors run in isolated browser contexts against shared application state. " +
-        "Scenarios use the same deterministic Flow actions/assertions plus explicit actors, shared variables, setup/teardown requests, " +
-        "and polling timeouts for eventual consistency. No model or API key is used during replay. Every result is tagged with its actor. " +
-        "Web actor isolation is implemented now; iOS and Android multi-actor replay is reported as unsupported rather than simulated.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          scenario: { type: "object", description: "Inline Scenario with {kind:'scenario', platform:'web', actors, steps, setup?, teardown?}" },
-          scenarioPath: { type: "string", description: "Repo-relative path to a .yml/.json Scenario" },
-          url: { type: "string", description: "Override the Scenario's web URL" },
-          variables: { type: "object", additionalProperties: { type: "string" }, description: "Explicit non-secret/shared variable overrides. Actor secrets may also be referenced by environment variable name in committed Scenario vars." },
-        },
-      },
-    },
-    {
-      name: "tapp_flow_generate",
-      title: "Generate a Flow from a goal (AI)",
-      description:
-        "Write a deterministic E2E Flow from a natural-language goal (e.g. 'sign in and open Settings'), " +
-        "GROUNDED in the app's real screens so it can't invent steps. Tapp explores the app to build a " +
-        "screen/control map (or reuses a recent run via captureId), then a model authors a Flow using only " +
-        "screens/controls that were actually observed. Saves it as an UNTRUSTED PROPOSAL under " +
-        ".tapp/proposals/flows/<name>.yml (never directly into .tapp/flows/) and returns the YAML for " +
-        "review (optionally runs it). Review → replay against the real app → explicitly PROMOTE (move to " +
-        ".tapp/flows/) before CI depends on it. Needs a model backend (Tapp subscription token or " +
-        "ANTHROPIC_API_KEY). Use this to bootstrap a test you then refine; use tapp_flow_run to replay it.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          goal: { type: "string", description: "What the test should do, in plain English (e.g. 'sign in with test creds and reach the dashboard')" },
-          appBundleId: { type: "string", description: "Bundle id of the installed app to author against" },
-          captureId: { type: "string", description: "Reuse this capture's grounding instead of exploring (from a prior run_qa, faster)" },
-          maxActions: { type: "integer", minimum: 5, maximum: 200, default: 35, description: "Exploration budget when building grounding" },
-          run: { type: "boolean", default: false, description: "Also replay the generated flow and include the pass/fail result" },
-          testEmail: { type: "string" },
-          testPassword: { type: "string" },
-        },
-        required: ["goal", "appBundleId"],
-      },
-    },
-    {
-      name: "tapp_flow_save",
-      title: "Save the session as a Flow",
-      description:
-        "Save what you've done in the CURRENT interactive session as a reusable, deterministic Flow " +
-        "(record-by-doing). Every successful tapp_session_act (tap/type/swipe/back) is recorded; this " +
-        "writes them to .tapp/flows/<name>.yml with wait_for steps auto-inserted on screen changes and a " +
-        "final assert_screen checkpoint. Typed credentials are templated to $TEST_EMAIL/$TEST_PASSWORD so the " +
-        "flow is shareable. The saved flow replays with tapp_flow_run. Do it once → it's a test.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          name: { type: "string", description: "Human name for the flow, e.g. 'Sign in and reach Home'" },
-          addFinalAssertion: { type: "boolean", default: true, description: "Append assert_screen for the final screen as a checkpoint" },
-          replace: { type: "boolean", default: false, description: "Explicitly replace a Flow with the same generated filename. Existing Flows are preserved by default." },
-        },
-        required: ["name"],
-      },
-    },
-    {
-      name: "tapp_ui_tree",
-      title: "Inspect screen (a11y tree)",
-      description:
-        "Dump the accessibility (UI) tree of the current screen of an installed iOS or Android app — " +
-        "the inspection primitive (like Playwright's snapshot). Returns {screenTitle, elements:[{type,id,label," +
-        "enabled,hittable,x,y,w,h}]}. Use it to see what's on screen before/after acting. NOT for launching an app (tapp_open_app) or finding bugs (tapp_explore).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          appBundleId: { type: "string", description: "iOS bundle id of the installed app" },
-          androidAppId: { type: "string", description: "Android application id of the installed app" },
-          androidSerial: { type: "string", description: "Android adb device serial" },
-        },
-      },
-    },
-    {
-      name: "tapp_screenshot",
-      title: "Screenshot current screen",
-      description:
-        "Return an inline image of whatever is CURRENTLY on the booted simulator. It does NOT launch or " +
-        "navigate the app — it just photographs the current screen (use it during a session, or after " +
-        "tapp_open_app). To launch an app and screenshot the screen it opens on, use tapp_open_app instead.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          maxWidth: { type: "integer", minimum: 200, maximum: 1400, default: 700, description: "Max image width in px (downscaled to keep payload small)" },
-        },
-      },
-    },
-    {
-      name: "tapp_open_app",
-      title: "Launch app + screenshot",
-      description:
-        "Launch an installed iOS or Android app and return a SCREENSHOT of the screen it lands on " +
-        "(plus the accessibility tree) — with NO exploration. This is the fast way (seconds) to just SEE a " +
-        "screen. Use this — NOT tapp_explore — whenever the user wants to view or screenshot a screen. Pass " +
-        "appLaunchArgs like [\"--uitesting\"] to bypass login and land on the home screen, and appLaunchEnv for " +
-        "a backend override. The app is launched fresh and closed afterward. (To screenshot a screen reached by " +
-        "real login or several taps, use a session instead and call tapp_screenshot along the way.)",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          appBundleId: { type: "string", description: "iOS bundle id of the installed app" },
-          androidAppId: { type: "string", description: "Android application id of the installed app" },
-          apkPath: { type: "string", description: "Android APK to install before launch" },
-          androidSerial: { type: "string", description: "Android adb device serial" },
-          clearData: { type: "boolean", default: false, description: "Android: clear app data before launch" },
-          appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch args, e.g. [\"--uitesting\"] to bypass login" },
-          appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch env, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
-          maxWidth: { type: "integer", minimum: 200, maximum: 1400, default: 700, description: "Max screenshot width in px" },
-        },
-      },
-    },
-    {
-      name: "tapp_list_simulators",
-      title: "List simulators",
-      description: "List available iOS simulators (name, udid, state, runtime, booted) so you can pick or boot one before running QA.",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "tapp_boot_simulator",
-      title: "Boot simulator",
-      description: "Boot an iOS simulator by udid (preferred) or name so Tapp can run against it. No-op if already booted.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          udid: { type: "string", description: "Simulator UDID (from tapp_list_simulators)" },
-          name: { type: "string", description: "Simulator name, e.g. 'iPhone 16 Pro' (used if udid omitted)" },
-        },
-      },
-    },
-    {
-      name: "tapp_install_app",
-      title: "Install app on sim",
-      description:
-        "Build a target iOS app for the booted simulator and install it, so it's ready for tapp_explore or " +
-        "a session. Provide the Xcode project OR workspace path + scheme. Best-effort — apps with CocoaPods/" +
-        "signing quirks may still need their normal build. Returns {ok, installed, simulator}.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          project: { type: "string", description: "Absolute path to .xcodeproj (use this OR workspace)" },
-          workspace: { type: "string", description: "Absolute path to .xcworkspace (use this OR project)" },
-          scheme: { type: "string", description: "Scheme to build" },
-          configuration: { type: "string", default: "Debug", description: "Build configuration (default Debug)" },
-          cleanInstall: { type: "boolean", default: true, description: "Uninstall the app first (clears data + keychain session; avoids Firebase keychain errors). Set false to install over the existing app." },
-        },
-        required: ["scheme"],
-      },
-    },
-    {
-      name: "tapp_session_start",
-      title: "Start interactive session",
-      description:
-        "Start a PERSISTENT interactive session against an installed iOS/Android app, a web URL, or an " +
-        "unambiguous managed web target in the MCP workspace. The app " +
-        "launches once and stays up, so you can drive a Playwright-style tap → inspect loop without a cold " +
-        "launch per action. NOT for finding bugs autonomously (tapp_explore), a one-off screenshot (tapp_open_app), " +
-        "or a site you do not own (tapp_audit — a session clicks). Returns the initial screen {screenTitle, elements[]}. Drive it with " +
-        "tapp_focus for any named destination (source + shortest observed route), then tapp_session_act only for remaining actions; finish with tapp_session_end. " +
-        "For a focused user request, ALWAYS pass it in `focus` so the session reaches that surface before returning. Only one session at a time. Starts from a " +
-        "fresh COLD launch (terminate + relaunch, for a deterministic starting screen): persisted data such as Keychain credentials survives, but the app opens on its " +
-        "launch screen, NOT a resumed foreground state — an app that gates each cold start behind sign-in will show its login wall, so plan a `login` act (or a login bypass " +
-        "launch argument) as the first step. CLI `tapp tree`/`tapp screenshot` warm-resume the currently foregrounded app instead, which is why they can look signed-in when a session does not. " +
-        "Use appLaunchArgs/appLaunchEnv for apps that need a backend override or login bypass. " +
-        "When you reach a screen with input fields and don't have values for them, ASK THE USER what to type " +
-        "(offer defaults/skip) before typing — the session does not prompt on its own.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          appBundleId: { type: "string", description: "Bundle id of the installed app to drive" },
-          androidAppId: { type: "string", description: "Android application id to drive (alternative to appBundleId)" },
-          url: { type: "string", description: "Owned http(s) web app URL to drive (alternative to appBundleId/androidAppId); omit all three target identifiers to build/start an unambiguous owned web target from projectDir" },
-          device: { type: "string", description: "Web sessions: render as a Playwright device profile (e.g. \"iPhone 13\")" },
-          viewport: { type: "string", description: "Web sessions: explicit viewport WIDTHxHEIGHT (e.g. \"390x844\")" },
-          target: { type: "string", description: "Optional managed-web target name/path when projectDir contains multiple browser applications" },
-          apkPath: { type: "string", description: "Android APK to install before starting" },
-          androidSerial: { type: "string", description: "Android adb device serial" },
-          clearData: { type: "boolean", default: true, description: "Android: clear app data before launch" },
-          testEmail: { type: "string", description: "Email available to the app/harness, if it has a sign-in" },
-          testPassword: { type: "string", description: "Password available to the app/harness" },
-          appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch arguments, e.g. [\"--uitesting\"]" },
-          appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch environment, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
-          focus: { type: "string", description: "Exact focused UI goal/control/screen to locate from repository source and reach through the shortest observed UI Map route before returning" },
-          projectDir: { type: "string", description: "Repository root for source-connected focus; defaults to the MCP workspace" },
-          mapPath: { type: "string", description: "Optional repository-relative UI Map for focus; defaults to .tapp/ui-map.json" },
-        },
-      },
-    },
-    {
-      name: "tapp_focus",
-      title: "Locate and reach a requested UI surface",
-      description:
-        "The FAST source-connected path for focused tasks. Locate a requested screen/control from owned repository source, reconcile it with Tapp's runtime-observed UI Map, and—when a session is active—execute the shortest replayable route in one call. Use before step-by-step tapping when the user names a destination such as 'Save storefront settings'. Source identifies intent; Tapp never invents navigation from source, and only observed/validated UI Map edges are executed. Without an active session this returns the grounded location/route plan without acting.",
-      inputSchema: {
-        type: "object",
-        required: ["query"],
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          query: { type: "string", description: "User's requested screen, control, or focused UI task" },
-          projectDir: { type: "string", description: "Repository root; defaults to the MCP workspace" },
-          platform: { type: "string", enum: ["ios", "android", "web"], description: "Optional without an active session; an active session is authoritative" },
-          mapPath: { type: "string", description: "Optional repository-relative UI Map; defaults to .tapp/ui-map.json" },
-        },
-      },
-    },
-    {
-      name: "tapp_session_act",
-      title: "Session: tap/type/inspect",
-      description:
-        "Perform ONE action in the active interactive session and get the resulting screen back (the fresh " +
-        "accessibility tree). Actions: 'login' (`email` + `password` — fills the login form, submits, and " +
-        "verifies IN ONE CALL; always prefer this over manual type/tap for sign-in: iOS wipes secure fields " +
-        "on refocus, so step-by-step login flows lose the password), 'tap' (by `id` = accessibility identifier " +
-        "or visible/partial label or placeholder, or by `x`/`y` coordinates), 'type' (`text`, optional `id` to " +
-        "target a field — always REPLACES the field's content), 'swipe' (`direction`), 'back', 'wait' (block " +
-        "until an element with `id`/`text` appears, up to `timeoutMs`), 'tree' (re-inspect without acting; " +
-        "pass `full: true` for every raw element with frames — the default projection dedupes and caps at " +
-        "160 elements, so grep-style checks against it can miss text that IS on screen), " +
-        "'screenshot'. Returns {status, screenTitle, elements[], durationMs}; status 'not_found'/'timeout'/'still_on_login' " +
-        "etc. with a `detail` explaining login failures.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" },
-          action: { type: "string", enum: ["login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot"] },
-          email: { type: "string", description: "login: email/username to sign in with" },
-          password: { type: "string", description: "login: password to sign in with" },
-          actor: { type: "string", description: "login: configured actor; explicit email/password override its environment bindings" },
-          id: { type: "string", description: "Element accessibility id or visible/partial label (for tap/type/wait)" },
-          x: { type: "number", description: "Tap X coordinate (points), if not using id" },
-          y: { type: "number", description: "Tap Y coordinate (points), if not using id" },
-          text: { type: "string", description: "Text to type, or the label/text to wait for" },
-          direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Swipe direction" },
-          timeoutMs: { type: "integer", minimum: 500, maximum: 60000, default: 5000, description: "For 'wait': how long to poll for the element" },
-          full: { type: "boolean", default: false, description: "For 'tree': return the complete raw element list (frames included) instead of the deduplicated agent-facing projection capped at 160 elements" },
-          label: { type: "string", description: "Optional screenshot label" },
-        },
-        required: ["action"],
-      },
-    },
-    {
-      name: "tapp_session_end",
-      title: "End session",
-      description: "End the active interactive session (quits the app + harness). Always call this when done.",
-      inputSchema: {
-        type: "object",
-        properties: { authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" } },
-      },
-    },
-  ],
-}));
+// ADR-0007: one command surface. Thirteen public tools; the engine handlers below keep their
+// original internal names and are reached through dispatchTool(). Every pre-0.18 tool name still
+// answers (see LEGACY_TOOLS) with a `deprecated` pointer to its replacement.
+const AUTH = { authToken: { type: "string", description: "Required when TAPP_MCP_TOKEN is set" } };
+const PLATFORM = { type: "string", enum: ["ios", "android", "web"] };
+const TARGET_PROPS = {
+  appBundleId: { type: "string", description: "iOS: bundle id of the installed app" },
+  androidAppId: { type: "string", description: "Android: application id on a connected emulator/device" },
+  apkPath: { type: "string", description: "Android: optional APK to install first" },
+  androidSerial: { type: "string", description: "Android: optional adb device serial" },
+  url: { type: "string", description: "Web: http(s) URL of an app or environment you own" },
+};
+const INPUT_OVERRIDES = {
+  type: "object", additionalProperties: { type: "string" },
+  description: "Deterministic field values typed during exploration: {'id:<identifier>'|'label:<label>'|'screen:<title>|id:<identifier>': value}",
+};
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
+export const TOOLS = [
+  {
+    name: "tapp_explore",
+    title: "Explore the real app (observe — never a verdict)",
+    description:
+      "Autonomously explore an iOS app (appBundleId), Android app (androidAppId) or web app (url) like a tester — taps, types, " +
+      "navigates — and return findings, coverage and evidence. It OBSERVES: no score, no ship verdict; the deterministic gate " +
+      "(`npx -y @aarwitz/tapp@latest ci`) judges. Runs for minutes; for one screen use tapp_look, for a journey use tapp_session. " +
+      "readOnly:true turns it into the read-only audit (renders and reads, never clicks, crawls `pages` same-origin pages) — the only " +
+      "mode safe against production or a site you do not own. goal:\"…\" locates a named screen/control from source + the observed " +
+      "UI Map and, inside an active session, takes the shortest observed route there. If the app barely explored (sign-in wall, crash) " +
+      "the result is `inconclusive` — absence of findings is never a pass. When fields were encountered and you have no values, ASK the user.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH, ...TARGET_PROPS,
+        readOnly: { type: "boolean", default: false, description: "Read-only audit of `url`: never clicks, types, submits or hovers" },
+        goal: { type: "string", description: "A named screen, control or focused task to locate (source-connected) instead of exploring everything" },
+        pages: { type: "integer", default: 1, minimum: 1, maximum: 200, description: "readOnly: same-origin pages to audit at most" },
+        delayMs: { type: "integer", default: 1000, minimum: 0, description: "readOnly: pause between crawled pages" },
+        linkCheckLimit: { type: "integer", default: 30, minimum: 0, description: "readOnly: same-origin links to check per page" },
+        capture: { type: "boolean", default: true, description: "readOnly: write a capture (screenshots, evidence, report.html)" },
+        projectDir: { type: "string", description: "goal: repository root; defaults to the MCP workspace" },
+        mapPath: { type: "string", description: "goal: repository-relative UI Map; defaults to .tapp/ui-map.json" },
+        platform: { ...PLATFORM, description: "goal: optional when no session is active" },
+        clearData: { type: "boolean", default: true, description: "Android: clear app data before launch" },
+        watch: { type: "boolean", default: false, description: "Web: show Tapp's controlled Chromium window and a cursor/HUD" },
+        device: { type: "string", description: "Web: Playwright device profile, e.g. \"iPhone 13\"" },
+        viewport: { type: "string", description: "Web: viewport WIDTHxHEIGHT, e.g. \"390x844\"" },
+        maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 60, description: "Exploration action budget" },
+        timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600, description: "Max wall-clock seconds" },
+        testEmail: { type: "string", description: "Email for the sign-in preamble" },
+        testPassword: { type: "string", description: "Password for the sign-in preamble" },
+        interactive: { type: "boolean", description: "Host-with-a-human only: pause at input screens and wait for values via interactiveResponsePath" },
+        interactiveResponsePath: { type: "string", description: "File path the prompting host answers on" },
+        visualReadyPath: { type: "string", description: "Local-client temp path written once the iOS target is foregrounded" },
+        inputOverrides: INPUT_OVERRIDES,
+        appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch arguments, e.g. [\"--uitesting\"]" },
+        appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch environment, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
+        loginSteps: { type: "array", items: {}, description: "Explicit login replay before exploring: [{action:'type'|'tap'|'wait', target, value?, timeoutMs?}] or 'action:target[:value]' strings; $TEST_EMAIL/$TEST_PASSWORD substituted" },
+        baselineFindings: { type: "array", items: { type: "object" }, description: "Findings from a previous run; adds a `regression` comparison (an observation, not a gate)" },
+      },
+    },
+  },
+  {
+    name: "tapp_look",
+    title: "See one screen",
+    description:
+      "The fast way (seconds) to SEE the app: with appBundleId/androidAppId it launches the installed app fresh and returns a screenshot " +
+      "plus the accessibility tree of the screen it lands on; with no target it photographs whatever is on the booted simulator right now " +
+      "(tree:true returns the accessibility tree instead). No exploration, no findings. Use appLaunchArgs/appLaunchEnv for a login bypass " +
+      "or backend override. For a screen reached by signing in or several taps, use tapp_session.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        appBundleId: TARGET_PROPS.appBundleId, androidAppId: TARGET_PROPS.androidAppId, apkPath: TARGET_PROPS.apkPath, androidSerial: TARGET_PROPS.androidSerial,
+        tree: { type: "boolean", default: false, description: "No target: return the accessibility tree of the current screen instead of a screenshot" },
+        clearData: { type: "boolean", default: false, description: "Android: clear app data before launch" },
+        appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch args, e.g. [\"--uitesting\"]" },
+        appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch env, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
+        maxWidth: { type: "integer", minimum: 200, maximum: 1400, default: 700, description: "Max screenshot width in px" },
+      },
+    },
+  },
+  {
+    name: "tapp_run",
+    title: "Replay a Flow, Task, contract, or Scenario",
+    description:
+      "Replay a committed deterministic test exactly, the same way every time — keyless, no model. Pass ONE of: flowPath or an inline " +
+      "`flow` ({name, app|url, steps:[{tap:X},{type:{field,value}},{wait_for:S},{assert_screen:S},{assert_exists:X},…]}), taskPath " +
+      "(.tapp/tasks/*.yml, compiled then replayed), contractPath (.tapp/contracts/*.contract.ts), or scenarioPath / inline `scenario` " +
+      "(multi-actor, web). A failed assertion fails the run and is reported like a finding. $TEST_EMAIL/$TEST_PASSWORD come from " +
+      "testEmail/testPassword or a configured `actor`. Use tapp_explore to find bugs; use this to prove a fix or guard a regression.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        flowPath: { type: "string", description: "Repo-relative Flow (.yml/.json), e.g. .tapp/flows/login.yml" },
+        flow: { type: "object", description: "Inline Flow instead of flowPath" },
+        taskPath: { type: "string", description: "Repo-relative .tapp/tasks/*.yml Task" },
+        inputs: { type: "object", additionalProperties: { type: "string" }, description: "Task inputs; secrets as $ENV placeholders, never plaintext" },
+        contractPath: { type: "string", description: "Repo-relative .tapp/contracts/*.contract.ts" },
+        scenarioPath: { type: "string", description: "Repo-relative Scenario (.yml/.json)" },
+        scenario: { type: "object", description: "Inline Scenario instead of scenarioPath" },
+        variables: { type: "object", additionalProperties: { type: "string" }, description: "Scenario: non-secret shared variable overrides" },
+        platform: { ...PLATFORM, description: "Overrides platform detection" },
+        ...TARGET_PROPS,
+        testEmail: { type: "string", description: "Value for $TEST_EMAIL" },
+        testPassword: { type: "string", description: "Value for $TEST_PASSWORD" },
+        actor: { type: "string", description: "Configured actor; resolves $TEST_EMAIL/$TEST_PASSWORD from its env-var bindings" },
+        device: { type: "string", description: "Web: Playwright device profile" },
+        viewport: { type: "string", description: "Web: viewport WIDTHxHEIGHT" },
+      },
+    },
+  },
+  {
+    name: "tapp_validate",
+    title: "Check a Flow, Task, contract, or Scenario without launching",
+    description:
+      "Deterministically validate a committed artifact — pass ONE of flowPath/flow, taskPath, contractPath, scenarioPath/scenario. " +
+      "Tasks and contracts can be grounded against the UI Map (mapPath; updateMap:true records their coverage). compile:true returns the " +
+      "expanded keyless Flow a Task or contract executes as (Tasks only need a `platform`). Nothing is launched and no model is used.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        flowPath: { type: "string" }, flow: { type: "object" },
+        taskPath: { type: "string" }, contractPath: { type: "string" },
+        scenarioPath: { type: "string" }, scenario: { type: "object" },
+        compile: { type: "boolean", default: false, description: "Task/contract: return the compiled deterministic executor form" },
+        platform: { ...PLATFORM, description: "Implementation to validate/compile" },
+        inputs: { type: "object", additionalProperties: { type: "string" }, description: "Task compile inputs" },
+        mapPath: { type: "string", description: "Optional repo-relative UI Map for grounding" },
+        updateMap: { type: "boolean", default: false, description: "Record the validated artifact's coverage in mapPath" },
+        outPath: { type: "string", description: "compile: optional repo-relative JSON output" },
+      },
+    },
+  },
+  {
+    name: "tapp_init",
+    title: "Inspect a repository: application model + release plan",
+    description:
+      "Deterministically inspect repository targets, reviewed Tasks/contracts, actors, capabilities and the persistent UI Map, and return the " +
+      "application model plus a compact grounded release-contract plan. `inspect` is read-only; `write` creates .tapp artifacts without " +
+      "overwriting; `refresh` updates source evidence; `explore` builds/starts a detected target, runs the real-surface exploration, " +
+      "merges its UI Map, then refreshes the plan. Keyless; no AI unless remote AI was explicitly enabled.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        operation: { type: "string", enum: ["inspect", "write", "refresh", "explore"], default: "inspect" },
+        projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
+        platform: { ...PLATFORM, description: "Optional target filter" },
+        url: { type: "string", description: "Owned web runtime URL when already running; omit during web explore to build/start the detected target" },
+        target: { type: "string", description: "Explore target selector: web target name/path, or iOS repo dir, Xcode container, .app, or bundle id" },
+        appBundleId: TARGET_PROPS.appBundleId, androidAppId: TARGET_PROPS.androidAppId, apkPath: TARGET_PROPS.apkPath, androidSerial: TARGET_PROPS.androidSerial,
+        maxActions: { type: "integer", minimum: 1, maximum: 1000, default: 40 },
+        timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600 },
+        testEmail: { type: "string", description: "Explore: actor/login email; never persisted" },
+        testPassword: { type: "string", description: "Explore: actor/login password; never persisted" },
+        watch: { type: "boolean", default: false, description: "Web explore: show the controlled browser" },
+        maxContracts: { type: "integer", minimum: 1, maximum: 50, default: 15 },
+        outDir: { type: "string", description: "Repo-relative artifact directory; default .tapp" },
+      },
+    },
+  },
+  {
+    name: "tapp_plan",
+    title: "The release-plan lifecycle",
+    description:
+      "One tool for the reviewed release plan in .tapp/release-plan.json. action: `read` (default) · `review` (approve/reject/defer items — " +
+      "decision metadata only) · `generate` (grounded Task/contract DRAFTS under .tapp/proposals; untrusted, no AI) · `validate` (replay drafts " +
+      "on a real target) · `promote` (move fully validated drafts into reviewed artifacts) · `pr` (deterministic PR coverage plan from " +
+      "changedFiles) · `adopt` (append one observed PR coverage proposal) · `actor_read` / `actor_set` (named test actors; env-var NAMES only, " +
+      "never credential values). Nothing is trusted until real deterministic replay passes and promotion is explicit.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        action: { type: "string", enum: ["read", "review", "generate", "validate", "promote", "pr", "adopt", "actor_read", "actor_set"], default: "read" },
+        planPath: { type: "string", description: "Repo-relative plan path; default .tapp/release-plan.json" },
+        projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
+        approve: { type: "array", items: { type: "string" }, description: "review: item ids/names to approve" },
+        reject: { type: "array", items: { type: "string" }, description: "review: item ids/names to reject" },
+        defer: { type: "array", items: { type: "string" }, description: "review: item ids/names to defer" },
+        items: { type: "array", items: { type: "string" }, description: "validate/promote: only these items" },
+        platform: { ...PLATFORM, description: "validate/pr: target platform" },
+        url: { type: "string", description: "validate web: already-running owned URL" },
+        target: { type: "string", description: "validate managed web: target id/name/path" },
+        appBundleId: TARGET_PROPS.appBundleId, androidAppId: TARGET_PROPS.androidAppId, apkPath: TARGET_PROPS.apkPath, androidSerial: TARGET_PROPS.androidSerial,
+        timeout: { type: "integer", minimum: 30, maximum: 3600, default: 600 },
+        changedFiles: { type: "array", minItems: 1, items: { anyOf: [{ type: "string" }, { type: "object", required: ["filename"], additionalProperties: false, properties: { filename: { type: "string" }, previous_filename: { type: "string" }, patch: { type: "string" } } }] }, description: "pr: repository-relative changed paths or provider change objects" },
+        mapPath: { type: "string", description: "pr: project-relative UI Map; default .tapp/ui-map.json" },
+        prPlanPath: { type: "string", description: "adopt: executed PR plan with conclusive exploration evidence" },
+        item: { type: "string", description: "adopt: exploration target id to append" },
+        releasePlanPath: { type: "string", description: "adopt: target plan; default .tapp/release-plan.json" },
+        name: { type: "string", description: "actor_set: stable actor name" },
+        role: { type: "string", description: "actor_set: product role" },
+        session: { type: "string", enum: ["default", "isolated"], default: "default" },
+        provisioning: { type: "string", enum: ["existing", "seeded", "api", "unknown"], default: "existing" },
+        credentialBindings: { type: "object", additionalProperties: { type: "string", pattern: "^[A-Z_][A-Z0-9_]{0,127}$" }, description: "actor_set: credential names → environment-variable NAMES" },
+        replace: { type: "boolean", default: false, description: "actor_set: replace an existing actor's non-secret configuration" },
+      },
+    },
+  },
+  {
+    name: "tapp_map",
+    title: "The UI Map: read, build, or diff",
+    description:
+      "Tapp's platform-neutral UI Map: observed screen states, semantic controls, transitions, provenance and Task/contract coverage. " +
+      "action `read` returns one (repo .tapp/ui-map.json or a capture's); `build` merges a map from OCQA evidence; `diff` reports additions " +
+      "and absences, calling absence a lost state only when comparableFullSweep is true. No AI.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        action: { type: "string", enum: ["read", "build", "diff"], default: "read" },
+        captureId: { type: "string", description: "Read/build from this capture" },
+        mapPath: { type: "string", description: "Repo-relative map path (default .tapp/ui-map.json)" },
+        markersPath: { type: "string", description: "build: repo-relative OCQA markers when captureId is not supplied" },
+        beforePath: { type: "string", description: "diff: baseline map" },
+        afterPath: { type: "string", description: "diff: current map" },
+        platform: { ...PLATFORM, default: "ios" },
+        target: { type: "string", description: "Bundle id, app id, or owned URL recorded as provenance" },
+        replace: { type: "boolean", default: false, description: "build: replace rather than merge" },
+        comparableFullSweep: { type: "boolean", default: false, description: "diff: both runs had comparable budget; permits lost-reachability classification" },
+      },
+    },
+  },
+  {
+    name: "tapp_ci",
+    title: "The merge gate in CI: preview, install, baseline",
+    description:
+      "Set up the deterministic release gate from the application model. action `inspect` (default) renders the target-aware GitHub " +
+      "workflow and CI manifest without writing; `install` writes both with collision protection; `baseline` imports a successful conclusive " +
+      "gate report as the target's baseline. The gate itself runs with `npx -y @aarwitz/tapp@latest ci`. No network, commits, or AI.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        action: { type: "string", enum: ["inspect", "install", "baseline"], default: "inspect" },
+        projectDir: { type: "string", description: "Repo-relative project root; defaults to the MCP workspace root" },
+        modelPath: { type: "string", description: "Repo-relative application model; default <projectDir>/.tapp/application-model.json" },
+        actionRef: { type: "string", description: "GitHub Action reference owner/repo@tag; defaults to this release" },
+        defaultBranch: { type: "string", default: "main" },
+        workflowPath: { type: "string", description: "install: default .github/workflows/tapp.yml" },
+        manifestPath: { type: "string", description: "install: default .tapp/ci.json" },
+        allowUnresolved: { type: "boolean", default: false },
+        replace: { type: "boolean", default: false, description: "Replace an existing workflow/manifest or baseline" },
+        reportPath: { type: "string", description: "baseline: repo-relative successful conclusive gate JSON report" },
+        platform: { ...PLATFORM, description: "baseline: target platform" },
+        target: { type: "string", description: "baseline: application-model target id, name, or source path" },
+        baselinePath: { type: "string", description: "baseline: optional project-relative output" },
+      },
+    },
+  },
+  {
+    name: "tapp_report",
+    title: "Evidence: recent runs, or one run's summary",
+    description:
+      "Without captureId: list recent capture runs for THIS project (other projects' captures are counted but hidden unless allProjects). " +
+      "With captureId: that run's summary metadata. Cite only the capture a command just returned as evidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        captureId: { type: "string", description: "Capture run id to summarise; omit to list" },
+        runPath: { type: "string", description: "Absolute capture path override (must stay under captures/)" },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 10 },
+        allProjects: { type: "boolean", default: false, description: "Include other projects' and pre-provenance captures" },
+      },
+    },
+  },
+  {
+    name: "tapp_session",
+    title: "Drive the app step by step (persistent session)",
+    description:
+      "A persistent interactive session: the app launches once and stays up for a tap → inspect loop. action `start` launches an installed " +
+      "iOS/Android app, an owned web URL, or the workspace's managed web target (pass `focus` to reach a named screen first); then one action " +
+      "per call: `login` (email+password or `actor` — fills, submits and verifies in one call; prefer it over manual typing), `tap` (id/label " +
+      "or x/y), `type` (text, optional id — replaces the field), `swipe`, `back`, `wait` (for id/text), `tree` (re-inspect; full:true for every " +
+      "raw element), `screenshot`; `save_flow` writes the recorded steps as a replayable Flow; `draft_flow` has a model write a Flow from `goal` " +
+      "grounded in observed screens (untrusted proposal; needs a model backend); `end` quits the app — always call it when done. One session " +
+      "at a time; starts from a cold launch, so plan a `login` first when the app gates on sign-in. Ask the user before typing into fields you have no values for.",
+    inputSchema: {
+      type: "object",
+      required: ["action"],
+      properties: {
+        ...AUTH,
+        action: { type: "string", enum: ["start", "login", "tap", "type", "swipe", "back", "wait", "tree", "screenshot", "save_flow", "draft_flow", "end"] },
+        ...TARGET_PROPS,
+        target: { type: "string", description: "start: managed-web target name/path when the workspace has several" },
+        device: { type: "string", description: "start (web): Playwright device profile" },
+        viewport: { type: "string", description: "start (web): viewport WIDTHxHEIGHT" },
+        clearData: { type: "boolean", default: true, description: "start (Android): clear app data" },
+        testEmail: { type: "string" }, testPassword: { type: "string" },
+        appLaunchArgs: { type: "array", items: { type: "string" } },
+        appLaunchEnv: { type: "object", additionalProperties: { type: "string" } },
+        focus: { type: "string", description: "start: a named screen/control to reach (source + shortest observed route) before returning" },
+        projectDir: { type: "string", description: "start: repository root for source-connected focus" },
+        mapPath: { type: "string", description: "start: repository-relative UI Map; default .tapp/ui-map.json" },
+        email: { type: "string", description: "login: email/username" },
+        password: { type: "string", description: "login: password" },
+        actor: { type: "string", description: "login: configured actor name" },
+        id: { type: "string", description: "tap/type/wait: accessibility id or visible/partial label" },
+        x: { type: "number" }, y: { type: "number" },
+        text: { type: "string", description: "type: text to type · wait: text to wait for" },
+        direction: { type: "string", enum: ["up", "down", "left", "right"] },
+        timeoutMs: { type: "integer", minimum: 500, maximum: 60000, default: 5000 },
+        full: { type: "boolean", default: false, description: "tree: complete raw element list with frames" },
+        label: { type: "string", description: "screenshot: optional label" },
+        name: { type: "string", description: "save_flow: human name for the Flow" },
+        addFinalAssertion: { type: "boolean", default: true, description: "save_flow: append assert_screen for the final screen" },
+        replace: { type: "boolean", default: false, description: "save_flow: replace a Flow with the same filename" },
+        goal: { type: "string", description: "draft_flow: what the test should do, in plain English" },
+        captureId: { type: "string", description: "draft_flow: reuse this capture's grounding instead of exploring" },
+        maxActions: { type: "integer", minimum: 5, maximum: 200, default: 35, description: "draft_flow: exploration budget for grounding" },
+        run: { type: "boolean", default: false, description: "draft_flow: also replay the draft" },
+      },
+    },
+  },
+  {
+    name: "tapp_build",
+    title: "iOS simulator: build, install, boot",
+    description:
+      "action `build` (default): build the iOS app under projectDir for the simulator (auto-detects container and scheme) and install it, " +
+      "returning the bundle id — use before tapp_explore/tapp_look when the app is not installed; `install`: build a given project/workspace + " +
+      "scheme and install it; `simulators`: list available simulators; `boot`: boot one by udid or name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...AUTH,
+        action: { type: "string", enum: ["build", "install", "simulators", "boot"], default: "build" },
+        projectDir: { type: "string", description: "build: dir to search for the .xcworkspace/.xcodeproj (default cwd)" },
+        scheme: { type: "string", description: "Scheme (build: auto-detected; install: required)" },
+        configuration: { type: "string", default: "Debug" },
+        install: { type: "boolean", default: true, description: "build: install on the booted simulator afterwards" },
+        project: { type: "string", description: "install: absolute .xcodeproj path" },
+        workspace: { type: "string", description: "install: absolute .xcworkspace path" },
+        cleanInstall: { type: "boolean", default: true, description: "install: uninstall first" },
+        udid: { type: "string", description: "boot: simulator UDID" },
+        name: { type: "string", description: "boot: simulator name, e.g. 'iPhone 16 Pro'" },
+      },
+    },
+  },
+  {
+    name: "tapp_doctor",
+    title: "Check Tapp readiness",
+    description: "Check the workspace and toolchain: Xcode, simulators, adb, Playwright, and what each platform can run right now.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "tapp_feedback",
+    title: "Send feedback to the tapp maintainers",
+    description:
+      "Draft a public GitHub issue on aarwitz/tapp about tapp itself — a bug in tapp, an idea, or a question (not a finding about the app " +
+      "under test). Adds the tapp version, platform availability and the latest capture id, and redacts home paths and tokens. Default is a " +
+      "DRAFT with a prefilled github.com URL; pass submit:true only after the user agreed to file a public issue (uses this machine's gh).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short, specific title" },
+        body: { type: "string", description: "What happened, what you expected, the exact call. No secrets or private source." },
+        type: { type: "string", enum: ["bug", "idea", "question"], description: "Default bug" },
+        capture: { type: "string", description: "Capture id to reference, 'latest' (default) or 'none'" },
+        submit: { type: "boolean", description: "File the issue now with gh (needs the user's consent). Default false." },
+      },
+      required: ["title"],
+    },
+  },
+];
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+
+
+// The in-flight MCP request (progress tokens); routed and legacy calls share it.
+let currentRequest = null;
+
+async function handleTool(name, args = {}) {
+  const request = currentRequest || { params: { name, arguments: args, _meta: {} } };
 
   if (name === "tapp_feedback") {
     const fb = await import("./feedback.js");
@@ -4275,7 +3881,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const loaded = readProjectConfig(workspaceRoot);
       if (loaded.errors.length) return errorResult(`Invalid ${loaded.relativePath}: ${loaded.errors.join("; ")}`);
       const actor = loaded.config.actors?.[args.actor.trim()];
-      if (!actor) return errorResult(`Actor '${args.actor.trim()}' is not configured in ${loaded.relativePath}`, { hint: "Configure it with tapp_actor_set / tapp actor set first" });
+      if (!actor) return errorResult(`Actor '${args.actor.trim()}' is not configured in ${loaded.relativePath}`, { hint: "Configure it with tapp_plan (action actor_set) / tapp actor set first" });
       // Actors store env-var NAMES only; resolve values here. Explicit testEmail/testPassword win.
       for (const [credential, argName, envKey] of [["email", "testEmail", "OCQA_TEST_EMAIL"], ["password", "testPassword", "OCQA_TEST_PASSWORD"]]) {
         if (isNonEmptyString(args[argName])) continue;
@@ -4450,7 +4056,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         L.push("", "---", "", (rep.stdout || "").trim());
       }
     } else {
-      L.push("", `Replay the proposal: \`tapp_flow_run\` with \`flowPath: "${rel}"\`. After it passes, promote it to \`.tapp/flows/\`.`);
+      L.push("", `Replay the proposal: \`tapp_run\` with \`flowPath: "${rel}"\`. After it passes, promote it to \`.tapp/flows/\`.`);
     }
     return richResult(L.join("\n"), { path: rel, proposal: true, promotePath: promotedPath, flow, groundedScreens: grounding.screens.length, ungrounded });
   }
@@ -4548,7 +4154,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     for (const s of list.slice(0, 20)) {
       L.push(`- ${s.booted ? "🟢" : "⚪️"} **${s.name}** — ${s.runtime || "?"}${s.booted ? " · **booted**" : ""}  \`${s.udid}\``);
     }
-    if (!booted.length) L.push("", "No simulator booted — `tapp_boot_simulator` to start one before QA.");
+    if (!booted.length) L.push("", "No simulator booted — `tapp_build (action boot)` to start one before QA.");
     return richResult(L.join("\n"), sims);
   }
 
@@ -4583,7 +4189,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const configuration = isNonEmptyString(args.configuration) ? args.configuration.trim() : "Debug";
     const sims = await listSimulators();
     const booted = (sims.booted || [])[0];
-    if (!booted) return errorResult("No booted simulator. Call tapp_boot_simulator first.");
+    if (!booted) return errorResult("No booted simulator. Call tapp_build (action boot) first.");
     const target = workspace || project;
     if (!fs.existsSync(target)) return errorResult("Project/workspace path not found", { target });
 
@@ -4670,7 +4276,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const screen = agentScreenProjection(focused || r);
     const text = focused
       ? `🎬 Session started — \`${target}\` (${platformLabel})\n\n${(await import("./focused-navigation.js")).focusedTargetSummary(focused)}\n\n${formatScreen(screen.screenTitle, screen.elements)}`
-      : `🎬 Session started — \`${target}\` (${platformLabel})\n\n${formatScreen(screen.screenTitle, screen.elements)}\n\nDrive it with \`tapp_focus\` for a named destination, or \`tapp_session_act\` for one action.`;
+      : `🎬 Session started — \`${target}\` (${platformLabel})\n\n${formatScreen(screen.screenTitle, screen.elements)}\n\nDrive it with \`tapp_explore (goal)\` for a named destination, or \`tapp_session\` for one action.`;
     // Return the final focused screen once. Previously this duplicated the complete native tree
     // inside `focus` and at top level, and retained the pre-focus web URL at top level.
     const structured = focused
@@ -4742,7 +4348,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       : tgt ? `${verb} \`${tgt}\`` : verb;
     const detailNote = !ok && r.detail ? ` — ${r.detail}` : "";
     const head = `${did} — ${ok ? "ok" : `⚠️ ${r.status}${detailNote}`} → now on **${r.screenTitle || "Unknown"}**`;
-    const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_flow_save\` to keep it as a test.` : "";
+    const rec = typeof r.recordedSteps === "number" ? `\n\n🔴 Recording — ${r.recordedSteps} step(s). \`tapp_session (action save_flow)\` to keep it as a test.` : "";
     // `verbose` is the documented spelling (SESSION_ACT_ARGS.tree); `full` is the original.
     // Accepting only `full` meant the documented flag silently did nothing (field issue #9).
     const fullTree = action === "tree" && (args.full === true || args.verbose === true || cmd.verbose === true || cmd.full === true);
@@ -4757,7 +4363,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     try {
       const saved = await saveInteractiveSessionFlow({ projectDir:workspaceRoot, name:args.name, addFinalAssertion:args.addFinalAssertion !== false, replace:args.replace === true });
-      const text = `💾 Saved flow **${saved.flow.name}** → \`${saved.path}\` (${saved.flow.steps.length} steps)\n\n\`\`\`yaml\n${saved.yaml}\n\`\`\`\n\nReplay it anytime: \`tapp_flow_run\` with \`flowPath: "${saved.path}"\`.`;
+      const text = `💾 Saved flow **${saved.flow.name}** → \`${saved.path}\` (${saved.flow.steps.length} steps)\n\n\`\`\`yaml\n${saved.yaml}\n\`\`\`\n\nReplay it anytime: \`tapp_run\` with \`flowPath: "${saved.path}"\`.`;
       return richResult(text, { path:saved.path, flow:saved.flow });
     } catch (error) {
       return errorResult(error.message || String(error), error.code ? { code:error.code } : {});
@@ -4769,12 +4375,158 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (unauthorized) return unauthorized;
     const recorded = activeSession && activeSession.recording ? activeSession.recording.length : 0;
     await endSession();
-    const hint = recorded > 0 ? ` (${recorded} recorded step(s) discarded — use tapp_flow_save before ending to keep them)` : "";
+    const hint = recorded > 0 ? ` (${recorded} recorded step(s) discarded — use tapp_session (action save_flow) before ending to keep them)` : "";
     return richResult(`🏁 Session ended.${hint}`, { ok: true, recordedStepsDiscarded: recorded });
   }
 
   return errorResult(`Unknown tool: ${name}`);
+}
+
+// Public tool → engine handler routing (ADR-0007). Handlers keep their original names so the
+// engine does not change; only the surface does.
+const PUBLIC_TOOL_NAMES = new Set(TOOLS.map((tool) => tool.name));
+
+// Every pre-0.18 tool name still answers through its original handler, plus a pointer to the
+// public tool that replaced it. ListTools no longer advertises these.
+export const LEGACY_TOOLS = Object.freeze({
+  tapp_run_qa: { tool: "tapp_explore" },
+  tapp_audit: { tool: "tapp_explore", hint: "readOnly: true" },
+  tapp_focus: { tool: "tapp_explore", hint: "goal: <query>" },
+  tapp_open_app: { tool: "tapp_look" },
+  tapp_ui_tree: { tool: "tapp_look", hint: "tree: true" },
+  tapp_screenshot: { tool: "tapp_look" },
+  tapp_flow_run: { tool: "tapp_run" },
+  tapp_scenario_run: { tool: "tapp_run" },
+  tapp_task: { tool: "tapp_validate", hint: "taskPath (tapp_run replays it)" },
+  tapp_release_contract: { tool: "tapp_validate", hint: "contractPath (tapp_run replays it)" },
+  tapp_flow_generate: { tool: "tapp_session", hint: 'action: "draft_flow"' },
+  tapp_flow_save: { tool: "tapp_session", hint: 'action: "save_flow"' },
+  tapp_session_start: { tool: "tapp_session", hint: 'action: "start"' },
+  tapp_session_act: { tool: "tapp_session" },
+  tapp_session_end: { tool: "tapp_session", hint: 'action: "end"' },
+  tapp_list_simulators: { tool: "tapp_build", hint: 'action: "simulators"' },
+  tapp_boot_simulator: { tool: "tapp_build", hint: 'action: "boot"' },
+  tapp_install_app: { tool: "tapp_build", hint: 'action: "install"' },
+  tapp_health: { tool: "tapp_doctor" },
+  tapp_release_plan: { tool: "tapp_plan" },
+  tapp_pr_plan: { tool: "tapp_plan", hint: 'action: "pr" | "adopt"' },
+  tapp_actor_config: { tool: "tapp_plan", hint: 'action: "actor_read" | "actor_set"' },
+  tapp_ui_map: { tool: "tapp_map" },
+  tapp_ci_setup: { tool: "tapp_ci" },
+  tapp_list_captures: { tool: "tapp_report" },
+  tapp_capture_summary: { tool: "tapp_report", hint: "captureId" },
+  tapp_capture: { tool: "tapp_explore", hint: "(harness-era capture; explore writes the same evidence)" },
+  tapp_parse_markers: { tool: "tapp_report", hint: "captureId" },
 });
+
+async function validateArtifactTool(args) {
+  const { compile, ...v } = args;
+  const operation = compile === true ? "compile" : "validate";
+  if (isNonEmptyString(v.taskPath)) return handleTool("tapp_task", { ...v, operation });
+  if (isNonEmptyString(v.contractPath)) return handleTool("tapp_release_contract", { ...v, operation });
+  if (v.flow || isNonEmptyString(v.flowPath)) {
+    const { loadFlowFile, validateFlowSteps } = await import("./flow-runtime.js");
+    let flow = v.flow;
+    if (!flow) {
+      const flowFile = path.resolve(workspaceRoot, v.flowPath.trim());
+      if (!isInsideDir(workspaceRoot, flowFile)) return errorResult("flowPath must be inside the workspace");
+      if (!fs.existsSync(flowFile)) return errorResult("Flow file not found", { flowPath: v.flowPath });
+      try { flow = loadFlowFile(flowFile); } catch (error) { return errorResult("Could not load Flow", { detail: error.message || String(error) }); }
+    }
+    const errors = validateFlowSteps(flow, v.platform || undefined);
+    if (errors.length) return errorResult(`Flow has ${errors.length} invalid step(s)`, { errors, flow: flow.name });
+    return richResult(`✅ Valid Flow — ${flow.name || "unnamed"} · ${(flow.steps || []).length} steps`, { ok: true, flow: flow.name, steps: (flow.steps || []).length });
+  }
+  if (v.scenario || isNonEmptyString(v.scenarioPath)) {
+    const { loadScenarioFile, validateScenario } = await import("./scenario-runtime.js");
+    let scenario = v.scenario;
+    if (!scenario) {
+      const scenarioFile = path.resolve(workspaceRoot, v.scenarioPath.trim());
+      if (!isInsideDir(workspaceRoot, scenarioFile)) return errorResult("scenarioPath must be inside the workspace");
+      if (!fs.existsSync(scenarioFile)) return errorResult("Scenario file not found", { scenarioPath: v.scenarioPath });
+      try { scenario = loadScenarioFile(scenarioFile); } catch (error) { return errorResult("Could not load Scenario", { detail: error.message || String(error) }); }
+    }
+    const errors = validateScenario(scenario);
+    if (errors.length) return errorResult(`Scenario has ${errors.length} problem(s)`, { errors });
+    return richResult(`✅ Valid Scenario — ${scenario.name || "unnamed"} · ${Object.keys(scenario.actors || {}).length} actors · ${(scenario.steps || []).length} steps`, { ok: true, scenario: scenario.name });
+  }
+  return errorResult("tapp_validate needs one of taskPath, contractPath, flowPath|flow, or scenarioPath|scenario");
+}
+
+export async function routePublicTool(name, args = {}) {
+  const { readOnly, goal, tree, action, ...rest } = args;
+  switch (name) {
+    case "tapp_explore":
+      if (readOnly === true) return handleTool("tapp_audit", rest);
+      if (isNonEmptyString(goal)) return handleTool("tapp_focus", { query: goal, projectDir: rest.projectDir, platform: rest.platform, mapPath: rest.mapPath, authToken: rest.authToken });
+      return handleTool("tapp_explore", rest);
+    case "tapp_look":
+      if (isNonEmptyString(rest.appBundleId) || isNonEmptyString(rest.androidAppId)) return handleTool("tapp_open_app", rest);
+      return handleTool(tree === true ? "tapp_ui_tree" : "tapp_screenshot", rest);
+    case "tapp_run": {
+      if (rest.flow || isNonEmptyString(rest.flowPath)) return handleTool("tapp_flow_run", rest);
+      if (rest.scenario || isNonEmptyString(rest.scenarioPath)) return handleTool("tapp_scenario_run", rest);
+      if (isNonEmptyString(rest.contractPath)) return handleTool("tapp_release_contract", { ...rest, operation: "run" });
+      if (isNonEmptyString(rest.taskPath)) {
+        const compiled = await handleTool("tapp_task", { operation: "compile", taskPath: rest.taskPath, platform: rest.platform, inputs: rest.inputs, authToken: rest.authToken });
+        if (compiled.isError || !compiled.structuredContent?.flow) return compiled;
+        const { taskPath, inputs, ...replay } = rest;
+        return handleTool("tapp_flow_run", { ...replay, flow: compiled.structuredContent.flow });
+      }
+      return errorResult("tapp_run needs one of flowPath|flow, taskPath, contractPath, or scenarioPath|scenario");
+    }
+    case "tapp_validate":
+      return validateArtifactTool(rest);
+    case "tapp_plan": {
+      const op = action || "read";
+      if (op === "pr" || op === "adopt") return handleTool("tapp_pr_plan", { ...rest, operation: op === "pr" ? "plan" : "adopt" });
+      if (op === "actor_read" || op === "actor_set") return handleTool("tapp_actor_config", { ...rest, operation: op === "actor_set" ? "set" : "read" });
+      return handleTool("tapp_release_plan", { ...rest, operation: op });
+    }
+    case "tapp_map":
+      return handleTool("tapp_ui_map", { ...rest, operation: action || rest.operation || "read" });
+    case "tapp_ci":
+      return handleTool("tapp_ci_setup", { ...rest, operation: action || rest.operation || "inspect" });
+    case "tapp_report":
+      if (isNonEmptyString(rest.captureId) || isNonEmptyString(rest.runPath)) return handleTool("tapp_capture_summary", { runId: rest.captureId, runPath: rest.runPath });
+      return handleTool("tapp_list_captures", rest);
+    case "tapp_session": {
+      if (action === "start") return handleTool("tapp_session_start", rest);
+      if (action === "end") return handleTool("tapp_session_end", rest);
+      if (action === "save_flow") return handleTool("tapp_flow_save", rest);
+      if (action === "draft_flow") return handleTool("tapp_flow_generate", { ...rest, goal });
+      return handleTool("tapp_session_act", { ...rest, action: action || "tree" });
+    }
+    case "tapp_build": {
+      if (action === "simulators") return handleTool("tapp_list_simulators", rest);
+      if (action === "boot") return handleTool("tapp_boot_simulator", rest);
+      if (action === "install") return handleTool("tapp_install_app", rest);
+      return handleTool("tapp_build", rest);
+    }
+    case "tapp_doctor":
+      return handleTool("tapp_health", rest);
+    default:
+      return handleTool(name, args);
+  }
+}
+
+export async function dispatchTool(name, args = {}) {
+  if (PUBLIC_TOOL_NAMES.has(name)) return routePublicTool(name, args);
+  const legacy = LEGACY_TOOLS[name];
+  if (!legacy) return errorResult(`Unknown tool: ${name}`);
+  const result = await handleTool(name, args);
+  const deprecated = `${name} is deprecated; use ${legacy.tool}${legacy.hint ? ` with ${legacy.hint}` : ""}.`;
+  result.structuredContent = { ...(result.structuredContent || {}), deprecated };
+  if (result.content?.[0]?.type === "text") result.content[0].text = `${result.content[0].text}\n\nℹ️ ${deprecated}`;
+  return result;
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  currentRequest = request;
+  try { return await dispatchTool(request.params.name, request.params.arguments || {}); }
+  finally { currentRequest = null; }
+});
+
 
 export async function startMcpServer() {
   const transport = new StdioServerTransport();

@@ -128,6 +128,79 @@ function parseVerbArgs(argv) {
   return { flags, positionals };
 }
 
+// ADR-0007: twelve public verbs, one engine. The resolver maps the public surface onto the
+// internal case labels below (which keep their original argument shapes), and keeps every older
+// verb working as a hidden alias that names its new form once on stderr.
+function artifactKind(file) {
+  if (!file) return "flow";
+  if (/\.ts$/.test(file)) return "contract";
+  try {
+    const head = fs.readFileSync(path.resolve(file), "utf8").slice(0, 4000);
+    const kind = head.match(/^kind:\s*"?([a-z]+)/m)?.[1] || head.match(/"kind"\s*:\s*"([a-z]+)"/)?.[1];
+    if (kind === "task" || kind === "scenario" || kind === "contract") return kind;
+    if (/^actors:/m.test(head) && /^lifecycle:|^services:/m.test(head)) return "scenario";
+  } catch { /* missing file: the flow runner reports it */ }
+  return "flow";
+}
+
+function resolveCommand(command, rest) {
+  const without = (flag, count = 1) => { const i = rest.indexOf(flag); return i < 0 ? [...rest] : [...rest.slice(0, i), ...rest.slice(i + count)]; };
+  const has = (flag) => rest.includes(flag);
+  const legacy = (from, to) => `ℹ️  'tapp ${from}' is now 'tapp ${to}' — the old form still works for now.`;
+  const sub = rest[0];
+  switch (command) {
+    // Public verbs → internal dispatch.
+    case "explore": {
+      if (has("--read-only")) return { command: "audit", rest: without("--read-only") };
+      const goal = rest.indexOf("--goal");
+      if (goal >= 0 && rest[goal + 1] !== undefined) return { command: "focus", rest: [rest[goal + 1], ...rest.slice(0, goal), ...rest.slice(goal + 2)] };
+      return { command, rest };
+    }
+    case "look":
+      if (has("--sim")) return { command: "shot", rest: without("--sim") };
+      if (has("--tree")) return { command: "tree", rest: without("--tree") };
+      return { command: "open", rest };
+    case "run":
+      return { command: artifactKind(rest.find((a) => !a.startsWith("--"))), rest: ["run", ...rest] };
+    case "validate": {
+      if (has("--example")) return { command: "flow", rest: ["example"] };
+      const file = rest.find((a) => !a.startsWith("--"));
+      const kind = artifactKind(file);
+      const compile = has("--compile") && (kind === "task" || kind === "contract");
+      return { command: kind, rest: [compile ? "compile" : "validate", ...without("--compile")] };
+    }
+    case "plan":
+      if (sub === "pr") return { command: "pr", rest: ["plan", ...rest.slice(1)] };
+      if (sub === "adopt") return { command: "pr", rest };
+      if (sub === "map" || sub === "workflows" || sub === "actor") return { command: sub, rest: rest.slice(1) };
+      return { command, rest };
+    case "ci":
+      if (sub === "baseline") return { command: "baseline", rest: ["create", ...rest.slice(1)] };
+      return { command, rest };
+    case "doctor":
+      if (has("--install")) return { command: "install", rest: without("--install") };
+      return { command, rest };
+    // Hidden aliases → internal dispatch, with the note.
+    case "qa": return { command: "explore", rest, note: legacy("qa", "explore") };
+    case "audit": return { command, rest, note: legacy("audit <url>", "explore <url> --read-only") };
+    case "focus": return { command, rest, note: legacy('focus "goal"', 'explore --goal "goal"') };
+    case "open": return { command, rest, note: legacy("open", "look") };
+    case "tree": return { command, rest, note: legacy("tree", "look --tree") };
+    case "shot": case "screenshot": return { command: "shot", rest, note: legacy(command, "look --sim") };
+    case "flow": case "task": case "contract": case "scenario": {
+      const verb = sub || (command === "flow" || command === "scenario" ? "run" : "validate");
+      const to = verb === "run" ? "run FILE" : verb === "example" ? "validate --example" : verb === "compile" ? "validate FILE --compile" : verb === "validate" ? "validate FILE" : "";
+      return { command, rest, ...(to ? { note: legacy(`${command} ${verb}`, to) } : {}) };
+    }
+    case "pr": return { command, rest, note: legacy(`pr ${sub || "plan"}`, `plan ${sub || "pr"}`.replace("plan plan", "plan pr")) };
+    case "map": case "workflows": case "actor": return { command, rest, note: legacy(command, `plan ${command}`) };
+    case "baseline": return { command, rest, note: legacy("baseline create", "ci baseline") };
+    case "install": return { command, rest, note: legacy("install", "doctor --install") };
+    case "studio": return { command: "app", rest, note: legacy("studio", "app") };
+    default: return { command, rest };
+  }
+}
+
 function repeatedFlagValues(argv, name) {
   const values = [];
   for (let index = 0; index < argv.length; index += 1) {
@@ -266,30 +339,31 @@ async function resolveTargetOrExit(engine, input, { inspect = false } = {}) {
 
 function safeCommandUsage(verb) {
   const usage = {
-    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
-    focus: "tapp focus \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
+    workflows: "tapp plan workflows [repo] [--save FILE --confirm] [--workflow ID] [--json]",
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    focus: "tapp explore --goal \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
-    open: "tapp open [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
-    tree: "tapp tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  iOS: inspects an installed app; never builds or installs. Use tapp build explicitly first if needed.\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
-    shot: "tapp shot [--out FILE]",
+    open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  --sim: screenshot the booted simulator only (never builds or installs)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
+    tree: "tapp look --tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  iOS: inspects an installed app; never builds or installs.\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
+    shot: "tapp look --sim [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp flow example\ntapp flow steps [--json]\ntapp flow validate FILE [--platform PLATFORM] [--map FILE]\ntapp flow run FILE [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--launch-arg ARG] [--launch-env JSON]\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
-    task: "tapp task validate FILE [--platform PLATFORM] [--map FILE]\ntapp task compile FILE --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp task run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
-    contract: "tapp contract validate FILE [--platform PLATFORM] [--map FILE]\ntapp contract compile FILE --platform PLATFORM [--out FILE]\ntapp contract run FILE --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
-    scenario: "tapp scenario validate FILE [--project-dir DIR]\ntapp scenario run FILE --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
-    map: "tapp map build MARKERS [--platform PLATFORM] [--out FILE] [--replace]\ntapp map inspect [FILE]\ntapp map diff BEFORE AFTER [--comparable]",
-    pr: "tapp pr plan [--base REF|--changed-files FILE] [--head REF] [--platform PLATFORM] [--out FILE]\ntapp pr gate PLAN [gate target/options]\ntapp pr adopt PLAN --item ID [--project-dir DIR]",
-    plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]",
-    baseline: "tapp baseline create [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
-    ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]",
-    actor: "tapp actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp actor list [repo]",
+    flow: "tapp run FLOW.yml [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    task: "tapp validate TASK.yml [--platform PLATFORM] [--map FILE]\ntapp validate TASK.yml --compile --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp run TASK.yml --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
+    contract: "tapp validate FILE.contract.ts [--platform PLATFORM] [--map FILE]\ntapp validate FILE.contract.ts --compile --platform PLATFORM [--out FILE]\ntapp run FILE.contract.ts --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
+    scenario: "tapp validate SCENARIO.yml [--project-dir DIR]\ntapp run SCENARIO.yml --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
+    map: "tapp plan map build MARKERS [--platform PLATFORM] [--out FILE] [--replace]\ntapp plan map inspect [FILE]\ntapp plan map diff BEFORE AFTER [--comparable]",
+    pr: "tapp plan pr [--base REF|--changed-files FILE] [--head REF] [--platform PLATFORM] [--out FILE]\ntapp plan adopt PLAN --item ID [--project-dir DIR]",
+    plan: "tapp plan show [FILE]\ntapp plan review [FILE] --approve NAME[,NAME] --reject NAME[,NAME] --defer NAME[,NAME]\ntapp plan generate|validate|promote [FILE] [options]\ntapp plan pr --base REF · tapp plan adopt PLAN --item ID · tapp plan workflows [repo] · tapp plan map inspect|diff|build · tapp plan actor set|list",
+    baseline: "tapp ci baseline [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
+    ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]\ntapp ci baseline [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
+    actor: "tapp plan actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp plan actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
     report: "tapp report [captureId|latest]",
     feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
-    audit: "tapp audit <url> [<url>...] [--urls FILE] [--pages N] [--delay MS] [--links N] [--json [FILE]] [--no-capture] [--device NAME] [--viewport WxH]\n  Read-only: renders each page and reads it, never clicks — safe to point at production or a site you do not own.\n  Finds dead controls, broken images/assets/links, 5xx/failed requests, JS exceptions, mixed content, horizontal overflow.\n  --pages N crawls same-origin links (robots.txt honoured, --delay between pages). Writes a capture with screenshots, evidence and report.html.\n  Exit codes: 0 nothing broken · 1 defects found · 2 usage/infrastructure",
-    doctor: "tapp doctor [--json]\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
-    install: "tapp install",
+    audit: "tapp explore --read-only <url> [<url>...] [--urls FILE] [--pages N] [--delay MS] [--links N] [--json [FILE]] [--no-capture] [--device NAME] [--viewport WxH]\n  Read-only: renders each page and reads it, never clicks — safe to point at production or a site you do not own.\n  Finds dead controls, broken images/assets/links, 5xx/failed requests, JS exceptions, mixed content, horizontal overflow.\n  --pages N crawls same-origin links (robots.txt honoured, --delay between pages). Writes a capture with screenshots, evidence and report.html.\n  Exit codes: 0 nothing broken · 1 defects found · 2 usage/infrastructure",
+    doctor: "tapp doctor [--json] [--install]\n  --install prebuilds the iOS exploration harness (~2 min; otherwise it builds on first use)\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
+    install: "tapp doctor --install",
     mcp: "tapp mcp",
   };
   return usage[verb] || `tapp ${verb}`;
@@ -305,14 +379,25 @@ if (["--help", "-h"].includes(command)) {
   rest = [];
 }
 const knownCommands = new Set([
-  "help", "version", "--version", "-v", "mcp", "init", "focus", "explore", "qa", "open",
-  "tree", "shot", "screenshot", "apps", "build", "flow", "task", "contract", "scenario", "map",
-  "pr", "plan", "baseline", "ci", "actor", "app", "studio", "report", "doctor", "install", "feedback", "audit",
+  "help", "version", "--version", "-v",
+  // The twelve public verbs (ADR-0007).
+  "explore", "look", "run", "validate", "init", "plan", "ci", "app", "report", "doctor", "mcp", "feedback",
+  // Hidden aliases: still resolve, print their new form once.
+  "qa", "focus", "audit", "open", "tree", "shot", "screenshot", "flow", "task", "contract", "scenario",
+  "pr", "map", "workflows", "actor", "baseline", "install", "studio", "build", "apps",
 ]);
 if (!knownCommands.has(command)) {
   console.error(`❌ Unknown command: ${command}`);
   console.error("Run `npx -y @aarwitz/tapp@latest --help` for the command reference.");
   process.exit(2);
+}
+{
+  const helpRequested = rest.includes("--help") || rest.includes("-h");
+  const resolved = resolveCommand(command, rest);
+  if (resolved.note && !helpRequested) console.error(resolved.note);
+  command = resolved.command;
+  // The resolver may rebuild the argument list; the safe-help guarantee must survive it.
+  rest = helpRequested && !resolved.rest.includes("--help") && !resolved.rest.includes("-h") ? [...resolved.rest, "--help"] : resolved.rest;
 }
 const safeHelpRequested = (rest.includes("--help") || rest.includes("-h"))
   && !["help", "version", "--version", "-v"].includes(command)
@@ -328,6 +413,26 @@ if (!["help", "version", "--version", "-v"].includes(command)) {
 }
 
 switch (command) {
+  case "workflows": {
+    const {flags,positionals}=parseVerbArgs(rest);
+    const projectDir=path.resolve(positionals[0] || process.cwd());
+    const {readBusinessWorkflowProject,saveBusinessWorkflowProject}=await import("../mcp-server/src/business-workflow-files.js");
+    try {
+      if(flags.save) {
+        if(typeof flags.save!=="string")throw new Error("--save requires a workflow JSON file");
+        const document=JSON.parse(fs.readFileSync(path.resolve(flags.save),"utf8"));
+        console.log(JSON.stringify(saveBusinessWorkflowProject({projectDir,document,confirm:flags.confirm===true}),null,2));
+      } else {
+        const view=readBusinessWorkflowProject({projectDir});
+        if(flags.workflow) {
+          const plan=view.plans.find(plan=>plan.workflowId===flags.workflow);
+          if(!plan)throw new Error("Workflow not found in the saved map");
+          console.log(JSON.stringify(plan,null,2));
+        } else console.log(JSON.stringify(view,null,2));
+      }
+    } catch(error) {console.error(error.message);process.exitCode=2;}
+    break;
+  }
   case "mcp": {
     // Agents spawn `tapp mcp`; the engine module is import-safe, so start explicitly.
     const { startMcpServer } = await engineImport();
@@ -559,7 +664,7 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const query = positionals[0] || "";
     if (!query) {
-      console.error('usage: tapp focus "SCREEN OR CONTROL" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]');
+      console.error('usage: tapp explore --goal "SCREEN OR CONTROL" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]');
       process.exit(2);
     }
     let projectDir;
@@ -692,11 +797,7 @@ switch (command) {
     break;
   }
 
-  case "explore":
-  case "qa": {
-    // `explore` is the canonical verb (ADR-0005: exploration observes; the gate judges). `qa` is a
-    // hidden deprecated alias.
-    if (command === "qa") console.error("note: 'qa' is now 'explore' — 'qa' still works for now.\n");
+  case "explore": {
     const { flags, positionals } = parseVerbArgs(rest);
     const launchOptions = iosLaunchOptions(flags, rest);
     let target = positionals[0] || "";
@@ -1068,7 +1169,7 @@ switch (command) {
     const verb = positionals[0] || "validate";
     const taskPath = positionals[1] ? path.resolve(positionals[1]) : "";
     if (!["validate", "compile", "run"].includes(verb) || !taskPath) {
-      console.error("usage: tapp task validate <task.yml> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp task compile <task.yml> --platform PLATFORM [--inputs '{\"name\":\"value\"}'] [--out compiled.json]\n       tapp task run <task.yml> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]");
+      console.error("usage: tapp validate <task.yml> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp validate <task.yml> --compile --platform PLATFORM [--inputs '{\"name\":\"value\"}'] [--out compiled.json]\n       tapp run <task.yml> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]");
       process.exit(2);
     }
     if (!fs.existsSync(taskPath)) { console.error(`❌ Task not found: ${taskPath}`); process.exit(2); }
@@ -1155,7 +1256,7 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp flow example\n       tapp flow steps [--json]\n       tapp flow run <flow.yml|glob> [...more] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp flow validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
+      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
       process.exit(2);
     }
     // Several Flows in one command (field issue #9): the shell usually expands the glob, but a
@@ -1293,7 +1394,7 @@ switch (command) {
     const verb = positionals[0] || "validate";
     const contractPath = positionals[1] ? path.resolve(positionals[1]) : "";
     if (!["validate", "compile", "run"].includes(verb) || !contractPath) {
-      console.error("usage: tapp contract validate <name.contract.ts> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp contract compile <name.contract.ts> --platform PLATFORM [--out compiled.json]\n       tapp contract run <name.contract.ts> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]");
+      console.error("usage: tapp validate <name.contract.ts> [--platform ios|android|web] [--map .tapp/ui-map.json]\n       tapp validate <name.contract.ts> --compile --platform PLATFORM [--out compiled.json]\n       tapp run <name.contract.ts> --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]");
       process.exit(2);
     }
     const {
@@ -1351,14 +1452,14 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const verb = positionals[0] || "plan";
     if (!['plan', 'adopt'].includes(verb)) {
-      console.error("usage: tapp pr plan --base BASE [--head HEAD] [--project-dir DIR] [--platform PLATFORM] [--map PATH] [--json-out PATH]\n       tapp pr plan --changed-files 'src/a.ts,src/b.ts' [options]\n       tapp pr plan --changed-files-file /path/to/files.json [options]\n       tapp pr adopt <executed-pr-plan.json> --item ID [--project-dir DIR]");
+      console.error("usage: tapp plan pr --base BASE [--head HEAD] [--project-dir DIR] [--platform PLATFORM] [--map PATH] [--json-out PATH]\n       tapp plan pr --changed-files 'src/a.ts,src/b.ts' [options]\n       tapp plan pr --changed-files-file /path/to/files.json [options]\n       tapp plan adopt <executed-pr-plan.json> --item ID [--project-dir DIR]");
       process.exit(2);
     }
     const projectDir = path.resolve(typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd());
     if (verb === "adopt") {
       const prPlanPath = positionals[1];
       if (!prPlanPath || typeof flags.item !== "string") {
-        console.error("usage: tapp pr adopt <executed-pr-plan.json> --item ID [--project-dir DIR] [--release-plan PATH]");
+        console.error("usage: tapp plan adopt <executed-pr-plan.json> --item ID [--project-dir DIR] [--release-plan PATH]");
         process.exit(2);
       }
       const { adoptPrCoverageProposal } = await import(path.join(packageRoot, "mcp-server", "src", "pr-selection.js"));
@@ -1421,7 +1522,7 @@ switch (command) {
     const verb = positionals[0] || "run";
     const scenarioPath = positionals[1] || "";
     if (!["run", "validate"].includes(verb) || !scenarioPath) {
-      console.error("usage: tapp scenario run <scenario.yml> [--url URL]\n       tapp scenario validate <scenario.yml>");
+      console.error("usage: tapp run <scenario.yml> [--url URL]\n       tapp validate <scenario.yml>");
       process.exit(2);
     }
     const absolute = path.resolve(scenarioPath);
@@ -1506,7 +1607,7 @@ switch (command) {
       const beforePath = positionals[1] ? path.resolve(positionals[1]) : "";
       const afterPath = positionals[2] ? path.resolve(positionals[2]) : "";
       if (!beforePath || !afterPath || !fs.existsSync(beforePath) || !fs.existsSync(afterPath)) {
-        console.error("usage: tapp map diff <before.json> <after.json> [--comparable] [--json out.json]");
+        console.error("usage: tapp plan map diff <before.json> <after.json> [--comparable] [--json out.json]");
         process.exit(2);
       }
       const diff = diffUiMaps(JSON.parse(fs.readFileSync(beforePath, "utf8")), JSON.parse(fs.readFileSync(afterPath, "utf8")), { comparableFullSweep: flags.comparable === true });
@@ -1515,7 +1616,7 @@ switch (command) {
       if (!diff.comparableFullSweep && (diff.notObservedNodes.length || diff.notObservedEdges.length)) console.log("ℹ️  Absence is not labeled a regression because the runs were not declared comparable full sweeps.");
       process.exit(diff.lostReachability.length || diff.lostTransitions.length ? 1 : 0);
     }
-    console.error("usage: tapp map build <ocqa-markers.txt> [--platform ios|android|web] [--out .tapp/ui-map.json]\n       tapp map inspect [ui-map.json]\n       tapp map diff <before.json> <after.json> [--comparable]");
+    console.error("usage: tapp plan map build <ocqa-markers.txt> [--platform ios|android|web] [--out .tapp/ui-map.json]\n       tapp plan map inspect [ui-map.json]\n       tapp plan map diff <before.json> <after.json> [--comparable]");
     process.exit(2);
   }
 
@@ -1732,7 +1833,7 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const verb = positionals[0] || "list";
     if (!["list", "set"].includes(verb)) {
-      console.error("usage: tapp actor list [repo] [--json]\n       tapp actor set NAME [repo] [--role ROLE] [--session default|isolated] [--provisioning existing|seeded|api|unknown] [--credential name=ENV_NAME] [--email-env ENV_NAME] [--password-env ENV_NAME] [--replace]");
+      console.error("usage: tapp plan actor list [repo] [--json]\n       tapp plan actor set NAME [repo] [--role ROLE] [--session default|isolated] [--provisioning existing|seeded|api|unknown] [--credential name=ENV_NAME] [--email-env ENV_NAME] [--password-env ENV_NAME] [--replace]");
       process.exit(2);
     }
     const projectValue = verb === "set" ? positionals[2] : positionals[1];
@@ -1797,7 +1898,7 @@ switch (command) {
     const { flags, positionals } = parseVerbArgs(rest);
     const verb = positionals[0] || "create";
     if (verb !== "create") {
-      console.error("usage: tapp baseline create [repo] [--platform ios|android|web] [--target ID|NAME|PATH] [--from gate-report.json] [--replace]\n       Without --from, Tapp builds/starts the selected target, runs the full portable gate, and saves only a successful conclusive report.");
+      console.error("usage: tapp ci baseline [repo] [--platform ios|android|web] [--target ID|NAME|PATH] [--from gate-report.json] [--replace]\n       Without --from, Tapp builds/starts the selected target, runs the full portable gate, and saves only a successful conclusive report.");
       process.exit(2);
     }
     const projectDir = fs.realpathSync(path.resolve(positionals[1] || (typeof flags["project-dir"] === "string" ? flags["project-dir"] : process.cwd())));
@@ -2087,64 +2188,34 @@ switch (command) {
   default: {
     console.log(`tapp v${pkg.version} — agent-driven app testing for iOS, Android, and web.
 
-Core — inspect, explore, gate (no Tapp account or server required):
-  tapp explore [target]    Autonomous exploration → findings + evidence (an observation, NOT a
-                           release decision — run 'npx -y @aarwitz/tapp@latest ci' to gate a merge)
-                           (web: --watch · all: --platform ios|android|web · --actions N)
-  tapp focus "goal" [target] Source-locate a named screen/control and take the shortest observed route
-  tapp contract run FILE   Replay a business-level release contract — the guarantees that must hold
-  tapp ci ...              Merge-blocking release gate — explore + suites + baseline → pass/fail/inconclusive
-                           (see: tapp ci --help)
+Observe — look at the real app (no Tapp account or server required):
+  tapp explore [target]    Autonomous exploration → findings, UI map, evidence. An observation, NOT a
+                           release decision — 'tapp ci' gates a merge.
+                           (--read-only <url>: never clicks, safe on production · --goal "screen": go
+                           straight to a named screen · web: --watch · --platform ios|android|web · --actions N)
+  tapp look [target]       One screen: summary + screenshot (--tree adds the accessibility tree,
+                           --sim screenshots the booted simulator · web: --tap TEXT · --wait-for TEXT)
 
-Primitives — an agent's eyes and hands:
-  tapp open [target]       Launch the app → screen summary + screenshot saved to a file
-                           (web: --tap TEXT · --wait-for TEXT · --out FILE)
-  tapp tree [target]       Accessibility tree of the current screen (--json for every element)
-                           (web: --tap TEXT · --wait-for TEXT)
-  tapp audit <url>...      Read-only audit — dead controls, broken images/links/assets, failed
-                           requests, JS exceptions, mixed content, overflow. Never clicks, so it
-                           is safe against production or a prospect's site (exit 1 on defects)
-                           (--pages N crawls same-origin · --urls FILE batches · --json [FILE])
+Replay — deterministic, keyless:
+  tapp run FILE            Replay a committed Flow, Task, release contract, or Scenario
+                           (the kind comes from the file; exit 1 when it fails)
+  tapp validate FILE       Check a Flow/Task/contract/Scenario without launching anything
+                           (--compile shows the executor form · --example prints a starter Flow)
 
-Repository & release:
-  tapp init [repo]         Detect targets and write the application model + reviewable release plan
-                           (--explore grounds the UI Map · --url URL · --platform · --dry-run · --refresh)
-  tapp baseline create [repo] Run/import a conclusive full gate and save a target-scoped baseline
-  tapp report [captureId]  Open the HTML evidence page for a capture (default: latest)
+Release — from model to merge gate:
+  tapp init [repo]         Detect targets and write the application model + a reviewable release plan
+                           (--explore grounds it on the real app)
+  tapp plan …              The release-plan lifecycle: show · review · generate · validate · promote ·
+                           pr --base REF · adopt PLAN --item ID · workflows · map inspect|diff · actor set|list
+  tapp ci …                Merge-blocking gate: explore + suites + baseline → pass/fail/inconclusive
+                           (ci install writes the GitHub workflow · ci baseline saves a conclusive run · see: tapp ci --help)
+  tapp report [capture]    Open the HTML evidence page for a run (default: latest)
+
+Workspace:
+  tapp app [repo]          The local Studio: connect a repo, watch it explore, review, gate (loopback-only)
+  tapp doctor              Check Xcode / simulators / toolchain (--install prebuilds the iOS harness)
+  tapp mcp                 Start the MCP server on stdio (inline screenshots + interactive sessions)
   tapp feedback "title"    Send a bug, idea, or question to the tapp maintainers as a GitHub issue
-                           (drafts by default · --submit files it · issues are public)
-  tapp ci install [repo]   Generate a reviewable target-aware GitHub workflow + CI manifest
-  tapp actor set NAME      Configure an actor using environment-variable names only (never values)
-  tapp actor list [repo]   Inspect named actors, sessions, provisioning, and secret env bindings
-
-Advanced — deterministic suites, lifecycle & compilers:
-  tapp flow example        Print a complete starter Flow YAML (no target or MCP required)
-  tapp flow run FILE       Replay a committed deterministic Flow (no AI/API key)
-  tapp flow validate FILE  Validate a Flow without launching a target
-  tapp task validate FILE  Validate a reusable deterministic Task (+ optional UI Map grounding)
-  tapp task compile FILE   Compile one Task to the shared keyless Flow execution contract
-  tapp task run FILE       Replay a Task directly on iOS, Android, or web
-  tapp contract validate FILE  Validate a business-level TypeScript release contract
-  tapp contract compile FILE   Compile a contract to the shared deterministic executor
-  tapp scenario run FILE   Replay an isolated multi-actor system Scenario (web)
-  tapp scenario validate FILE  Validate actors, lifecycle, and deterministic steps
-  tapp pr plan --base REF      Select critical + diff-relevant contracts and report uncovered changes
-  tapp pr adopt PLAN --item ID Explicitly add an observed PR coverage proposal to the release plan
-  tapp plan show [FILE]    Inspect the proposed/accepted release-contract plan
-  tapp plan review [FILE]  Explicitly approve, reject, or defer proposed plan items
-  tapp plan generate [FILE] Generate compile-checked, untrusted contract drafts from approved Tasks
-  tapp plan validate [FILE] Replay drafts on a real target; trust only after all platforms pass
-  tapp plan promote [FILE] Move fully validated drafts into reviewed Tasks/contracts + map coverage
-  tapp map build MARKERS    Build/merge the persistent platform-neutral UI Map
-  tapp map inspect [FILE]   Inspect states, controls, platforms, and map validity
-  tapp map diff A B         Diff observed UI structure without false reachability claims
-
-Simulator & workspace:
-  tapp shot                Screenshot the booted simulator → file path (--out file.jpg)
-  tapp build [dir]         Build the iOS app in a repo for the simulator + install it (--scheme S)
-  tapp apps                List apps installed on the booted simulator (with bundle ids)
-  tapp app [repo]          Optional local browser workspace for repository onboarding and review
-                           (loopback-only; --no-open · --port PORT)
 
   [target] is whatever you have — nothing (in an initialized repo, bare 'tapp explore' drives the
   application model's default target from source: managed web is built/started/stopped, iOS is
@@ -2152,11 +2223,6 @@ Simulator & workspace:
   project in the current dir, or falls back to the app on the simulator), a repo dir, a
   path/to/App.app, a bundle id, an Android app id/APK (--platform android --app-id ...), or an
   http(s) URL. For iOS you never need to know a bundle id up front.
-
-Setup:
-  tapp install    Prebuild the exploration harness (~2 min; otherwise builds on first use)
-  tapp doctor     Check Xcode / simulators / toolchain
-  tapp mcp        Start the MCP server on stdio (adds inline screenshots + interactive sessions)
 
 Agent Skill (recommended — so a short “Use Tapp to test this app” prompt is enough):
   Any supported agent: npx -y skills add aarwitz/tapp --skill tapp
@@ -2172,6 +2238,9 @@ Then ask your agent things like:
   "Explore com.mycompany.app and show me what breaks"
   "Open the settings screen and show me the screenshot"
   "Drive the login flow and record it as a replayable test"
+
+Older verbs (audit, focus, open, tree, flow, task, contract, scenario, pr, map, baseline,
+workflows, actor, install, shot, build, apps) still work and print their new form.
 
 Docs: ${pkg.homepage}`);
     break;

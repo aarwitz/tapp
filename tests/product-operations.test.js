@@ -271,7 +271,8 @@ test("explicit init exploration asks again even when a prior target default exis
 
 test("CLI baseline is a thin adapter over shared gate and baseline operations", () => {
   const source = fs.readFileSync("bin/tapp.js", "utf8");
-  const baseline = source.match(/case "baseline":[\s\S]*?case "ci":/)?.[0] || "";
+  // `case "baseline": {` is the real body; the command resolver has a one-line `case "baseline": return`.
+  const baseline = source.match(/case "baseline": \{[\s\S]*?case "ci":/)?.[0] || "";
   assert.match(baseline, /runProductGate/);
   assert.match(baseline, /createProductBaseline/);
   assert.doesNotMatch(baseline, /writeTargetBaseline|ci-gate\.sh/);

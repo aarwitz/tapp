@@ -66,13 +66,13 @@
     ],
     "languageModelTools": [
       {
-        "name": "tapp_open_ios_app",
-        "displayName": "Open iOS app",
-        "toolReferenceName": "openIosApp",
+        "name": "tapp_open_app",
+        "displayName": "Open app",
+        "toolReferenceName": "openApp",
         "canBeReferencedInPrompt": true,
         "icon": "$(device-mobile)",
         "userDescription": "Build (if needed) and open the iOS app on the simulator",
-        "modelDescription": "Open an iOS app on the simulator and return the current screen as a structured accessibility summary. `target` is optional: omit it to auto-detect and build the Xcode project in the workspace (first build can take minutes), or pass a bundle id (com.example.app), a path to a simulator .app build, or a project directory. For a focused request, ALWAYS pass the user's named destination/control/task in `focus`: Tapp locates it from source and follows the shortest observed UI Map route before returning. Starts an interactive session.",
+        "modelDescription": "Open an iOS app on the simulator and return the current screen as a structured accessibility summary. `target` is optional: omit it to auto-detect and build the Xcode project in the workspace (first build can take minutes), or pass a bundle id (com.example.app), a path to a simulator .app build, or a project directory. For a focused request, pass the user's named destination/control/task in `goal`: Tapp locates it from source and follows the shortest observed UI Map route before returning. Starts an interactive session that tapp_look and tapp_act use.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -80,217 +80,128 @@
               "type": "string",
               "description": "Optional: bundle id, path to .app, or project directory. Omit to auto-detect the workspace's Xcode project."
             },
-            "focus": {
+            "goal": {
               "type": "string",
-              "description": "Focused screen/control/task to source-locate and reach before returning, e.g. 'Save storefront settings visible above keyboard'"
+              "description": "Optional screen/control/task to source-locate and reach before returning, e.g. 'Save storefront settings visible above keyboard'"
             }
           }
         }
       },
       {
-        "name": "tapp_ios_focus",
-        "displayName": "Reach iOS screen from source",
-        "toolReferenceName": "focusIosApp",
+        "name": "tapp_look",
+        "displayName": "Look at the screen",
+        "toolReferenceName": "look",
         "canBeReferencedInPrompt": true,
-        "icon": "$(target)",
-        "userDescription": "Find a named UI surface in source and take the shortest observed route",
-        "modelDescription": "FAST PATH for a focused UI task after tapp_open_ios_app. Pass the user's exact requested screen/control/task. Tapp searches the open repository's source, reconciles it with the runtime-observed UI Map, and executes the shortest trusted route in one call. Use this before step-by-step taps; if no observed route exists it returns exact source evidence and does not wander or invent navigation.",
+        "icon": "$(eye)",
+        "userDescription": "Read and screenshot the current app screen",
+        "modelDescription": "Observe what is on the simulator screen right now: returns a screenshot of the open iOS app and, with `tree: true`, the structured accessibility snapshot (screen title, elements, controls, hittability — the iOS equivalent of read_page). Use it before acting and after each action instead of tapping from memory. Requires tapp_open_app first. Observation only; it changes nothing.",
         "inputSchema": {
           "type": "object",
           "properties": {
-            "query": {
-              "type": "string",
-              "description": "Requested screen, control, or focused UI task"
+            "tree": {
+              "type": "boolean",
+              "description": "Also return the structured accessibility tree of the current screen (default false: screenshot only)"
             }
-          },
+          }
+        }
+      },
+      {
+        "name": "tapp_act",
+        "displayName": "Act in the app",
+        "toolReferenceName": "act",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(hand-pointing)",
+        "userDescription": "Tap, type, fill a field with a value you provide, or sign in",
+        "modelDescription": "Perform one interaction in the open iOS app and get the resulting screen back. `action` is one of: `tap` (element by accessibility id or visible label, case-insensitive contains fallback), `type` (text into the focused field, or into `id` first), `fill_field` (VS Code prompts the USER for the value and types it — the value never passes through you; use for codes, personal data, anything credential-like; set `secure` to mask), `login` (finds email + password fields, fills, submits and verifies in one call with secure-field handling done internally — ALWAYS use this for sign-in; omit `email`/`password` to let VS Code prompt the user, or pass `actor` to use repository actor bindings). Read the previous tapp_look result before acting. Requires tapp_open_app first.",
+        "inputSchema": {
+          "type": "object",
           "required": [
-            "query"
-          ]
-        }
-      },
-      {
-        "name": "tapp_ios_login",
-        "displayName": "Sign in to iOS app",
-        "toolReferenceName": "iosLogin",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(key)",
-        "userDescription": "Sign in — prompts you for credentials if the agent doesn't have them",
-        "modelDescription": "Sign in to the open iOS app IN ONE CALL: finds the email + password fields, fills both, submits, and verifies — with all keyboard/secure-field handling done internally. ALWAYS use this for login instead of type/tap sequences (iOS wipes secure fields when editing re-begins). `email`/`password` are OPTIONAL: omit them when you don't know the credentials and tapp will prompt the user directly in VS Code — the values go straight to the app and are never shown to you. Requires tapp_open_ios_app first. On failure, the result includes the on-screen error text. Pass actor to use repository actor environment bindings. When omitted without complete credentials, the sole configured actor is used, or the user chooses among multiple actors. Saved values are used only when no actor and no explicit credential are supplied.",
-        "inputSchema": {
-          "type": "object",
+            "action"
+          ],
           "properties": {
-            "email": {
+            "action": {
               "type": "string",
-              "description": "Email/username to sign in with"
+              "enum": [
+                "tap",
+                "type",
+                "fill_field",
+                "login"
+              ],
+              "description": "What to do"
             },
-            "password": {
-              "type": "string",
-              "description": "Password to sign in with"
-            },
-            "actor": {
-              "type": "string",
-              "description": "Configured test actor from .tapp/project.json; environment bindings take precedence over saved Keychain values. Explicit credentials override actor bindings."
-            }
-          },
-          "required": []
-        }
-      },
-      {
-        "name": "tapp_ios_fill_field",
-        "displayName": "Ask the user for a field value",
-        "toolReferenceName": "iosFillField",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(comment-discussion)",
-        "userDescription": "Prompts you for a value and types it into the app",
-        "modelDescription": "Fill a field in the open iOS app with a value provided BY THE USER: VS Code prompts them directly, waits for their answer, and types it into the field — the value never passes through you. Use this whenever the app shows a field whose real value only the user knows (verification codes, search terms, personal data, any credential-like input). `id` is the field's accessibility id, label, or placeholder from the tree; `prompt` is what to ask the user; set `secure` for passwords/codes (masked input). Requires tapp_open_ios_app first.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
             "id": {
               "type": "string",
-              "description": "Field to fill (accessibility id / label / placeholder)"
+              "description": "tap/type/fill_field: accessibility id, label, or placeholder of the element or field"
+            },
+            "text": {
+              "type": "string",
+              "description": "type: the text to type"
             },
             "prompt": {
               "type": "string",
-              "description": "Question shown to the user, e.g. 'Enter the SMS verification code'"
+              "description": "fill_field: question shown to the user, e.g. 'Enter the SMS verification code'"
             },
             "secure": {
               "type": "boolean",
-              "description": "Mask the user's input (passwords, codes)"
-            }
-          },
-          "required": [
-            "id"
-          ]
-        }
-      },
-      {
-        "name": "tapp_read_ios_screen",
-        "displayName": "Read iOS screen",
-        "toolReferenceName": "readIosScreen",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(list-tree)",
-        "userDescription": "Structured accessibility snapshot of the current screen",
-        "modelDescription": "Best default for inspecting the iOS app: returns a structured accessibility snapshot of what is actually rendered on the simulator screen (screen title, elements, controls, hittability). Requires an app opened with tapp_open_ios_app. The iOS equivalent of read_page.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "tapp_ios_screenshot",
-        "displayName": "Screenshot iOS app",
-        "toolReferenceName": "iosScreenshot",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(device-camera)",
-        "userDescription": "Screenshot the simulator screen",
-        "modelDescription": "Visual capture of the current iOS simulator screen, for when layout or appearance matters. Returns the screenshot image and refreshes the Tapp simulator panel.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "tapp_ios_tap",
-        "displayName": "Tap in iOS app",
-        "toolReferenceName": "iosTap",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(hand-pointing)",
-        "userDescription": "Tap a control in the open iOS app",
-        "modelDescription": "Tap an element in the open iOS app by accessibility id or visible label (case-insensitive contains match as fallback), and get the resulting screen back. Read the previous result's elements before tapping — never tap from memory. Requires tapp_open_ios_app first.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "description": "Accessibility id or visible label of the element to tap"
-            }
-          },
-          "required": [
-            "id"
-          ]
-        }
-      },
-      {
-        "name": "tapp_ios_type",
-        "displayName": "Type in iOS app",
-        "toolReferenceName": "iosType",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(keyboard)",
-        "userDescription": "Type text into the focused field",
-        "modelDescription": "Type text into the currently focused field of the open iOS app (tap the field first with tapp_ios_tap). Pass `id` to tap a specific field before typing. Requires tapp_open_ios_app first.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string",
-              "description": "Text to type"
+              "description": "fill_field: mask the user's input (passwords, codes)"
             },
-            "id": {
+            "email": {
               "type": "string",
-              "description": "Optional: accessibility id/label of the field to focus first"
+              "description": "login: email/username (optional)"
+            },
+            "password": {
+              "type": "string",
+              "description": "login: password (optional)"
+            },
+            "actor": {
+              "type": "string",
+              "description": "login: configured test actor from .tapp/project.json; environment bindings take precedence over saved Keychain values. Explicit credentials override actor bindings."
             }
-          },
-          "required": [
-            "text"
-          ]
+          }
         }
       },
       {
-        "name": "tapp_explore_ios",
-        "displayName": "Explore iOS app",
-        "toolReferenceName": "exploreIosApp",
+        "name": "tapp_explore",
+        "displayName": "Explore",
+        "toolReferenceName": "explore",
         "canBeReferencedInPrompt": true,
         "icon": "$(beaker)",
-        "userDescription": "Autonomous iOS exploration → findings, coverage, and evidence",
-        "modelDescription": "Explore the iOS app like a user with no authored test and return an observation: deterministic/advisory findings, coverage, an evidence page, screenshots, and a full exploration recording. Takes a few minutes. `target` is optional (same resolution as tapp_open_ios_app). Exploration is not a release gate and returns no score or ship verdict. Report inconclusive coverage and the checked/not-checked scope honestly; use the Tapp CI gate for a merge decision.",
+        "userDescription": "Autonomous exploration of the iOS app, or a read-only audit of a website",
+        "modelDescription": "Observe an application without an authored test and return an observation: findings, coverage, evidence page, screenshots and a recording. Three modes. (1) iOS exploration: omit `url`; `target` optional (same resolution as tapp_open_app), `maxActions` is the budget; takes minutes. (2) Read-only website audit: pass `url` — renders and reads, NEVER clicks, types, submits or hovers, so it is safe on production or a site the user does not own; finds dead controls, broken images/assets/links, failed requests, JS exceptions, mixed content, overflow; `pages` crawls same-origin links, `device` audits a mobile rendering. (3) Focused: pass `goal` with an open session to source-locate a named screen/control and take the shortest observed route in one call — if no observed route exists it returns exact source evidence and does not wander. Exploration is not a release gate: it returns no score or ship verdict. Report inconclusive coverage and the checked/not-checked scope honestly; use the Tapp CI gate for a merge decision.",
         "inputSchema": {
           "type": "object",
           "properties": {
             "target": {
               "type": "string",
-              "description": "Optional: bundle id, .app path, or project dir. Omit to auto-detect."
+              "description": "iOS: optional bundle id, .app path, or project dir. Omit to auto-detect."
             },
             "maxActions": {
               "type": "integer",
-              "description": "Exploration budget (default 40)"
-            }
-          }
-        }
-      },
-      {
-        "name": "tapp_audit_web",
-        "displayName": "Audit website (read-only)",
-        "toolReferenceName": "auditWebsite",
-        "canBeReferencedInPrompt": true,
-        "icon": "$(search)",
-        "userDescription": "Read-only audit of a live web page or site — never clicks",
-        "modelDescription": "Audit a live web page or site WITHOUT touching it: renders and reads, never clicks, types, submits or hovers — safe on production or a site the user does not own. Finds dead controls (anchors/placeholders/aria-controls/unwired buttons), broken images, 404 assets, failed/5xx requests, JS exceptions, dead same-origin links, mixed content, horizontal overflow. `pages` > 1 crawls same-origin links (robots.txt honoured). Returns findings plus a capture (screenshots, evidence, report.html). An observation, not a verdict: no findings means the page is served without structural defects, not that the product works.",
-        "inputSchema": {
-          "type": "object",
-          "required": [
-            "url"
-          ],
-          "properties": {
+              "description": "iOS: exploration budget (default 40)"
+            },
+            "goal": {
+              "type": "string",
+              "description": "Focused mode: the requested screen, control, or UI task to reach in the open app"
+            },
             "url": {
               "type": "string",
-              "description": "http(s) URL to audit"
+              "description": "Website mode: http(s) URL to audit read-only"
             },
             "pages": {
               "type": "integer",
-              "description": "Same-origin pages to audit at most (default 1)"
+              "description": "Website mode: same-origin pages to audit at most (default 1)"
             },
             "device": {
               "type": "string",
-              "description": "Optional Playwright device profile, e.g. \"iPhone 13\", to audit the mobile rendering"
+              "description": "Website mode: optional Playwright device profile, e.g. \"iPhone 13\""
             }
           }
         }
       },
       {
-        "name": "tapp_build_ios_app",
-        "displayName": "Build iOS app",
-        "toolReferenceName": "buildIosApp",
+        "name": "tapp_build",
+        "displayName": "Build app",
+        "toolReferenceName": "build",
         "canBeReferencedInPrompt": true,
         "icon": "$(tools)",
         "userDescription": "Build the workspace's iOS app for the simulator and install it",

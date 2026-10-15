@@ -28,7 +28,7 @@ test("the canonical Tapp skill is concise, discoverable, and honest", () => {
   assert.match(skill, /Never guess among multiple targets/);
   assert.match(skill, /exploration never decides this/i);
   assert.match(skill, /fresh repository needs one grounding exploration/i);
-  assert.match(skill, /MCP session start → focus or act → end/);
+  assert.match(skill, /`tapp_session` start → act → end/);
   assert.match(skill, /npx -y @aarwitz\/tapp@latest doctor/);
   // 120 lines: the decision table and the navigation rules are the skill; raised from 100 on
   // 2026-10-08 when the audit-vs-explore routing left no room for the next rule.
@@ -79,20 +79,20 @@ test("npm and the Claude plugin ship the same current skill and MCP server", () 
 
 test("VS Code contributes the Tapp skill and the current observation contract", () => {
   assert.deepEqual(extension.contributes.chatSkills, [{ path: "./skills/tapp/SKILL.md" }]);
+  // ADR-0007: one naming scheme — five LM tools, no `tapp_ios_*` second scheme.
   const names = extension.contributes.languageModelTools.map((tool) => tool.name);
-  assert.ok(names.includes("tapp_explore_ios"));
-  assert.ok(names.includes("tapp_ios_focus"));
-  assert.ok(!names.includes("tapp_run_ios_qa"));
-  const explorer = extension.contributes.languageModelTools.find((tool) => tool.name === "tapp_explore_ios");
+  assert.deepEqual(names, ["tapp_open_app", "tapp_look", "tapp_act", "tapp_explore", "tapp_build"]);
+  for (const legacy of ["tapp_explore_ios", "tapp_ios_focus", "tapp_run_ios_qa", "tapp_audit_web", "tapp_read_ios_screen"]) assert.ok(!names.includes(legacy), `${legacy} is retired`);
+  const explorer = extension.contributes.languageModelTools.find((tool) => tool.name === "tapp_explore");
   assert.match(explorer.modelDescription, /observation/);
   assert.match(explorer.modelDescription, /no score or ship verdict/);
+  assert.match(explorer.modelDescription, /NEVER clicks/);
   assert.doesNotMatch(JSON.stringify(extension), /ship\/no-ship|SHIP-READY/i);
 
-  const bridge = read("vscode-extension/bridge.js");
+  const bridge = read("vscode-extension/bridge.js") + read("vscode-extension/extension.js");
   assert.match(bridge, new RegExp(`@aarwitz/tapp@${pkg.version.replaceAll(".", "\\.")}`));
-  assert.match(bridge, /this\.call\("tapp_explore"/);
-  assert.match(bridge, /this\.call\("tapp_focus"/);
-  assert.doesNotMatch(bridge, /tapp_run_qa/);
+  for (const current of ["tapp_explore", "tapp_look", "tapp_session", "tapp_plan", "tapp_build"]) assert.match(bridge, new RegExp(`this\\.call\\("${current}"`), `bridge calls ${current}`);
+  for (const legacy of ["tapp_run_qa", "tapp_audit", "tapp_focus", "tapp_screenshot", "tapp_session_start", "tapp_session_act", "tapp_session_end", "tapp_actor_config", "tapp_open_ios_app"]) assert.doesNotMatch(bridge, new RegExp(`\\b${legacy}\\b`), `${legacy} is no longer called`);
 });
 
 const hasPrivatePublicationTool = fs.existsSync(new URL("../tools/sync-public.sh", import.meta.url));

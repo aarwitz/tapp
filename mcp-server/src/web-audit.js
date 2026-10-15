@@ -21,6 +21,7 @@ import { buildQaReport } from "./report.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { writeCaptureProvenance } from "./capture-provenance.js";
+import { passiveUrlRisk } from "./business-observation.js";
 
 const require = createRequire(import.meta.url);
 const VERSION = (() => { try { return require("../../package.json").version; } catch { return "0.0.0"; } })();
@@ -110,10 +111,11 @@ async function auditPageHealth(page) {
       if (!src || src.startsWith("data:")) continue;
       if (img.complete && img.naturalWidth === 0) {
         // A 1×1 (or hidden) image that failed is a tracking pixel the visitor never sees, not a
-        // broken picture on the page; a failed image lays out as a 16px placeholder box even when
-        // it was meant to be invisible, so a cross-origin, query-string, alt-less one is a beacon.
+        // broken picture on the page.
         const box = img.getBoundingClientRect();
         if (box.width <= 2 || box.height <= 2) continue;
+        // A failed image lays out as a 16px placeholder box even when it was meant to be
+        // invisible; a cross-origin, query-string, alt-less image is a beacon, not a picture.
         let crossOrigin = false;
         try { crossOrigin = new URL(src, location.href).origin !== location.origin; } catch { /* keep */ }
         if (crossOrigin && /\?/.test(src) && !img.hasAttribute("alt")) continue;
@@ -208,7 +210,7 @@ async function checkLinks(context, links, { limit, pageUrl }) {
 
 // One page, inside an already-open context. Collects everything, then (if a capture is open) shoots
 // the page and each named element and appends the markers.
-async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, capture }) {
+async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, capture, blockedRequests = new WeakSet(), observationOnly = false, allowLink = () => true }) {
   const page = await context.newPage();
   const bounded = Math.max(1000, Math.min(60_000, Number(timeoutMs) || NAV_TIMEOUT_MS));
   page.setDefaultTimeout(bounded);
@@ -231,6 +233,7 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
   });
   page.on("requestfailed", (req) => {
     try {
+      if (blockedRequests.has(req)) return; // Our observation policy is not an application defect.
       const u = new URL(req.url());
       if (u.origin !== origin) return;
       const errorText = req.failure()?.errorText || "?";
@@ -246,7 +249,8 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
 
     const controls = await auditStructuralControls(page);
     const health = await auditPageHealth(page);
-    const links = await checkLinks(context, health.links, { limit: linkCheckLimit, pageUrl: page.url() });
+    const allowedLinks = health.links.filter(allowLink);
+    const links = await checkLinks(context, allowedLinks, { limit: linkCheckLimit, pageUrl: page.url() });
 
     const structural = auditFindingsFromControls(controls.dead).map((f, i) => ({ ...f, selector: controls.dead[i].selector }));
     const findings = [...structural, ...healthFindings(health.findings), ...loadFindings, ...links.findings];
@@ -273,12 +277,15 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
     return {
       url: page.url(),
       title: controls.title,
+      ...(observationOnly ? { visibleText: await page.locator("body").innerText({ timeout: bounded }).then(text => text.slice(0, 12000)).catch(() => ""),
+        visibleTextLimit: 12000 } : {}),
+      ...(page.video() ? { recording: path.basename(await page.video().path()) } : {}),
       controlsExamined: controls.controlCount,
       linksChecked: { total: links.total, checked: links.checked },
       // Why the wiring-dependent checks were skipped on this page, if they were.
       ...(controls.wiringUnverifiable ? { wiringUnverifiable: controls.wiringUnverifiable } : {}),
       findings,
-      links: health.links,
+      links: allowedLinks,
     };
   } finally {
     await page.close().catch(() => {});
@@ -301,7 +308,7 @@ export function auditCaptureId(now = new Date()) {
   return `web-audit-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
 }
 
-function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, linksChecked, wiringUnverifiable = [] }) {
+function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, linksChecked, observationLimits = [], skippedLinks = [], wiringUnverifiable = [] }) {
   capture.emit("COMPLETE", { actions: 0, screens: pages.length, credentialsProvided: false, credentialsUsed: false, timedOut: false, stop: "audit-complete", readOnly: true, robotsBlocked });
   capture.close();
   const markers = path.join(capture.dir, "ocqa-markers.txt");
@@ -313,15 +320,18 @@ function finalizeCapture(capture, { startUrl, pages, findings, robotsBlocked, li
   Object.assign(report, {
     kind: "tapp-structural-audit",
     readOnly: true,
-    inconclusive: false,
+    inconclusive: observationLimits.length > 0,
     runStatus: "completed",
     stopReason: "audit-complete",
-    headline: findings.length === 0
+    headline: observationLimits.length > 0
+      ? `Passive audit of ${pages.length} page(s): ${findings.length} finding(s). Observation restrictions limited rendering; inspect those limits before attributing findings to the app.`
+      : findings.length === 0
       ? `Read-only audit of ${pages.length} page(s) — nothing broken was observed. Nothing was clicked; this says the page is served without structural defects, not that the product works.`
       : `${findings.length} defect(s) observed on ${pages.length} page(s) without clicking anything (${counts.critical} critical, ${counts.high} high, ${counts.medium} medium, ${counts.low} low).`,
     checkedFor: scope.checkedFor,
-    notChecked: scope.notChecked,
-    conditionsNotReached: [],
+    notChecked: [...scope.notChecked, ...observationLimits, ...(skippedLinks.length ? ["Potential action/signed links and robots exclusions were not fetched; see skippedLinks."] : [])],
+    skippedLinks,
+    conditionsNotReached: observationLimits,
   });
   fs.writeFileSync(path.join(capture.dir, "report.json"), JSON.stringify(report, null, 2));
   // The capture-local UI map is what ties a page screenshot to the findings on that page for
@@ -356,12 +366,13 @@ export function dedupeSiteIssues(findings = []) {
 export async function auditWebSite({
   url, pages = 1, timeoutMs = NAV_TIMEOUT_MS, device = "", viewport = "",
   linkCheckLimit = AUDIT_LINK_CHECK_LIMIT, delayMs = AUDIT_CRAWL_DELAY_MS,
-  capturesDir = "", captureId = "", onPage = null,
+  capturesDir = "", captureId = "", onPage = null, observationOnly = false, recordVideo = false,
 }) {
   let start;
   try { start = new URL(url); }
   catch { throw new Error("Audit needs a valid http(s) URL"); }
   if (!/^https?:$/.test(start.protocol)) throw new Error("Audit needs a valid http(s) URL");
+  if (observationOnly && passiveUrlRisk(start.href)) throw new Error("Passive checks cannot open signed or potentially state-changing links");
   const maxPages = Math.max(1, Math.min(200, Number(pages) || 1));
 
   const { chromium, devices } = await loadPlaywright();
@@ -374,12 +385,39 @@ export async function auditWebSite({
     const probe = await browser.newContext(contextOptions);
     const defaultUa = contextOptions.userAgent || await (await probe.newPage()).evaluate(() => navigator.userAgent).catch(() => "");
     await probe.close();
-    const context = await browser.newContext({ ...contextOptions, userAgent: `${defaultUa} tapp-audit/${VERSION} (+https://runtapp.com)`.trim() });
+    const context = await browser.newContext({ ...contextOptions,
+      ...(observationOnly ? { serviceWorkers: "block", acceptDownloads: false } : {}),
+      ...(recordVideo && capture ? { recordVideo: { dir: capture.dir } } : {}),
+      userAgent: `${defaultUa} tapp-audit/${VERSION} (+https://runtapp.com)`.trim() });
+    const blockedRequests = new WeakSet();
+    const observationLimits = new Set();
+    if (observationOnly) {
+      // Enforce the passive path even if page JavaScript tries to submit data.
+      // No login/storage state or application credentials enter this fresh context.
+      await context.route("**/*", async route => {
+        const request = route.request();
+        const method = request.method();
+        const risk = passiveUrlRisk(request.url());
+        if (!["GET", "HEAD"].includes(method) || risk) {
+          blockedRequests.add(request);
+          observationLimits.add(risk ? "A possible action or signed resource URL was blocked; dependent content was not verified."
+            : `${method} requests were blocked; content depending on those requests was not verified.`);
+          await route.abort("blockedbyclient");
+          return;
+        }
+        await route.continue();
+      });
+      if (typeof context.routeWebSocket !== "function") throw new Error("Passive hosted checks require a Playwright version with WebSocket routing");
+      await context.routeWebSocket("**/*", socket => {
+        observationLimits.add("WebSockets were blocked; live content depending on them was not verified.");
+        socket.close();
+      });
+    }
     await installWebListenerTracking(context);
     if (capture) capture.emit("CONTEXT", { ...(String(device || "").trim() ? { device: String(device).trim() } : {}), viewport: contextOptions.viewport, deviceScaleFactor: contextOptions.deviceScaleFactor ?? 1, mode: "audit", readOnly: true });
 
     let robots = [];
-    if (maxPages > 1) {
+    if (maxPages > 1 || observationOnly) {
       try {
         const res = await context.request.get(new URL("/robots.txt", start).href, { timeout: 5_000, failOnStatusCode: false });
         if (res.ok()) robots = parseRobots(await res.text());
@@ -388,19 +426,33 @@ export async function auditWebSite({
 
     const results = [];
     const robotsBlocked = [];
+    const skippedLinks = new Map();
+    const allowLink = link => {
+      if (!observationOnly) return true;
+      const url = new URL(link.href);
+      const reason = passiveUrlRisk(link.href) || (url.origin === start.origin && !robotsAllows(robots, url.pathname) ? "robots-excluded" : null);
+      if (!reason) return true;
+      if (skippedLinks.size < 100) skippedLinks.set(link.href, { path: url.pathname, reason });
+      return false;
+    };
     const queued = new Set([start.href]);
     const queue = [start];
     let linksTotal = 0;
     let linksChecked = 0;
     while (queue.length && results.length < maxPages) {
       const target = queue.shift();
+      if (observationOnly && !robotsAllows(robots, target.pathname)) {
+        robotsBlocked.push(target.href);
+        observationLimits.add("robots.txt excluded a requested page; it was not inspected.");
+        continue;
+      }
       if (results.length > 0) {
         if (!robotsAllows(robots, target.pathname)) { robotsBlocked.push(target.href); continue; }
         if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
       }
       let result;
       try {
-        result = await auditOnePage(context, target, { timeoutMs, linkCheckLimit, capture });
+        result = await auditOnePage(context, target, { timeoutMs, linkCheckLimit, capture, blockedRequests, observationOnly, allowLink });
       } catch (error) {
         if (results.length === 0) throw error;
         result = { url: target.href, title: "", controlsExamined: 0, linksChecked: { total: 0, checked: 0 }, links: [],
@@ -409,7 +461,8 @@ export async function auditWebSite({
       linksTotal += result.linksChecked.total;
       linksChecked += result.linksChecked.checked;
       const { links, ...pageResult } = result;
-      results.push(pageResult);
+      results.push({ ...pageResult, ...(observationOnly ? { observedLinks: links.slice(0, 100),
+        observedLinksTruncated: links.length > 100 } : {}) });
       if (typeof onPage === "function") onPage(pageResult, results.length);
       // A link the HEAD check already found broken is reported; opening it would only repeat the finding.
       const broken = new Set(pageResult.findings.filter((f) => f.type === "broken_link").map((f) => f.target));
@@ -417,12 +470,15 @@ export async function auditWebSite({
         if (!link.sameOrigin || queued.has(link.href) || broken.has(link.href) || queued.size >= maxPages * 4) continue;
         let next;
         try { next = new URL(link.href); } catch { continue; }
+        if (observationOnly && next.origin !== start.origin) continue;
         if (/\.(pdf|zip|png|jpe?g|gif|svg|webp|mp4|mp3|css|js|xml|ico)$/i.test(next.pathname)) continue;
         queued.add(next.href);
         queue.push(next);
       }
     }
 
+    // Closing the context finalizes page recordings before evidence is uploaded.
+    await context.close();
     const findings = results.flatMap((r) => r.findings);
     const issues = dedupeSiteIssues(findings);
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -432,23 +488,27 @@ export async function auditWebSite({
     const summary = {
       kind: "tapp-structural-audit",
       readOnly: true,
+      ...(observationOnly ? { observationOnly: true, observationLimits: [...observationLimits],
+        inconclusive: observationLimits.size > 0,
+        observationPolicy: "Fresh unauthenticated browser; no interactions; GET/HEAD only; no WebSockets or service workers. Page loads may still generate server logs and analytics. Restricted rendering may affect findings." } : {}),
       url: start.href,
       pagesAudited: results.length,
       pagesWithUnverifiableWiring: wiringUnverifiable.length,
       pagesQueued: queue.length,
       robotsBlocked,
+      ...(observationOnly ? { skippedLinks: [...skippedLinks.values()], skippedLinksLimit: 100 } : {}),
       findingCounts: { ...bySeverity, total: findings.length },
       // One entry per distinct defect across the site, with the pages it appears on: a footer
       // link that answers 404 on six pages is one thing to fix, and one line in an email.
       issues,
       issueCount: issues.length,
       checkedFor: scope.checkedFor,
-      notChecked: scope.notChecked,
+      notChecked: [...scope.notChecked, ...observationLimits, ...(skippedLinks.size ? ["Potential action/signed links and robots exclusions were not fetched; see skippedLinks."] : [])],
       pages: results,
       capture: null,
     };
     if (capture) {
-      finalizeCapture(capture, { startUrl: start.href, pages: results, findings, robotsBlocked, linksChecked: { total: linksTotal, checked: linksChecked }, wiringUnverifiable });
+      finalizeCapture(capture, { startUrl: start.href, pages: results, findings, robotsBlocked, linksChecked: { total: linksTotal, checked: linksChecked }, observationLimits: [...observationLimits], skippedLinks: [...skippedLinks.values()], wiringUnverifiable });
       summary.capture = { id: capture.id, path: capture.dir, report: path.join(capture.dir, "report.html"), provenance };
       fs.writeFileSync(path.join(capture.dir, "audit.json"), JSON.stringify(summary, null, 2));
     }

@@ -153,6 +153,12 @@ export async function runWebRequestStep({ step, startUrl, vars = {}, timeout = D
     init.body = JSON.stringify(substituteStructure(request.body, vars));
     if (!Object.keys(headers).some((key) => key.toLowerCase() === "content-type")) headers["content-type"] = "application/json";
   }
+  if (process.env.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
+    const { publicRequest } = await import("./public-network.js");
+    const response = await publicRequest(targetUrl, {method,headers,body:init.body,timeout:Number(request.timeoutMs) || timeout});
+    if (response.status !== Number(request.status ?? 200)) throw new Error(`${method} ${targetUrl.pathname} did not return the expected status`);
+    return { action:"request",target:`${method} ${targetUrl.pathname}`,status:"pass",detail:"" };
+  }
   const response = await fetch(targetUrl, init);
   const expected = Number(request.status ?? 200);
   if (response.status !== expected) throw new Error(`${method} ${targetUrl.pathname} returned ${response.status}; expected ${expected}`);
@@ -284,7 +290,7 @@ export function resolveGateFlowUrl(declared, gateUrl) {
   }
 }
 
-export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright, device = "", viewport = "", urlIsFallback = false }) {
+export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVideoDir, variables = {}, strictOrigin = false, playwright, device = "", viewport = "", urlIsFallback = false }) {
   // urlIsFallback = the caller is a gate: the Flow's own page wins, rebased onto the gate's
   // deployment (see resolveGateFlowUrl). An explicit caller url (CLI positional) still overrides.
   const declaredUrl = flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
@@ -296,12 +302,13 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
   const loggedFlow = { ...flow, steps: [...setup, ...flow.steps, ...teardown] };
   const log = new FlowLog({ logPath, flow: loggedFlow });
   const pw = playwright || await loadPlaywright();
-  const browser = await pw.chromium.launch({ headless: true });
-  const context = await browser.newContext(webContextOptions({ device, viewport, devices: pw.devices }));
+  const { webBrowserLaunchOptions } = await import("./web-explorer.js");
+  const browser = await pw.chromium.launch(webBrowserLaunchOptions());
+  const context = await browser.newContext({...webContextOptions({ device, viewport, devices: pw.devices }),...(recordVideoDir ? {recordVideo:{dir:recordVideoDir}} : {})});
   const page = await context.newPage();
   const timeout = Number(flow.timeoutMs ?? flow.timeout) || DEFAULT_TIMEOUT;
   page.setDefaultTimeout(timeout);
-  const vars = flowVariables(flow);
+  const vars = flowVariables(flow, variables);
   let index = 0;
   let failed = false;
 
@@ -328,6 +335,10 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
       await page.goto(startUrl, { waitUntil: "domcontentloaded" });
       await settle(page);
       for (const step of flow.steps) {
+        if (strictOrigin && new URL(page.url()).origin !== new URL(startUrl).origin) {
+          emit({action:"origin",target:"connected app",status:"fail",detail:"The workflow left the connected app origin. Authorize a supported sign-in route before continuing."});
+          break;
+        }
         const outcome = await executeWebFlowStep({ page, step, vars, defaultTimeout: timeout });
         emit(outcome);
         if (outcome.status === "fail" && screenshotDir) {
@@ -343,6 +354,8 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, playwright
     }
   } finally {
     await requestPhase(teardown);
+    // Test doubles for playwright may not model a context; a real one always closes.
+    if (typeof context.close === "function") await context.close().catch(() => {});
     await browser.close().catch(() => {});
   }
   return log.finish({ url: startUrl });

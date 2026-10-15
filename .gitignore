@@ -62,3 +62,6 @@ cloud/server/app-credentials.json
 cloud/runner/nodes.local.json
 cloud/runner/proofs.local/
 cloud/admin/.wrangler/
+
+# packaged plugin/extension zips from scripts/package-*.mjs
+dist/

@@ -46,8 +46,8 @@ function extensionFixture({ actors = [], saved = {}, savedError = false, prompt 
 
 test("extension open then login retains the bridge and prioritizes a configured actor over stale saved values", async () => {
   const fixture = extensionFixture({ actors: ["coach"], saved: { email: "stale@example.com", password: "stale" } });
-  assert.match(await fixture.invoke("tapp_open_ios_app", { target: "test.app" }), /Session started/);
-  assert.match(await fixture.invoke("tapp_ios_login"), /Signed in/);
+  assert.match(await fixture.invoke("tapp_open_app", { target: "test.app" }), /Session started/);
+  assert.match(await fixture.invoke("tapp_act", { action: "login" }), /Signed in/);
   assert.equal(fixture.state.instances, 1);
   assert.equal(fixture.state.savedReads, 0);
   assert.deepEqual(fixture.state.logins, [{ email: null, password: null, actor: "coach" }]);
@@ -55,16 +55,16 @@ test("extension open then login retains the bridge and prioritizes a configured 
 
 test("partial explicit login credentials survive and never mix with a saved identity", async () => {
   const fixture = extensionFixture({ saved: { email: "stale@example.com", password: "stale" } });
-  await fixture.invoke("tapp_open_ios_app", { target: "test.app" });
-  await fixture.invoke("tapp_ios_login", { email: "new@example.com" });
+  await fixture.invoke("tapp_open_app", { target: "test.app" });
+  await fixture.invoke("tapp_act", { action: "login", email: "new@example.com" });
   assert.equal(fixture.state.savedReads, 0);
   assert.deepEqual(fixture.state.logins, [{ email: "new@example.com", password: "test-secret", actor: undefined }]);
 });
 
 test("failed credential storage lookup does not mutate or submit a login form", async () => {
   const fixture = extensionFixture({ savedError: true });
-  await fixture.invoke("tapp_open_ios_app", { target: "test.app" });
-  const result = await fixture.invoke("tapp_ios_login");
+  await fixture.invoke("tapp_open_app", { target: "test.app" });
+  const result = await fixture.invoke("tapp_act", { action: "login" });
   assert.match(result, /Saved credentials could not be read/);
   assert.equal(fixture.state.logins.length, 0);
 });
@@ -93,14 +93,15 @@ test("login waits for open and concurrent native commands remain ordered", async
     calls.push({ name, args });
     await new Promise((r) => setTimeout(r, 10));
     inFlight--;
-    return { content: [{ type: "text", text: name === "tapp_session_start" ? "Session started" : "Signed in — ok" }] };
+    return { content: [{ type: "text", text: args.action === "start" ? "Session started" : "Signed in — ok" }] };
   } });
   const open = bridge.openTarget("com.example.app", "/tmp");
   const login = bridge.login("qa@example.com", "test-secret", "coach");
   const read = bridge.readScreen();
   const results = await Promise.all([open, login, read]);
   assert.ok(results.every((r) => !r.error));
-  assert.deepEqual(calls.map((c) => c.name), ["tapp_session_start", "tapp_session_act", "tapp_session_act"]);
+  assert.deepEqual(calls.map((c) => c.name), ["tapp_session", "tapp_session", "tapp_session"]);
+  assert.equal(calls[0].args.action, "start");
   assert.deepEqual(calls[1].args, { action: "login", email: "qa@example.com", password: "test-secret", actor: "coach" });
 });
 
@@ -140,7 +141,7 @@ test("MCP results expose text, images, and error state", () => {
 test("interactive actions are rejected until an app session is open", async () => {
   const bridge = new TappBridge({ cwd: "/tmp" });
   assert.deepEqual(await bridge.act({ action: "tree" }), {
-    error: "No app is open — call tapp_open_ios_app first.",
+    error: "No app is open — call tapp_open_app first.",
   });
 });
 
@@ -156,7 +157,7 @@ test("bundle-id targets bypass builds and start a session", async () => {
   assert.equal(result.bundleId, "com.example.app");
   assert.match(result.text, /Home/);
   assert.deepEqual(calls, [
-    { name: "tapp_session_start", args: { appBundleId: "com.example.app" } },
+    { name: "tapp_session", args: { action: "start", appBundleId: "com.example.app" } },
   ]);
   assert.equal(bridge.sessionActive, true);
 });
@@ -169,7 +170,8 @@ test("focused open forwards the source-connected goal and workspace in one sessi
     return { content:[{ type:"text", text:"Storefront Settings" }] };
   };
   await bridge.openTarget("com.example.app", "/tmp/project", "Save storefront settings visible above keyboard");
-  assert.deepEqual(calls, [{ name:"tapp_session_start", args:{
+  assert.deepEqual(calls, [{ name:"tapp_session", args:{
+    action:"start",
     appBundleId:"com.example.app",
     focus:"Save storefront settings visible above keyboard",
     projectDir:"/tmp/project",
@@ -218,4 +220,21 @@ test("tool preparation stays on the stable VS Code API", () => {
 
   assert.doesNotMatch(extensionSource, /\bpastTenseMessage\s*:/);
   assert.deepEqual(manifest.enabledApiProposals || [], []);
+});
+
+test("the bridge speaks the consolidated MCP surface (ADR-0007)", async () => {
+  const calls = [];
+  const bridge = new TappBridge({ cwd: "/tmp" });
+  bridge.call = async (name, args) => { calls.push({ name, args }); return { content: [{ type: "text", text: "ok" }], structuredContent: { actors: { coach: {} } } }; };
+  bridge.sessionActive = true;
+  await bridge.focus("Settings", "/tmp/project");
+  await bridge.screenshot();
+  await bridge.audit("https://example.com", { pages: 3 });
+  await bridge.actors();
+  assert.deepEqual(calls, [
+    { name: "tapp_explore", args: { goal: "Settings", projectDir: "/tmp/project" } },
+    { name: "tapp_look", args: {} },
+    { name: "tapp_explore", args: { url: "https://example.com", readOnly: true, pages: 3 } },
+    { name: "tapp_plan", args: { action: "actor", operation: "read" } },
+  ]);
 });

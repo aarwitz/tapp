@@ -24,6 +24,10 @@ try {
     url: process.argv[3],
     logPath,
     screenshotDir,
+    ...(process.env.TAPP_FLOW_RECORD_VIDEO === "1" ? {recordVideoDir:screenshotDir} : {}),
+    ...(process.env.TAPP_WORKFLOW_REPLAY === "1" ? {strictOrigin:true,variables:{
+      TEST_RUN_ID:process.env.TEST_RUN_ID || "",TEST_EMAIL:process.env.OCQA_TEST_EMAIL || "",TEST_PASSWORD:process.env.OCQA_TEST_PASSWORD || "",
+    }} : {}),
     device: process.env.TAPP_WEB_DEVICE || "",
     viewport: process.env.TAPP_WEB_VIEWPORT || "",
   });

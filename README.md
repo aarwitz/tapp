@@ -70,7 +70,7 @@ you want inline screenshot results or when the agent must interactively tap, typ
 arbitrary multi-step journey in one persistent session. It is not required for the core
 skill-to-CLI workflow.
 
-**A live site, production, or a site you do not own:** the agent uses `tapp audit` / `tapp_audit`,
+**A live site, production, or a site you do not own:** the agent uses `tapp explore --read-only` / `tapp_explore {readOnly:true}`,
 which renders and reads the page but never clicks, types or submits. Exploration is for apps and
 environments you own.
 
@@ -106,12 +106,12 @@ From the app repository, ground Tapp once, then use the smallest operation for l
 
 ```bash
 npx -y @aarwitz/tapp@latest init . --explore # first run: detect/build, explore, and ground .tapp/ui-map.json
-npx -y @aarwitz/tapp@latest open            # one current screen + screenshot
-npx -y @aarwitz/tapp@latest focus "Save storefront settings visible above keyboard" # source + observed-route fast path
+npx -y @aarwitz/tapp@latest look            # one current screen + screenshot
+npx -y @aarwitz/tapp@latest explore --goal "Save storefront settings visible above keyboard" # source + observed-route fast path
 npx -y @aarwitz/tapp@latest explore         # later broad exploration (observation, not a gate)
 ```
 
-Source tells `focus` where the requested UI likely lives; only a route already observed in
+Source tells `explore --goal` where the requested UI likely lives; only a route already observed in
 `.tapp/ui-map.json` authorizes navigation. If a fresh repository has no such route yet, Tapp returns
 the source evidence instead of guessing through the app.
 
@@ -137,13 +137,13 @@ npx -y @aarwitz/tapp@latest init . --explore --platform ios --target .
 # Or connect to an already-running owned URL:
 npx -y @aarwitz/tapp@latest init . --explore --platform web --url http://127.0.0.1:4173
 # If the app has roles/accounts, bind names once; values stay in local/CI secrets.
-npx -y @aarwitz/tapp@latest actor set alice . --role member --session isolated \
+npx -y @aarwitz/tapp@latest plan actor set alice . --role member --session isolated \
   --credential email=ALICE_EMAIL --credential password=ALICE_PASSWORD
 # Review-only path: tapp init . → tapp plan show → tapp plan review --approve ...
 
 # After approved drafts replay and are promoted, establish the selected target's baseline
 # through the ordinary full gate, then generate the reviewable GitHub workflow.
-npx -y @aarwitz/tapp@latest baseline create . --platform web
+npx -y @aarwitz/tapp@latest ci baseline . --platform web
 npx -y @aarwitz/tapp@latest ci install .
 ```
 
@@ -167,21 +167,19 @@ configuration and existing-file collisions, and never commits, pushes, enables b
 or creates GitHub resources. Review and pin the generated Tapp release reference to its immutable
 commit SHA before production.
 
-`open` and `explore` accept a repo directory, a `path/to/App.app`, a bundle id, or no target
+`look` and `explore` accept a repo directory, a `path/to/App.app`, a bundle id, or no target
 (auto-detecting the repository or installed app):
 
 ```bash
-npx -y @aarwitz/tapp@latest open [target]   # launch the app → screen summary + screenshot file
-npx -y @aarwitz/tapp@latest tree [target]   # accessibility tree of the current screen
-npx -y @aarwitz/tapp@latest shot            # screenshot the booted simulator
-npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator (names + bundle ids)
-npx -y @aarwitz/tapp@latest build [dir]     # just build + install (scheme auto-detected)
+npx -y @aarwitz/tapp@latest look [target]         # launch the app → screen summary + screenshot file
+npx -y @aarwitz/tapp@latest look [target] --tree  # + the accessibility tree of the current screen
+npx -y @aarwitz/tapp@latest look                  # no target on iOS: the booted simulator as it is right now
 ```
 
-On iOS, `tree` inspects an installed app and never builds, uninstalls, or replaces it. With no
+On iOS, `look --tree` inspects an installed app and never builds, uninstalls, or replaces it. With no
 target, it uses the repository's recorded iOS target or the sole installed app. If the choice
 is ambiguous, it lists the installed apps for you to select. Pass a bundle id to inspect a
-specific sandbox build; run `tapp build` explicitly when you intend to replace it.
+specific sandbox build; run `tapp_build` (MCP) or `init . --explore` when you intend to replace it.
 
 iOS Flow evidence includes `flow-final.png` on passing and failing replays, plus
 `flow-failure-N.png` at a failed step, alongside the log, JSON report, and XCTest result bundle.
@@ -195,25 +193,24 @@ Focused web inspection waits briefly for loading states to settle. If a consent 
 blocks the screen, dismiss it and wait for the content you care about in the same package-only call:
 
 ```bash
-npx -y @aarwitz/tapp@latest open https://example.com --tap "Not now" --wait-for "Dashboard"
-npx -y @aarwitz/tapp@latest tree https://example.com --tap "Not now" --wait-for "Dashboard" --json
+npx -y @aarwitz/tapp@latest look https://example.com --tap "Not now" --wait-for "Dashboard"
+npx -y @aarwitz/tapp@latest look https://example.com --tree --tap "Not now" --wait-for "Dashboard" --json
 ```
 
 Android:
 
 ```bash
 npx -y @aarwitz/tapp@latest explore path/to/app-debug.apk --platform android --app-id com.acme.app
-npx -y @aarwitz/tapp@latest open com.acme.app --platform android
+npx -y @aarwitz/tapp@latest look com.acme.app --platform android
 ```
 
 Turn a driven journey into a deterministic test, or print the complete Flow format before writing
 one by hand:
 
 ```bash
-npx -y @aarwitz/tapp@latest flow example
-npx -y @aarwitz/tapp@latest flow steps      # the step vocabulary: target semantics and pass condition per step
-npx -y @aarwitz/tapp@latest flow validate .tapp/flows/smoke.yml
-npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml
+npx -y @aarwitz/tapp@latest validate --example           # a complete starter Flow, with the step vocabulary
+npx -y @aarwitz/tapp@latest validate .tapp/flows/smoke.yml
+npx -y @aarwitz/tapp@latest run .tapp/flows/smoke.yml     # Flows, Tasks, contracts, and Scenarios all replay with `run`
 ```
 
 Flows support an atomic `login` step using `$TEST_EMAIL` / `$TEST_PASSWORD`; Tapp's session recorder
@@ -221,8 +218,8 @@ creates that step without writing credential values into the repository.
 
 Optional but recommended (prebuilds the test harness so the first run is fast):
 ```bash
-npx -y @aarwitz/tapp@latest install    # ~2 min, one time
-npx -y @aarwitz/tapp@latest doctor     # verify Xcode / simulators / toolchain
+npx -y @aarwitz/tapp@latest doctor --install   # ~2 min, one time
+npx -y @aarwitz/tapp@latest doctor             # verify Xcode / simulators / toolchain
 ```
 
 ### MCP hookup (optional)
@@ -263,23 +260,16 @@ Then ask your agent:
 
 | | Tool | What it does |
 |---|---|---|
-| 👁 | `tapp_open_app` | **See a screen** — launch the app, return screenshot + accessibility tree. Seconds. |
-| 📸 | `tapp_screenshot` | Whatever's on the sim right now, as an inline image. |
-| 🌳 | `tapp_ui_tree` | The accessibility tree of the current screen (ids, labels, hittability). |
-| 🕹 | `tapp_session_start/act/end` | **Interactive driving** — the Playwright loop. App launches once; each act (tap/type/swipe/back/wait) returns the fresh tree. |
-| 🔭 | `tapp_explore` | **Autonomous exploration** — explores with no authored test, returns an observation `{kind, headline, inconclusive, findingCounts, findings[]}` (no verdict/score — the deterministic gate judges). Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
+| 👁 | `tapp_look` | **See a screen** — the current real surface: screen summary + inline screenshot; `tree:true` adds the accessibility tree (ids, labels, hittability). Seconds. |
+| 🕹 | `tapp_session` | **Interactive driving** — `action:"start"`, then `tap/type/swipe/back/wait/login` (each returns the fresh tree), then `"end"`. `save_flow` keeps the journey as a replayable Flow; `draft_flow` proposes one from a goal. |
+| 🔭 | `tapp_explore` | **Autonomous exploration** — explores with no authored test, returns an observation `{kind, headline, inconclusive, findingCounts, findings[]}` (no verdict/score — the deterministic gate judges). `readOnly:true` never clicks (production, a site you do not own); `goal:"…"` source-locates a named screen and takes the shortest observed route. Takes `appBundleId` (iOS), `androidAppId` (Android), or `url` (web). |
 | 🧭 | `tapp_init` | **Repository import** — detect targets; optionally explore a real surface; persist the shared UI Map; construct the evidence-classified model and grounded release plan. |
-| 👤 | `tapp_actor_config` | **Actor/session setup** — store roles, isolation/provisioning, and environment-variable names without accepting or persisting credential values. |
-| ✅ | `tapp_release_plan` | **Release-plan lifecycle** — inspect, approve/reject/defer, generate, real-target validate, and explicitly promote proposed guarantees without silent test edits. |
-| 🚦 | `tapp_ci_setup` | **Baseline and CI setup** — import a conclusive target baseline or render/install the same reviewable target-aware workflow as the CLI. |
-| 🗺️ | `tapp_ui_map` | **Persistent UI Map** — build, inspect, merge, and diff observed states, controls, transitions, provenance, and coverage. |
-| 🧩 | `tapp_task` | **Reusable deterministic Tasks** — validate and compile shared actions such as `signIn` against the UI Map; replay stays keyless. |
-| 📜 | `tapp_release_contract` | **Business-level release contracts** — validate, compile, or run typed guarantees composed from Tasks and named actors. |
-| 📋 | `tapp_pr_plan` | **PR-aware evolution** — select reviewed contracts, schedule bounded changed-surface exploration, and explicitly adopt observed coverage proposals without silent rewrites. |
-| 🔁 | `tapp_flow_run` / `flow_save` / `flow_generate` | **Deterministic E2E execution (Flows)** — raw steps or reusable Task calls replay with exact assertions. |
-| 👥 | `tapp_scenario_run` | **Multi-actor system tests** — isolated named browser sessions verify cross-account state with deterministic assertions. No AI at replay time. |
-| 📱 | `tapp_list_simulators` / `boot_simulator` / `install_app` | Simulator + app management. |
-| 🩺 | `tapp_health`, `tapp_capture*`, `tapp_parse_markers` | Diagnostics and capture history. |
+| ✅ | `tapp_plan` | **Release-plan lifecycle** — `show`, `review` (approve/reject/defer), `generate`, real-target `validate`, explicit `promote`, PR-aware `pr`/`adopt`, and `actor` setup (roles and env-var names, never credential values). No silent test edits. |
+| 🔁 | `tapp_run` / `tapp_validate` | **Deterministic replay** — run or validate a committed Flow, reusable Task, business-level contract, or multi-actor Scenario; the kind comes from the file. No AI at replay time. |
+| 🚦 | `tapp_ci` | **Baseline and CI setup** — save a target-scoped baseline or render/install the same reviewable target-aware workflow as the CLI. |
+| 🗺️ | `tapp_map` | **Persistent UI Map** — build, inspect, merge, and diff observed states, controls, transitions, provenance, and coverage. |
+| 📱 | `tapp_build` | **Build and simulator management** — `build`, `install`, `list_simulators`, `boot`; builds an iOS app without knowing its bundle id first. |
+| 🩺 | `tapp_doctor` / `tapp_report` / `tapp_feedback` | Toolchain check, this project's capture history and evidence, and issues about Tapp itself. |
 
 Canonical installable skill: [`skills/tapp/SKILL.md`](skills/tapp/SKILL.md). Full low-level tool
 reference: [AGENTS.md](./AGENTS.md). Both ship inside the npm package; installing the Claude plugin
@@ -383,7 +373,7 @@ inconclusive; Tapp does not guess a path from a screen name.
 The first successful, conclusive run on `main` seeds a repository-scoped Actions cache and a
 90-day baseline artifact. Both are keyed by platform and stable application-model target id. Pull requests automatically restore it and fail only on **new**
 high/critical findings or broken Flows—not pre-existing debt. No baseline commit or PAT is required.
-If you prefer a reviewed, durable baseline, run `tapp baseline create` and commit the generated
+If you prefer a reviewed, durable baseline, run `tapp ci baseline` and commit the generated
 `.tapp/baselines/<platform>/<target-id>.json`; `tapp ci install` wires its explicit path into the
 corresponding job. The legacy `.tapp/baseline.json` is still recognized. Automatic baseline restore and the PR comment need `actions: read` and
 `pull-requests: write` as shown above. Secrets are unavailable to workflows from forks, so
@@ -437,7 +427,7 @@ your agent proves its UI work instead of claiming it:
 ```markdown
 ## Verifying UI changes
 This repo uses tapp (https://github.com/aarwitz/tapp) to verify UI work on a real app surface
-(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp@latest open` from the
+(iOS simulator, Android emulator/device, or a browser for web). After any UI change, run `npx -y @aarwitz/tapp@latest look` from the
 repo root (it finds and builds the Xcode project itself) and look at the screenshot it saves as
 proof. Before declaring a feature done, run `npx -y @aarwitz/tapp@latest explore` (or `explore <url>` for web)
 and report the findings + evidence. A change is not "done" until it has been seen working.
@@ -466,7 +456,7 @@ reviewed change—no secrets or evidence formats need to be rewritten.
 
 Committed Flow replay, recording a driven session, autonomous exploration, exact assertions,
 regression comparison, and CI gating require **no API key and no coding agent at runtime**. AI is
-only an optional authoring/enrichment layer (`tapp_flow_generate`, `assert_ai`, finding enrichment).
+only an optional authoring/enrichment layer (`tapp_session {action:"draft_flow"}`, `assert_ai`, finding enrichment).
 
 The first tool call builds the harness once (~2 min, cached in `~/.tapp`; rebuilt automatically
 if you switch simulators). All captures land in `~/.tapp/captures/`.

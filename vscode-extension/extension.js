@@ -266,50 +266,47 @@ function activate(ctx) {
     })
   );
 
-  registerTool(ctx, "tapp_open_ios_app", async (input) => {
+  registerTool(ctx, "tapp_open_app", async (input) => {
     const ws = wsDir();
     if (!ws && !input.target) return textResult(`❌ ${NO_WORKSPACE}`);
     SimulatorPanel.show();
     SimulatorPanel.pause("Building, installing, and opening the app…");
-    const r = await getBridge().openTarget(input.target, ws || process.cwd(), input.focus);
+    const r = await getBridge().openTarget(input.target, ws || process.cwd(), input.goal);
     if (r.error) return textResult(`❌ ${r.error}`);
     SimulatorPanel.resume();
     return textResult(r.text);
   }, (input) => `📱 Opening ${input.target || "the iOS app"} on the simulator`);
 
-  registerTool(ctx, "tapp_ios_focus", async (input) => {
-    if (!input.query) return textResult("❌ `query` is required — name the screen, control, or focused UI task.");
-    const r = await getBridge().focus(input.query, wsDir() || process.cwd());
-    return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, (input) => `⚡ Navigating directly to “${input.query || "the requested screen"}”`);
-
-  registerTool(ctx, "tapp_read_ios_screen", async () => {
-    const r = await getBridge().readScreen();
-    return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, () => "🌳 Reading the current screen");
-
-  registerTool(ctx, "tapp_ios_screenshot", async () => {
-    const r = await getBridge().screenshot();
-    if (r.error) return textResult(`❌ ${r.error}`);
+  // One observation tool: screenshot always, accessibility tree on request.
+  registerTool(ctx, "tapp_look", async (input) => {
+    const b = getBridge();
+    const shot = await b.screenshot();
+    if (shot.error) return textResult(`❌ ${shot.error}`);
     SimulatorPanel.show();
+    let text = shot.text;
+    if (input.tree) {
+      const tree = await b.readScreen();
+      if (tree.error) return textResult(`❌ ${tree.error}`);
+      text = `${tree.text}\n\n${shot.text}`;
+    }
     // Persist every screenshot so the session leaves a trail (chat thumbnails are ephemeral).
     let saved = "";
     try {
-      if (r.image) {
+      if (shot.image) {
         const dir = path.join(os.homedir(), ".tapp", "shots");
         fs.mkdirSync(dir, { recursive: true });
         const p = path.join(dir, `session-${Date.now()}.jpg`);
-        fs.writeFileSync(p, r.image.data);
+        fs.writeFileSync(p, shot.image.data);
         saved = `\n💾 Saved: ${p}`;
       }
     } catch { /* persistence is best-effort */ }
-    return resultWithImage(r.text + saved, r.image);
-  }, () => "📸 Screenshotting the simulator");
+    return resultWithImage(text + saved, shot.image);
+  }, (input) => (input.tree ? "🌳 Reading and screenshotting the current screen" : "📸 Screenshotting the simulator"));
 
-  registerTool(ctx, "tapp_ios_login", async (input) => {
+  async function login(input) {
     const b = getBridge();
     if (b.opening) await b.opening;
-    if (!b.sessionActive) return textResult(`❌ ${b.sessionError || "No app is open — call tapp_open_ios_app first."}`);
+    if (!b.sessionActive) return textResult(`❌ ${b.sessionError || "No app is open — call tapp_open_app first."}`);
     const bundleId = b.bundleId;
     let email = input.email ? String(input.email) : null;
     let password = input.password ? String(input.password) : null;
@@ -359,9 +356,9 @@ function activate(ctx) {
     }
     const suffix = agentProvided || usedSaved ? "" : "\n\n(Credentials were entered by the user directly — they were not shown to you.)";
     return textResult((r.error ? `❌ ${r.error}` : r.text) + suffix);
-  }, (input) => (input.email ? `🔐 Signing in as ${input.email}` : "🔐 Signing in (saved or user-provided credentials)"));
+  }
 
-  registerTool(ctx, "tapp_ios_fill_field", async (input) => {
+  async function fillField(input) {
     if (!input.id) return textResult("❌ `id` is required — which field to fill.");
     const value = await vscode.window.showInputBox({
       title: "Tapp — the agent needs a value",
@@ -384,22 +381,49 @@ function activate(ctx) {
     }
     // Strip nothing from the harness text (it never echoes typed values), just add provenance.
     return textResult(r.text + "\n\n(Value entered by the user directly — it was not shown to you.)");
-  }, (input) => `🙋 Asking you for ${input.prompt ? `“${input.prompt}”` : `a value for “${input.id || "a field"}”`}`);
+  }
 
-  registerTool(ctx, "tapp_ios_tap", async (input) => {
-    if (!input.id) return textResult("❌ `id` is required — the accessibility id or visible label to tap.");
-    const r = await getBridge().act({ action: "tap", id: String(input.id) });
-    return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, (input) => `👆 Tapping “${input.id || "?"}”`);
+  // One interaction tool; `action` picks the verb so Copilot has a single "do something" intent.
+  registerTool(ctx, "tapp_act", async (input) => {
+    const action = String(input.action || "");
+    if (action === "login") return login(input);
+    if (action === "fill_field") return fillField(input);
+    if (action === "tap") {
+      if (!input.id) return textResult("❌ `id` is required — the accessibility id or visible label to tap.");
+      const r = await getBridge().act({ action: "tap", id: String(input.id) });
+      return textResult(r.error ? `❌ ${r.error}` : r.text);
+    }
+    if (action === "type") {
+      if (!input.text) return textResult("❌ `text` is required.");
+      const r = await getBridge().act({ action: "type", text: String(input.text), ...(input.id ? { id: String(input.id) } : {}) });
+      return textResult(r.error ? `❌ ${r.error}` : r.text);
+    }
+    return textResult("❌ `action` must be one of tap, type, fill_field, login.");
+  }, (input) => {
+    switch (String(input.action || "")) {
+      case "login": return input.email ? `🔐 Signing in as ${input.email}` : "🔐 Signing in (saved or user-provided credentials)";
+      case "fill_field": return `🙋 Asking you for ${input.prompt ? `“${input.prompt}”` : `a value for “${input.id || "a field"}”`}`;
+      case "tap": return `👆 Tapping “${input.id || "?"}”`;
+      case "type": return `⌨️ Typing into ${input.id || "the focused field"}`;
+      default: return "🤖 Acting in the app";
+    }
+  });
 
-  registerTool(ctx, "tapp_ios_type", async (input) => {
-    if (!input.text) return textResult("❌ `text` is required.");
-    const b = getBridge();
-    const r = await b.act({ action: "type", text: String(input.text), ...(input.id ? { id: String(input.id) } : {}) });
-    return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, (input) => `⌨️ Typing into ${input.id || "the focused field"}`);
-
-  registerTool(ctx, "tapp_explore_ios", async (input) => {
+  // One exploration tool: iOS exploration, focused navigation (goal), or a read-only web audit (url).
+  registerTool(ctx, "tapp_explore", async (input) => {
+    if (input.url) {
+      const url = String(input.url || "").trim();
+      if (!/^https?:\/\//i.test(url)) return textResult("❌ The read-only website audit needs an http(s) URL");
+      const r = await getBridge().audit(url, {
+        pages: Number.isFinite(Number(input.pages)) && Number(input.pages) > 1 ? Math.min(200, Math.floor(Number(input.pages))) : undefined,
+        device: input.device ? String(input.device) : undefined,
+      });
+      return textResult(r.error ? `❌ ${r.error}` : r.text);
+    }
+    if (input.goal) {
+      const r = await getBridge().focus(String(input.goal), wsDir() || process.cwd());
+      return textResult(r.error ? `❌ ${r.error}` : r.text);
+    }
     const ws = wsDir();
     if (!ws && !input.target) return textResult(`❌ ${NO_WORKSPACE}`);
     SimulatorPanel.show();
@@ -433,19 +457,12 @@ function activate(ctx) {
       },
     });
     return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, (input) => `🔭 Exploring${input.target ? ` ${input.target}` : " the iOS app"}`);
+  }, (input) => input.url
+    ? `🔎 Read-only audit of ${input.url}${Number(input.pages) > 1 ? ` (up to ${input.pages} pages)` : ""} — nothing will be clicked`
+    : input.goal ? `⚡ Navigating directly to “${input.goal}”`
+    : `🔭 Exploring${input.target ? ` ${input.target}` : " the iOS app"}`);
 
-  registerTool(ctx, "tapp_audit_web", async (input) => {
-    const url = String(input.url || "").trim();
-    if (!/^https?:\/\//i.test(url)) return textResult("❌ tapp_audit_web needs an http(s) URL");
-    const r = await getBridge().audit(url, {
-      pages: Number.isFinite(Number(input.pages)) && Number(input.pages) > 1 ? Math.min(200, Math.floor(Number(input.pages))) : undefined,
-      device: input.device ? String(input.device) : undefined,
-    });
-    return textResult(r.error ? `❌ ${r.error}` : r.text);
-  }, (input) => `🔎 Read-only audit of ${input.url}${Number(input.pages) > 1 ? ` (up to ${input.pages} pages)` : ""} — nothing will be clicked`);
-
-  registerTool(ctx, "tapp_build_ios_app", async (input) => {
+  registerTool(ctx, "tapp_build", async (input) => {
     const ws = wsDir();
     if (!ws && !input.projectDir) return textResult(`❌ ${NO_WORKSPACE}`);
     const dir = input.projectDir ? path.resolve(ws || process.cwd(), String(input.projectDir)) : ws;

@@ -666,7 +666,16 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   const markersFd = fs.openSync(markersPath, "w");
   const emit = (kind, payload) => fs.writeSync(markersFd, `OCQA_${kind}:${JSON.stringify(payload)}\n`);
   const startedAtMs = Date.now();
-  const emitAction = (payload) => emit("ACTION", { t: Date.now() - startedAtMs, ...payload });
+  const emitAction = (payload) => {
+    emit("ACTION", { t: Date.now() - startedAtMs, ...payload });
+    narrate(payload.narrative || `${payload.type} ${payload.target}`, { screen: payload.screen });
+  };
+  // Live narration for hosts that render a transcript (Studio chat). Counts stay on the
+  // regular progress tick; this carries what the action was and, on a new state, its screenshot.
+  const narrate = (narrative, extra = {}) => {
+    if (!onProgress) return;
+    try { onProgress({ action: actions, max: maxActions, states: screenCount, narrative, ...extra }); } catch {}
+  };
 
   const { chromium, devices } = await loadPlaywright();
   const browser = await chromium.launch(webBrowserLaunchOptions(process.env, { watch }));
@@ -869,6 +878,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       screenshotFor.set(evidenceKey, { path: screenshotPath, busy: info.busy, route: key });
       screenCount = screenshotFor.size;
       await screenshotWithoutWebWatchUi(page, { path: screenshotPath }, watch).catch(() => {});
+      narrate(existingScreenshot ? `Settled on ${screen}` : `Reached ${screen}`, { screen, screenshot: screenshotPath });
       // Deterministic per-page detectors run once per distinct screen.
       if (webPageAppearsBlank(info)) issue("blank_screen", "high", "Page rendered no visible content", screen);
       else {

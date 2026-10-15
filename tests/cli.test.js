@@ -29,7 +29,7 @@ test("tapp version prints the package version", () => {
 });
 
 test("Flow CLI only advertises evidence after a runner writes artifacts", () => {
-  const flowCommand = cliSource.match(/case "flow":[\s\S]*?case "contract":/)?.[0] || "";
+  const flowCommand = cliSource.match(/case "flow": \{[\s\S]*?case "contract": \{/)?.[0] || "";
   assert.match(flowCommand, /const evidenceWritten = fs\.existsSync\(evidenceDir\)/);
   assert.match(flowCommand, /Evidence unavailable — the platform runner did not write any artifacts/);
 });
@@ -69,35 +69,81 @@ test("iOS Flow launch configuration is validated before starting a harness", (t)
   assert.doesNotMatch(result.stdout + result.stderr, /Building.*harness|requires macOS/);
 });
 
-test("tapp help presents a Core / Primitives / Advanced hierarchy", () => {
+test("tapp help presents the twelve-verb surface (ADR-0007): Observe / Replay / Release / Workspace", () => {
   const out = execFileSync("node", [tappBin], { encoding: "utf8" });
-  // Core leads with the user journey while keeping contract replay and the gate visible.
   assert.match(out, /agent-driven app testing for iOS, Android, and web/);
-  assert.match(out, /Core — inspect, explore, gate/);
+  assert.match(out, /Observe — look at the real app/);
   assert.match(out, /no Tapp account or server required/);
   assert.match(out, /tapp explore \[target\]/);
-  assert.match(out, /tapp focus "goal" \[target\]/);
-  assert.match(out, /tapp contract run FILE/);
-  assert.match(out, /tapp ci \.\.\./);
-  assert.doesNotMatch(out, /tapp qa \[target\]/); // renamed to explore (qa is a hidden alias)
-  // Primitives, then Advanced (lifecycle/compilers) below.
-  assert.match(out, /Primitives —/);
-  assert.match(out, /tapp tree \[target\]/);
-  assert.match(out, /Advanced —/);
-  assert.match(out, /never need to know a bundle id/);
-  // Key verbs remain present (just reorganized).
-  assert.match(out, /tapp task validate FILE/);
-  assert.match(out, /tapp pr plan --base REF/);
+  assert.match(out, /--read-only <url>/);
+  assert.match(out, /--goal "screen"/);
+  assert.match(out, /tapp look \[target\]/);
+  assert.match(out, /Replay — deterministic, keyless/);
+  assert.match(out, /tapp run FILE/);
+  assert.match(out, /tapp validate FILE/);
+  assert.match(out, /Release — from model to merge gate/);
   assert.match(out, /tapp init \[repo\]/);
   assert.match(out, /--explore/);
+  assert.match(out, /tapp plan …/);
+  assert.match(out, /tapp ci …/);
+  assert.match(out, /tapp report \[capture\]/);
+  assert.match(out, /Workspace:/);
+  assert.match(out, /tapp app \[repo\]/);
+  assert.match(out, /tapp doctor/);
+  assert.match(out, /tapp mcp/);
+  assert.match(out, /tapp feedback "title"/);
   assert.match(out, /web: --watch/);
-  assert.match(out, /tapp plan review \[FILE\]/);
-  assert.match(out, /tapp plan promote \[FILE\]/);
-  assert.match(out, /tapp baseline create \[repo\]/);
-  assert.match(out, /tapp actor set NAME/);
+  assert.match(out, /never need to know a bundle id/);
   assert.match(out, /npx -y skills add aarwitz\/tapp --skill tapp/);
   assert.match(out, /Agent Skill \(recommended/);
   assert.match(out, /claude plugin install tapp@tapp/);
+  // Older verbs are mentioned once, as aliases, and never listed as commands.
+  assert.match(out, /Older verbs \(audit, focus, open, tree, flow, task, contract, scenario, pr, map, baseline/);
+  for (const legacy of ["tapp qa [target]", "tapp focus \"goal\"", "tapp open [target]", "tapp tree [target]", "tapp audit <url>", "tapp flow run", "tapp task validate", "tapp contract run", "tapp pr plan", "tapp baseline create", "tapp actor set", "tapp shot", "tapp install", "Core —", "Primitives —", "Advanced —"]) {
+    assert.equal(out.includes(legacy), false, `help must not list legacy form: ${legacy}`);
+  }
+  // Twelve verbs: count the distinct `  tapp <verb>` command lines.
+  const verbs = new Set([...out.matchAll(/^  tapp ([a-z]+)/gm)].map((m) => m[1]));
+  assert.deepEqual([...verbs].sort(), ["app", "ci", "doctor", "explore", "feedback", "init", "look", "mcp", "plan", "report", "run", "validate"]);
+});
+
+test("every older verb still resolves and names its new form once (ADR-0007 alias window)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-alias-"));
+  const env = { ...process.env, TAPP_HOME: path.join(dir, "home") };
+  const probe = (args) => spawnSync("node", [tappBin, ...args], { encoding: "utf8", env, cwd: dir });
+  // Each probe fails fast on usage (no target/file), which is enough to prove the resolution.
+  const cases = [
+    [["audit"], /'tapp audit <url>' is now 'tapp explore <url> --read-only'/, /url/i],
+    [["focus"], /'tapp focus "goal"' is now 'tapp explore --goal "goal"'/, /usage: tapp focus|SCREEN OR CONTROL/],
+    [["task"], /'tapp task validate' is now 'tapp validate FILE'/, /usage: tapp validate <task\.yml>/],
+    [["contract", "compile"], /'tapp contract compile' is now 'tapp validate FILE --compile'/, /usage: tapp validate <name\.contract\.ts>/],
+    [["scenario", "run"], /'tapp scenario run' is now 'tapp run FILE'/, /usage: tapp run <scenario\.yml>/],
+    [["pr", "bogus"], /'tapp pr bogus' is now 'tapp plan bogus'/, /usage: tapp plan pr/],
+    [["map", "build"], /'tapp map' is now 'tapp plan map'/, /Markers not found/],
+    [["actor", "bogus"], /'tapp actor' is now 'tapp plan actor'/, /usage: tapp plan actor/],
+    [["baseline", "bogus"], /'tapp baseline create' is now 'tapp ci baseline'/, /usage: tapp ci baseline/],
+  ];
+  for (const [args, note, usage] of cases) {
+    const result = probe(args);
+    assert.match(result.stderr, note, `${args.join(" ")} should print its new form`);
+    assert.match(result.stderr + result.stdout, usage, `${args.join(" ")} should still reach its command`);
+    assert.equal((result.stderr.match(/is now 'tapp/g) || []).length, 1, `${args.join(" ")} prints the note exactly once`);
+  }
+  // Canonical forms reach the same commands without any note.
+  const look = probe(["look", "--platform", "web"]);
+  assert.doesNotMatch(look.stderr, /is now 'tapp/);
+  assert.match(look.stderr + look.stdout, /url|target/i);
+  const run = probe(["run", "missing.contract.ts"]);
+  assert.doesNotMatch(run.stderr, /is now 'tapp/);
+  assert.match(run.stderr + run.stdout, /contract/i);
+  const pr = probe(["plan", "pr"]);
+  assert.doesNotMatch(pr.stderr, /is now 'tapp/);
+  assert.match(pr.stderr + pr.stdout, /usage: tapp plan pr|--base|--changed-files/);
+  // --help on a legacy verb prints the new usage and no note.
+  const help = probe(["open", "--help"]);
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /tapp look \[target\]/);
+  assert.doesNotMatch(help.stderr, /is now 'tapp/);
 });
 
 test("--help is safe on every verb — shows the reference, writes NOTHING (not even TAPP_HOME)", () => {
@@ -113,12 +159,19 @@ test("--help is safe on every verb — shows the reference, writes NOTHING (not 
   assert.match(explore, /--launch-env/);
   assert.match(explore, /--watch/);
   assert.doesNotMatch(explore, /Core — explore, prove, gate/, "verb help must not repeat the entire root reference");
+  assert.match(explore, /--read-only <url>/);
+  assert.match(explore, /--goal "SCREEN OR CONTROL"/);
   const focus = execFileSync("node", [tappBin, "focus", "--help"], { encoding:"utf8", env });
-  assert.match(focus, /tapp focus "SCREEN OR CONTROL"/);
+  assert.match(focus, /tapp explore --goal "SCREEN OR CONTROL"/);
+  const look = execFileSync("node", [tappBin, "look", "--help"], { encoding:"utf8", env });
+  assert.match(look, /tapp look \[target\]/);
+  assert.match(look, /--tree/);
   const task = execFileSync("node", [tappBin, "task", "run", "--help"], { encoding: "utf8", env });
-  assert.match(task, /tapp task run FILE --platform PLATFORM/);
+  assert.match(task, /tapp run TASK.yml --platform PLATFORM/);
   const contract = execFileSync("node", [tappBin, "contract", "run", "--help"], { encoding: "utf8", env });
-  assert.match(contract, /tapp contract run FILE --platform PLATFORM/);
+  assert.match(contract, /tapp run FILE.contract.ts --platform PLATFORM/);
+  const validate = execFileSync("node", [tappBin, "validate", "--example", "--help"], { encoding: "utf8", env });
+  assert.match(validate, /starter Flow/);
   const ciInstall = execFileSync("node", [tappBin, "ci", "install", "--help"], { encoding: "utf8", env });
   assert.match(ciInstall, /tapp ci install \[repo\]/);
   // The dangerous case: init --help must NOT create project artifacts...
@@ -215,7 +268,7 @@ test("tapp report latest picks the newest capture WITH exploration markers, skip
   mk("flow-web-9999999999999-abcdef01", false, future + 10); // newest, but NO exploration markers
   const env = { ...process.env, TAPP_HOME: home };
 
-  const out = execFileSync("node", [tappBin, "report"], { cwd: root, encoding: "utf8", env });
+  const out = execFileSync("node", [tappBin, "report"], { cwd: home, encoding: "utf8", env });
   assert.match(out, /Evidence report/);
   assert.match(out, /web-20260101-000001/, "selected the exploration capture");
   assert.doesNotMatch(out, /flow-web-9999999999999/, "did not select the newer flow dir");
@@ -249,14 +302,14 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
   try {
     await new Promise((resolve) => setTimeout(resolve, 300));
     const url = `http://127.0.0.1:${port}`;
-    const opened = execFileSync("node", [tappBin, "open", url, "--platform", "web", "--out", screenshot], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
+    const opened = execFileSync("node", [tappBin, "look", url, "--platform", "web", "--out", screenshot], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } });
     assert.match(opened, /Opened `http:\/\/127\.0\.0\.1:/);
     assert.match(opened, /Read screen \*\*Agent Home\*\*/);
     assert.match(opened, /`Continue`/);
     assert.match(opened, /Screenshot:/);
     assert.ok(fs.statSync(screenshot).size > 1000, "focused web screenshot is written");
 
-    const tree = JSON.parse(execFileSync("node", [tappBin, "tree", url, "--platform", "web", "--json"], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } }));
+    const tree = JSON.parse(execFileSync("node", [tappBin, "look", "--tree", url, "--platform", "web", "--json"], { cwd: root, encoding: "utf8", env: { ...process.env, TAPP_HOME: home } }));
     assert.equal(tree.platform, "web");
     assert.equal(tree.screenTitle, "Agent Home");
     assert.equal(tree.settled, true);
@@ -288,7 +341,7 @@ test("tapp open and tree give a coding agent focused web evidence", { skip: skip
     fs.mkdirSync(path.join(project, ".tapp"));
     fs.writeFileSync(path.join(project, ".tapp", "ui-map.json"), JSON.stringify(buildUiMapFromMarkers({ markersPath, platform:"web", target:url, runId:"cli-focus" })));
     const focusedShot = path.join(project, "focused.png");
-    const focused = execFileSync("node", [tappBin, "focus", "Save storefront settings", url, "--platform", "web", "--project-dir", project, "--out", focusedShot], { cwd:root, encoding:"utf8", env:{ ...process.env, TAPP_HOME:home } });
+    const focused = execFileSync("node", [tappBin, "explore", "--goal", "Save storefront settings", url, "--platform", "web", "--project-dir", project, "--out", focusedShot], { cwd:root, encoding:"utf8", env:{ ...process.env, TAPP_HOME:home } });
     assert.match(focused, /Focused route ready/);
     assert.match(focused, /Reached in 1 route action/);
     assert.match(focused, /Read screen \*\*Storefront Settings\*\*/);
@@ -416,7 +469,7 @@ test("web QA reports placeholder links and dead controls deterministically despi
 
 test("tapp actor configures only environment-variable bindings and lists them without values", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-actor-cli-"));
-  const configured = execFileSync("node", [tappBin, "actor", "set", "alice", project, "--role", "member", "--session", "isolated", "--provisioning", "seeded", "--credential", "email=ALICE_EMAIL", "--credential", "password=ALICE_PASSWORD"], { cwd: root, encoding: "utf8" });
+  const configured = execFileSync("node", [tappBin, "plan", "actor", "set", "alice", project, "--role", "member", "--session", "isolated", "--provisioning", "seeded", "--credential", "email=ALICE_EMAIL", "--credential", "password=ALICE_PASSWORD"], { cwd: root, encoding: "utf8" });
   assert.match(configured, /No credential values were accepted or written/);
   const persisted = fs.readFileSync(path.join(project, ".tapp", "project.json"), "utf8");
   assert.match(persisted, /ALICE_EMAIL/);
@@ -448,9 +501,9 @@ test("tapp validates and compiles a reusable Task without an agent or target", (
     postconditions: [{ screen: "Dashboard" }],
     coverage: { nodes: ["home", "dashboard"], edges: [] },
   }));
-  const validated = execFileSync("node", [tappBin, "task", "validate", taskPath], { cwd: root, encoding: "utf8" });
+  const validated = execFileSync("node", [tappBin, "validate", taskPath], { cwd: root, encoding: "utf8" });
   assert.match(validated, /Valid Task — openHome v1/);
-  const compiled = execFileSync("node", [tappBin, "task", "compile", taskPath, "--platform", "web", "--out", compiledPath], { cwd: root, encoding: "utf8" });
+  const compiled = execFileSync("node", [tappBin, "validate", taskPath, "--compile", "--platform", "web", "--out", compiledPath], { cwd: root, encoding: "utf8" });
   assert.match(compiled, /4 deterministic Flow steps/);
   const flow = JSON.parse(fs.readFileSync(compiledPath, "utf8"));
   assert.equal(flow.steps.length, 4);
@@ -466,7 +519,7 @@ test("tapp ci help documents the portable gate without requiring Xcode", () => {
 });
 
 test("tapp validates a committed Android Flow without an agent or device", () => {
-  const out = execFileSync("node", [tappBin, "flow", "validate", "AndroidCorpus/demoapp/.tapp/flows/smoke.yml"], {
+  const out = execFileSync("node", [tappBin, "validate", "AndroidCorpus/demoapp/.tapp/flows/smoke.yml"], {
     encoding: "utf8", cwd: root,
   });
   assert.match(out, /Valid android Flow/);
@@ -476,7 +529,7 @@ test("tapp validates a committed Android Flow without an agent or device", () =>
 test("tapp flow example prints a complete Flow that validates without MCP", () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-example-"));
   const flowPath = path.join(project, "example.yml");
-  const example = execFileSync("node", [tappBin, "flow", "example"], { cwd:project, encoding:"utf8" });
+  const example = execFileSync("node", [tappBin, "validate", "--example"], { cwd:project, encoding:"utf8" });
   fs.writeFileSync(flowPath, example);
   assert.match(example, /login:/);
   assert.match(example, /\$TEST_PASSWORD/);
@@ -485,7 +538,7 @@ test("tapp flow example prints a complete Flow that validates without MCP", () =
 });
 
 test("tapp validates a committed multi-actor Scenario without a browser or model", { skip: !hasSocialDemo }, () => {
-  const out = execFileSync("node", [tappBin, "scenario", "validate", "SocialDemo/.tapp/scenarios/social-system.yml"], {
+  const out = execFileSync("node", [tappBin, "validate", "SocialDemo/.tapp/scenarios/social-system.yml"], {
     cwd: root, encoding: "utf8",
   });
   assert.match(out, /Valid web Scenario/);
@@ -496,10 +549,10 @@ test("tapp validates and compiles a TypeScript release contract without an agent
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-contract-cli-"));
   const outPath = path.join(dir, "social.json");
   const contractPath = "SocialDemo/.tapp/contracts/social-system.contract.ts";
-  const validated = execFileSync("node", [tappBin, "contract", "validate", contractPath], { cwd: root, encoding: "utf8" });
+  const validated = execFileSync("node", [tappBin, "validate", contractPath], { cwd: root, encoding: "utf8" });
   assert.match(validated, /Valid Release Contract/);
   assert.match(validated, /critical, 2 actors/);
-  const compiled = execFileSync("node", [tappBin, "contract", "compile", contractPath, "--platform", "web", "--out", outPath], { cwd: root, encoding: "utf8" });
+  const compiled = execFileSync("node", [tappBin, "validate", contractPath, "--compile", "--platform", "web", "--out", outPath], { cwd: root, encoding: "utf8" });
   assert.match(compiled, /deterministic steps \(scenario\)/);
   const execution = JSON.parse(fs.readFileSync(outPath, "utf8"));
   assert.equal(execution.releaseContract.name, "socialSystemWorks");
@@ -509,7 +562,7 @@ test("tapp validates and compiles a TypeScript release contract without an agent
 test("tapp produces a reviewable PR contract plan from explicit changed files", { skip: !hasSocialDemo }, () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-pr-cli-"));
   const outPath = path.join(dir, "plan.json");
-  const output = execFileSync("node", [tappBin, "pr", "plan", "--project-dir", "SocialDemo", "--platform", "web", "--changed-files", "server.js,unowned.ts", "--json-out", outPath], { cwd: root, encoding: "utf8" });
+  const output = execFileSync("node", [tappBin, "plan", "pr", "--project-dir", "SocialDemo", "--platform", "web", "--changed-files", "server.js,unowned.ts", "--json-out", outPath], { cwd: root, encoding: "utf8" });
   assert.match(output, /PR contract plan/);
   const plan = JSON.parse(fs.readFileSync(outPath, "utf8"));
   assert.equal(plan.selected.some((item) => item.name === "socialSystemWorks"), true);
@@ -574,7 +627,7 @@ test("tapp baseline import and CI install complete the reviewable repository pat
   fs.writeFileSync(path.join(project, ".tapp", "application-model.json"), JSON.stringify(model));
   const gateReport = path.join(project, "gate-report.json");
   fs.writeFileSync(gateReport, JSON.stringify({ platform: "web", targetKey: target.id, inconclusive: false, findings: [], screens: ["Home"], screensExplored: 1, actionsPerformed: 2, flows: [], scenarios: [], contracts: [{ name: "Home works", passed: true }], gate: { failed: false, outcome: "pass", reasons: [] } }));
-  const baseline = execFileSync("node", [tappBin, "baseline", "create", project, "--platform", "web", "--from", gateReport], { cwd: root, encoding: "utf8" });
+  const baseline = execFileSync("node", [tappBin, "ci", "baseline", project, "--platform", "web", "--from", gateReport], { cwd: root, encoding: "utf8" });
   assert.match(baseline, /Conclusive baseline established/);
   const installed = execFileSync("node", [tappBin, "ci", "install", project, "--action-ref", "aarwitz/tapp@v0.13.1"], { cwd: root, encoding: "utf8" });
   assert.match(installed, /Reviewable CI gate installed/);
@@ -932,9 +985,9 @@ test("tapp builds and inspects a repository-native UI Map from shared markers", 
     'OCQA_TRANSITION:{"from":"Home","to":"Settings","action":"Settings","changed":true}',
     'OCQA_STATE:{"screen":"Settings","role":"settings","controls":[]}',
   ].join("\n") + "\n");
-  const built = execFileSync("node", [tappBin, "map", "build", markers, "--platform", "web", "--out", outPath], { cwd: root, encoding: "utf8" });
+  const built = execFileSync("node", [tappBin, "plan", "map", "build", markers, "--platform", "web", "--out", outPath], { cwd: root, encoding: "utf8" });
   assert.match(built, /2 states · 1 transitions · 1 controls/);
-  const inspected = execFileSync("node", [tappBin, "map", "inspect", outPath], { cwd: root, encoding: "utf8" });
+  const inspected = execFileSync("node", [tappBin, "plan", "map", "inspect", outPath], { cwd: root, encoding: "utf8" });
   assert.match(inspected, /UI Map v1/);
   assert.match(inspected, /Settings/);
 });
@@ -979,34 +1032,40 @@ test("MCP stdio handshake: initialize + tools/list", async () => {
     send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     const tools = await waitFor(2);
     const names = tools.result.tools.map((t) => t.name);
-    assert.ok(names.length >= 15, `expected a full toolset, got ${names.length}`);
-    for (const required of ["tapp_explore", "tapp_build", "tapp_open_app", "tapp_session_act", "tapp_scenario_run", "tapp_init", "tapp_actor_config", "tapp_release_plan", "tapp_ci_setup", "tapp_ui_map", "tapp_task", "tapp_release_contract", "tapp_pr_plan"]) {
+    // ADR-0007: thirteen advertised tools, one naming scheme. Older names dispatch but are not listed.
+    for (const required of ["tapp_explore", "tapp_look", "tapp_run", "tapp_validate", "tapp_init", "tapp_plan", "tapp_map", "tapp_ci", "tapp_report", "tapp_session", "tapp_build", "tapp_doctor", "tapp_feedback"]) {
       assert.ok(names.includes(required), `${required} present`);
     }
-    assert.ok(!names.includes("tapp_run_qa"), "the run_qa name is renamed to tapp_explore (alias still dispatches)");
+    assert.equal(names.length, 13, `expected the thirteen ADR-0007 tools, got ${names.length}: ${names.join(", ")}`);
+    for (const legacy of ["tapp_run_qa", "tapp_audit", "tapp_focus", "tapp_open_app", "tapp_ui_tree", "tapp_screenshot", "tapp_flow_run", "tapp_task", "tapp_release_contract", "tapp_scenario_run", "tapp_release_plan", "tapp_pr_plan", "tapp_actor_config", "tapp_ui_map", "tapp_ci_setup", "tapp_list_captures", "tapp_capture_summary", "tapp_session_start", "tapp_session_act", "tapp_session_end", "tapp_flow_save", "tapp_flow_generate", "tapp_install_app", "tapp_list_simulators", "tapp_boot_simulator", "tapp_health", "tapp_capture", "tapp_parse_markers"]) {
+      assert.ok(!names.includes(legacy), `${legacy} is a hidden alias, not a listed tool`);
+    }
     const qa = tools.result.tools.find((t) => t.name === "tapp_explore");
     assert.ok(qa.inputSchema.properties.androidAppId, "Android exploration target is public");
     assert.ok(qa.inputSchema.properties.watch, "web watch mode is public");
-    const flow = tools.result.tools.find((t) => t.name === "tapp_flow_run");
-    assert.ok(flow.inputSchema.properties.androidAppId, "Android Flow override is public");
+    assert.ok(qa.inputSchema.properties.readOnly, "the read-only audit is explore's readOnly flag");
+    assert.ok(qa.inputSchema.properties.goal, "focus is explore's goal");
+    const run = tools.result.tools.find((t) => t.name === "tapp_run");
+    for (const input of ["flowPath", "taskPath", "contractPath", "scenarioPath", "androidAppId"]) {
+      assert.ok(run.inputSchema.properties[input], `tapp_run replays by file kind: ${input}`);
+    }
+    const validate = tools.result.tools.find((t) => t.name === "tapp_validate");
+    assert.ok(validate.inputSchema.properties.compile, "validate exposes the executor form");
     const initTool = tools.result.tools.find((t) => t.name === "tapp_init");
     assert.ok(initTool.inputSchema.properties.operation.enum.includes("explore"), "init exposes the shared real-surface exploration operation");
     for (const input of ["target", "appBundleId", "androidAppId", "apkPath", "maxActions", "timeout", "watch"]) {
       assert.ok(initTool.inputSchema.properties[input], `init explore exposes ${input}`);
     }
-    const releasePlanTool = tools.result.tools.find((t) => t.name === "tapp_release_plan");
-    assert.ok(releasePlanTool.inputSchema.properties.operation.enum.includes("validate"), "release-plan lifecycle exposes real deterministic draft validation");
-    assert.ok(releasePlanTool.inputSchema.properties.operation.enum.includes("promote"), "release-plan lifecycle exposes explicit validated promotion");
-    assert.ok(releasePlanTool.inputSchema.properties.items, "promotion can be constrained to reviewed item ids");
-    const ciSetup = tools.result.tools.find((t) => t.name === "tapp_ci_setup");
-    assert.deepEqual(ciSetup.inputSchema.properties.operation.enum, ["inspect", "install", "baseline"]);
-    const actorConfig = tools.result.tools.find((t) => t.name === "tapp_actor_config");
-    assert.deepEqual(actorConfig.inputSchema.properties.operation.enum, ["read", "set"]);
-    assert.match(actorConfig.description, /never accepts, returns, or persists credential values/);
-    assert.ok(ciSetup.inputSchema.properties.target, "baseline setup selects an application-model target explicitly");
-    const prPlanTool = tools.result.tools.find((t) => t.name === "tapp_pr_plan");
-    assert.deepEqual(prPlanTool.inputSchema.properties.operation.enum, ["plan", "adopt"]);
-    assert.ok(prPlanTool.inputSchema.properties.prPlanPath, "PR evidence adoption is explicit in MCP");
+    const planTool = tools.result.tools.find((t) => t.name === "tapp_plan");
+    for (const action of ["review", "generate", "validate", "promote", "pr", "adopt", "actor_read", "actor_set"]) {
+      assert.ok(planTool.inputSchema.properties.action.enum.includes(action), `plan lifecycle exposes ${action}`);
+    }
+    assert.ok(planTool.inputSchema.properties.items, "promotion can be constrained to reviewed item ids");
+    assert.ok(planTool.inputSchema.properties.prPlanPath, "PR evidence adoption is explicit in MCP");
+    assert.match(planTool.description, /never credential values|never accepts, returns, or persists credential values/);
+    const ciTool = tools.result.tools.find((t) => t.name === "tapp_ci");
+    assert.deepEqual(ciTool.inputSchema.properties.action.enum, ["inspect", "install", "baseline"]);
+    assert.ok(ciTool.inputSchema.properties.target, "baseline setup selects an application-model target explicitly");
     send({ jsonrpc: "2.0", id: 20, method: "prompts/list", params: {} });
     const prompts = await waitFor(20);
     assert.deepEqual(prompts.result.prompts.map((prompt) => prompt.name), ["test-app"]);

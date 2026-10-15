@@ -14,10 +14,11 @@ or [inspect a complete web evidence report](https://runtapp.com/evidence/webdemo
 | Need | Tapp exposure |
 |---|---|
 | Decide how to test the current app | bundled Tapp Agent Skill |
-| Open/read/screenshot an iOS screen | `tapp_open_ios_app`, `tapp_read_ios_screen`, `tapp_ios_screenshot` |
-| Reach a named iOS screen/control quickly | `tapp_ios_focus` — source + shortest observed UI Map route |
-| Tap, type, or sign in on iOS | `tapp_ios_tap`, `tapp_ios_type`, `tapp_ios_login` |
-| Find iOS bugs autonomously | `tapp_explore_ios` — findings, coverage, evidence, and recording |
+| Open an iOS app (optionally straight to a named screen) | `tapp_open_app` — `goal` takes the shortest observed UI Map route from source |
+| Read and screenshot the current screen | `tapp_look` — screenshot, plus the accessibility tree with `tree` |
+| Tap, type, fill a field, or sign in | `tapp_act` — one tool, `action` picks the verb |
+| Find bugs autonomously, or audit a website read-only | `tapp_explore` — findings, coverage, evidence, recording; `url` never clicks |
+| Build for the simulator | `tapp_build` |
 | Test Android or web | the skill uses the bundled Tapp CLI/MCP workflow |
 
 Exploration is an observation, not permission to ship. It reports what Tapp found, what it covered,
@@ -45,12 +46,12 @@ application targets, and keeps exploration findings separate from gate decisions
 
 > Use Tapp to audit https://example.com — don't click anything.
 
-`tapp_audit_web` is the read-only check for production or a site you do not own: it renders and
+`tapp_explore` with a `url` is the read-only check for production or a site you do not own: it renders and
 reads the page (dead controls, broken images, 404 assets and links, failed requests, JS errors,
 mixed content, overflow) and never clicks, types or submits. Add `pages` to crawl same-origin
 links or `device` for the mobile rendering. It writes a capture with evidence and a report.
 
-For sign-in, `tapp_ios_login` accepts an `actor` from `.tapp/project.json`. The engine resolves
+For sign-in, `tapp_act` with `action: login` accepts an `actor` from `.tapp/project.json`. The engine resolves
 its environment-variable bindings; start VS Code with those variables available. Without a
 named actor or complete explicit credentials, the sole configured actor is used, or VS Code
 asks you to choose among several. Explicit email/password values take precedence. Saved

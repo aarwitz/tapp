@@ -11,20 +11,29 @@
   <link rel="stylesheet" href="./assets/app.css">
 </head>
 <body>
-  <header class="topbar">
-    <button class="brand" id="brand-home" aria-label="Tapp overview"><span class="brand-mark">&#9757;&#65038;</span><span>tapp</span><small>release confidence</small></button>
-    <div class="top-actions">
-      <span class="mode-pill" id="mode-pill">Local engine</span>
-      <select id="repository-switcher" class="repository-switcher hidden" aria-label="Current repository"></select>
-      <button class="quiet hidden" id="refresh-project">Refresh</button>
-    </div>
-  </header>
+  <svg hidden aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-grid" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M6.5 5.5v5l4-2.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.3v.2"/></symbol>
+    <symbol id="i-map" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4l4-1.5 4 1.5 4-1.5v10l-4 1.5-4-1.5-4 1.5z"/><path d="M6 2.5v10M10 4v10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.25"/><path d="M8 1.75v2M8 12.25v2M1.75 8h2M12.25 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M3.6 12.4 5 11M11 5l1.4-1.4"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="5" r="1.5"/><path d="M4 5v6M12 6.5c0 3-8 2-8 4.5"/></symbol>
+    <symbol id="i-server" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2.5" width="12" height="4.5" rx="1"/><rect x="2" y="9" width="12" height="4.5" rx="1"/><path d="M4.5 4.75h.01M4.5 11.25h.01"/></symbol>
+    <symbol id="i-target" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2"/></symbol>
+    <symbol id="i-app" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="2"/><path d="M6.5 12h3"/></symbol>
+  </svg>
 
   <main class="source-onboarding hidden" id="source-onboarding">
+    <header class="onboarding-topbar">
+      <button class="brand" data-brand-home aria-label="Tapp overview">tapp<span class="brand-mark"></span><small>release confidence</small></button>
+      <span class="mode-pill" id="onboarding-mode-pill">Local engine</span>
+    </header>
     <section class="welcome-copy">
-      <p class="eyebrow">RELEASE CONTRACTS FOR REAL APPLICATIONS</p>
+      <p class="eyebrow">Release contracts for real applications</p>
       <h1>Bring the product.<br>Tapp builds the proof.</h1>
-      <p>Connect a repository once. Tapp detects its targets, builds and explores the real application, maps what users can do, proposes the business journeys worth protecting, and installs deterministic release gates.</p>
+      <p>Connect a repository once. Tapp detects its targets, builds and explores the real application, maps what users can do, proposes the business journeys worth protecting, and installs deterministic release gates. A website alone can be explored and recorded, but only source gives a release verdict.</p>
       <div class="platform-row" aria-label="Supported target platforms">
         <span>iOS</span><span>Android</span><span>Web</span>
       </div>
@@ -32,15 +41,17 @@
 
     <section class="source-choices" aria-label="Connect a repository">
       <article class="source-card local-runner-card">
+        <span class="source-layer">Repository</span>
         <div class="source-icon">⌘</div>
-        <p class="eyebrow">THIS MAC</p>
+        <p class="eyebrow">This Mac</p>
         <h2>Run from your checkout</h2>
         <p>Your source never uploads. Tapp builds with local Xcode and drives your local simulator, while the web app shows progress and evidence.</p>
         <div id="local-repositories"><small>Looking for connected Mac repositories…</small></div>
       </article>
       <article class="source-card drop-zone" id="repository-drop-zone" tabindex="0">
+        <span class="source-layer">Repository</span>
         <div class="source-icon">↥</div>
-        <p class="eyebrow">CLOUD COPY</p>
+        <p class="eyebrow">Cloud copy</p>
         <h2>Upload a project folder</h2>
         <p>Upload an isolated working copy from this computer. Committed hidden config (like <code>.tapp/</code>) is included; dependency and build output folders are skipped.</p>
         <button class="primary" id="browse-folder">Browse folder</button>
@@ -48,12 +59,22 @@
         <small>For direct edits to an existing checkout, start with <code>tapp app /path/to/repo</code>.</small>
       </article>
       <article class="source-card github-card">
+        <span class="source-layer">Repository</span>
         <div class="source-icon github-icon">⌘</div>
-        <p class="eyebrow">GITHUB</p>
+        <p class="eyebrow">GitHub</p>
         <h2>Connect to GitHub</h2>
         <p id="github-source-copy">Select one of the repositories authorized by your local GitHub session. Tapp clones an isolated checkout and never pushes silently.</p>
         <button class="secondary" id="connect-github">Choose repository</button>
         <small id="github-source-note">Local preview uses <code>gh auth</code>. Hosted Tapp will use repository-scoped GitHub App authorization.</small>
+      </article>
+      <article class="source-card website-card" id="website-card">
+        <span class="source-layer">Website</span>
+        <div class="source-icon">⌁</div>
+        <p class="eyebrow">No source code</p>
+        <h2>Connect a website</h2>
+        <p id="website-source-copy">Explore, record, and check the journeys of an app you own from its public URL. Without source there is no release verdict — exploration observes; only the repository gate judges.</p>
+        <a class="button-link hidden" id="website-connect-link" href="/connect">Connect a website</a>
+        <small id="website-source-note">In the local Studio, website checks run from the CLI: <code>npx -y @aarwitz/tapp@latest explore https://example.com --read-only</code>. Website projects live in the hosted Studio.</small>
       </article>
     </section>
 
@@ -62,50 +83,90 @@
 
   <div class="product-shell hidden" id="product-shell">
     <aside class="sidebar">
-      <div class="project-identity">
-        <span class="project-avatar" id="project-avatar">A</span>
-        <div><strong id="sidebar-project-name">Product</strong><small id="sidebar-project-source">Repository</small></div>
+      <button class="brand" data-brand-home aria-label="Tapp overview">tapp<span class="brand-mark"></span></button>
+      <div class="project-menu">
+        <span class="project-avatar" id="project-avatar">T</span>
+        <select id="repository-switcher" class="repository-switcher hidden" aria-label="Current project"></select>
       </div>
       <nav class="primary-nav" aria-label="Product navigation">
-        <button data-view="overview" class="active"><span>⌂</span>Overview</button>
-        <button data-view="runs"><span>▶</span>Runs <i id="run-count">0</i></button>
-        <button data-view="findings"><span>◇</span>Findings <i id="finding-count">0</i></button>
-        <button data-view="coverage"><span>⌘</span>Coverage</button>
-        <button data-view="contracts"><span>✓</span>Contracts <i id="contract-count">0</i></button>
-        <button data-view="settings"><span>⚙</span>Settings</button>
+        <button data-view="overview" class="active"><span><svg><use href="#i-grid"/></svg></span>Overview</button>
+        <button data-view="runs"><span><svg><use href="#i-play"/></svg></span>Runs <i id="run-count" class="zero">0</i></button>
+        <button data-view="findings"><span><svg><use href="#i-warn"/></svg></span>Findings <i id="finding-count" class="zero">0</i></button>
+        <button data-view="coverage"><span><svg><use href="#i-map"/></svg></span>Coverage</button>
+        <button data-view="contracts"><span><svg><use href="#i-check"/></svg></span>Contracts <i id="contract-count" class="zero">0</i></button>
+        <button data-view="settings"><span><svg><use href="#i-gear"/></svg></span>Settings</button>
       </nav>
-      <div class="sidebar-context">
-        <p class="eyebrow">SELECTED TARGET</p>
-        <strong id="sidebar-target">Select a target</strong>
-        <small id="sidebar-runner">Runner not checked</small>
+      <div class="sidebar-project">
+        <p class="eyebrow">Project</p>
+        <div class="row"><span><svg><use href="#i-folder"/></svg></span><span><strong id="sidebar-project-name">Product</strong></span></div>
+        <div class="row"><span><svg><use href="#i-branch"/></svg></span><span id="sidebar-project-source">Repository</span></div>
+        <div class="row"><span><svg><use href="#i-target"/></svg></span><span id="sidebar-target">Select a target</span></div>
+        <div class="row"><span><svg><use href="#i-server"/></svg></span><span id="sidebar-runner">Runner not checked</span></div>
+        <div class="row hidden" id="sidebar-app-row"><span><svg><use href="#i-app"/></svg></span><span><code id="sidebar-app-id"></code></span></div>
+        <span class="mode-pill" id="mode-pill">Local engine</span>
       </div>
-      <button class="sidebar-source" id="change-source">＋ Add another repository</button>
-      <div class="keyless-note"><span>●</span><div><strong>Keyless replay</strong><small>AI is outside the ordinary gate loop.</small></div></div>
+      <div class="sidebar-footer">
+        <button class="quiet" id="change-source">＋ Add project</button>
+        <button class="quiet hidden" id="refresh-project">Refresh</button>
+      </div>
     </aside>
 
     <main class="workspace">
       <section class="workspace-view active" data-view-panel="overview" id="overview">
-        <div class="view-heading">
-          <div><p class="eyebrow">OVERVIEW</p><h1 id="app-name">Your release workspace</h1><p id="app-summary">Inspect the repository to discover product targets and release intent.</p></div>
+        <div class="command-bar">
+          <div><h1>Release Command Center</h1><p><span id="app-name">Your release workspace</span> · <span id="app-summary">Inspect the repository to discover product targets and release intent.</span></p></div>
+          <div class="command-actions">
+            <span class="phase-pill hidden" id="phase-pill"><span class="spinner"></span><span id="phase-pill-text">Working…</span></span>
+            <button class="primary" id="command-run">Run release check</button>
+          </div>
+        </div>
+        <div class="run-progress hidden" id="run-progress"><span class="progress-track"><span id="run-progress-bar"></span></span><span id="run-progress-text">Starting…</span></div>
+        <div class="idle-badges" id="idle-badges"></div>
+        <hr class="command-divider">
+
+        <section class="evidence-section">
+          <div class="device-panel">
+            <p class="feed-label" id="device-feed-label">Live feed</p>
+            <div class="device-frame" id="device-frame">
+              <span class="notch"></span>
+              <div class="device-screen">
+                <img id="live-frame-image" alt="Current application screen">
+                <div id="live-frame-loading" class="hidden">Capturing live application…</div>
+                <div class="device-placeholder" id="device-placeholder"><div><strong>No live feed yet</strong>Run a release check or open a live session to see the real application here.</div></div>
+              </div>
+            </div>
+            <div class="device-meta">
+              <div><span>Device</span><strong id="device-meta-device">—</strong></div>
+              <div><span>Screen</span><strong id="live-screen-title">—</strong></div>
+            </div>
+          </div>
+          <span class="vrule"></span>
+          <div class="chat-panel">
+            <div class="chat-head"><div><h2>tapp chat</h2><p>Live narration of screens, actions, and findings during a run</p></div></div>
+            <div class="chat-transcript" id="chat-transcript"></div>
+            <div class="chat-footer">Narration comes from the engine's own progress events. Nothing here is generated after the fact.</div>
+          </div>
+        </section>
+
+        <div class="view-heading" style="margin-top:20px">
+          <nav class="journey" aria-label="Release setup progress" style="margin:0">
+            <button data-jump="connect"><span>1</span><b>Connect</b><small>Repository</small></button>
+            <button data-jump="target-stage"><span>2</span><b>Target</b><small>Build & runtime</small></button>
+            <button data-jump="map"><span>3</span><b>Map</b><small>Observed product</small></button>
+            <button data-jump="contracts"><span>4</span><b>Contracts</b><small>Review intent</small></button>
+            <button data-jump="validate"><span>5</span><b>Validate</b><small>Keyless replay</small></button>
+            <button data-jump="evidence"><span>6</span><b>Gate</b><small>Decision & CI</small></button>
+          </nav>
           <div class="decision-card neutral" id="decision-card"><span class="decision-label">CURRENT DECISION</span><strong id="decision-title">Not evaluated</strong><span id="decision-detail">Run a conclusive release gate to establish evidence.</span></div>
         </div>
 
-        <nav class="journey" aria-label="Release setup progress">
-          <button data-jump="connect"><span>1</span><b>Connect</b><small>Repository</small></button>
-          <button data-jump="target-stage"><span>2</span><b>Target</b><small>Build & runtime</small></button>
-          <button data-jump="map"><span>3</span><b>Map</b><small>Observed product</small></button>
-          <button data-jump="contracts"><span>4</span><b>Contracts</b><small>Review intent</small></button>
-          <button data-jump="validate"><span>5</span><b>Validate</b><small>Keyless replay</small></button>
-          <button data-jump="evidence"><span>6</span><b>Gate</b><small>Decision & CI</small></button>
-        </nav>
-
         <section class="panel section" id="connect">
-          <div class="section-heading"><div><p class="eyebrow">CONNECTED REPOSITORY</p><h2 id="repository-title">Repository</h2><p id="repository-detail">Tapp reads canonical repository artifacts and writes only explicit, reviewable changes.</p></div><span class="status-chip" id="connect-status">Not inspected</span></div>
+          <div class="section-heading"><div><p class="eyebrow">Connected repository</p><h2 id="repository-title">Repository</h2><p id="repository-detail">Tapp reads canonical repository artifacts and writes only explicit, reviewable changes.</p></div><span class="status-chip" id="connect-status">Not inspected</span></div>
           <div class="button-row"><button class="secondary" id="inspect">Inspect repository</button><button class="quiet" data-view="settings">Repository settings</button></div>
         </section>
 
         <section class="panel section" id="target-stage">
-          <div class="section-heading"><div><p class="eyebrow">BUILD & RUN</p><h2>Choose the product target</h2><p>Tapp detected these targets from source. Multiple targets require an explicit choice; build results validate—not replace—the model.</p></div><span class="status-chip" id="target-status">No target selected</span></div>
+          <div class="section-heading"><div><p class="eyebrow">Build & run</p><h2>Choose the product target</h2><p>Tapp detected these targets from source. Multiple targets require an explicit choice; build results validate—not replace—the model.</p></div><span class="status-chip" id="target-status">No target selected</span></div>
           <div class="target-choice-callout hidden" id="target-choice-callout"><span>1</span><div><strong>Choose what Tapp should test</strong><small>Nothing will build until you select a target. Tapp never guesses when a repository contains multiple applications.</small></div></div>
           <div id="targets" class="target-grid"><div class="empty">Inspect the repository to detect iOS, Android, and web targets.</div></div>
           <div class="runtime-row hidden" id="runtime-row">
@@ -116,21 +177,21 @@
         </section>
 
         <section class="panel section live-session-panel hidden" id="live-session-panel">
-          <div class="section-heading"><div><p class="eyebrow">LIVE APPLICATION</p><h2 id="live-screen-title">Running target</h2><p>See and drive the same real application surface used by Tapp's deterministic engine. Semantic controls refresh after every action.</p></div><div class="button-row"><button class="quiet" id="refresh-live-session">Refresh</button><button class="secondary" id="end-session">End session</button></div></div>
+          <div class="section-heading"><div><p class="eyebrow">Live application</p><h2>Drive the running target</h2><p>The device feed above shows the same real application surface used by Tapp's deterministic engine. Semantic controls refresh after every action.</p></div><div class="button-row"><span class="status-chip" id="live-platform">Target</span><span class="status-chip" id="live-recorded-steps">0 recorded steps</span><button class="quiet" id="refresh-live-session">Refresh</button><button class="secondary" id="end-session">End session</button></div></div>
           <div class="live-layout">
-            <div class="live-frame-shell"><div class="live-frame-head"><span id="live-platform">Target</span><span id="live-recorded-steps">0 recorded steps</span></div><div class="live-frame"><img id="live-frame-image" alt="Current application screen"><div id="live-frame-loading">Capturing live application…</div></div><div class="flow-recorder"><div><strong>Keep this journey as a deterministic Flow</strong><small>Successful actions are recorded with semantic selectors. Existing files are preserved.</small></div><label><span>Flow name</span><input id="live-flow-name" placeholder="Checkout smoke"></label><button class="primary" id="save-live-flow">Save Flow</button></div></div>
             <aside class="live-controls"><div class="live-controls-heading"><div><strong>Semantic controls</strong><small id="live-control-count">0 available</small></div></div><div id="live-control-list"><div class="empty">Controls appear when the session starts.</div></div><div class="manual-action"><label><span>Target or field</span><input id="live-action-target" placeholder="Accessibility id or visible label"></label><label><span>Text <i>for type/wait</i></span><input id="live-action-text" autocomplete="off"></label><div class="button-row"><button class="secondary" id="live-tap">Tap</button><button class="secondary" id="live-type">Type</button><button class="quiet" id="live-back">Back</button><button class="quiet" id="live-swipe">Swipe up</button></div></div></aside>
+            <div class="flow-recorder-panel"><div class="flow-recorder-head"><div><strong>Keep this journey as a deterministic Flow</strong><small>Successful actions are recorded with semantic selectors. Existing files are preserved.</small></div></div><div class="flow-recorder"><label><span>Flow name</span><input id="live-flow-name" placeholder="Checkout smoke"></label><button class="primary" id="save-live-flow">Save Flow</button><p>Saved Flows replay without AI and can be promoted into the release gate from Contracts.</p></div></div>
           </div>
         </section>
 
         <section class="overview-grid">
-          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">LATEST EVIDENCE</p><h2>What changed?</h2></div><button class="quiet" data-view="runs">All runs</button></div><div id="overview-evidence"><div class="empty">No release run yet.</div></div></article>
-          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">COVERAGE</p><h2>Observed surface</h2></div><button class="quiet" data-view="coverage">Open map</button></div><div id="overview-coverage" class="metric-grid"></div></article>
+          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">Latest evidence</p><h2>What changed?</h2></div><button class="quiet" data-view="runs">All runs</button></div><div id="overview-evidence"><div class="empty">No release run yet.</div></div></article>
+          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">Coverage</p><h2>Observed surface</h2></div><button class="quiet" data-view="coverage">Open map</button></div><div id="overview-coverage" class="metric-grid"></div></article>
         </section>
       </section>
 
       <section class="workspace-view" data-view-panel="runs">
-        <div class="view-heading simple"><div><p class="eyebrow">RUNS</p><h1>Release history</h1><p>Every autonomous sweep, deterministic replay, finding, and decision stays inspectable.</p></div><button class="primary" id="run-gate">Run release gate</button></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Release history</h1><p>Every autonomous sweep, deterministic replay, finding, and decision stays inspectable.</p></div><button class="primary" id="run-gate">Run release gate</button></div>
         <div class="split-view">
           <section class="panel list-panel" id="runs-list"><div class="empty">No runs yet.</div></section>
           <section class="panel detail-panel" id="run-detail"><div class="empty">Select a run to inspect its decision, checks, findings, and artifacts.</div></section>
@@ -138,12 +199,12 @@
       </section>
 
       <section class="workspace-view" data-view-panel="findings">
-        <div class="view-heading simple"><div><p class="eyebrow">FINDINGS</p><h1>What needs attention</h1><p>Findings preserve their severity and regression state. A failed contract is never silently healed.</p></div><select id="finding-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Findings</p><h1>What needs attention</h1><p>Findings preserve their severity and regression state. A failed contract is never silently healed.</p></div><select id="finding-filter"><option value="all">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></div>
         <div class="split-view findings-layout"><section class="panel list-panel" id="findings-list"><div class="empty">No findings yet.</div></section><section class="panel detail-panel" id="finding-detail"><div class="empty">Select a finding to inspect its evidence.</div></section></div>
       </section>
 
       <section class="workspace-view" data-view-panel="coverage" id="map">
-        <div class="view-heading simple"><div><p class="eyebrow">COVERAGE</p><h1>The product Tapp understands</h1><p>One platform-neutral Application Model and UI Map power exploration, planning, maintenance, CLI, MCP, and CI.</p></div><span class="metric" id="map-metric">0 states</span></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Coverage</p><h1>The product Tapp understands</h1><p>One platform-neutral Application Model and UI Map power exploration, planning, maintenance, CLI, MCP, and CI.</p></div><span class="metric" id="map-metric">0 states</span></div>
         <div class="subnav"><button data-coverage-tab="map" class="active">Flow Map</button><button data-coverage-tab="screens">Screens</button><button data-coverage-tab="application">Application</button><button data-coverage-tab="plan">Release Plan</button></div>
         <section class="coverage-panel active" data-coverage-panel="map"><div class="map-layout"><div class="map-canvas" id="map-canvas"><div class="empty">Explore the real product to build its map.</div></div><aside id="coverage-summary" class="coverage-summary"></aside></div><div id="transition-list" class="transition-list"></div></section>
         <section class="coverage-panel" data-coverage-panel="screens"><div class="panel table-panel" id="screen-list"><div class="empty">No observed screens yet.</div></div></section>
@@ -152,28 +213,28 @@
       </section>
 
       <section class="workspace-view" data-view-panel="contracts" id="contracts">
-        <div class="view-heading simple"><div><p class="eyebrow">RELEASE CONTRACTS</p><h1>Review business guarantees</h1><p>Approve a compact set of important outcomes. Tapp composes reusable Tasks instead of generating one script for every situation.</p></div><span class="status-chip" id="plan-status">No plan</span></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Release contracts</p><h1>Review business guarantees</h1><p>Approve a compact set of important outcomes. Tapp composes reusable Tasks instead of generating one script for every situation.</p></div><span class="status-chip" id="plan-status">No plan</span></div>
         <section class="panel section">
           <div class="plan-toolbar"><button class="quiet" id="approve-high">Approve high & critical</button><button class="quiet" id="defer-rest">Defer undecided</button><span class="spacer"></span><button class="primary" id="save-review">Save review</button></div>
           <div id="plan-list" class="plan-list"><div class="empty">Inspect and explore to create a grounded release plan.</div></div>
         </section>
         <section class="panel section" id="validate">
-          <div class="section-heading"><div><p class="eyebrow">DETERMINISTIC SUITE</p><h2>Generate, replay, then promote</h2><p>Draft Tasks and contracts remain untrusted until they pass without AI against the selected real target. Promotion is explicit.</p></div><span class="status-chip" id="validation-status">Not generated</span></div>
+          <div class="section-heading"><div><p class="eyebrow">Deterministic suite</p><h2>Generate, replay, then promote</h2><p>Draft Tasks and contracts remain untrusted until they pass without AI against the selected real target. Promotion is explicit.</p></div><span class="status-chip" id="validation-status">Not generated</span></div>
           <div class="pipeline"><article><span>01</span><h3>Generate drafts</h3><p>Compose reusable Tasks and TypeScript contracts from approved, grounded intent.</p><button class="secondary" id="generate">Generate</button></article><article><span>02</span><h3>Replay without AI</h3><p>Execute exact assertions and bounded waits on the actual selected platform.</p><button class="secondary" id="validate-drafts">Validate</button></article><article><span>03</span><h3>Promote reviewed proof</h3><p>Move only validated drafts into the committed suite and update map coverage.</p><button class="secondary" id="promote">Promote</button></article></div>
           <div id="artifact-list" class="artifact-list"></div>
         </section>
       </section>
 
       <section class="workspace-view" data-view-panel="settings">
-        <div class="view-heading simple"><div><p class="eyebrow">SETTINGS</p><h1>Project and execution</h1><p>Only unavoidable target, environment, actor, and credential inputs belong here.</p></div></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Settings</p><h1>Project and execution</h1><p>Only unavoidable target, environment, actor, and credential inputs belong here.</p></div></div>
         <div class="settings-grid">
-          <section class="panel settings-section"><p class="eyebrow">REPOSITORY</p><h2>Source</h2><div id="settings-repository"></div><button class="secondary" id="settings-add-repository">Add repository</button></section>
-          <section class="panel settings-section"><p class="eyebrow">RUNNERS</p><h2>Execution surfaces</h2><div id="runner-list"></div></section>
-          <section class="panel settings-section"><p class="eyebrow">ACTORS & CREDENTIALS</p><h2>Runtime-only values</h2><p>Values stay in this browser session and process environment; they are never written into repository artifacts or job results.</p><label class="field"><span>Test email</span><input id="test-email" autocomplete="off"></label><label class="field"><span>Test password</span><input id="test-password" type="password" autocomplete="new-password"></label><div id="actor-list" class="actor-list"></div></section>
-          <section class="panel settings-section"><p class="eyebrow">AI & DATA</p><h2>Optional orchestration</h2><div class="setting-row"><div><strong>Remote AI</strong><small>Planning and maintenance only. Deterministic execution does not need it.</small></div><span class="status-chip">Off</span></div><p class="honesty">Remote AI consent and provider controls are not yet exposed in this local browser build. Tapp will not opt you in implicitly.</p></section>
+          <section class="panel settings-section"><p class="eyebrow">Repository</p><h2>Source</h2><div id="settings-repository"></div><button class="secondary" id="settings-add-repository">Add repository</button></section>
+          <section class="panel settings-section"><p class="eyebrow">Runners</p><h2>Execution surfaces</h2><div id="runner-list"></div></section>
+          <section class="panel settings-section"><p class="eyebrow">Actors & credentials</p><h2>Runtime-only values</h2><p>Values stay in this browser session and process environment; they are never written into repository artifacts or job results.</p><label class="field"><span>Test email</span><input id="test-email" autocomplete="off"></label><label class="field"><span>Test password</span><input id="test-password" type="password" autocomplete="new-password"></label><div id="actor-list" class="actor-list"></div></section>
+          <section class="panel settings-section"><p class="eyebrow">AI & data</p><h2>Optional orchestration</h2><div class="setting-row"><div><strong>Remote AI</strong><small>Planning and maintenance only. Deterministic execution does not need it.</small></div><span class="status-chip">Off</span></div><p class="honesty">Remote AI consent and provider controls are not yet exposed in this local browser build. Tapp will not opt you in implicitly.</p></section>
         </div>
         <section class="panel section" id="evidence">
-          <div class="section-heading"><div><p class="eyebrow">RELEASE EVIDENCE & CI</p><h2>Install the same decision in GitHub</h2><p>Preview the target-aware workflow, required secrets, unresolved configuration, and exact policy before writing anything.</p></div><div class="button-row"><button class="secondary" id="create-baseline" disabled>Establish baseline</button><button class="secondary" id="preview-ci">Preview CI</button><button class="primary" id="install-ci">Write reviewable patch</button></div></div>
+          <div class="section-heading"><div><p class="eyebrow">Release evidence & CI</p><h2>Install the same decision in GitHub</h2><p>Preview the target-aware workflow, required secrets, unresolved configuration, and exact policy before writing anything.</p></div><div class="button-row"><button class="secondary" id="create-baseline" disabled>Establish baseline</button><button class="secondary" id="preview-ci">Preview CI</button><button class="primary" id="install-ci">Write reviewable patch</button></div></div>
           <div id="latest-evidence" class="evidence-grid"><div class="empty">No release run yet.</div></div>
           <pre id="ci-preview" class="code-preview hidden"></pre>
         </section>
@@ -183,7 +244,7 @@
 
   <dialog id="github-dialog">
     <form method="dialog" class="dialog-shell">
-      <div class="dialog-heading"><div><p class="eyebrow">CONNECT TO GITHUB</p><h2>Select a repository</h2><p>Tapp only displays repositories available to your authenticated local GitHub session.</p></div><button class="quiet" value="cancel" aria-label="Close">Close</button></div>
+      <div class="dialog-heading"><div><p class="eyebrow">Connect to GitHub</p><h2>Select a repository</h2><p>Tapp only displays repositories available to your authenticated local GitHub session.</p></div><button class="quiet" value="cancel" aria-label="Close">Close</button></div>
       <input class="search-input" id="github-search" placeholder="Search repositories…" autocomplete="off">
       <div id="github-repositories" class="github-repositories"><div class="empty">Loading authorized repositories…</div></div>
     </form>

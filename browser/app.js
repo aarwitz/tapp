@@ -13,7 +13,7 @@ function apiRoute(route) {
 const state = {
   csrf: "", session: null, project: null, activeJob: null, activeView: "overview",
   selectedTargetId: "", selectedRunId: "", selectedFindingId: "", githubRepositories: [],
-  uploadedEntries: [], live: { active:false },
+  uploadedEntries: [], live: { active:false }, transcript: [], transcriptSource: "", frameTimer: null,
 };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -99,20 +99,32 @@ function showProduct() {
   activateView(location.hash.slice(1) || state.activeView);
 }
 
+function sourceLayer(repository) {
+  return repository?.source?.kind === "website" ? "Website" : "Repository";
+}
+
 function renderRepositoryChrome() {
   const repositories = state.session?.repositories || [];
   const current = state.project?.repository || state.session?.repository;
   const switcher = $("#repository-switcher");
   switcher.classList.toggle("hidden", repositories.length < 1);
-  switcher.innerHTML = repositories.map((repository) => `<option value="${esc(repository.id)}" ${repository.id === current?.id ? "selected" : ""}>${esc(repository.name)} · ${esc(repository.source?.kind || "repository")}</option>`).join("") + '<option value="__add__">＋ Add repository…</option>';
+  switcher.innerHTML = repositories.map((repository) => `<option value="${esc(repository.id)}" ${repository.id === current?.id ? "selected" : ""}>${esc(repository.name)} · ${esc(repository.source?.kind || "repository")}</option>`).join("") + '<option value="__add__">＋ Add project…</option>';
   $("#refresh-project").classList.toggle("hidden", !current);
   if (!current) return;
+  const website = sourceLayer(current) === "Website";
   $("#sidebar-project-name").textContent = state.project?.application?.name || current.name;
-  $("#sidebar-project-source").textContent = current.source?.label || current.root || "Repository";
+  $("#sidebar-project-source").textContent = website ? "Website · no source, no release verdict" : (current.source?.label || current.root || "Repository");
   $("#project-avatar").textContent = (state.project?.application?.name || current.name || "T").slice(0, 1).toUpperCase();
   $("#repository-title").textContent = current.source?.label || current.name;
-  $("#repository-detail").textContent = current.source?.note || (current.ephemeral ? "This is an isolated working copy. Review and export changes before updating the source repository." : `Direct local checkout · ${current.root}`);
-  $("#settings-repository").innerHTML = `<dl class="settings-dl"><div><dt>Source</dt><dd>${esc(pretty(current.source?.kind))}</dd></div><div><dt>Location</dt><dd><code>${esc(current.root)}</code></dd></div><div><dt>Write mode</dt><dd>${current.ephemeral ? "Isolated review copy" : "Direct checkout"}</dd></div></dl>`;
+  $("#repository-detail").textContent = current.source?.note || (website ? "Connected website. Tapp can explore, record, and check it; a release verdict needs a source revision." : current.ephemeral ? "This is an isolated working copy. Review and export changes before updating the source repository." : `Direct local checkout · ${current.root}`);
+  $("#settings-repository").innerHTML = `<dl class="settings-dl"><div><dt>Layer</dt><dd>${sourceLayer(current)}</dd></div><div><dt>Source</dt><dd>${esc(pretty(current.source?.kind))}</dd></div><div><dt>Location</dt><dd><code>${esc(current.root || current.source?.label || "—")}</code></dd></div><div><dt>Write mode</dt><dd>${website ? "Observation only" : current.ephemeral ? "Isolated review copy" : "Direct checkout"}</dd></div></dl>`;
+}
+
+function setCount(id, value, { alert = false } = {}) {
+  const node = $(id);
+  node.textContent = value;
+  node.classList.toggle("zero", !value);
+  node.classList.toggle("alert", alert && value > 0);
 }
 
 function renderTargets() {
@@ -132,9 +144,14 @@ function renderTargets() {
   $("#target-status").textContent = target ? `${pretty(target.platform)} · ${target.name}` : targets.length > 1 ? "Selection required" : "No target selected";
   $("#sidebar-target").textContent = target ? `${pretty(target.platform)} · ${target.name}` : "Select a target";
   $("#sidebar-runner").textContent = target ? (state.session?.runners?.find((runner) => runner.platform === target.platform)?.label || "Runner resolves at execution") : "Runner not selected";
+  const appId = target?.runtime?.bundleId || target?.runtime?.applicationId || target?.build?.bundleId || "";
+  $("#sidebar-app-row").classList.toggle("hidden", !appId);
+  $("#sidebar-app-id").textContent = appId;
+  renderDeviceChrome(target);
   $("#runtime-row").classList.toggle("hidden", !targets.length);
   $("#serial-field").classList.toggle("hidden", target?.platform !== "android");
   $("#explore").disabled = !target;
+  $("#command-run").disabled = !target || !!state.activeJob;
   $("#explore").textContent = target && targets.length > 1 ? `Build & explore ${target.name}` : "Build, launch & explore";
   $("#start-session").disabled = !target || state.live?.active === true;
   $("#explore-help").textContent = !target ? (targets.length > 1 ? `Choose one of the ${targets.length} detected targets. Tapp will not select one for you.` : "Inspect to discover a runnable target.")
@@ -143,20 +160,63 @@ function renderTargets() {
     : "Builds and starts the selected repository web application, then explores it in Chromium.";
 }
 
+function renderDeviceChrome(target) {
+  const platform = state.live?.active ? state.live.platform : target?.platform;
+  const frame = $("#device-frame");
+  frame.className = `device-frame ${platform === "ios" ? "" : platform || ""}`.trim();
+  $("#device-feed-label").textContent = platform === "android" ? "Live Android Feed" : platform === "web" ? "Live Browser Feed" : "Live iPhone Feed";
+  $("#device-meta-device").textContent = platform === "ios" ? (target?.runtime?.surface || "iOS Simulator")
+    : platform === "android" ? (target?.runtime?.serial || "Android emulator / device")
+    : platform === "web" ? "Chromium" : "—";
+}
+
+// The device panel shows whichever real surface exists right now: an interactive session's frame,
+// else the newest screenshot the running exploration wrote. Nothing is synthesized.
+function frameSource() {
+  if (state.live?.active) return "/api/live-session/frame";
+  if (state.activeJob && state.jobHasFrame) return `/api/jobs/${state.activeJob}/frame`;
+  return "";
+}
+
+// One in-flight capture at a time; the next request waits for the previous image to land so a
+// slow simulator does not pile up frame requests.
 function refreshLiveFrame() {
-  if (!state.live?.active) return;
+  clearTimeout(state.frameTimer);
+  const source = frameSource();
+  if (!source) { stopLiveFrames(); return; }
   const image = $("#live-frame-image");
   const loading = $("#live-frame-loading");
-  loading.classList.remove("hidden");
-  image.onload = () => loading.classList.add("hidden");
-  image.onerror = () => { loading.textContent = "Live frame could not be captured. The semantic controls remain available."; };
-  image.src = apiRoute(`/api/live-session/frame?at=${Date.now()}`);
+  $("#device-placeholder").classList.add("hidden");
+  if (!image.naturalWidth) loading.classList.remove("hidden");
+  image.onload = () => { loading.classList.add("hidden"); scheduleLiveFrame(); };
+  image.onerror = () => { loading.textContent = "Live frame could not be captured. The semantic controls remain available."; scheduleLiveFrame(); };
+  image.src = apiRoute(`${source}?at=${Date.now()}`);
+}
+
+function scheduleLiveFrame() {
+  clearTimeout(state.frameTimer);
+  if (frameSource()) state.frameTimer = setTimeout(refreshLiveFrame, 1500);
+}
+
+function stopLiveFrames() {
+  clearTimeout(state.frameTimer);
+  state.frameTimer = null;
 }
 
 function renderLiveSession() {
   const live = state.live || { active:false };
   $("#live-session-panel").classList.toggle("hidden", !live.active);
-  if (!live.active) return;
+  if (!live.active) {
+    // Keep the last real frame on screen after a run; only show the placeholder when nothing was ever captured.
+    if (!frameSource()) stopLiveFrames();
+    const hasFrame = !!$("#live-frame-image").getAttribute("src");
+    $("#live-frame-loading").classList.toggle("hidden", hasFrame || !frameSource());
+    $("#device-placeholder").classList.toggle("hidden", hasFrame);
+    if (!state.activeJob) $("#live-screen-title").textContent = hasFrame ? $("#live-screen-title").textContent : "—";
+    renderDeviceChrome(currentTarget());
+    return;
+  }
+  renderDeviceChrome(currentTarget());
   $("#live-screen-title").textContent = live.screenTitle || live.targetName || "Running target";
   $("#live-platform").textContent = `${pretty(live.platform)} · ${live.targetName || "live target"}`;
   $("#live-recorded-steps").textContent = `${live.recordedSteps || 0} recorded step${live.recordedSteps === 1 ? "" : "s"}`;
@@ -205,7 +265,7 @@ function renderPlan(plan) {
   $("#plan-status").textContent = plan ? `${items.length} proposed · ${pending} pending` : "No plan";
   $("#plan-list").innerHTML = planHtml(plan);
   $("#coverage-plan-list").innerHTML = planHtml(plan);
-  $("#contract-count").textContent = state.project?.model?.artifacts?.contracts?.length || 0;
+  setCount("#contract-count", state.project?.model?.artifacts?.contracts?.length || 0);
 }
 
 function renderArtifacts(model, plan) {
@@ -274,7 +334,7 @@ function findingTitle(finding) { return finding.title || finding.message || find
 function renderFindings() {
   const filter = $("#finding-filter").value;
   const findings = allFindings().filter((finding) => filter === "all" || String(finding.severity).toLowerCase() === filter);
-  $("#finding-count").textContent = allFindings().filter((finding) => ["critical", "high"].includes(String(finding.severity).toLowerCase())).length;
+  setCount("#finding-count", allFindings().filter((finding) => ["critical", "high"].includes(String(finding.severity).toLowerCase())).length, { alert:true });
   $("#findings-list").innerHTML = findings.length ? findings.map((finding) => `<button class="finding-row ${finding.__id === state.selectedFindingId ? "selected" : ""}" data-finding-id="${esc(finding.__id)}"><span class="severity ${esc(String(finding.severity || "info").toLowerCase())}"></span><span><strong>${esc(findingTitle(finding))}</strong><small>${esc(finding.screen || finding.category || pretty(finding.type))} · ${compactDate(finding.__createdAt)}</small></span><em>${esc(finding.severity || "info")}</em></button>`).join("") : '<div class="empty">No findings match this view.</div>';
   const selected = findings.find((finding) => finding.__id === state.selectedFindingId) || findings[0];
   if (selected) state.selectedFindingId = selected.__id;
@@ -282,7 +342,7 @@ function renderFindings() {
 }
 
 function renderRuns(runs) {
-  $("#run-count").textContent = runs.length;
+  setCount("#run-count", runs.length);
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
     const report = run.report;
     const failed = report?.gate?.failed === true;
@@ -324,6 +384,78 @@ function renderRunners() {
   $("#actor-list").innerHTML = actors.length ? actors.map((actor) => `<div class="actor-row"><span>${esc(actor.name.slice(0, 1).toUpperCase())}</span><div><strong>${esc(actor.name)}</strong><small>${esc((actor.roles || []).join(", ") || actor.session || "actor")} · ${(actor.credentialRequirements || []).length} credential binding(s)</small></div></div>`).join("") : '<p class="muted">No actors are configured. Tapp will ask only when a reviewed journey requires one.</p>';
 }
 
+const chatTime = (value) => new Intl.DateTimeFormat(undefined, { hour:"numeric", minute:"2-digit" }).format(new Date(value));
+
+function renderChat() {
+  const node = $("#chat-transcript");
+  const stickToBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
+  node.innerHTML = state.transcript.map((entry) => `<div class="chat-bubble ${esc(entry.kind || "")} ${esc(entry.severity || "")}">${esc(entry.text)}<small>${chatTime(entry.at)}</small></div>`).join("")
+    + (state.activeJob ? '<div class="chat-bubble typing">tapp is working…</div>' : "");
+  if (stickToBottom) node.scrollTop = node.scrollHeight;
+}
+
+// The transcript is the engine's own progress log, bubble per entry. Phase changes get the
+// `phase` style; everything else is narration of what actually happened.
+function syncTranscriptFromJob(name, job) {
+  const key = job.id;
+  if (state.transcriptSource !== key) { state.transcript = [{ at: job.createdAt, kind: "phase", text: `${pretty(name)} started` }]; state.transcriptSource = key; }
+  const seen = state.transcript.length - 1;
+  for (const entry of job.progress.slice(seen)) {
+    // Engine progress lines can carry a whole contract result; the transcript keeps the lede.
+    const text = String(entry.text || "").trim().replace(/\s+/g, " ").slice(0, 220).replace(/(.{219}).+/, "$1…");
+    if (!text) continue;
+    const last = state.transcript.at(-1);
+    if (last && last.text === text) continue;
+    state.transcript.push({ at: entry.at, kind: entry.phase === "explore" || entry.phase === "runtime" ? "" : "phase", text });
+  }
+}
+
+function finishTranscript(name, job) {
+  if (job.status === "failed") { state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "failed", text: job.error?.message || `${pretty(name)} failed` }); return; }
+  const report = job.result?.report || job.result;
+  for (const finding of (report?.findings || []).slice(0, 12)) {
+    const severity = String(finding.severity || "info").toLowerCase();
+    state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "finding", severity, text: `${pretty(severity)} issue${finding.screen ? ` on ${finding.screen}` : ""}: ${finding.title || finding.message || finding.type || "finding"}` });
+  }
+  const summary = report?.headline || (name === "gate" ? (job.result?.passed === false ? "Release gate blocked this revision." : "Release gate completed.") : `${pretty(name)} completed`);
+  state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "summary", text: summary });
+}
+
+function seedIdleTranscript() {
+  if (state.transcriptSource) return;
+  const latest = latestRun();
+  const report = latest?.report;
+  state.transcript = report
+    ? [{ at: latest.createdAt, kind: "summary", text: `Last run: ${report.headline || "release run completed"} · ${report.screensExplored || 0} states · ${(report.findings || []).length} findings` }]
+    : [{ at: new Date().toISOString(), kind: "phase", text: state.project?.state?.inspected ? "Ready. Run a release check to watch Tapp build, launch, and explore the real app." : "Inspecting the project to discover its targets." }];
+}
+
+function renderCommandState(job = null, name = "") {
+  const running = !!state.activeJob;
+  const pill = $("#phase-pill");
+  pill.classList.toggle("hidden", !running);
+  pill.classList.toggle("running", running);
+  $("#command-run").disabled = running || !currentTarget();
+  $("#run-progress").classList.toggle("hidden", !running);
+  $("#idle-badges").classList.toggle("hidden", running);
+  if (running) {
+    const progress = job?.progress?.at(-1);
+    const text = progress?.text || `${pretty(name)}…`;
+    $("#phase-pill-text").textContent = text;
+    $("#run-progress-text").textContent = text;
+    const ratio = progress?.current && progress?.total ? Math.min(92, Math.round(progress.current / progress.total * 100)) : Math.min(88, 8 + (job?.progress?.length || 0) * 4);
+    $("#run-progress-bar").style.width = `${ratio}%`;
+    return;
+  }
+  const target = currentTarget();
+  const runner = target ? state.session?.runners?.find((item) => item.platform === target.platform) : null;
+  $("#idle-badges").innerHTML = [
+    target ? `<span><b>${esc(pretty(target.platform))}</b> · ${esc(target.name)}</span>` : "<span>No target selected</span>",
+    runner ? `<span>${esc(runner.label)} · ${esc(pretty(runner.status))}</span>` : "",
+    `<span>Idle · ${target ? "Ready for next release check" : "Choose a target to run"}</span>`,
+  ].filter(Boolean).join("");
+}
+
 function renderJourney(status) {
   const flags = productJourneyFlags({ status, hasTarget:!!currentTarget(), hasEvidence:(state.project?.evidence || []).some((run) => run.report) });
   $$(".journey button").forEach((button, index) => button.classList.toggle("done", !!flags[index]));
@@ -351,15 +483,24 @@ function renderProject() {
   renderRunners();
   renderLiveSession();
   renderJourney(project.state);
+  seedIdleTranscript();
+  renderChat();
+  renderCommandState();
 }
 
 async function refreshSession() {
   state.session = await api("/api/session");
   state.csrf = state.session.csrfToken;
   const local = state.session.mode === "local";
-  $("#mode-pill").textContent = local ? "Local engine · private" : "Execution · local Mac";
-  $("#privacy-note-title").textContent = local ? "Your code stays on this machine in local mode." : "Your repository stays in your private Tapp workspace.";
-  $("#privacy-note-detail").textContent = local ? "Ordinary exploration, replay, and merge decisions are deterministic and require no API key." : "Builds and application runs execute on your connected outbound runner; Render remains the control plane.";
+  $("#mode-pill").textContent = local ? "Self-host · this machine" : "Cloud · outbound runner";
+  $("#onboarding-mode-pill").textContent = local ? "Self-host · this machine" : "Cloud";
+  $("#privacy-note-title").textContent = local ? "Your code stays on this machine in self-host mode." : "Your repository stays in your private Tapp workspace.";
+  $("#privacy-note-detail").textContent = local ? "Ordinary exploration, replay, and merge decisions are deterministic and require no API key. This machine must stay open while Tapp runs." : "Builds and application runs execute on your connected outbound runner; the hosted control plane keeps the evidence.";
+  $("#website-connect-link").classList.toggle("hidden", local);
+  $(".local-runner-card").classList.toggle("hidden", local);
+  $("#website-source-note").textContent = local
+    ? "In the local Studio, website checks run from the CLI: npx -y @aarwitz/tapp@latest explore https://example.com --read-only. Website projects live in the hosted Studio."
+    : "You confirm you own the site before Tapp observes it. Accounts and backend access are configured privately, never in chat.";
   if (!local) {
     $("#github-source-copy").textContent = "Repository upload works now. GitHub App connection will add selected-repository import without changing the product workflow.";
     $("#github-source-note").textContent = "Use This Mac now; GitHub can be added independently later.";
@@ -384,6 +525,9 @@ async function runOperation(name, body = {}) {
   $("#operation-title").textContent = pretty(name);
   $("#operation-progress").textContent = "Starting operation";
   $("#operation-progress-bar").style.width = "6%";
+  syncTranscriptFromJob(name, started.job);
+  renderCommandState(started.job, name);
+  renderChat();
   try {
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, 650));
@@ -392,7 +536,14 @@ async function runOperation(name, body = {}) {
       $("#operation-progress").textContent = progress?.text || "Working…";
       const ratio = progress?.current && progress?.total ? Math.min(92, Math.round(progress.current / progress.total * 100)) : Math.min(88, 8 + job.progress.length * 4);
       $("#operation-progress-bar").style.width = `${ratio}%`;
+      syncTranscriptFromJob(name, job);
+      renderCommandState(job, name);
+      renderChat();
+      const screen = [...job.progress].reverse().find((entry) => entry.screen)?.screen;
+      if (screen && !state.live?.active) $("#live-screen-title").textContent = screen;
+      if (job.frame && !state.jobHasFrame) { state.jobHasFrame = true; refreshLiveFrame(); }
       if (operationIsPending(job.status)) continue;
+      finishTranscript(name, job);
       if (job.status === "failed") throw new Error(job.error?.message || "Operation failed");
       if (job.status !== "completed") throw new Error(`Operation ended in an unknown '${job.status}' state`);
       $("#operation-progress-bar").style.width = "100%";
@@ -404,6 +555,7 @@ async function runOperation(name, body = {}) {
       return job.result;
     }
   } finally {
+    if (state.jobHasFrame) { state.jobHasFrame = false; await new Promise((resolve) => setTimeout(resolve, 200)); stopLiveFrames(); }
     state.activeJob = null;
     try {
       await refreshSession();
@@ -614,6 +766,8 @@ document.addEventListener("click", (event) => {
     activateView(view);
     setTimeout(() => document.getElementById(destination)?.scrollIntoView({ behavior:"smooth", block:"start" }), 20);
   }
+  const localButton = event.target.closest("[data-local-repository]");
+  if (localButton) api("/api/repositories/local", { method:"POST", body:JSON.stringify({ runnerId:localButton.dataset.localRunner, repositoryId:localButton.dataset.localRepository }) }).then(async () => { state.selectedTargetId = ""; await refreshSession(); await refresh(); }).catch((error) => toast(error.message, true));
   const liveControl = event.target.closest("[data-live-control]");
   if (liveControl) {
     const target = liveControl.dataset.liveTarget;
@@ -626,7 +780,8 @@ document.addEventListener("click", (event) => {
   }
 });
 
-$("#brand-home").addEventListener("click", () => state.project?.connected ? activateView("overview") : showSourceOnboarding());
+$$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showSourceOnboarding()));
+$("#command-run").addEventListener("click", () => runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)));
 $("#refresh-project").addEventListener("click", () => refresh().catch((error) => toast(error.message, true)));
 $("#change-source").addEventListener("click", showSourceOnboarding);
 $("#settings-add-repository").addEventListener("click", showSourceOnboarding);
@@ -677,5 +832,3 @@ try {
   // choice when detection is ambiguous.
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
 } catch (error) { toast(error.message, true); }
-  const localButton = event.target.closest("[data-local-repository]");
-  if(localButton) api("/api/repositories/local",{method:"POST",body:JSON.stringify({runnerId:localButton.dataset.localRunner,repositoryId:localButton.dataset.localRepository})}).then(async()=>{state.selectedTargetId="";await refreshSession();await refresh();}).catch(error=>toast(error.message,true));

@@ -130,7 +130,7 @@ function openBrowser(url) {
 function publicJob(job, { hosted = false } = {}) {
   return {
     id: job.id, operation: job.operation, status: job.status, repositoryId: job.repositoryId || null,
-    createdAt: job.createdAt, completedAt: job.completedAt || null, progress: job.progress.slice(-80),
+    createdAt: job.createdAt, completedAt: job.completedAt || null, progress: job.progress.slice(-80), frame: !!job.latestFrame,
     result: hosted ? hostedPayload(job.result) : job.result || null,
     error: job.error || null,
   };
@@ -324,8 +324,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
     const job = { id: crypto.randomBytes(10).toString("hex"), operation, repositoryId, status: "running", createdAt: new Date().toISOString(), progress: [] };
     const progress = (entry) => {
       const normalized = typeof entry === "string" ? { text: entry } : entry || {};
-      job.progress.push({ at: new Date().toISOString(), phase: normalized.phase || operation, text: String(normalized.text || "").slice(-1200), ...(normalized.current ? { current: normalized.current, total: normalized.total } : {}) });
+      job.progress.push({ at: new Date().toISOString(), phase: normalized.phase || operation, text: String(normalized.text || "").slice(-1200), ...(normalized.current ? { current: normalized.current, total: normalized.total } : {}), ...(normalized.screen ? { screen: String(normalized.screen).slice(0, 200) } : {}) });
       if (job.progress.length > 200) job.progress.splice(0, job.progress.length - 200);
+      // The engine names the screenshot it just wrote; the Studio device panel polls it as the
+      // exploration feed. Only engine-supplied paths ever land here, never client input.
+      if (normalized.screenshot && path.isAbsolute(normalized.screenshot)) job.latestFrame = normalized.screenshot;
     };
     jobs.set(job.id, job);
     activeMutation = job;
@@ -434,6 +437,15 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         const job = jobs.get(jobMatch[1]);
         if (!job) { json(response, 404, { error: "No such operation" }); return; }
         json(response, 200, publicJob(job, { hosted }));
+        return;
+      }
+      const jobFrameMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/frame$/);
+      if (request.method === "GET" && jobFrameMatch) {
+        const job = jobs.get(jobFrameMatch[1]);
+        if (!job?.latestFrame || !fs.existsSync(job.latestFrame)) { json(response, 404, { error: "No exploration frame yet" }); return; }
+        const data = fs.readFileSync(job.latestFrame);
+        response.writeHead(200, { "content-type": job.latestFrame.endsWith(".jpg") || job.latestFrame.endsWith(".jpeg") ? "image/jpeg" : "image/png", "content-length": data.length, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+        response.end(data);
         return;
       }
       const captureMatch = url.pathname.match(/^\/evidence\/captures\/([A-Za-z0-9._-]{1,128})(?:\/(.*))?$/);
@@ -592,7 +604,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             maxActions: runtime.maxActions, timeout: runtime.timeout, maxContracts: runtime.maxContracts,
             testEmail: runtime.testEmail, testPassword: runtime.testPassword,
             runExploration: engine.runInitExploration,
-            onProgress: (entry) => progress({ phase: "explore", text: `${entry.action || 0}/${entry.max || runtime.maxActions} actions · ${entry.states || 0} states` }),
+            onProgress: (entry) => progress({ phase: "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || runtime.maxActions} actions · ${entry.states || 0} states`, current: entry.action || 0, total: entry.max || runtime.maxActions, screen: entry.screen, screenshot: entry.screenshot }),
             onStatus: (text) => progress({ phase: "runtime", text }),
           });
         }

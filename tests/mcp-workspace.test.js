@@ -81,7 +81,7 @@ http.createServer((request, response) => {
     await waitFor(1);
     send({ jsonrpc: "2.0", method: "notifications/initialized" });
 
-    send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "tapp_health", arguments: {} } });
+    send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "tapp_doctor", arguments: {} } });
     const health = await waitFor(2);
     const workspaceCheck = health.result.structuredContent.checks.find((check) => check.check === "workspace");
     assert.equal(workspaceCheck.ok, true);
@@ -94,7 +94,7 @@ http.createServer((request, response) => {
     assert.ok(initialized.result.structuredContent.written.modelPath.startsWith(`${fs.realpathSync(workspace)}${path.sep}`));
     assert.ok(fs.existsSync(path.join(workspace, ".tapp", "application-model.json")));
 
-    send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "tapp_actor_config", arguments: { operation: "read" } } });
+    send({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "tapp_plan", arguments: { action: "actor_read" } } });
     const actors = await waitFor(4);
     assert.notEqual(actors.result.isError, true, actors.result.content?.[0]?.text);
     assert.ok(actors.result.structuredContent.path.startsWith(`${fs.realpathSync(workspace)}${path.sep}`));
@@ -104,7 +104,7 @@ http.createServer((request, response) => {
     assert.equal(escaped.result.isError, true);
     assert.match(escaped.result.content[0].text, /inside the workspace/);
 
-    send({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "tapp_focus", arguments: { query:"Save storefront settings" } } });
+    send({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "tapp_explore", arguments: { goal:"Save storefront settings" } } });
     const focused = await waitFor(6);
     assert.notEqual(focused.result.isError, true, focused.result.content?.[0]?.text);
     assert.equal(focused.result.structuredContent.status, "source-located");
@@ -113,10 +113,11 @@ http.createServer((request, response) => {
 
     send({ jsonrpc: "2.0", id: 7, method: "tools/list", params: {} });
     const tools = await waitFor(7);
-    const sessionStart = tools.result.tools.find((tool) => tool.name === "tapp_session_start");
+    const sessionStart = tools.result.tools.find((tool) => tool.name === "tapp_session");
     assert.ok(sessionStart.inputSchema.properties.url, "the source-connected session contract must include web URLs");
     assert.ok(sessionStart.inputSchema.properties.target, "managed multi-target workspaces can select a browser target");
-    assert.match(sessionStart.description, /managed web target in the MCP workspace/);
+    assert.match(sessionStart.description, /managed web target/);
+    assert.equal(tools.result.tools.length, 13, "ADR-0007: thirteen public tools");
 
     if (!skipRealBrowser) {
       const markersPath = path.join(workspace, "focus-markers.txt");
@@ -130,7 +131,7 @@ http.createServer((request, response) => {
         markersPath, platform:"web", target:url, runId:"mcp-workspace-focus",
       })));
 
-      send({ jsonrpc:"2.0", id:8, method:"tools/call", params:{ name:"tapp_session_start", arguments:{ url, focus:"Settings page" } } });
+      send({ jsonrpc:"2.0", id:8, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"start", url, focus:"Settings page" } } });
       const started = await waitFor(8);
       assert.notEqual(started.result.isError, true, started.result.content?.[0]?.text);
       assert.equal(started.result.structuredContent.screenTitle, "Settings");
@@ -138,15 +139,15 @@ http.createServer((request, response) => {
       assert.equal(started.result.structuredContent.focus.execution.status, "reached");
       assert.equal(started.result.structuredContent.focus.elements, undefined, "the focused tree is returned only once");
 
-      send({ jsonrpc:"2.0", id:9, method:"tools/call", params:{ name:"tapp_session_act", arguments:{ action:"tap", id:"Save settings" } } });
+      send({ jsonrpc:"2.0", id:9, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"tap", id:"Save settings" } } });
       const acted = await waitFor(9);
       assert.equal(acted.result.structuredContent.status, "ok");
       assert.equal(acted.result.structuredContent.elements.some((element) => element.label === "Saved"), true);
 
-      send({ jsonrpc:"2.0", id:10, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
+      send({ jsonrpc:"2.0", id:10, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"end" } } });
       await waitFor(10);
 
-      send({ jsonrpc:"2.0", id:11, method:"tools/call", params:{ name:"tapp_session_start", arguments:{ focus:"Settings page" } } });
+      send({ jsonrpc:"2.0", id:11, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"start", focus:"Settings page" } } });
       const managed = await waitFor(11, 30_000);
       assert.notEqual(managed.result.isError, true, managed.result.content?.[0]?.text);
       assert.equal(managed.result.structuredContent.screenTitle, "Settings");
@@ -154,13 +155,13 @@ http.createServer((request, response) => {
       const managedUrl = managed.result.content[0].text.match(/`(http:\/\/127\.0\.0\.1:\d+)/)?.[1];
       assert.ok(managedUrl, "managed session reports its owned runtime URL");
 
-      send({ jsonrpc:"2.0", id:12, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
+      send({ jsonrpc:"2.0", id:12, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"end" } } });
       await waitFor(12);
       await assert.rejects(fetch(managedUrl, { signal:AbortSignal.timeout(1500) }), "MCP session end stops the managed web runtime");
     }
   } finally {
     try {
-      send({ jsonrpc:"2.0", id:99, method:"tools/call", params:{ name:"tapp_session_end", arguments:{} } });
+      send({ jsonrpc:"2.0", id:99, method:"tools/call", params:{ name:"tapp_session", arguments:{ action:"end" } } });
       await Promise.race([waitFor(99, 2_000), new Promise((resolve) => setTimeout(resolve, 2_000))]);
     } catch { /* the MCP process may already be gone */ }
     proc.kill();

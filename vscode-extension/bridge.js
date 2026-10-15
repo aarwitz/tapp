@@ -19,7 +19,7 @@ function exec(cmd, args, timeoutMs = 60_000) {
 // caches tag-resolved installs (`@latest` can serve a stale engine forever), and the
 // tool contract (tapp_build shape, target resolution) must match what the bridge expects.
 // Bump together with the extension version. TAPP_ENGINE_SPEC overrides for development.
-const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.17.27";
+const ENGINE_SPEC = process.env.TAPP_ENGINE_SPEC || "@aarwitz/tapp@0.18.0";
 
 class TappBridge {
   constructor({ cwd, command, args } = {}) {
@@ -44,7 +44,7 @@ class TappBridge {
           if (this.client !== client) return;
           this.client = null;
           this.sessionActive = false;
-          this.sessionError = "The Tapp engine connection closed; reopen the app with tapp_open_ios_app to start a new session.";
+          this.sessionError = "The Tapp engine connection closed; reopen the app with tapp_open_app to start a new session.";
         };
         return client;
       }).finally(() => { this.connecting = null; });
@@ -144,15 +144,15 @@ class TappBridge {
     const r = await this.resolveBundleId(target, workspaceDir);
     if (r.error) return { error: r.error };
     if (this.sessionActive) {
-      try { await this.call("tapp_session_end", {}, 60_000); } catch { /* stale session */ }
+      try { await this.call("tapp_session", { action: "end" }, 60_000); } catch { /* stale session */ }
       this.sessionActive = false;
     }
-    const sessionArgs = { appBundleId: r.bundleId };
+    const sessionArgs = { action: "start", appBundleId: r.bundleId };
     if (focus) {
       sessionArgs.focus = String(focus);
       sessionArgs.projectDir = workspaceDir;
     }
-    const s = await this.call("tapp_session_start", sessionArgs, 5 * 60 * 1000);
+    const s = await this.call("tapp_session", sessionArgs, 5 * 60 * 1000);
     if (this.isError(s)) return { error: this.textOf(s) };
     this.sessionActive = true;
     this.sessionError = null;
@@ -162,15 +162,17 @@ class TappBridge {
 
   async act(cmd) {
     if (this.opening) await this.opening;
-    if (!this.sessionActive) return { error: this.sessionError || "No app is open — call tapp_open_ios_app first." };
-    const res = await this.call("tapp_session_act", cmd, cmd.action === "login" ? 4 * 60 * 1000 : 2 * 60 * 1000);
+    if (!this.sessionActive) return { error: this.sessionError || "No app is open — call tapp_open_app first." };
+    const res = await this.call("tapp_session", cmd, cmd.action === "login" ? 4 * 60 * 1000 : 2 * 60 * 1000);
     if (this.isError(res)) return { error: this.textOf(res) };
     return { text: this.textOf(res) };
   }
 
+  // Focused navigation is `tapp_explore` with a goal: source-locate the surface, take the
+  // shortest observed route inside the open session.
   async focus(query, workspaceDir) {
-    if (!this.sessionActive) return { error: "No app is open — call tapp_open_ios_app first." };
-    const res = await this.call("tapp_focus", { query:String(query || ""), projectDir:workspaceDir }, 3 * 60 * 1000);
+    if (!this.sessionActive) return { error: "No app is open — call tapp_open_app first." };
+    const res = await this.call("tapp_explore", { goal:String(query || ""), projectDir:workspaceDir }, 3 * 60 * 1000);
     if (this.isError(res)) return { error:this.textOf(res) };
     return { text:this.textOf(res) };
   }
@@ -184,13 +186,13 @@ class TappBridge {
   }
 
   async actors() {
-    const res = await this.call("tapp_actor_config", { operation: "read" });
+    const res = await this.call("tapp_plan", { action: "actor", operation: "read" });
     if (this.isError(res)) throw new Error(this.textOf(res));
     return Object.keys(res.structuredContent?.actors || {});
   }
 
   async screenshot() {
-    const res = await this.call("tapp_screenshot", {}, 60_000);
+    const res = await this.call("tapp_look", {}, 60_000);
     if (this.isError(res)) return { error: this.textOf(res) };
     return { text: this.textOf(res), image: this.imageOf(res) };
   }
@@ -201,10 +203,10 @@ class TappBridge {
   // <responsePath>.request, we prompt the human, and write the response the harness polls.
   // Read-only web audit: no simulator, no session, no clicks — a plain MCP call.
   async audit(url, { pages, device } = {}) {
-    const args = { url };
+    const args = { url, readOnly: true };
     if (pages) args.pages = pages;
     if (device) args.device = device;
-    const res = await this.call("tapp_audit", args, 15 * 60 * 1000);
+    const res = await this.call("tapp_explore", args, 15 * 60 * 1000);
     if (this.isError(res)) return { error: this.textOf(res) };
     return { text: this.textOf(res) };
   }
@@ -213,7 +215,7 @@ class TappBridge {
     const r = await this.resolveBundleId(target, workspaceDir);
     if (r.error) return { error: r.error };
     if (this.sessionActive) {
-      try { await this.call("tapp_session_end", {}, 60_000); } catch { /* stale session */ }
+      try { await this.call("tapp_session", { action: "end" }, 60_000); } catch { /* stale session */ }
       this.sessionActive = false;
     }
     const args = { appBundleId: r.bundleId };
@@ -296,7 +298,7 @@ class TappBridge {
 
   async dispose() {
     if (this.sessionActive) {
-      try { await this.call("tapp_session_end", {}, 30_000); } catch { /* shutting down */ }
+      try { await this.call("tapp_session", { action: "end" }, 30_000); } catch { /* shutting down */ }
     }
     if (this.client) {
       try { await this.client.close(); } catch { /* shutting down */ }

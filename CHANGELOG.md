@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.18.0
+
+- **The Studio looks like the Command Center.** `tapp app` (and the hosted Studio built from the
+  same `browser/` assets) now uses the desktop palette and layout: wordmark and project menu,
+  Overview / Runs / Findings / Coverage / Contracts / Settings with a findings badge, a project
+  block with target, runner and app id, and a "Release Command Center" heading with the current
+  phase and a progress chip while an operation runs.
+- **A device feed and "tapp chat" on Overview.** The feed shows a live session frame or, during
+  exploration, the newest screenshot the explorer wrote (`GET /api/jobs/<id>/frame`); the chat is
+  the engine's own progress log rendered as a transcript. Web exploration now narrates each action
+  and each new screen (`Opened /cart`, `Reached Cart`, `Tapped "Place order"`) through
+  `onProgress`; the iOS tail forwards `OCQA_ACTION` lines the same way, synthesizing a narrative
+  when the harness wrote none. Progress entries carry `current/total` from the action budget.
+- Onboarding frames the three entry layers: repository cards are labelled as such, and a website
+  card links to `/connect` in the hosted Studio or points at `tapp explore --read-only` locally. Website projects
+  are labelled "no source, no release verdict" in the sidebar and settings. The mode pill reads
+  "Self-host · this machine" or "Cloud · outbound runner".
+- Fixed a stray click handler at the end of `browser/app.js` that ran at module load.
+- **One command surface (ADR-0007).** The CLI goes from 33 verbs to twelve — `explore`, `look`,
+  `run`, `validate`, `init`, `plan`, `ci`, `app`, `report`, `doctor`, `mcp`, `feedback` — and
+  the local MCP server from 31 tools to 13 with the same names (`tapp_explore`, `tapp_look`,
+  `tapp_run`, `tapp_validate`, `tapp_init`, `tapp_plan`, `tapp_map`, `tapp_ci`, `tapp_report`,
+  `tapp_session`, `tapp_build`, `tapp_doctor`, `tapp_feedback`). `audit` is `explore --read-only`,
+  `focus` is `explore --goal`, `open`/`tree`/`shot` are `look`, the four `flow|task|contract|scenario`
+  families are `run FILE` and `validate FILE`, `pr`/`map`/`workflows`/`actor` live under `plan`,
+  `baseline` under `ci`, `install` under `doctor --install`. The VS Code extension exposes five
+  tools (`tapp_open_app`, `tapp_look`, `tapp_act`, `tapp_explore`, `tapp_build`) and the hosted
+  control plane adopts the shared names where it overlaps. Every old verb and tool name still works
+  for one minor version and prints its new form. Nothing in the engine changed.
+
 ## 0.17.27
 
 - **`tapp audit` stops calling wired controls dead.** A precision pass on 25 real small-business

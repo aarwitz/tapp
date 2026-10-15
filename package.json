@@ -1,6 +1,6 @@
 {
   "name": "@aarwitz/tapp",
-  "version": "0.17.27",
+  "version": "0.18.0",
   "mcpName": "io.github.aarwitz/tapp",
   "description": "Let coding agents verify UI changes on real iOS, Android, and web surfaces, then enforce reviewed proof in deterministic CI.",
   "license": "MIT",
@@ -11,6 +11,11 @@
   "exports": {
     ".": "./mcp-server/src/index.js",
     "./product-operations": "./mcp-server/src/product-operations.js",
+    "./business-workflows": {
+      "types": "./mcp-server/src/business-workflows.d.ts",
+      "import": "./mcp-server/src/business-workflows.js"
+    },
+    "./business-workflow-runtime": "./mcp-server/src/business-workflow-runtime.js",
     "./contracts": {
       "types": "./mcp-server/src/release-contract.d.ts",
       "import": "./mcp-server/src/contract-authoring.js"
@@ -21,6 +26,7 @@
     "browser/",
     "docs/BROWSER-PRODUCT.md",
     "docs/PRODUCT-ENGINE.md",
+    "docs/BUSINESS-WORKFLOWS.md",
     "docs/application-model.md",
     "docs/scenarios.md",
     "mcp-server/src/",

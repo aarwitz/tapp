@@ -13,21 +13,20 @@ APK plus app id, or an owned HTTP(S) URL. You never need to know an iOS bundle i
 
 ```bash
 npx -y @aarwitz/tapp@latest explore [target]     # autonomous exploration → findings + evidence (observation, not a gate; ≈ tapp_explore)
-npx -y @aarwitz/tapp@latest focus "SCREEN OR CONTROL" [target] # source-locate + shortest observed route + screenshot
+npx -y @aarwitz/tapp@latest explore --goal "SCREEN OR CONTROL" [target] # source-locate + shortest observed route + screenshot
 npx -y @aarwitz/tapp@latest explore https://your-app.example --watch  # web: visibly follow the same exploration
-npx -y @aarwitz/tapp@latest open [target]   # launch + screen summary + screenshot saved to a file (≈ tapp_open_app)
-npx -y @aarwitz/tapp@latest tree [target]   # accessibility tree, --json for every element (≈ tapp_ui_tree)
-npx -y @aarwitz/tapp@latest shot            # screenshot the booted sim → file path (≈ tapp_screenshot)
-npx -y @aarwitz/tapp@latest apps            # what's installed on the simulator, with bundle ids
-npx -y @aarwitz/tapp@latest build [dir]     # build the app in an Xcode repo + install it (≈ tapp_build)
+npx -y @aarwitz/tapp@latest explore --read-only https://example.com --pages 5  # never clicks: production or a site you do not own
+npx -y @aarwitz/tapp@latest look [target]        # launch + screen summary + screenshot saved to a file (≈ tapp_look)
+npx -y @aarwitz/tapp@latest look [target] --tree # + the accessibility tree, --json for every element
+npx -y @aarwitz/tapp@latest look                 # no target on iOS: the booted sim as it is → file path
 npx -y @aarwitz/tapp@latest explore app.apk --platform android --app-id com.acme.app
-npx -y @aarwitz/tapp@latest flow run .tapp/flows/smoke.yml  # committed, keyless E2E replay
+npx -y @aarwitz/tapp@latest run .tapp/flows/smoke.yml  # committed, keyless replay of a Flow, Task, contract, or Scenario
 ```
 
-On iOS, `tree` only uses an installed app: it never builds, uninstalls, or replaces it. With
+On iOS, `look` only uses an installed app: it never builds, uninstalls, or replaces it. With
 no target it uses the repository's recorded iOS target or the sole installed app; ambiguity
 requires a choice. Pass a bundle id to inspect a particular sandbox build. To replace a build,
-run `tapp build` explicitly first.
+run `tapp_build` (MCP) or `init . --explore` explicitly first.
 
 If repository onboarding detects multiple application targets, target detection is deterministic but
 the choice is the user's. Explicit `init --explore` asks even when the model has a saved default; a
@@ -41,7 +40,7 @@ with the client's native multiple-choice question UI when available, then rerun 
 widget.
 
 For focused web evidence, `open` and `tree` accept one semantic interaction plus an async content
-wait: `tapp open https://example.com --tap "Not now" --wait-for "Dashboard"`. Tapp waits for the
+wait: `tapp look https://example.com --tap "Not now" --wait-for "Dashboard"`. Tapp waits for the
 page to stabilize before capturing it and warns honestly if the bounded wait ends while it is still
 loading or changing.
 
@@ -64,13 +63,13 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 
 | The user wants… | Use | NOT |
 |---|---|---|
-| "Show me / screenshot a screen" | `tapp_open_app` (launch + screenshot + tree, ~15s) | `tapp_explore` (a full multi-minute exploration) |
-| "Find/reach this named screen or control" | `tapp_session_start` with `focus`, or `tapp_focus`; plain CLI: `tapp focus` | screenshot-by-screenshot wandering |
-| "Tap through / drive / fill a form / log in" | `tapp_session_start` → `session_act` loop | repeated `open_app` calls (cold relaunch each time) |
+| "Show me / screenshot a screen" | `tapp_look` (launch + screenshot; `tree:true` for the tree, ~15s) | `tapp_explore` (a full multi-minute exploration) |
+| "Find/reach this named screen or control" | `tapp_session {action:"start", focus}` or `tapp_explore {goal}`; plain CLI: `tapp explore --goal` | screenshot-by-screenshot wandering |
+| "Tap through / drive / fill a form / log in" | `tapp_session` `start` → act loop | repeated `tapp_look` launches (cold relaunch each time) |
 | "Is my app broken? Find bugs" | `tapp_explore` — `appBundleId` for iOS, `androidAppId` for Android, `url` for owned web apps; returns an observation (findings + evidence), not a ship verdict — gate a merge with the CI gate (`tapp ci` CLI / the GitHub Action) + a contract | a manual session (exploration is autonomous) |
-| "Is this live site / production / a prospect's site broken?" | `tapp_audit` (CLI `tapp audit <url> --pages N`) — read-only: dead controls, broken images/links/assets, failed requests, JS errors, mixed content, overflow; writes a capture with evidence | `tapp_explore` (it clicks, types and submits) |
-| "Make this flow a repeatable test" | drive it in a session, then `tapp_flow_save`; replay with `tapp_flow_run` | re-driving it by hand every time |
-| "What's on screen right now?" | `tapp_screenshot` / `tapp_ui_tree` | relaunching the app |
+| "Is this live site / production / a prospect's site broken?" | `tapp_explore {readOnly:true}` (CLI `tapp explore --read-only <url> --pages N`) — read-only: dead controls, broken images/links/assets, failed requests, JS errors, mixed content, overflow; writes a capture with evidence | `tapp_explore` (it clicks, types and submits) |
+| "Make this flow a repeatable test" | drive it in a session, then `tapp_session {action:"save_flow"}`; replay with `tapp_run` | re-driving it by hand every time |
+| "What's on screen right now?" | `tapp_look` | relaunching the app |
 
 ## Session driving (the Playwright loop)
 
@@ -81,19 +80,19 @@ If it returns source evidence without a route, inspect the cited file/navigation
 wander blindly or invent a route. URL-only targets correctly have no source advantage.
 
 ```
-tapp_session_start { appBundleId: "com.acme.app", focus: "Save storefront settings visible above keyboard", projectDir: "." }
-tapp_session_start { focus: "Storefront Settings", projectDir: "." } → managed web target from the workspace
-tapp_focus         { query: "Save storefront settings visible above keyboard" } → one-call shortest observed route
-tapp_session_act   { action: "login", email: "qa@x.com", password: "…" } → atomic fill + submit + verify
-tapp_session_act   { action: "tap",  id: "Email" }      → tap by a11y id OR visible label
-tapp_session_act   { action: "type", text: "qa@x.com" } → types into the focused field
-tapp_session_act   { action: "tap",  id: "Sign In" }
-tapp_session_act   { action: "wait", text: "Home", timeoutMs: 10000 }  → block until it appears
-tapp_screenshot                                          → see it
-tapp_session_end
+tapp_session { action: "start", appBundleId: "com.acme.app", focus: "Save storefront settings visible above keyboard", projectDir: "." }
+tapp_session { action: "start", focus: "Storefront Settings", projectDir: "." } → managed web target from the workspace
+tapp_explore { goal: "Save storefront settings visible above keyboard" } → one-call shortest observed route
+tapp_session { action: "login", email: "qa@x.com", password: "…" } → atomic fill + submit + verify
+tapp_session { action: "tap",  id: "Email" }      → tap by a11y id OR visible label
+tapp_session { action: "type", text: "qa@x.com" } → types into the focused field
+tapp_session { action: "tap",  id: "Sign In" }
+tapp_session { action: "wait", text: "Home", timeoutMs: 10000 }  → block until it appears
+tapp_look                                            → see it
+tapp_session { action: "end" }
 ```
 
-Android uses the same loop with `tapp_session_start { androidAppId: "com.acme.app", apkPath:
+Android uses the same loop with `tapp_session { action: "start", androidAppId: "com.acme.app", apkPath:
 "path/to/app.apk" }`. Android selectors prefer resource id, then content description, exact text,
 and text contains. The APK/app id replace the iOS bundle/simulator build inputs.
 
@@ -112,12 +111,12 @@ Rules that prevent 90% of failures:
    secret-templated replay step and avoids native secure-field refocus behavior.
 5. Tap results: `ok` (landed), `not_hittable` (exists but disabled/covered — the harness
    auto-dismisses keyboards and retries), `not_found` (nothing matches — re-read the tree).
-6. One session at a time. `session_start` always begins from a fresh **cold** launch
+6. One session at a time. `action:"start"` always begins from a fresh **cold** launch
    (terminate + relaunch, for a deterministic starting screen). Persisted app data such as
    Keychain credentials survives, but the app opens on its launch screen, not a resumed
    foreground state — an app that gates each cold start behind sign-in WILL show its login
-   wall, so plan `login` (or a bypass launch argument) as the first act. Plain `tapp tree` /
-   `tapp screenshot` warm-resume the currently foregrounded app instead, which is why they can
+   wall, so plan `login` (or a bypass launch argument) as the first act. Plain `tapp look`
+   warm-resumes the currently foregrounded app instead, which is why they can
    look signed-in when a fresh session does not.
 
 ## Autonomous exploration (`tapp_explore`)
@@ -139,7 +138,7 @@ advisory). Report the finding counts and coverage; do not invent a scalar or a s
   (e.g. `["--uitesting"]` if the app has a test bypass), and/or `appLaunchEnv` (e.g. a staging
   backend URL). If the result shows `inputFieldsEncountered` and you have no credentials, **ask
   the user** for them rather than re-running blind.
-- `tapp audit <url>` / `tapp_audit` is the read-only pass: it renders the page and reads it but never
+- `tapp explore --read-only <url>` / `tapp_explore {readOnly:true}` is the read-only pass: it renders the page and reads it but never
   clicks, types, submits, or hovers, so it is the one analysis safe to point at production or at a
   site you do not own. It finds controls that were never alive (dead in-page anchors,
   `aria-controls` naming nothing, placeholder links, buttons with no handler/form/link — which Flows
@@ -167,35 +166,35 @@ advisory). Report the finding counts and coverage; do not invent a scalar or a s
 Flow YAML is repository-native test code. Commit it under `.tapp/flows/`; CI can replay it
 without a coding agent, model, subscription, or API key. AI generation and `assert_ai` are optional.
 
-- **Record:** every successful `session_act` is recorded. After driving a flow, call
-  `tapp_flow_save { name: "checkout" }` → writes `.tapp/flows/checkout.yml` with waits and
+- **Record:** every successful session act is recorded. After driving a flow, call
+  `tapp_session { action: "save_flow", name: "checkout" }` → writes `.tapp/flows/checkout.yml` with waits and
   a final screen assertion auto-inserted; typed credentials are templated to `$TEST_EMAIL`/`$TEST_PASSWORD`.
-- **Replay:** `tapp_flow_run { flowPath: ".tapp/flows/checkout.yml" }` — exact steps,
+- **Replay:** `tapp_run { path: ".tapp/flows/checkout.yml" }` — exact steps,
   deterministic assertions, same result every time. A failed assertion is a finding.
 - **Credentials at replay:** pass real values (`testEmail`/`testPassword`, CLI `--email`/
   `--password`), or name a configured actor (`actor: "coach"`, CLI `--actor coach`) and Tapp
   resolves `$TEST_EMAIL`/`$TEST_PASSWORD` from the env vars that actor binds. Actors store
-  env-var **names** only — never values. `tapp actor set` refuses to overwrite an existing
+  env-var **names** only — never values. `tapp plan actor set` refuses to overwrite an existing
   actor unless you pass `--replace`, so idempotent setup scripts must include it.
-- **Generate:** `tapp_flow_generate { goal: "log in and add the first item to cart" }` —
+- **Generate:** `tapp_session { action: "draft_flow", goal: "log in and add the first item to cart" }` —
   grounded in the app's actually-explored screens, so it can't invent steps.
-- **Discover the file format without MCP:** `npx -y @aarwitz/tapp@latest flow example` prints a
-  complete starter Flow; `tapp flow validate <file>` checks it without launching a target.
+- **Discover the file format without MCP:** `npx -y @aarwitz/tapp@latest validate --example` prints a
+  complete starter Flow; `tapp validate <file>` checks it without launching a target.
 
 ## Setup facts (tell the user when relevant)
 
 - iOS runs locally on a Mac with Xcode + a simulator. Android needs `adb` and a connected
   emulator/device; source builds also need JDK 17, while prebuilt APK testing does not. Web needs
   Playwright + Chromium. `tapp doctor` reports each capability separately.
-- First tool call builds the test harness once (~2 min, cached in `~/.tapp`). `tapp install`
+- First tool call builds the test harness once (~2 min, cached in `~/.tapp`). `tapp doctor --install`
   prebuilds it. Switching simulators triggers an automatic rebuild.
-- The app under test must be **installed on the booted simulator** (`tapp_install_app` builds
+- The app under test must be **installed on the booted simulator** (`tapp_build { action: "install" }` builds
   and installs from an Xcode project/workspace; or the user's normal build).
-- A simulator must be booted (`tapp_list_simulators` → `tapp_boot_simulator`).
+- A simulator must be booted (`tapp_build { action: "list_simulators" }` → `{ action: "boot" }`).
 - Screenshots/captures land in `~/.tapp/captures/`.
 - Driving `tapp mcp` from a raw stdio client: **consume or discard stderr** — the server logs
   progress there, and an unread stderr pipe can deadlock a naive client. The first
-  `tapp_session_start` on a cold machine includes the one-time harness build, so it can take
+  `tapp_session { action: "start" }` on a cold machine includes the one-time harness build, so it can take
   minutes before the first result arrives; that is startup cost, not a hang.
 - Managed web targets always bind `127.0.0.1` and prefer the repository's declared or framework
   default port (vite → 5173, next → 3000). If the app's backend uses a CORS allowlist, pin the
@@ -212,10 +211,10 @@ without a coding agent, model, subscription, or API key. AI generation and `asse
   I haven't verified checkout").
 - The capture a command returns is the evidence; `~/.tapp/captures/` holds every project's history.
   Every capture carries `provenance.json` (kind, platform, target, project) and every result that
-  hands back a capture path hands back that record. `tapp_list_captures` and `tapp report latest`
+  hands back a capture path hands back that record. `tapp_report` and `tapp report latest`
   are scoped to the current project; pass `allProjects:true` only when the user asks for history,
   and never present another project's capture as this project's evidence or borrow it as a fixture.
-- A clean `tapp_audit` means the page is served without structural defects. It says nothing about
+- A clean read-only explore means the page is served without structural defects. It says nothing about
   behaviour, because nothing was clicked; never report it as "the site works".
 
 ## File feedback on tapp itself — don't just work around it

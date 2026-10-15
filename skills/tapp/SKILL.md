@@ -12,13 +12,13 @@ screen or journey works from source inspection alone.
 
 | Intent | Operation |
 |---|---|
-| See or screenshot one screen | `open` / `tapp_open_app` |
-| Inspect controls on the current screen | `tree` / `tapp_ui_tree` |
-| Reach a named screen/control | `focus` / `tapp_focus` (source + observed UI Map fast path) |
-| Drive a specific journey | MCP session start → focus or act → end |
+| See or screenshot one screen | `look` / `tapp_look` |
+| Inspect controls on the current screen | `look --tree` / `tapp_look {tree:true}` |
+| Reach a named screen/control | `explore --goal` / `tapp_explore {goal}` (source + observed UI Map fast path) |
+| Drive a specific journey | `tapp_session` start → act → end |
 | Find bugs autonomously (owned app/environment; it clicks) | `explore` / `tapp_explore` |
-| Check production or a site you do not own (never clicks) | `audit` / `tapp_audit` |
-| Preserve a journey | record and save a Flow; replay it deterministically |
+| Check production or a site you do not own (never clicks) | `explore --read-only` / `tapp_explore {readOnly:true}` |
+| Preserve a journey | `tapp_session {action:"save_flow"}`; replay it with `run` / `tapp_run` |
 | Decide whether a merge passes policy | `ci`; exploration never decides this |
 
 Prefer connected `tapp_*` MCP tools when available: they keep interactive sessions alive and return
@@ -35,7 +35,7 @@ When the user asks for a general first test of a repository:
 3. If Tapp returns `target-selection-required`, present its actual choices and ask the user to pick.
    Never guess among multiple targets. Re-run with the selected platform/target exactly as Tapp
    instructs.
-4. If a prerequisite is missing, call `tapp_health` when MCP is connected or run
+4. If a prerequisite is missing, call `tapp_doctor` when MCP is connected or run
    `npx -y @aarwitz/tapp@latest doctor`, apply only the stated remediation that is in scope, and
    retry once.
 
@@ -50,17 +50,17 @@ or owned HTTP(S) URL. Never explore a third-party web property: exploration clic
 When the user names a screen, control, or UI condition, do not discover the app one screenshot at a
 time. Start from the repository source, then use Tapp's observed navigation evidence:
 
-1. In a source repository, run `npx -y @aarwitz/tapp@latest focus "<exact request>" [target]`; it
-   selects the reviewed model target and prepares web, iOS, or Android from source. In an active MCP
-   session call `tapp_focus`; for managed web, `tapp_session_start` can also take `projectDir` and
-   `focus` without retyping the URL.
+1. In a source repository, run `npx -y @aarwitz/tapp@latest explore --goal "<exact request>" [target]`;
+   it selects the reviewed model target and prepares web, iOS, or Android from source. In an active MCP
+   session call `tapp_explore {goal}`; for managed web, `tapp_session {action:"start"}` can also take
+   `projectDir` and `focus` without retyping the URL.
 2. Tapp searches owned source, reconciles the likely surface with `.tapp/ui-map.json`, and executes
    the shortest runtime-observed route in one call. Read its final tree before visual assertions.
 3. If Tapp returns source evidence but no replayable route, inspect the cited file/line and relevant
    router/navigation source. Do not wander blindly or invent a path; ground the map or drive only a
    route supported by that source evidence.
 
-A fresh repository needs one grounding exploration before `focus` can replay a route. Source can
+A fresh repository needs one grounding exploration before `--goal` can replay a route. Source can
 locate an unobserved surface, but it never authorizes unobserved taps.
 
 Source establishes intent and location; the real UI establishes behavior. A URL-only target has no
@@ -78,7 +78,7 @@ ship verdict. Report:
 - what Tapp explicitly did not check.
 
 Evidence is the capture the command just returned. `~/.tapp/captures/` is shared by every project on
-the machine; `tapp_list_captures` shows only this project's and labels each with its provenance. Never
+the machine; `tapp_report` shows only this project's and labels each with its provenance. Never
 cite or reuse another project's capture, and never borrow one as a fixture — make a fresh one.
 
 If `inconclusive: true`, explain the blocker. A login wall or missing test data is not a pass. Ask for
@@ -109,4 +109,5 @@ workaround to finish a straightforward task; a result reported `ok`/`inconclusiv
 shouldn't have; or you're unsure whether something is a real app finding or a Tapp bug. One report
 per issue; when unsure, file — a closed non-issue costs nothing, an unreported bug stays a bug.
 
+Older verbs and tool names (`audit`, `focus`, `open`, `tree`, `tapp_session_start`, …) still work for one minor version and print their new form.
 Read [references/commands.md](references/commands.md) only for exact CLI/MCP syntax, Flow replay, credentials, or platform prerequisites.
