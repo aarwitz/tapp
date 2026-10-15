@@ -208,7 +208,8 @@ test("hosted direct login serves its own sign-in page and mints a first-party se
   }
 });
 
-test("the Studio audits a website read-only without a repository and lists it with its capture", async () => {
+// The audit renders pages in Chromium; hosted unit jobs run without a browser.
+test("the Studio audits a website read-only without a repository and lists it with its capture", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1" && "real browser tests are skipped" }, async () => {
   const http = await import("node:http");
   const site = http.createServer((request, response) => {
     if (request.url === "/missing.css") { response.writeHead(404); response.end("nope"); return; }
