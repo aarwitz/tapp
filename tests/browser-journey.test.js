@@ -19,7 +19,9 @@ function commerceFixture() {
   return project;
 }
 
-test("browser journey completes onboarding, map review, contract promotion, baseline, evidence, and CI preview", { skip: !chromium, timeout: 180_000 }, async () => {
+// The Studio is a run viewer (ADR-0006, owner decision 2026-10-15): open a repository, choose the
+// target, explore it, drive it live, keep a Flow, run the gate, and read every run's evidence.
+test("browser journey: target, exploration, live session, saved Flow, gate, and the runs list", { skip: !chromium, timeout: 180_000 }, async () => {
   const project = commerceFixture();
   const priorHome = process.env.TAPP_HOME;
   process.env.TAPP_HOME = path.join(project, "tapp-home");
@@ -36,7 +38,12 @@ test("browser journey completes onboarding, map review, contract promotion, base
     await page.locator("#targets .target-card").waitFor({ state:"visible", timeout:30_000 });
     assert.match(await page.locator("body").innerText(), /Choose the product target/);
     assert.match(await page.locator("body").innerText(), /Web/);
+    // The removed views are gone, not hidden.
+    for (const id of ["contracts", "coverage", "settings", "findings"]) assert.equal(await page.locator(`.primary-nav [data-view="${id}"]`).count(), 0, `${id} view removed`);
+    assert.equal(await page.locator("#folder-input").count(), 0, "no upload path");
+
     await operate("#explore");
+    assert.match(await page.locator("#chat-transcript").innerText(), /Initialize started/);
     await operate("#start-session");
     await page.locator("#live-session-panel").waitFor({ state:"visible" });
     await page.waitForFunction(() => document.querySelector("#live-frame-image")?.naturalWidth > 0);
@@ -54,48 +61,15 @@ test("browser journey completes onboarding, map review, contract promotion, base
     assert.doesNotMatch(fs.readFileSync(recordedFlow, "utf8"), /127\.0\.0\.1:\d+/, "managed runtime ports are not committed");
     await operate("#end-session");
     await page.locator("#live-session-panel").waitFor({ state:"hidden" });
-    await page.locator('.primary-nav [data-view="coverage"]').click();
-    await page.locator("#map-metric").waitFor({ state: "visible" });
-    assert.match(await page.locator("#map-metric").innerText(), /5 states · 4 transitions/);
-
-    await page.locator('.primary-nav [data-view="contracts"]').click();
-    const proposals = page.locator("#plan-list .plan-item");
-    assert.ok(await proposals.count() >= 1);
-    for (let index = 0; index < await proposals.count(); index += 1) {
-      const item = proposals.nth(index);
-      const text = await item.innerText();
-      await item.locator("select").selectOption(text.includes("Checkout creates an order that remains in order history") ? "approved" : "deferred");
-    }
-    await operate("#save-review");
-    await operate("#generate");
-    assert.match(await page.locator("#validation-status").innerText(), /untrusted draft/);
-    await operate("#validate-drafts");
-    assert.match(await page.locator("#validation-status").innerText(), /Validated drafts available/);
-    await operate("#promote");
-    assert.equal(fs.existsSync(path.join(project, ".tapp", "contracts", "checkout-creates-durable-order.contract.ts")), true);
-    const promotedModel = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "application-model.json"), "utf8"));
-    assert.equal(promotedModel.requirements.some((item) => item.id === "contracts"), false, "promotion refreshes canonical product readiness");
-    assert.equal(promotedModel.artifacts.contracts.some((item) => item.name === "checkoutCreatesDurableOrder"), true);
-    const promotedPlan = JSON.parse(fs.readFileSync(path.join(project, ".tapp", "release-plan.json"), "utf8"));
-    assert.match(promotedPlan.items.find((item) => item.name === "checkoutCreatesDurableOrder").generation.realValidation.web.evidence, /^tapp-capture:flow-web-/);
-    assert.doesNotMatch(await page.locator("#connect").innerText(), /No reviewed release contracts exist yet/);
-    assert.match(await page.locator("#validation-status").innerText(), /Promoted suite ready/);
-    assert.doesNotMatch(await page.locator("#artifact-list").innerText(), /Draft/);
-    assert.equal(await page.locator("#promote").isDisabled(), true);
 
     await page.locator('.primary-nav [data-view="runs"]').click();
     await operate("#run-gate");
-    assert.match(await page.locator("#decision-title").innerText(), /Ready to merge/);
-    await page.locator('.primary-nav [data-view="settings"]').click();
-    assert.equal(await page.locator("#create-baseline").isEnabled(), true);
-    await operate("#create-baseline");
-    assert.equal(fs.existsSync(path.join(project, ".tapp", "baselines", "web")), true);
-    await page.locator('.primary-nav [data-view="runs"]').click();
-    await operate("#run-gate");
-    await page.locator('.primary-nav [data-view="settings"]').click();
-    assert.match(await page.locator("#latest-evidence").innerText(), /0 new vs baseline/);
-    await operate("#preview-ci");
-    assert.match(await page.locator("#ci-preview").innerText(), /Tapp release gate/);
+    const decision = await page.locator("#decision-title").innerText();
+    assert.match(decision, /Ready to merge|Do not merge|Inconclusive/, "the decision card shows the gate outcome, never a score");
+    assert.ok(await page.locator("#runs-list .run-row").count() >= 1, "the gate run is listed");
+    const detail = await page.locator("#run-detail").innerText();
+    assert.match(detail, /Decision rationale/);
+    assert.match(detail, /Visual report/, "every run links to the report page the engine wrote");
     await page.screenshot({ path: path.join(process.env.TAPP_HOME, "release-studio.png"), fullPage: true });
   } finally {
     await browser.close();

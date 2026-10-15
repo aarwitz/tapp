@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.2
+
+- **The Studio is a run viewer.** After the browser surfaces audit (ADR-0006, owner decision of
+  2026-10-15) `tapp app` keeps what a browser does better than a terminal — watching a real device
+  while a run happens, driving it by hand and recording a Flow, reading every run's evidence — and
+  drops the second Command Center: the Contracts, Coverage and Settings views, the journey stepper,
+  and the folder-upload / GitHub-clone / remote-runner onboarding are gone (`tapp plan`,
+  `tapp validate`, `tapp ci` and `.tapp/project.json` are where that work lives). A repository
+  is opened with `tapp app /path/to/repo`; with no repository the Studio still audits websites.
+- **Website audits from the Studio.** A URL field runs the read-only audit (`explore --read-only`,
+  up to six pages, nothing clicked) and lists it with the release runs; each opens the report page
+  the engine wrote. New `audit` operation and `GET /api/audits` on the local server.
+- The browser client went from 834 to 522 lines, the stylesheet from 39 to 28 KB (every rule the
+  removed views used is gone); the server lost the upload, GitHub, planning, promotion, baseline and CI
+  endpoints. The hosted control plane (`saas/`) is frozen and unchanged.
+- `website/` (the earlier demo runner) and `cloud/` (the runner prototype) were removed.
+
 ## 0.18.1
 
 - **A finished iOS exploration no longer hangs on the simulator recorder.** `simctl io recordVideo`

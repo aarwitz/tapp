@@ -58,7 +58,7 @@ Current convergence:
 - VS Code remains a thin MCP client;
 - desktop reads the same `.tapp` artifacts but still has legacy import/build orchestration. It is
   retained, not the launch UX, until that orchestration is removed;
-- `cloud/runner` is retained prototype evidence for exact checkout, versioned operation envelopes,
+- The former `cloud/runner` prototype (removed 2026-10-15) was the evidence for exact checkout, versioned operation envelopes,
   leases, and cleanup. It is not the production hosted adapter or an adequate arbitrary-customer
   isolation boundary. The new SaaS must call these shared operations only through a tenant-aware,
   queued worker contract (defined in the private source repository's SaaS architecture doc).

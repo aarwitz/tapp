@@ -32,8 +32,6 @@ test("browser opens, drives, captures, and records the real iOS target", {
     await page.locator("#targets .target-card").waitFor({ state:"visible", timeout:30_000 });
     assert.match(await page.locator("#targets").innerText(), /iOS/);
     await operate("#explore");
-    assert.match(await page.locator("#map-metric").innerText(), /\d+ states · \d+ transitions/);
-    assert.doesNotMatch(await page.locator("#map-metric").innerText(), /^0 states/);
     await operate("#start-session");
     await page.locator("#live-session-panel").waitFor({ state:"visible" });
     await page.waitForFunction(() => document.querySelector("#live-frame-image")?.naturalWidth > 0, null, { timeout:30_000 });

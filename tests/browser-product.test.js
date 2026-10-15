@@ -39,15 +39,16 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     assert.doesNotMatch(cookie, /token=/i, "the bootstrap query name is not reused as a readable cookie name");
     const page = await fetch(product.origin, { headers: { cookie } });
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Bring the product/);
+    assert.match(await page.text(), /Point Tapp at something real/);
 
     const sessionResponse = await fetch(`${product.origin}/api/session`, { headers: { cookie } });
     const session = await sessionResponse.json();
     assert.equal(session.root, fs.realpathSync(root));
     assert.deepEqual(session.contract.targetPlatforms, ["ios", "android", "web"]);
-    assert.deepEqual(session.contract.repositorySources, ["local-folder", "github"]);
-    assert.equal(session.contract.views.some((view) => view.id === "runs"), true);
-    assert.equal(session.contract.views.some((view) => view.id === "findings"), true);
+    assert.deepEqual(session.contract.repositorySources, ["local-path"]);
+    assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs"]);
+    assert.equal(session.contract.operations.includes("audit"), true);
+    assert.equal(session.contract.operations.includes("ci-install"), false);
     const rejected = await fetch(`${product.origin}/api/operations/initialize`, { method: "POST", headers: { cookie, origin: product.origin, "content-type": "application/json" }, body: "{}" });
     assert.equal(rejected.status, 403);
 
@@ -207,66 +208,55 @@ test("hosted direct login serves its own sign-in page and mints a first-party se
   }
 });
 
-test("browser repository onboarding stages folder uploads and GitHub selections without accepting filesystem paths", async () => {
-  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-workspaces-test-"));
-  const githubProvider = {
-    async list() {
-      return [{ nameWithOwner:"acme/mobile", name:"mobile", url:"https://github.com/acme/mobile", defaultBranch:"main", private:true, permission:"ADMIN" }];
-    },
-    async clone(nameWithOwner, destination) {
-      assert.equal(nameWithOwner, "acme/mobile");
-      fs.mkdirSync(destination, { recursive:true });
-      fs.writeFileSync(path.join(destination, "index.html"), "<h1>GitHub product</h1>");
-      fs.writeFileSync(path.join(destination, "package.json"), JSON.stringify({ name:"github-product" }));
-    },
-  };
-  const product = await startBrowserProduct({ workspaceRoot, githubProvider, launch:false });
+test("the Studio audits a website read-only without a repository and lists it with its capture", async () => {
+  const http = await import("node:http");
+  const site = http.createServer((request, response) => {
+    if (request.url === "/missing.css") { response.writeHead(404); response.end("nope"); return; }
+    response.writeHead(200, { "content-type":"text/html" });
+    response.end('<!doctype html><title>Acme</title><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/missing.css"><body><h1>Acme</h1></body>');
+  });
+  await new Promise((resolve) => site.listen(0, "127.0.0.1", resolve));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-audit-home-"));
+  const priorHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const product = await startBrowserProduct({ launch:false });
   try {
     const bootstrap = await fetch(product.launchUrl, { redirect:"manual" });
     const cookie = cookieFrom(bootstrap);
     const session = await fetch(`${product.origin}/api/session`, { headers:{ cookie } }).then((response) => response.json());
     assert.equal(session.root, null);
-    assert.equal((await fetch(`${product.origin}/api/project`, { headers:{ cookie } }).then((response) => response.json())).connected, false);
-
     const mutationHeaders = { cookie, origin:product.origin, "x-tapp-csrf":session.csrfToken, "content-type":"application/json" };
-    const upload = await fetch(`${product.origin}/api/repositories/uploads`, {
-      method:"POST", headers:mutationHeaders, body:JSON.stringify({ name:"Uploaded App", expectedFiles:3, expectedBytes:96 }),
-    }).then((response) => response.json());
-    const uploadFile = async (relativePath, contents) => fetch(`${product.origin}/api/repositories/uploads/${upload.id}/files`, {
-      method:"PUT",
-      headers:{ cookie, origin:product.origin, "x-tapp-csrf":session.csrfToken, "content-type":"application/octet-stream", "x-tapp-relative-path":encodeURIComponent(relativePath) },
-      body:Buffer.from(contents),
-    });
-    assert.equal((await uploadFile("../outside.txt", "no")).ok, false);
-    assert.equal((await uploadFile(".DS_Store", "junk")).ok, false);
-    assert.equal((await uploadFile("index.html", "<h1>Uploaded product</h1>")).status, 200);
-    assert.equal((await uploadFile("package.json", JSON.stringify({ name:"uploaded-product" }))).status, 200);
-    assert.equal((await uploadFile(".tapp/project.json", JSON.stringify({ kind:"tapp-product-project" }))).status, 200);
-    const completed = await fetch(`${product.origin}/api/repositories/uploads/${upload.id}/complete`, { method:"POST", headers:mutationHeaders, body:"{}" }).then((response) => response.json());
-    assert.equal(completed.repository.source.kind, "local-folder-upload");
-    const stagedRoot = path.join(workspaceRoot, upload.id, "repository");
-    assert.equal(fs.existsSync(path.join(stagedRoot, "outside.txt")), false);
-    assert.equal(fs.existsSync(path.join(stagedRoot, ".DS_Store")), false);
-    assert.equal(fs.existsSync(path.join(stagedRoot, ".tapp", "project.json")), true, "hidden .tapp config must survive the staged upload");
-    assert.equal(completed.repository.fileCount, 3);
 
-    const github = await fetch(`${product.origin}/api/repositories/github`, { headers:{ cookie } }).then((response) => response.json());
-    assert.deepEqual(github.repositories.map((repository) => repository.nameWithOwner), ["acme/mobile"]);
-    const connectedResponse = await fetch(`${product.origin}/api/operations/connect-github`, { method:"POST", headers:mutationHeaders, body:JSON.stringify({ repository:"acme/mobile", filesystemPath:"/tmp/not-trusted" }) });
-    assert.equal(connectedResponse.status, 202);
-    const connected = await connectedResponse.json();
+    // Removed paths are gone: no uploads, no GitHub, no planning or CI operations.
+    assert.equal((await fetch(`${product.origin}/api/repositories/uploads`, { method:"POST", headers:mutationHeaders, body:"{}" })).status, 404);
+    assert.equal((await fetch(`${product.origin}/api/repositories/github`, { headers:{ cookie } })).status, 404);
+    const rejected = await fetch(`${product.origin}/api/operations/ci-install`, { method:"POST", headers:mutationHeaders, body:"{}" });
+    assert.equal(rejected.status, 409, "operations that need a repository say so when none is open");
+
+    const bad = await fetch(`${product.origin}/api/operations/audit`, { method:"POST", headers:mutationHeaders, body:JSON.stringify({ url:"ftp://nope" }) });
+    assert.equal(bad.status, 400);
+    const started = await fetch(`${product.origin}/api/operations/audit`, { method:"POST", headers:mutationHeaders, body:JSON.stringify({ url:`http://127.0.0.1:${site.address().port}/`, pages:2 }) }).then((response) => response.json());
     let job;
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      job = await fetch(`${product.origin}/api/jobs/${connected.job.id}`, { headers:{ cookie } }).then((response) => response.json());
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      job = await fetch(`${product.origin}/api/jobs/${started.job.id}`, { headers:{ cookie } }).then((response) => response.json());
       if (job.status !== "running") break;
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.equal(job.status, "completed", job.error?.message);
-    assert.equal(job.result.source.nameWithOwner, "acme/mobile");
-    assert.equal(job.result.root.startsWith(fs.realpathSync(workspaceRoot) + path.sep), true);
-    assert.equal(job.result.root.includes("not-trusted"), false);
+    assert.equal(job.result.readOnly, true);
+    assert.equal(job.result.issueCount, 1);
+    assert.match(job.result.issues[0].title, /404 asset: \/missing\.css/);
+    assert.ok(job.progress.some((entry) => /nothing will be clicked/.test(entry.text)));
+
+    const audits = await fetch(`${product.origin}/api/audits`, { headers:{ cookie } }).then((response) => response.json());
+    assert.equal(audits.audits.length, 1);
+    assert.equal(audits.audits[0].id, job.result.capture.id);
+    assert.equal(audits.audits[0].issueCount, 1);
+    const report = await fetch(`${product.origin}/evidence/captures/${audits.audits[0].id}/report.html`, { headers:{ cookie } });
+    assert.equal(report.status, 200, "the evidence page the engine wrote is served, not re-rendered");
   } finally {
     await product.close();
-    fs.rmSync(workspaceRoot, { recursive:true, force:true });
+    site.close();
+    if (priorHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = priorHome;
   }
 });

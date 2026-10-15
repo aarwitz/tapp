@@ -1,83 +1,60 @@
-# Browser Release Studio
+# Browser Studio
 
-Status: current product contract as of 2026-10-14 (shell and evidence panel reworked for desktop
-parity; the 2026-08-08 "paused track" framing is superseded by ADR-0006, "Three entry layers,
-two execution modes", in the private decision log).
+Status: current product contract as of 2026-10-15 (ADR-0006, owner decision). Supersedes the
+"desktop-parity Command Center" framing of 2026-10-14.
 
-The browser Release Studio is the one web UI. `browser/` is its only source; the hosted control
-plane (`saas/`) copies these assets at build time, so the self-host Studio (`tapp app`) and
-`app.runtapp.com` are the same interface with different execution modes. Its layout mirrors the
-macOS Command Center: wordmark and project menu, Overview / Runs / Findings / Coverage / Contracts /
-Settings, a project block, and an Overview that pairs a device feed with "tapp chat". The feed shows
-a live session frame or the newest screenshot the running exploration wrote; the chat is the
-engine's own progress log (phase changes, per-action narratives such as `Tapped "Place order"`,
-`Reached Checkout`, findings, completion). Nothing in either panel is generated after the fact, and
-there is no message input because no chat backend exists in the package. Web is one application
-target beside iOS and Android; it is not a separate QA product. CLI, MCP, VS Code, the Action,
-desktop, and the hosted Studio all adapt the shared product operations described in
-[`PRODUCT-ENGINE.md`](PRODUCT-ENGINE.md).
+The Studio in `browser/` is the one browser surface. It is a **run viewer**: point Tapp at a
+repository target or a website, watch the run live, open its evidence. It never scores or judges
+a run — only the deterministic gate decides — and it never re-renders evidence: every run opens
+the `report.html` the engine wrote into the capture. The hosted control plane (`saas/`, frozen)
+embeds these same assets at build time.
 
 ## Start locally
 
 ```bash
-npx -y @aarwitz/tapp@latest app
+npx -y @aarwitz/tapp@latest app /path/to/repo   # a repository on this machine
+npx -y @aarwitz/tapp@latest app                 # no repository: website audits only
 ```
 
-Tapp prints an authenticated one-time launch URL and opens it in the default browser. Use
-`--no-open` when copying the URL manually and `--port 4317` only when a fixed loopback port is
-needed. Drag/drop or Browse Folder copies source into a Tapp-owned workspace. Connect GitHub lists
-repositories authorized to the local `gh` session and makes a shallow isolated clone.
-`tapp app /path/to/repo` intentionally works directly in that checkout.
+Tapp prints an authenticated one-time launch URL and opens it in the default browser (`--no-open`
+to copy it by hand, `--port 4317` for a fixed loopback port). A repository is opened from the
+machine the Studio runs on; the Studio does not upload or clone source. Everything runs on this
+machine with its own toolchain (Xcode for iOS, JDK/SDK + `adb` for Android, Playwright Chromium
+for web), which must stay open while a run is in progress.
 
-The local server binds to `127.0.0.1`. It owns workspace paths; browser requests cannot submit an
-arbitrary server path. Mutations require an `HttpOnly` same-site session cookie, the exact local
-Origin, and an in-memory CSRF token. Application runtimes, repository credentials, and evidence stay
-in the local process/filesystem. This is a local trust boundary, not hosted multi-tenancy.
+## What is on the page
 
-## Product journey
+| View | What it shows | Operations |
+|---|---|---|
+| Overview | The detected targets (an explicit choice when there are several), the live device feed, "tapp chat" (the engine's own progress log — nothing is generated after the fact), the current decision from the last gate, the latest evidence | `initialize` (inspect, then build + explore), live session `start / act / save-flow / end`, release check |
+| Runs | Every run on this repository and every read-only website audit, newest first; each opens its evidence page. A URL field runs an audit from here. | `gate`, `audit` |
 
-1. **Connect** a copied folder, an explicit checkout, or a repository authorized by local `gh`.
-2. **Detect and choose** an iOS, Android, or web target. Continue automatically only when the target
-   and configuration are conclusive.
-3. **Build, launch, and explore** the real simulator, emulator/device, or browser surface.
-4. **Understand the UI Map** through observed states, transitions, controls, provenance, and gaps.
-5. **Review intent** by approving, rejecting, deferring, or constraining a compact release plan.
-6. **Generate drafts** of Tasks and contracts. Drafts remain visibly untrusted.
-7. **Validate** approved drafts deterministically against the real target.
-8. **Promote** only validated artifacts into the canonical suite and refreshed Application Model.
-9. **Gate** with autonomous evidence plus the promoted deterministic suite.
-10. **Baseline** only a passing, conclusive, target-scoped gate.
-11. **Install CI** by previewing and writing a reviewable repository patch. Tapp does not commit,
-    push, create GitHub secrets, or enable branch protection.
+A **website audit** is `explore --read-only`: up to six same-origin pages are rendered and read —
+dead controls, broken images/assets/links, failed requests, JS exceptions, mixed content,
+horizontal overflow — and nothing is clicked, typed, submitted or hovered, so it is safe on
+production or a site you do not own. A website has no source revision, so it has no release
+verdict; the audit says what it checked and what it could not (its detectors were qualified on 25
+real small-business sites in October 2026; the remaining findings were verified by hand).
 
-Successful semantic actions can be saved in `.tapp/flows/`; credential values are templated to
-environment references. Long-lived repository artifacts store binding names, not resolved secret
-values.
+## What was removed, and where it lives instead
+
+The Contracts, Coverage and Settings views, the six-step journey stepper, and the folder-upload,
+GitHub-clone and remote-runner onboarding were removed on 2026-10-15. Reviewing and promoting
+contracts is `tapp plan` / `tapp validate` in the repository; coverage is on every run's
+`report.html`; actors and credentials live in `.tapp/project.json`; CI installation is `tapp ci`.
+The Studio keeps only what a browser does better than a terminal: watching a real device while a
+run happens, driving it by hand, and reading evidence.
 
 ## Verified reference journey
 
-`tests/browser-journey.test.js` drives the visible local browser against a fresh CommerceDemo copy.
-It exercises startup, a real live web surface and semantic action, UI Map creation, Flow recording
-and replay, proposal review, generation, deterministic validation, promotion, a first gate,
-baseline-aware rerun, and CI preview.
-
-The opt-in `tests/browser-native-journey.test.js` passed on 2026-08-06 against a booted iOS
-simulator: the browser built and installed a disposable DemoApp checkout, ran shared target
-preparation and exploration, rendered an observed UI Map, drove the live surface, and saved a
-repository-native iOS Flow. The equivalent Android browser journey was not verified in that audit
-because no emulator/device was connected.
-
-This evidence proves representative local journeys. It does not prove arbitrary frameworks,
-production credentials, third-party services, hosted execution, or complete inference of business
-intent.
+`tests/browser-journey.test.js` drives the CommerceDemo fixture end to end in a real browser:
+target choice, exploration, a live session that records a Flow, the gate, and the runs list.
+`tests/browser-onboarding.test.js` covers the no-repository start and a read-only website audit;
+`tests/browser-product.test.js` covers authentication, CSRF, the audit operation and the removed
+endpoints answering 404.
 
 ## Hosted relationship
 
-The future hosted application will present the same product journey through a different adapter: application
-accounts/organizations, GitHub App repository authorization, private storage, a durable queue, and
-isolated managed workers. It cannot reuse the loopback session, local `gh` authority, filesystem
-boundary, or in-memory ownership assumptions.
-
-The old hosted preview and `cloud/` prototype do not satisfy this boundary. The managed SaaS is a
-separate, paused track (see the private source repository); do not market or accept private
-repositories until its readiness gate passes.
+`saas/` serves the same `browser/` assets through `/api/studio` with an API base and login URL
+injected. It is frozen at its current commit (ADR-0006, owner decision) and will embed the
+simplified Studio when it is next deployed. Nothing in the Studio depends on it.

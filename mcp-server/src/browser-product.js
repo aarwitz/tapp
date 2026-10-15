@@ -12,19 +12,8 @@ import { fileURLToPath } from "node:url";
 import { customerProductContract } from "../../browser/product-contract.js";
 import { BrowserWorkspaceRegistry } from "./browser-workspaces.js";
 import { selectApplicationTarget } from "./ci-setup.js";
-import {
-  createProductBaseline,
-  generateProductPlan,
-  initializeProductProject,
-  installProductCi,
-  prepareProductCi,
-  prepareProductTarget,
-  promoteProductPlan,
-  readProductProject,
-  reviewProductPlan,
-  runProductGate,
-  validateProductPlan,
-} from "./product-operations.js";
+import { initializeProductProject, prepareProductTarget, readProductProject, runProductGate } from "./product-operations.js";
+import { readCaptureProvenance } from "./capture-provenance.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -117,6 +106,29 @@ function capturePath(captureId, relative = "report.html") {
   const root = path.resolve(captureRoot(), captureId);
   const candidate = path.resolve(root, relative || "report.html");
   return candidate === root || candidate.startsWith(root + path.sep) ? candidate : null;
+}
+
+// Read-only website audits live in the captures directory like every other run; the Studio
+// lists the ones with a summary file. Newest first, bounded.
+function listAudits(limit = 50) {
+  const root = captureRoot();
+  let names;
+  try { names = fs.readdirSync(root); } catch { return []; }
+  const audits = [];
+  for (const name of names) {
+    if (!name.startsWith("web-audit-")) continue;
+    const summaryPath = path.join(root, name, "audit.json");
+    let summary;
+    try { summary = JSON.parse(fs.readFileSync(summaryPath, "utf8")); } catch { continue; }
+    const provenance = readCaptureProvenance(path.join(root, name));
+    audits.push({
+      id: name, createdAt: provenance?.createdAt || fs.statSync(summaryPath).mtime.toISOString(),
+      url: summary.url, pagesAudited: summary.pagesAudited || 0, pagesWithUnverifiableWiring: summary.pagesWithUnverifiableWiring || 0,
+      findingCounts: summary.findingCounts || {}, issueCount: summary.issueCount ?? (summary.issues || []).length,
+      issues: (summary.issues || []).slice(0, 60), checkedFor: summary.checkedFor || [], notChecked: summary.notChecked || [],
+    });
+  }
+  return audits.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
 function openBrowser(url) {
@@ -418,7 +430,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
-      if (request.method === "GET" && url.pathname === "/api/repositories/github") { json(response, 200, { repositories: await registry.listGithub() }); return; }
+      if (request.method === "GET" && url.pathname === "/api/audits") { json(response, 200, { audits: hosted ? hostedPayload(listAudits()) : listAudits() }); return; }
       if (request.method === "GET" && url.pathname === "/api/project") { json(response, 200, hosted ? hostedPayload(projectSnapshot(registry)) : projectSnapshot(registry)); return; }
       if (request.method === "GET" && url.pathname === "/api/live-session") { json(response, 200, liveSession || { active:false }); return; }
       if (request.method === "GET" && url.pathname === "/api/live-session/frame") {
@@ -456,35 +468,6 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
 
-      const uploadFileMatch = url.pathname.match(/^\/api\/repositories\/uploads\/(upload_[a-f0-9]{20})\/files$/);
-      if (request.method === "PUT" && uploadFileMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
-        let relativePath;
-        try { relativePath = decodeURIComponent(String(request.headers["x-tapp-relative-path"] || "")); }
-        catch { throw Object.assign(new Error("Repository file path header is invalid"), { statusCode: 400 }); }
-        const result = await registry.writeUploadFile(uploadFileMatch[1], relativePath, request, request.headers["content-length"]);
-        json(response, 200, result);
-        return;
-      }
-      if (request.method === "POST" && url.pathname === "/api/repositories/uploads") {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
-        json(response, 201, registry.createUpload(await readJsonBody(request)));
-        return;
-      }
-      const uploadCompleteMatch = url.pathname.match(/^\/api\/repositories\/uploads\/(upload_[a-f0-9]{20})\/complete$/);
-      if (request.method === "POST" && uploadCompleteMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
-        if (liveSession?.active) throw Object.assign(new Error("End the active live session before changing repositories"), { statusCode:409 });
-        const repository = registry.finishUpload(uploadCompleteMatch[1]);
-        json(response, 200, { repository: hosted ? hostedRepository(repository) : repository });
-        return;
-      }
-      const uploadAbortMatch = url.pathname.match(/^\/api\/repositories\/uploads\/(upload_[a-f0-9]{20})$/);
-      if (request.method === "DELETE" && uploadAbortMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
-        json(response, 200, { aborted: registry.abortUpload(uploadAbortMatch[1]) });
-        return;
-      }
       if (request.method === "POST" && url.pathname === "/api/repositories/select") {
         requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
         if (activeMutation) throw Object.assign(new Error(`Operation '${activeMutation.operation}' is still running`), { statusCode: 409 });
@@ -499,14 +482,26 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
       const body = await readJsonBody(request);
       const operation = url.pathname.slice("/api/operations/".length);
-      if (operation === "connect-github") {
-        if (liveSession?.active) throw Object.assign(new Error("End the active live session before changing repositories"), { statusCode:409 });
-        const job = startJob(operation, (progress) => registry.cloneGithub(body.repository, progress), null);
+      // A website audit needs no repository: it is read-only against a URL and writes a capture.
+      if (operation === "audit") {
+        let target;
+        try { target = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 }); }
+        if (!/^https?:$/.test(target.protocol)) throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 });
+        const pages = Math.max(1, Math.min(20, Number(body.pages) || 6));
+        const job = startJob(operation, async (progress) => {
+          const { auditWebSite } = await import("./web-audit.js");
+          progress({ phase: "runtime", text: `Opening ${target.href} read-only (up to ${pages} pages, nothing will be clicked)` });
+          const summary = await auditWebSite({
+            url: target.href, pages, delayMs: 750, capturesDir: captureRoot(),
+            onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages }),
+          });
+          return hosted ? hostedPayload(summary) : summary;
+        }, null);
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }
       const root = registry.currentRoot();
-      if (!root) throw Object.assign(new Error("Connect a local folder or GitHub repository first"), { statusCode: 409 });
+      if (!root) throw Object.assign(new Error("Open a repository first: tapp app /path/to/repo"), { statusCode: 409 });
       const repositoryId = registry.current().id;
       const job = startJob(operation, async (progress) => {
         const engine = await import("./index.js");
@@ -608,21 +603,6 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             onStatus: (text) => progress({ phase: "runtime", text }),
           });
         }
-        if (operation === "review") return reviewProductPlan({ projectDir: root, approve: body.approve || [], reject: body.reject || [], defer: body.defer || [] });
-        if (operation === "generate") return generateProductPlan({ projectDir: root });
-        if (operation === "validate") {
-          const selected = selectedTarget(root, body);
-          const prepared = await prepareProductTarget({ projectDir: root, platform: selected.platform, target: selected.id, buildIos: engine.buildAppForSim, installIos: engine.installAppOnBootedSim, buildAndroid: engine.buildAndroidApp, onProgress: progress });
-          return validateProductPlan({
-            projectDir: root, items: body.items || [], platform: selected.platform, target: selected.id,
-            url: prepared.runtime.url || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
-            timeout: runtime.timeout, testEmail: runtime.testEmail, testPassword: runtime.testPassword,
-            startWebTarget: engine.startManagedWebTarget, stopWebTarget: engine.stopManagedWebTarget, onProgress: progress,
-          });
-        }
-        if (operation === "promote") return promoteProductPlan({ projectDir: root, items: body.items || [] });
-        if (operation === "ci-preview") return prepareProductCi({ projectDir: root, actionRef: body.actionRef, defaultBranch: body.defaultBranch || "main" });
-        if (operation === "ci-install") return installProductCi({ projectDir: root, actionRef: body.actionRef, defaultBranch: body.defaultBranch || "main", replace: body.replace === true, allowUnresolved: body.allowUnresolved === true });
         if (operation === "gate") {
           const selected = selectedTarget(root, body);
           const prepared = await prepareProductTarget({ projectDir: root, platform: selected.platform, target: selected.id, buildIos: engine.buildAppForSim, buildAndroid: engine.buildAndroidApp, onProgress: progress });
@@ -631,14 +611,6 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             url: prepared.runtime.url || "", appPath: prepared.runtime.appPath || "", bundleId: prepared.runtime.bundleId || "", appId: prepared.runtime.appId || "", apkPath: prepared.runtime.apkPath || "", serial: runtime.serial,
             actions: runtime.maxActions, timeout: runtime.timeout, baseline: body.baseline || "", testEmail: runtime.testEmail, testPassword: runtime.testPassword, onProgress: progress,
           });
-        }
-        if (operation === "baseline") {
-          const project = readProductProject({ projectDir: root });
-          const run = project.evidence.find((item) => item.id === body.runId);
-          if (!run?.reportPath) throw new Error("Select a completed local gate run before creating a baseline");
-          const platform = run.report?.platform || String(body.platform || "").toLowerCase();
-          const target = run.report?.targetKey || body.target || "";
-          return createProductBaseline({ projectDir: root, reportPath: run.reportPath, platform, target, replace: body.replace === true });
         }
         throw new Error(`Unsupported product operation '${operation}'`);
       }, repositoryId);

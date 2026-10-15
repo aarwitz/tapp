@@ -45,67 +45,73 @@ test("hosted operations remain pending while queued or leased to a runner", () =
   assert.equal(operationIsPending("failed"), false);
 });
 
-test("visible source chooser converges folder and GitHub imports into the same product journey", { skip:skipRealBrowser || !chromium, timeout:60_000 }, async () => {
-  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-onboarding-workspaces-"));
-  const folder = webRepository("tapp-visible-folder-", "folder-product");
-  const githubProvider = {
-    async list() { return [{ nameWithOwner:"acme/github-product", name:"github-product", defaultBranch:"main", private:true, permission:"WRITE" }]; },
-    async clone(_name, destination) {
-      fs.mkdirSync(destination, { recursive:true });
-      fs.writeFileSync(path.join(destination, "index.html"), "<!doctype html><h1>GitHub product</h1>");
-      fs.writeFileSync(path.join(destination, "package.json"), JSON.stringify({ name:"github-product" }));
-    },
-  };
-  const product = await startBrowserProduct({ workspaceRoot, githubProvider, launch:false });
+// A fixture website with one defect, for the read-only audit path.
+async function fixtureSite() {
+  const http = await import("node:http");
+  const server = http.createServer((request, response) => {
+    if (request.url === "/missing.css") { response.writeHead(404); response.end("nope"); return; }
+    response.writeHead(200, { "content-type":"text/html" });
+    response.end('<!doctype html><title>Acme</title><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="/missing.css"><body><h1>Acme</h1><a href="/">Home</a></body>');
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return { server, url:`http://127.0.0.1:${server.address().port}/` };
+}
+
+test("without a repository the Studio explains how to open one and audits a website read-only", { skip:skipRealBrowser || !chromium, timeout:90_000 }, async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-audit-home-"));
+  const priorHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const site = await fixtureSite();
+  const product = await startBrowserProduct({ launch:false });
   let browser;
   try {
     browser = await chromium.launch({ headless:true });
     const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
-    assert.match(await page.locator("#source-onboarding").innerText(), /Upload a project folder/);
-    assert.match(await page.locator("#source-onboarding").innerText(), /Connect to GitHub/);
+    const onboarding = await page.locator("#source-onboarding").innerText();
+    assert.match(onboarding, /npx -y @aarwitz\/tapp@latest app \/path\/to\/repo/, "a repository is opened from the machine, not uploaded");
+    assert.doesNotMatch(onboarding, /Upload a project folder|Connect to GitHub/);
+    assert.match(onboarding, /Audit a website/);
 
-    await page.locator("#folder-input").setInputFiles(folder);
-    await page.locator("#targets .target-card").waitFor({ state:"visible", timeout:30_000 });
-    await page.waitForFunction(() => document.querySelector("#operation-drawer")?.classList.contains("hidden") && !document.querySelector("#map-metric")?.textContent?.startsWith("0 states"), null, { timeout:30_000 });
-    assert.match(await page.locator("#repository-detail").innerText(), /isolated (?:working copy|checkout)/i);
-    assert.match(await page.locator("#targets").innerText(), /Web/);
-    assert.doesNotMatch(await page.locator("#map-metric").innerText(), /^0 states/);
-
-    await page.locator("#change-source").click();
-    await page.locator("#connect-github").click();
-    const githubRepository = page.locator('[data-github-repository="acme/github-product"]');
-    await githubRepository.waitFor({ state:"visible" });
-    await githubRepository.click();
-    await page.waitForFunction(() => document.querySelector("#repository-title")?.textContent?.includes("acme/github-product"), null, { timeout:30_000 });
-    await page.locator("#targets .target-card").waitFor({ state:"visible" });
-    await page.waitForFunction(() => document.querySelector("#operation-drawer")?.classList.contains("hidden") && !document.querySelector("#map-metric")?.textContent?.startsWith("0 states"), null, { timeout:30_000 });
-    assert.match(await page.locator("#repository-detail").innerText(), /isolated (?:working copy|checkout)/i);
-    assert.doesNotMatch(await page.locator("#map-metric").innerText(), /^0 states/);
-    const options = await page.locator("#repository-switcher option").allTextContents();
-    assert.equal(options.some((value) => value.includes("local-folder-upload")), true);
-    assert.equal(options.some((value) => value.includes("github")), true);
+    await page.locator("#onboarding-audit-url").fill(site.url);
+    await page.locator("#onboarding-audit-start").click();
+    await page.locator("#operation-drawer").waitFor({ state:"visible", timeout:5000 });
+    await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:60_000 });
+    await page.locator("#runs-list .run-row").first().waitFor({ state:"visible" });
+    const row = await page.locator("#runs-list .run-row").first().innerText();
+    assert.match(row, /Audit · 127\.0\.0\.1/);
+    assert.match(row, /read-only/);
+    assert.match(row, /1 issue/i);
+    const detail = await page.locator("#run-detail").innerText();
+    assert.match(detail, /READ-ONLY AUDIT/);
+    assert.match(detail, /404 asset: \/missing\.css/);
+    assert.match(detail, /nothing was clicked/i);
+    assert.match(detail, /Visual report/);
+    const captures = fs.readdirSync(path.join(home, "captures")).filter((name) => name.startsWith("web-audit-"));
+    assert.equal(captures.length, 1, "the audit wrote one capture in the explore layout");
+    assert.equal(fs.existsSync(path.join(home, "captures", captures[0], "report.html")), true);
   } finally {
     await browser?.close();
     await product.close();
+    site.server.close();
+    if (priorHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = priorHome;
   }
 });
 
 test("multiple detected applications require an explicit polished target choice", { skip:skipRealBrowser || !chromium, timeout:30_000 }, async () => {
-  const product = await startBrowserProduct({ workspaceRoot:fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-multi-workspaces-")), launch:false });
+  const product = await startBrowserProduct({ projectDir:multiTargetRepository(), launch:false });
   let browser;
   try {
     browser = await chromium.launch({ headless:true });
     const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
-    await page.locator("#folder-input").setInputFiles(multiTargetRepository());
     await page.locator("#targets .target-card").first().waitFor({ state:"visible", timeout:20_000 });
     await page.waitForFunction(() => document.querySelector("#operation-drawer")?.classList.contains("hidden"));
     assert.equal(await page.locator("#targets .target-card").count(), 2);
     assert.match(await page.locator("#target-choice-callout").innerText(), /Nothing will build until you select a target/);
     assert.match(await page.locator("#target-status").innerText(), /Selection required/);
     assert.equal(await page.locator("#explore").isDisabled(), true);
-    assert.match(await page.locator("#map-metric").innerText(), /^0 states/);
+    assert.equal(await page.locator("#run-gate").isDisabled(), true);
     await page.screenshot({ path:path.join(os.tmpdir(), "tapp-multi-target-proof.png"), fullPage:true });
 
     const selected = page.locator("#targets .target-card").first();
@@ -114,7 +120,7 @@ test("multiple detected applications require an explicit polished target choice"
     assert.equal(await page.locator("#target-choice-callout").isHidden(), true);
     assert.equal(await page.locator("#explore").isEnabled(), true);
     assert.match(await page.locator("#explore").innerText(), /Build & explore/);
-    assert.match(await page.locator("#map-metric").innerText(), /^0 states/, "selecting a target does not silently start exploration");
+    assert.equal(await page.locator("#operation-drawer").isHidden(), true, "selecting a target does not silently start a build");
   } finally {
     await browser?.close();
     await product.close();
