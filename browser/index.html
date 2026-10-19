@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Tapp Studio: run Tapp against a repository target or a website, watch it live, and open the evidence.">
+  <meta name="description" content="Tapp Studio: point Tapp at a website, a repository or a build, watch it run on a real device, and open the evidence.">
   <meta name="tapp-api-base" content="">
   <meta name="tapp-login-url" content="">
   <title>Tapp</title>
@@ -21,44 +21,49 @@
     <symbol id="i-app" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="2"/><path d="M6.5 12h3"/></symbol>
   </svg>
 
-  <main class="source-onboarding hidden" id="source-onboarding">
+  <main class="prompt-screen hidden" id="source-onboarding">
     <header class="onboarding-topbar">
       <button class="brand" data-brand-home aria-label="Tapp overview">tapp<span class="brand-mark"></span><small>ship with proof</small></button>
       <span class="mode-pill" id="onboarding-mode-pill">Self-host · this machine</span>
     </header>
-    <section class="welcome-copy">
-      <p class="eyebrow">Run viewer</p>
-      <h1>Point Tapp at something real.</h1>
-      <p>A repository on this machine gets built, explored and gated; a website gets a read-only audit. Either way the evidence is what the engine wrote — screenshots, findings, a report page — not a summary written afterwards.</p>
-      <div class="platform-row" aria-label="Supported target platforms">
-        <span>iOS</span><span>Android</span><span>Web</span>
+
+    <section class="prompt-hero" aria-hidden="true">
+      <!-- A device being driven: a cursor moves across screens, each screen gets its check. The
+           loop is the product in eight seconds; it respects prefers-reduced-motion. -->
+      <div class="hero-stage">
+        <div class="hero-device">
+          <span class="hero-notch"></span>
+          <div class="hero-screen">
+            <div class="hero-page hero-page-1"><span class="hero-bar"></span><span class="hero-line w60"></span><span class="hero-line w80"></span><span class="hero-tile"></span><span class="hero-btn">Add to cart</span></div>
+            <div class="hero-page hero-page-2"><span class="hero-bar"></span><span class="hero-line w40"></span><span class="hero-row"></span><span class="hero-row"></span><span class="hero-btn">Checkout</span></div>
+            <div class="hero-page hero-page-3"><span class="hero-bar"></span><span class="hero-check">✓</span><span class="hero-line w60 center"></span><span class="hero-line w40 center"></span></div>
+          </div>
+          <span class="hero-cursor">👆</span>
+        </div>
+        <ul class="hero-log">
+          <li class="hero-log-1">📱 Launching the app</li>
+          <li class="hero-log-2">👆 Tapping “Add to cart”</li>
+          <li class="hero-log-3">👆 Tapping “Checkout”</li>
+          <li class="hero-log-4">📸 Screenshotting · <b>✓ Order confirmed</b></li>
+        </ul>
       </div>
     </section>
 
-    <section class="source-choices" aria-label="Open a repository or audit a website">
-      <article class="source-card">
-        <span class="source-layer">Repository</span>
-        <div class="source-icon">⌘</div>
-        <p class="eyebrow">This machine</p>
-        <h2>Open a checkout</h2>
-        <p>Start the Studio from the repository you want to test. Tapp detects its iOS, Android and web targets, builds with your local toolchain, and never uploads source.</p>
-        <pre class="command"><code>npx -y @aarwitz/tapp@latest app /path/to/repo</code></pre>
-        <small>Already have a terminal in the repository? <code>tapp app .</code> does the same.</small>
-      </article>
-      <article class="source-card website-card">
-        <span class="source-layer">Website</span>
-        <div class="source-icon">⌁</div>
-        <p class="eyebrow">No source code</p>
-        <h2>Audit a website</h2>
-        <p>Read-only: Tapp renders up to six pages and reports what is broken as served — dead controls, broken images and links, failed requests, layout that scrolls sideways on a phone. Nothing is clicked, typed or submitted, so it is safe on production or a site you do not own. No release verdict without source.</p>
-        <form class="audit-form" id="onboarding-audit-form">
-          <label class="field"><span>Website URL</span><input id="onboarding-audit-url" name="url" type="url" inputmode="url" placeholder="https://example.com" required autocomplete="off"></label>
-          <button class="primary" type="submit" id="onboarding-audit-start">Audit read-only</button>
-        </form>
-      </article>
+    <section class="prompt-block">
+      <h1>What should tapp test?</h1>
+      <form class="prompt-form" id="prompt-form" autocomplete="off">
+        <label class="prompt-field"><span class="sr-only">Website, repository, folder, or build</span><input id="prompt-input" name="input" placeholder="A website URL, a GitHub repo, a folder on this Mac, a bundle id, an .app or .apk…" spellcheck="false" required></label>
+        <button class="primary prompt-go" type="submit" id="prompt-start" aria-label="Start">→</button>
+      </form>
+      <ul class="prompt-suggestions" aria-label="Examples">
+        <li><button type="button" data-prompt="https://example.com"><span>⌁</span><b>https://example.com</b><small>audit a website read-only — safe on production, nothing is clicked</small></button></li>
+        <li><button type="button" data-prompt="~/code/my-app"><span>⌘</span><b>~/code/my-app</b><small>open a repo folder on this Mac — detects iOS, Android and web targets, builds locally</small></button></li>
+        <li><button type="button" data-prompt="owner/repo"><span>🐙</span><b>owner/repo</b><small>clone from GitHub into an isolated workspace, then the same</small></button></li>
+        <li><button type="button" data-prompt="com.company.app"><span>📱</span><b>com.company.app</b><small>explore a build already on the booted simulator (or give a .app / .apk)</small></button></li>
+      </ul>
+      <p class="prompt-note" id="privacy-note-detail">Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key.</p>
+      <span class="sr-only" id="privacy-note-title">Your code stays on this machine.</span>
     </section>
-
-    <div class="privacy-note"><strong id="privacy-note-title">Your code stays on this machine.</strong><span id="privacy-note-detail">Exploration, replay and merge decisions are deterministic and need no API key. This machine must stay open while a run is in progress.</span></div>
   </main>
 
   <div class="product-shell hidden" id="product-shell">
@@ -82,7 +87,7 @@
         <span class="mode-pill" id="mode-pill">Self-host · this machine</span>
       </div>
       <div class="sidebar-footer">
-        <button class="quiet" id="change-source">⌁ Audit a website</button>
+        <button class="quiet" id="change-source">＋ Test something else</button>
         <button class="quiet hidden" id="refresh-project">Refresh</button>
       </div>
     </aside>
@@ -90,19 +95,17 @@
     <main class="workspace">
       <section class="workspace-view active" data-view-panel="overview" id="overview">
         <div class="command-bar">
-          <div><h1>Release check</h1><p><span id="app-name">Your project</span> · <span id="app-summary">Inspecting the repository for targets.</span></p></div>
+          <div><h1 id="app-name">Your project</h1><p id="app-summary">Inspecting the repository for targets.</p></div>
           <div class="command-actions">
             <span class="phase-pill hidden" id="phase-pill"><span class="spinner"></span><span id="phase-pill-text">Working…</span></span>
+            <div class="idle-badges" id="idle-badges"></div>
             <button class="primary" id="command-run">Run release check</button>
           </div>
         </div>
         <div class="run-progress hidden" id="run-progress"><span class="progress-track"><span id="run-progress-bar"></span></span><span id="run-progress-text">Starting…</span></div>
-        <div class="idle-badges" id="idle-badges"></div>
-        <hr class="command-divider">
 
-        <section class="evidence-section">
-          <div class="device-panel">
-            <p class="feed-label" id="device-feed-label">Live feed</p>
+        <section class="stage" id="stage">
+          <div class="device-stage">
             <div class="device-frame" id="device-frame">
               <span class="notch"></span>
               <div class="device-screen">
@@ -111,22 +114,18 @@
                 <div class="device-placeholder" id="device-placeholder"><div><strong>No live feed yet</strong>Run a release check or open a live session to see the real application here.</div></div>
               </div>
             </div>
-            <div class="device-meta">
-              <div><span>Device</span><strong id="device-meta-device">—</strong></div>
-              <div><span>Screen</span><strong id="live-screen-title">—</strong></div>
-            </div>
+            <div class="device-meta"><span id="device-feed-label">Live feed</span><span id="device-meta-device">—</span><span id="live-screen-title">—</span></div>
           </div>
-          <span class="vrule"></span>
-          <div class="chat-panel">
-            <div class="chat-head"><div><h2>tapp chat</h2><p>The engine's own progress log: screens, actions and findings as they happen</p></div></div>
-            <div class="chat-transcript" id="chat-transcript"></div>
-            <div class="chat-footer">Nothing here is generated after the fact.</div>
-          </div>
-        </section>
 
-        <div class="view-heading" style="margin-top:20px">
-          <div class="decision-card neutral" id="decision-card"><span class="decision-label">CURRENT DECISION</span><strong id="decision-title">Not evaluated</strong><span id="decision-detail">Run a conclusive release gate to establish evidence.</span></div>
-        </div>
+          <aside class="chat-float" id="chat-float" aria-label="tapp chat">
+            <button class="chat-head" id="chat-toggle" aria-expanded="true" aria-controls="chat-transcript">
+              <span class="chat-avatar">💬</span>
+              <span class="chat-title">tapp<small id="chat-status">ready</small></span>
+              <span class="chat-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="chat-transcript" id="chat-transcript"></div>
+          </aside>
+        </section>
 
         <section class="panel section" id="target-stage">
           <div class="section-heading"><div><p class="eyebrow">Build & run</p><h2>Choose the product target</h2><p>Tapp detected these targets from source. With more than one, you choose; nothing builds until you do.</p></div><span class="status-chip" id="target-status">No target selected</span></div>
@@ -140,7 +139,7 @@
         </section>
 
         <section class="panel section live-session-panel hidden" id="live-session-panel">
-          <div class="section-heading"><div><p class="eyebrow">Live application</p><h2>Drive the running target</h2><p>The device feed above is the real application. Semantic controls refresh after every action; successful actions are recorded as a Flow you can save.</p></div><div class="button-row"><span class="status-chip" id="live-platform">Target</span><span class="status-chip" id="live-recorded-steps">0 recorded steps</span><button class="quiet" id="refresh-live-session">Refresh</button><button class="secondary" id="end-session">End session</button></div></div>
+          <div class="section-heading"><div><p class="eyebrow">Live application</p><h2>Drive the running target</h2><p>The device above is the real application. Semantic controls refresh after every action; successful actions are recorded as a Flow you can save.</p></div><div class="button-row"><span class="status-chip" id="live-platform">Target</span><span class="status-chip" id="live-recorded-steps">0 recorded steps</span><button class="quiet" id="refresh-live-session">Refresh</button><button class="secondary" id="end-session">End session</button></div></div>
           <div class="live-layout">
             <aside class="live-controls"><div class="live-controls-heading"><div><strong>Semantic controls</strong><small id="live-control-count">0 available</small></div></div><div id="live-control-list"><div class="empty">Controls appear when the session starts.</div></div><div class="manual-action"><label><span>Target or field</span><input id="live-action-target" placeholder="Accessibility id or visible label"></label><label><span>Text <i>for type/wait</i></span><input id="live-action-text" autocomplete="off"></label><div class="button-row"><button class="secondary" id="live-tap">Tap</button><button class="secondary" id="live-type">Type</button><button class="quiet" id="live-back">Back</button><button class="quiet" id="live-swipe">Swipe up</button></div></div></aside>
             <div class="flow-recorder-panel"><div class="flow-recorder-head"><div><strong>Keep this journey as a deterministic Flow</strong><small>Saved Flows replay without AI; promote them into the gate from the repository.</small></div></div><div class="flow-recorder"><label><span>Flow name</span><input id="live-flow-name" placeholder="Checkout smoke"></label><button class="primary" id="save-live-flow">Save Flow</button></div></div>
@@ -148,12 +147,12 @@
         </section>
 
         <section class="overview-grid">
-          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">Latest evidence</p><h2>What the last run proved</h2></div><button class="quiet" data-view="runs">All runs</button></div><div id="overview-evidence"><div class="empty">No run yet.</div></div></article>
+          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">Latest evidence</p><h2>What the last run proved</h2></div><button class="quiet" data-view="runs">All runs</button></div><div class="decision-card neutral" id="decision-card"><span class="decision-label">CURRENT DECISION</span><strong id="decision-title">Not evaluated</strong><span id="decision-detail">Run a conclusive release gate to establish evidence.</span></div><div id="overview-evidence"><div class="empty">No run yet.</div></div></article>
         </section>
       </section>
 
       <section class="workspace-view" data-view-panel="runs">
-        <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks on this repository and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate">Run release gate</button></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks, explorations and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate">Run release gate</button></div>
         <section class="panel section audit-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Website</p><h2>Audit a website — read-only</h2><p>Up to six pages, nothing clicked. Safe on production or a site you do not own; no release verdict without source.</p></div></div>
           <form class="audit-form" id="runs-audit-form">

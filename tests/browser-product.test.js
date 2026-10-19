@@ -39,13 +39,13 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     assert.doesNotMatch(cookie, /token=/i, "the bootstrap query name is not reused as a readable cookie name");
     const page = await fetch(product.origin, { headers: { cookie } });
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Point Tapp at something real/);
+    assert.match(await page.text(), /What should tapp test\?/);
 
     const sessionResponse = await fetch(`${product.origin}/api/session`, { headers: { cookie } });
     const session = await sessionResponse.json();
     assert.equal(session.root, fs.realpathSync(root));
     assert.deepEqual(session.contract.targetPlatforms, ["ios", "android", "web"]);
-    assert.deepEqual(session.contract.repositorySources, ["local-path"]);
+    assert.deepEqual(session.contract.repositorySources, ["local-path", "github"]);
     assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs"]);
     assert.equal(session.contract.operations.includes("audit"), true);
     assert.equal(session.contract.operations.includes("ci-install"), false);

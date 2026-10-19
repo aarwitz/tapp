@@ -14,6 +14,8 @@ import { BrowserWorkspaceRegistry } from "./browser-workspaces.js";
 import { selectApplicationTarget } from "./ci-setup.js";
 import { initializeProductProject, prepareProductTarget, readProductProject, runProductGate } from "./product-operations.js";
 import { readCaptureProvenance } from "./capture-provenance.js";
+import { collectShots } from "./html-report.js";
+import { classifyPrompt } from "../../browser/view-model.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -129,6 +131,32 @@ function listAudits(limit = 50) {
     });
   }
   return audits.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+}
+
+// Everything the Studio can show for one capture, as paths relative to /evidence/captures/<id>/.
+function captureFiles(captureId) {
+  const root = capturePath(captureId, ".");
+  if (!root || !fs.existsSync(root)) return null;
+  const shots = collectShots(root).slice(0, 24);
+  const recording = ["exploration.webm", "exploration.mov", "exploration.mp4"].find((name) => fs.existsSync(path.join(root, name))) || null;
+  return { id: captureId, shots, recording, report: fs.existsSync(path.join(root, "report.html")) ? "report.html" : null, provenance: readCaptureProvenance(root) };
+}
+
+// Explorations started from the prompt (a bundle id, an .app or .apk) have no repository to list
+// them under; they are listed from their captures like audits are.
+function listBuildExplores(limit = 50) {
+  const root = captureRoot();
+  let names;
+  try { names = fs.readdirSync(root); } catch { return []; }
+  const runs = [];
+  for (const name of names) {
+    const provenance = readCaptureProvenance(path.join(root, name));
+    if (!provenance || provenance.kind !== "explore" || provenance.origin !== "studio-prompt") continue;
+    let report = null;
+    try { report = JSON.parse(fs.readFileSync(path.join(root, name, "report.json"), "utf8")); } catch { /* older capture */ }
+    runs.push({ id: name, createdAt: provenance.createdAt, platform: provenance.platform, target: provenance.target, report });
+  }
+  return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
 function openBrowser(url) {
@@ -430,7 +458,14 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
-      if (request.method === "GET" && url.pathname === "/api/audits") { json(response, 200, { audits: hosted ? hostedPayload(listAudits()) : listAudits() }); return; }
+      if (request.method === "GET" && url.pathname === "/api/audits") { json(response, 200, { audits: hosted ? hostedPayload(listAudits()) : listAudits(), explores: hosted ? hostedPayload(listBuildExplores()) : listBuildExplores() }); return; }
+      const filesMatch = url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/files$/);
+      if (request.method === "GET" && filesMatch) {
+        const files = captureFiles(filesMatch[1]);
+        if (!files) { json(response, 404, { error: "No such capture" }); return; }
+        json(response, 200, files);
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/project") { json(response, 200, hosted ? hostedPayload(projectSnapshot(registry)) : projectSnapshot(registry)); return; }
       if (request.method === "GET" && url.pathname === "/api/live-session") { json(response, 200, liveSession || { active:false }); return; }
       if (request.method === "GET" && url.pathname === "/api/live-session/frame") {
@@ -482,6 +517,71 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
       const body = await readJsonBody(request);
       const operation = url.pathname.slice("/api/operations/".length);
+      // "What should tapp test?" — a repository on this machine or on GitHub becomes the current
+      // project; a build is explored directly; a URL goes to `audit`; a business name is not
+      // something Tapp can resolve yet, and says so instead of guessing.
+      if (operation === "open") {
+        const prompt = classifyPrompt(body.input);
+        if (liveSession?.active) throw Object.assign(new Error("End the active live session before opening another project"), { statusCode: 409 });
+        if (prompt.kind === "path") {
+          if (hosted) throw Object.assign(new Error("A hosted Studio cannot open a path on your machine; run `tapp app /path/to/repo` locally"), { statusCode: 400 });
+          const resolved = prompt.value.startsWith("~") ? path.join(os.homedir(), prompt.value.slice(1)) : path.resolve(prompt.value);
+          if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw Object.assign(new Error(`No folder at ${resolved}`), { statusCode: 400 });
+          const repository = registry.addExisting(resolved);
+          json(response, 200, { kind: "repository", repository: hosted ? hostedRepository(repository) : repository });
+          return;
+        }
+        if (prompt.kind === "github") {
+          const job = startJob(operation, async (progress) => ({ kind: "repository", repository: await registry.cloneGithub(prompt.value, progress) }), null);
+          json(response, 202, { job: publicJob(job, { hosted }) });
+          return;
+        }
+        if (prompt.kind === "business") {
+          json(response, 200, { kind: "business", message: `I can't find a business's website or app from a name yet — paste its URL and I'll audit it read-only, or open its repository.` });
+          return;
+        }
+        json(response, 200, { kind: prompt.kind, value: prompt.value });
+        return;
+      }
+      if (operation === "explore-build") {
+        if (hosted) throw Object.assign(new Error("Builds are explored on the machine that has the simulator; run the Studio locally"), { statusCode: 400 });
+        const prompt = classifyPrompt(body.input);
+        if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a simulator .app, or an .apk"), { statusCode: 400 });
+        const job = startJob(operation, async (progress) => {
+          const engine = await import("./index.js");
+          const forward = (entry) => progress({ phase: "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || 0} actions · ${entry.states || 0} states`, ...(entry.action ? { current: entry.action, total: entry.max } : {}), ...(entry.screen ? { screen: entry.screen } : {}), ...(entry.screenshot ? { screenshot: entry.screenshot } : {}) });
+          let result;
+          if (prompt.kind === "apk") {
+            progress({ phase: "runtime", text: `Installing ${path.basename(prompt.value)} on the connected Android device` });
+            result = await engine.runQaAndroid({ apkPath: prompt.value, appId: String(body.appId || ""), maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600, onProgress: forward });
+          } else {
+            let bundleId = prompt.value;
+            if (prompt.kind === "app") {
+              progress({ phase: "runtime", text: `Installing ${path.basename(prompt.value)} on the booted simulator` });
+              const installed = await engine.installAppOnBootedSim(prompt.value, { onStatus: (text) => progress({ phase: "runtime", text }) });
+              if (installed?.error) throw new Error(installed.error);
+              bundleId = installed.bundleId;
+            }
+            progress({ phase: "runtime", text: `Launching ${bundleId} on the booted simulator` });
+            result = await engine.runQaIos({ bundleId, maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600, device: String(body.device || ""), onProgress: forward });
+          }
+          if (result?.error) throw Object.assign(new Error(result.error), { details: result.details || {} });
+          const structured = result.structured;
+          // Mark the capture as prompt-started so the Studio lists it without a repository.
+          try {
+            const captureDir = structured?.capture?.path;
+            if (captureDir) {
+              const provenancePath = path.join(captureDir, "provenance.json");
+              const provenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
+              fs.writeFileSync(provenancePath, JSON.stringify({ ...provenance, origin: "studio-prompt" }, null, 2));
+              fs.writeFileSync(path.join(captureDir, "report.json"), JSON.stringify({ headline: structured.headline, inconclusive: structured.inconclusive, screensExplored: structured.screensExplored, actionsPerformed: structured.actionsPerformed, findingCounts: structured.findingCounts, findings: structured.findings, checkedFor: structured.checkedFor, notChecked: structured.notChecked, platform: structured.platform, target: structured.target }, null, 2));
+            }
+          } catch { /* listing is a convenience; the capture is the evidence */ }
+          return structured;
+        }, null);
+        json(response, 202, { job: publicJob(job, { hosted }) });
+        return;
+      }
       // A website audit needs no repository: it is read-only against a URL and writes a capture.
       if (operation === "audit") {
         let target;

@@ -8,7 +8,7 @@ export const customerProductContract = Object.freeze({
   interface: "customer-browser",
   targetPlatforms: ["ios", "android", "web"],
   // A repository is opened by path (`tapp app /path/to/repo`); a website by URL in the Studio.
-  repositorySources: ["local-path"],
+  repositorySources: ["local-path", "github"],
   entryLayers: ["repository", "website"],
   views: [
     { id: "overview", label: "Overview", capabilities: ["target-selection", "release-check", "live-feed", "progress-transcript", "live-session", "flow-recording", "latest-evidence"] },

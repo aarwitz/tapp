@@ -43,7 +43,11 @@ test("browser journey: target, exploration, live session, saved Flow, gate, and 
     assert.equal(await page.locator("#folder-input").count(), 0, "no upload path");
 
     await operate("#explore");
-    assert.match(await page.locator("#chat-transcript").innerText(), /Initialize started/);
+    assert.match(await page.locator("#chat-transcript").innerText(), /Starting a release check/);
+    assert.match(await page.locator("#chat-transcript").innerText(), /[👆📍🧭⌨️🌐📱]/u, "the chat narrates with emoji-led lines");
+    assert.equal(await page.locator("#chat-float").isVisible(), true);
+    assert.match(await page.locator("#chat-transcript").innerText(), /not a release decision/, "exploration ends with an observation, never a verdict");
+    assert.match(await page.locator("#chat-transcript").innerText(), /report\.html/, "the report is attached");
     await operate("#start-session");
     await page.locator("#live-session-panel").waitFor({ state:"visible" });
     await page.waitForFunction(() => document.querySelector("#live-frame-image")?.naturalWidth > 0);

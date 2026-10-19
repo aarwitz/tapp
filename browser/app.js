@@ -1,5 +1,5 @@
 import { customerProductContract } from "./product-contract.js";
-import { operationIsPending } from "./view-model.js";
+import { classifyPrompt, narrate, narrateFinding, operationIsPending, summarize } from "./view-model.js";
 
 const API_BASE = String(document.querySelector('meta[name="tapp-api-base"]')?.content || "").replace(/\/$/, "");
 const LOGIN_URL = String(document.querySelector('meta[name="tapp-login-url"]')?.content || "");
@@ -11,14 +11,16 @@ function apiRoute(route) {
 }
 
 const state = {
-  csrf: "", session: null, project: null, audits: [], activeJob: null, activeView: "overview",
+  csrf: "", session: null, project: null, audits: [], explores: [], activeJob: null, activeView: "overview",
   selectedTargetId: "", selectedRunId: "", live: { active:false }, transcript: [], transcriptSource: "", frameTimer: null,
+  chatCollapsed: false, shotScreens: new Set(), lastShotAt: 0,
 };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[character]));
 const pretty = (value) => String(value || "").replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const compactDate = (value) => value ? new Intl.DateTimeFormat(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }).format(new Date(value)) : "—";
+const chatTime = (value) => new Intl.DateTimeFormat(undefined, { hour:"numeric", minute:"2-digit" }).format(new Date(value));
 
 function toast(message, error = false) {
   const node = $("#toast");
@@ -49,14 +51,15 @@ function captureId(report) {
   }
   return report?.capture?.id || "";
 }
-
+const captureUrl = (id, file = "report.html") => apiRoute(`/evidence/captures/${encodeURIComponent(id)}/${file}`);
 function evidenceLink(id, label = "Open visual evidence") {
-  return id ? `<a class="button-link" href="${esc(apiRoute(`/evidence/captures/${encodeURIComponent(id)}/report.html`))}" target="_blank" rel="noreferrer">${esc(label)}</a>` : "";
+  return id ? `<a class="button-link" href="${esc(captureUrl(id))}" target="_blank" rel="noreferrer">${esc(label)}</a>` : "";
 }
 function reportLink(report, label) { return evidenceLink(captureId(report), label); }
 
 function currentTarget() { return (state.project?.targets || []).find((target) => target.id === state.selectedTargetId) || null; }
 function targetStorageKey() { return `tapp:selected-target:${state.project?.repository?.id || "none"}`; }
+function currentPlatform() { return state.live?.active ? state.live.platform : (currentTarget()?.platform || state.promptPlatform || ""); }
 
 function chooseDefaultTarget() {
   const targets = state.project?.targets || [];
@@ -84,9 +87,10 @@ function activateView(view) {
   window.scrollTo({ top:0, behavior:"instant" });
 }
 
-function showSourceOnboarding() {
+function showPrompt() {
   $("#source-onboarding").classList.remove("hidden");
   $("#product-shell").classList.add("hidden");
+  setTimeout(() => $("#prompt-input")?.focus(), 50);
 }
 
 function showProduct() {
@@ -133,7 +137,7 @@ function renderTargets() {
   const appId = target?.runtime?.bundleId || target?.runtime?.applicationId || target?.build?.bundleId || "";
   $("#sidebar-app-row").classList.toggle("hidden", !appId);
   $("#sidebar-app-id").textContent = appId;
-  renderDeviceChrome(target);
+  renderDeviceChrome();
   $("#runtime-row").classList.toggle("hidden", !targets.length);
   $("#serial-field").classList.toggle("hidden", target?.platform !== "android");
   $("#explore").disabled = !target;
@@ -147,14 +151,17 @@ function renderTargets() {
     : "Builds and starts the selected repository web application, then explores it in Chromium.";
 }
 
-function renderDeviceChrome(target) {
-  const platform = state.live?.active ? state.live.platform : target?.platform;
-  const frame = $("#device-frame");
-  frame.className = `device-frame ${platform === "ios" ? "" : platform || ""}`.trim();
-  $("#device-feed-label").textContent = platform === "android" ? "Live Android Feed" : platform === "web" ? "Live Browser Feed" : "Live iPhone Feed";
+// The device frame takes the platform's real shape: a phone is tall, a browser is wide. The stage
+// gives it every pixel it can, so the frame class drives the aspect ratio and the stage the size.
+function renderDeviceChrome() {
+  const platform = currentPlatform();
+  const target = currentTarget();
+  $("#device-frame").className = `device-frame ${platform || "ios"}`;
+  $("#stage").className = `stage ${platform || "ios"}`;
+  $("#device-feed-label").textContent = platform === "android" ? "Android" : platform === "web" ? "Chromium" : "iPhone";
   $("#device-meta-device").textContent = platform === "ios" ? (target?.runtime?.surface || "iOS Simulator")
     : platform === "android" ? (target?.runtime?.serial || "Android emulator / device")
-    : platform === "web" ? "Chromium" : "—";
+    : platform === "web" ? "Local Chromium" : "—";
 }
 
 // The device panel shows whichever real surface exists right now: an interactive session's frame,
@@ -165,8 +172,6 @@ function frameSource() {
   return "";
 }
 
-// One in-flight capture at a time; the next request waits for the previous image to land so a
-// slow simulator does not pile up frame requests.
 function refreshLiveFrame() {
   clearTimeout(state.frameTimer);
   const source = frameSource();
@@ -179,31 +184,22 @@ function refreshLiveFrame() {
   image.onerror = () => { loading.textContent = "Live frame could not be captured. The semantic controls remain available."; scheduleLiveFrame(); };
   image.src = apiRoute(`${source}?at=${Date.now()}`);
 }
-
-function scheduleLiveFrame() {
-  clearTimeout(state.frameTimer);
-  if (frameSource()) state.frameTimer = setTimeout(refreshLiveFrame, 1500);
-}
-
-function stopLiveFrames() {
-  clearTimeout(state.frameTimer);
-  state.frameTimer = null;
-}
+function scheduleLiveFrame() { clearTimeout(state.frameTimer); if (frameSource()) state.frameTimer = setTimeout(refreshLiveFrame, 1500); }
+function stopLiveFrames() { clearTimeout(state.frameTimer); state.frameTimer = null; }
 
 function renderLiveSession() {
   const live = state.live || { active:false };
   $("#live-session-panel").classList.toggle("hidden", !live.active);
   if (!live.active) {
-    // Keep the last real frame on screen after a run; only show the placeholder when nothing was ever captured.
     if (!frameSource()) stopLiveFrames();
     const hasFrame = !!$("#live-frame-image").getAttribute("src");
     $("#live-frame-loading").classList.toggle("hidden", hasFrame || !frameSource());
     $("#device-placeholder").classList.toggle("hidden", hasFrame);
     if (!state.activeJob) $("#live-screen-title").textContent = hasFrame ? $("#live-screen-title").textContent : "—";
-    renderDeviceChrome(currentTarget());
+    renderDeviceChrome();
     return;
   }
-  renderDeviceChrome(currentTarget());
+  renderDeviceChrome();
   $("#live-screen-title").textContent = live.screenTitle || live.targetName || "Running target";
   $("#live-platform").textContent = `${pretty(live.platform)} · ${live.targetName || "live target"}`;
   $("#live-recorded-steps").textContent = `${live.recordedSteps || 0} recorded step${live.recordedSteps === 1 ? "" : "s"}`;
@@ -236,8 +232,6 @@ function renderDecision(run) {
     return;
   }
   const report = latest.report;
-  // The decision reflects the GATE outcome (pass/fail/inconclusive), not a ship verdict — exploration
-  // only observes (ADR-0005). Without a gate, it's an observation, not a merge decision.
   const outcome = report.gate?.outcome || (report.gate?.failed === true ? "fail" : report.inconclusive ? "inconclusive" : report.gate ? "pass" : null);
   const cssClass = { pass: "ready", fail: "blocked", inconclusive: "caution" }[outcome] || "caution";
   card.className = `decision-card ${cssClass}`;
@@ -246,23 +240,30 @@ function renderDecision(run) {
   $("#overview-evidence").innerHTML = `<div class="latest-run-line"><span class="verdict-dot ${esc(cssClass)}"></span><div><strong>${esc(report.headline || pretty(cssClass))}</strong><small>${esc(pretty(report.platform || "unknown"))} · ${compactDate(latest.createdAt)} · ${(report.contracts || []).filter((item) => item.passed).length}/${(report.contracts || []).length} contracts passed</small></div></div><p>${esc((report.gate?.reasons || ["No blocking release-gate reason reported."])[0])}</p>${reportLink(report)}`;
 }
 
-// Runs are two kinds with one list: gate runs on the repository (`report`) and read-only website
-// audits (`audit`). Both open the report page the engine wrote.
+// Runs are three kinds in one list: gate runs on the repository, explorations started from the
+// prompt, and read-only website audits. Each opens the report page the engine wrote.
 function allRuns() {
   const gates = (state.project?.evidence || []).map((run) => ({ ...run, kind:"gate" }));
+  const explores = (state.explores || []).map((run) => ({ id:run.id, createdAt:run.createdAt, kind:"explore", explore:run }));
   const audits = (state.audits || []).map((audit) => ({ id:audit.id, createdAt:audit.createdAt, kind:"audit", audit }));
-  return [...gates, ...audits].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  return [...gates, ...explores, ...audits].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 }
 
 function renderRuns() {
   const runs = allRuns();
   setCount("#run-count", runs.length);
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
+    const selected = run.id === state.selectedRunId ? "selected" : "";
     if (run.kind === "audit") {
       const audit = run.audit;
       const issues = audit.issueCount || 0;
       const host = (() => { try { return new URL(audit.url).host; } catch { return audit.url; } })();
-      return `<button class="run-row ${run.id === state.selectedRunId ? "selected" : ""}" data-run-id="${esc(run.id)}"><span class="run-status ${issues ? "inconclusive" : "ready"}">${issues ? "!" : "✓"}</span><span><strong>Audit · ${esc(host)}</strong><small>${compactDate(run.createdAt)} · ${audit.pagesAudited || 0} page${audit.pagesAudited === 1 ? "" : "s"} · read-only</small></span><em>${issues ? `${issues} issue${issues === 1 ? "" : "s"}` : "Nothing broken"}</em></button>`;
+      return `<button class="run-row ${selected}" data-run-id="${esc(run.id)}"><span class="run-status ${issues ? "inconclusive" : "ready"}">${issues ? "!" : "✓"}</span><span><strong>Audit · ${esc(host)}</strong><small>${compactDate(run.createdAt)} · ${audit.pagesAudited || 0} page${audit.pagesAudited === 1 ? "" : "s"} · read-only</small></span><em>${issues ? `${issues} issue${issues === 1 ? "" : "s"}` : "Nothing broken"}</em></button>`;
+    }
+    if (run.kind === "explore") {
+      const e = run.explore;
+      const findings = e.report?.findingCounts?.total ?? (e.report?.findings || []).length;
+      return `<button class="run-row ${selected}" data-run-id="${esc(run.id)}"><span class="run-status ${e.report?.inconclusive ? "inconclusive" : "completed"}">${e.report?.inconclusive ? "◐" : "✓"}</span><span><strong>Explore · ${esc(e.target || e.platform)}</strong><small>${compactDate(run.createdAt)} · ${esc(pretty(e.platform))}</small></span><em>${findings} finding${findings === 1 ? "" : "s"}</em></button>`;
     }
     const report = run.report;
     const failed = report?.gate?.failed === true;
@@ -270,65 +271,127 @@ function renderRuns() {
       : report.gate?.outcome === "fail" || failed ? "blocked"
       : report.gate?.outcome === "inconclusive" || report.inconclusive ? "inconclusive"
       : report.gate?.outcome === "pass" ? "ready" : "completed";
-    return `<button class="run-row ${run.id === state.selectedRunId ? "selected" : ""}" data-run-id="${esc(run.id)}"><span class="run-status ${esc(status)}">${failed ? "×" : report ? "✓" : "…"}</span><span><strong>${esc(report?.headline || `Release run ${run.id.slice(-8)}`)}</strong><small>${compactDate(run.createdAt)} · ${esc(pretty(report?.platform || "unknown"))}</small></span><em>${esc(pretty(status))}</em></button>`;
+    return `<button class="run-row ${selected}" data-run-id="${esc(run.id)}"><span class="run-status ${esc(status)}">${failed ? "×" : report ? "✓" : "…"}</span><span><strong>${esc(report?.headline || `Release run ${run.id.slice(-8)}`)}</strong><small>${compactDate(run.createdAt)} · ${esc(pretty(report?.platform || "unknown"))}</small></span><em>${esc(pretty(status))}</em></button>`;
   }).join("") : '<div class="empty">No runs yet. Run a release check, or audit a website above.</div>';
-  const selected = runs.find((run) => run.id === state.selectedRunId) || runs[0];
-  if (selected) state.selectedRunId = selected.id;
-  renderRunDetail(selected);
+  const chosen = runs.find((run) => run.id === state.selectedRunId) || runs[0];
+  if (chosen) state.selectedRunId = chosen.id;
+  renderRunDetail(chosen);
 }
 
-function renderAuditDetail(audit) {
-  const counts = audit.findingCounts || {};
-  const issues = audit.issues || [];
-  $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">READ-ONLY AUDIT</p><h2>${esc(audit.url)}</h2><small><code>${esc(audit.id)}</code> · ${compactDate(audit.createdAt)} · nothing was clicked</small></div>${evidenceLink(audit.id, "Visual report")}</div><div class="run-stats"><div><strong>${audit.pagesAudited || 0}</strong><small>pages</small></div><div><strong>${issues.length}</strong><small>distinct issues</small></div><div><strong>${counts.high || 0}</strong><small>high</small></div><div><strong>${counts.medium || 0}</strong><small>medium</small></div></div><h3>Issues</h3>${issues.length ? `<ul class="detail-list">${issues.slice(0, 40).map((issue) => `<li><b>${esc(issue.severity)}</b> · ${esc(issue.title)}${issue.pages?.length > 1 ? ` <small>(${issue.pages.length} pages)</small>` : ""}</li>`).join("")}</ul>` : '<p class="muted">Nothing broken was observed. This says the pages are served without structural defects, not that the site works.</p>'}<h3>Not checked</h3><ul class="detail-list boundary">${(audit.notChecked || []).slice(0, 6).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`;
+function detailLists(report) {
+  return `<h3>What Tapp checked</h3><ul class="detail-list">${(report.checkedFor || []).slice(0, 8).map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h3>Not checked</h3><ul class="detail-list boundary">${(report.notChecked || []).slice(0, 8).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`;
 }
 
 function renderRunDetail(run) {
-  if (run?.kind === "audit") { renderAuditDetail(run.audit); return; }
-  if (!run?.report) { $("#run-detail").innerHTML = '<div class="empty">Select a completed run to inspect its evidence.</div>'; return; }
+  if (!run) { $("#run-detail").innerHTML = '<div class="empty">Select a run to inspect its evidence.</div>'; return; }
+  if (run.kind === "audit") {
+    const audit = run.audit;
+    const counts = audit.findingCounts || {};
+    const issues = audit.issues || [];
+    $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">READ-ONLY AUDIT</p><h2>${esc(audit.url)}</h2><small><code>${esc(audit.id)}</code> · ${compactDate(audit.createdAt)} · nothing was clicked</small></div>${evidenceLink(audit.id, "Visual report")}</div><div class="run-stats"><div><strong>${audit.pagesAudited || 0}</strong><small>pages</small></div><div><strong>${issues.length}</strong><small>distinct issues</small></div><div><strong>${counts.high || 0}</strong><small>high</small></div><div><strong>${counts.medium || 0}</strong><small>medium</small></div></div><h3>Issues</h3>${issues.length ? `<ul class="detail-list">${issues.slice(0, 40).map((issue) => `<li><b>${esc(issue.severity)}</b> · ${esc(issue.title)}${issue.pages?.length > 1 ? ` <small>(${issue.pages.length} pages)</small>` : ""}</li>`).join("")}</ul>` : '<p class="muted">Nothing broken was observed. This says the pages are served without structural defects, not that the site works.</p>'}${detailLists(audit)}`;
+    return;
+  }
+  if (run.kind === "explore") {
+    const e = run.explore;
+    const report = e.report || {};
+    $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">${esc(report.inconclusive ? "INCONCLUSIVE" : "EXPLORATION")}</p><h2>${esc(report.headline || `Explored ${e.target || e.platform}`)}</h2><small><code>${esc(e.id)}</code> · ${compactDate(e.createdAt)} · an observation, not a release decision</small></div>${evidenceLink(e.id, "Visual report")}</div><div class="run-stats"><div><strong>${report.screensExplored || 0}</strong><small>screens</small></div><div><strong>${report.actionsPerformed || 0}</strong><small>actions</small></div><div><strong>${report.findingCounts?.total ?? (report.findings || []).length}</strong><small>findings</small></div></div><h3>Findings</h3>${(report.findings || []).length ? `<ul class="detail-list">${report.findings.slice(0, 40).map((f) => `<li><b>${esc(f.severity)}</b> · ${esc(f.title)}${f.screen ? ` <small>on ${esc(f.screen)}</small>` : ""}</li>`).join("")}</ul>` : '<p class="muted">No findings surfaced in the exercised surfaces.</p>'}${detailLists(report)}`;
+    return;
+  }
+  if (!run.report) { $("#run-detail").innerHTML = '<div class="empty">Select a completed run to inspect its evidence.</div>'; return; }
   const report = run.report;
   const contracts = report.contracts || [];
-  $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">${esc(report.gate?.failed ? "BLOCKED" : report.inconclusive ? "INCONCLUSIVE" : "RELEASE RUN")}</p><h2>${esc(report.headline || "Release gate completed")}</h2><small><code>${esc(run.id)}</code> · ${compactDate(run.createdAt)}</small></div>${reportLink(report, "Visual report")}</div><div class="run-stats"><div><strong>${report.screensExplored || 0}</strong><small>states</small></div><div><strong>${report.actionsPerformed || 0}</strong><small>actions</small></div><div><strong>${contracts.filter((item) => item.passed).length}/${contracts.length}</strong><small>contracts</small></div><div><strong>${report.findingCounts?.total ?? (report.findings || []).length}</strong><small>findings</small></div></div><h3>Decision rationale</h3><ul class="detail-list">${(report.gate?.reasons || ["No blocking gate reason reported."]).map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h3>Deterministic contracts</h3>${contracts.length ? contracts.map((contract) => `<div class="contract-result"><span class="${contract.passed ? "pass" : "fail"}">${contract.passed ? "✓" : "×"}</span><div><strong>${esc(contract.title || contract.name || contract.path)}</strong><small>${esc(contract.detail || contract.path || "Deterministic replay")}</small></div></div>`).join("") : '<p class="muted">No committed release contracts applied to this target.</p>'}<h3>What Tapp checked</h3><ul class="detail-list">${(report.checkedFor || []).slice(0, 8).map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h3>Not checked</h3><ul class="detail-list boundary">${(report.notChecked || []).slice(0, 8).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>`;
+  $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">${esc(report.gate?.failed ? "BLOCKED" : report.inconclusive ? "INCONCLUSIVE" : "RELEASE RUN")}</p><h2>${esc(report.headline || "Release gate completed")}</h2><small><code>${esc(run.id)}</code> · ${compactDate(run.createdAt)}</small></div>${reportLink(report, "Visual report")}</div><div class="run-stats"><div><strong>${report.screensExplored || 0}</strong><small>states</small></div><div><strong>${report.actionsPerformed || 0}</strong><small>actions</small></div><div><strong>${contracts.filter((item) => item.passed).length}/${contracts.length}</strong><small>contracts</small></div><div><strong>${report.findingCounts?.total ?? (report.findings || []).length}</strong><small>findings</small></div></div><h3>Decision rationale</h3><ul class="detail-list">${(report.gate?.reasons || ["No blocking gate reason reported."]).map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h3>Deterministic contracts</h3>${contracts.length ? contracts.map((contract) => `<div class="contract-result"><span class="${contract.passed ? "pass" : "fail"}">${contract.passed ? "✓" : "×"}</span><div><strong>${esc(contract.title || contract.name || contract.path)}</strong><small>${esc(contract.detail || contract.path || "Deterministic replay")}</small></div></div>`).join("") : '<p class="muted">No committed release contracts applied to this target.</p>'}${detailLists(report)}`;
 }
 
-const chatTime = (value) => new Intl.DateTimeFormat(undefined, { hour:"numeric", minute:"2-digit" }).format(new Date(value));
-
+// ---- tapp chat: the engine's progress log, rendered as a transcript -------------------------
 function renderChat() {
   const node = $("#chat-transcript");
   const stickToBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
-  node.innerHTML = state.transcript.map((entry) => `<div class="chat-bubble ${esc(entry.kind || "")} ${esc(entry.severity || "")}">${esc(entry.text)}<small>${chatTime(entry.at)}</small></div>`).join("")
-    + (state.activeJob ? '<div class="chat-bubble typing">tapp is working…</div>' : "");
+  const lines = state.transcript.map((entry) => {
+    if (entry.kind === "shots") return `<div class="chat-shots">${entry.shots.map((shot) => `<a href="${esc(shot.href)}" target="_blank" rel="noreferrer" title="${esc(shot.caption)}"><img src="${esc(shot.src)}" alt="${esc(shot.caption)}"></a>`).join("")}</div>`;
+    if (entry.kind === "attachments") return `<div class="chat-attachments">${entry.items.map((item) => `<a href="${esc(item.href)}" target="_blank" rel="noreferrer"><span>${item.icon}</span>${esc(item.label)}</a>`).join("")}</div>`;
+    if (entry.kind === "summary") return `<div class="chat-summary ${esc(entry.tone)}"><span class="chat-pill">${esc(entry.pill)}</span><p>${esc(entry.text)}</p></div>`;
+    if (entry.kind === "finding") return `<div class="chat-line finding ${esc(entry.severity)}"><span class="chat-icon">${entry.icon}</span><span>${esc(entry.text)}</span></div>`;
+    if (entry.kind === "progress") return "";
+    return `<div class="chat-line ${esc(entry.kind || "")}"><span class="chat-icon">${entry.icon || "•"}</span><span>${esc(entry.text)}${entry.detail ? ` <em>— ${esc(entry.detail)}</em>` : ""}</span></div>`;
+  }).join("") + (state.activeJob ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
+  node.innerHTML = lines;
   if (stickToBottom) node.scrollTop = node.scrollHeight;
+  const progress = [...state.transcript].reverse().find((entry) => entry.kind === "progress");
+  $("#chat-status").textContent = state.activeJob ? (progress ? `${progress.current}/${progress.total} actions${progress.states != null ? ` · ${progress.states} screens` : ""}` : "working…") : state.transcript.length > 1 ? "done" : "ready";
 }
 
-// The transcript is the engine's own progress log, bubble per entry. Phase changes get the
-// `phase` style; everything else is narration of what actually happened.
-function syncTranscriptFromJob(name, job) {
-  const key = job.id;
-  if (state.transcriptSource !== key) { state.transcript = [{ at: job.createdAt, kind: "phase", text: `${pretty(name)} started` }]; state.transcriptSource = key; }
-  const seen = state.transcript.length - 1;
-  for (const entry of job.progress.slice(seen)) {
-    const text = String(entry.text || "").trim().replace(/\s+/g, " ").slice(0, 220).replace(/(.{219}).+/, "$1…");
-    if (!text) continue;
+function setChatCollapsed(collapsed) {
+  state.chatCollapsed = collapsed;
+  $("#chat-float").classList.toggle("collapsed", collapsed);
+  $("#chat-toggle").setAttribute("aria-expanded", String(!collapsed));
+  try { localStorage.setItem("tapp:chat-collapsed", collapsed ? "1" : "0"); } catch { /* storage may be unavailable */ }
+}
+
+function pushLine(entry) { state.transcript.push({ at: new Date().toISOString(), ...entry }); }
+
+// A screenshot the engine wrote during the run, kept as a thumbnail in the transcript. Captured
+// once per screen name the engine reports, and never more often than every few seconds.
+async function keepShot(screen) {
+  const key = screen || `t${Math.floor(Date.now() / 4000)}`;
+  if (state.shotScreens.has(key) || Date.now() - state.lastShotAt < 2500 || !state.activeJob) return;
+  state.shotScreens.add(key);
+  state.lastShotAt = Date.now();
+  try {
+    const response = await fetch(apiRoute(`/api/jobs/${state.activeJob}/frame?at=${Date.now()}`));
+    if (!response.ok) return;
+    const blob = await response.blob();
+    const src = URL.createObjectURL(blob);
     const last = state.transcript.at(-1);
-    if (last && last.text === text) continue;
-    state.transcript.push({ at: entry.at, kind: entry.phase === "explore" || entry.phase === "runtime" ? "" : "phase", text });
+    if (last?.kind === "shots" && last.shots.length < 3) last.shots.push({ src, href: src, caption: screen || "screen" });
+    else pushLine({ kind: "shots", shots: [{ src, href: src, caption: screen || "screen" }] });
+    renderChat();
+  } catch { /* a missed thumbnail is not an error */ }
+}
+
+function syncTranscriptFromJob(name, job) {
+  if (state.transcriptSource !== job.id) {
+    state.transcript = [{ at: job.createdAt, kind: "phase", icon: "🚀", text: startLine(name, job) }];
+    state.transcriptSource = job.id;
+    state.shotScreens = new Set();
+    state.lastShotAt = 0;
+  }
+  const seen = state.transcript.filter((entry) => entry.source === "job").length;
+  for (const entry of job.progress.slice(seen)) {
+    const line = narrate(entry, { platform: currentPlatform() });
+    state.transcript.push({ ...(line || { kind: "step", icon: "•", text: "" }), at: entry.at, source: "job" });
+    if (line && line.kind !== "progress") {
+      const last = state.transcript.at(-2);
+      if (last && last.text === line.text && last.kind !== "shots") state.transcript.splice(-1, 1);
+    }
+    if (entry.screen) keepShot(entry.screen);
   }
 }
 
-function finishTranscript(name, job) {
-  if (job.status === "failed") { state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "failed", text: job.error?.message || `${pretty(name)} failed` }); return; }
-  const report = job.result?.report || job.result;
-  const findings = report?.findings || (report?.issues || []);
-  for (const finding of findings.slice(0, 12)) {
-    const severity = String(finding.severity || "info").toLowerCase();
-    state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "finding", severity, text: `${pretty(severity)} issue${finding.screen ? ` on ${finding.screen}` : ""}: ${finding.title || finding.message || finding.type}` });
+function startLine(name, job) {
+  const input = job.input || "";
+  return { initialize: "Starting a release check — build, launch and explore the real app", gate: "Running the release gate", audit: `Opening ${input} read-only — nothing will be clicked`, "explore-build": `Exploring ${input} on the booted device`, open: `Opening ${input}`, "session-start": "Opening a live session", "session-act": "Acting in the live session", "session-save-flow": "Saving the journey as a Flow", "session-end": "Ending the live session" }[name] || `${pretty(name)} started`;
+}
+
+async function finishTranscript(name, job) {
+  state.transcript = state.transcript.filter((entry) => entry.kind !== "progress" || true);
+  if (job.status === "failed") { pushLine({ kind: "warning", icon: "⚠️", text: job.error?.message || `${pretty(name)} failed` }); return; }
+  const result = job.result || {};
+  // initialize carries its exploration beside the project; the gate carries a report.
+  const report = result.exploration || result.report || result;
+  for (const finding of (report.findings || result.issues || []).slice(0, 12)) pushLine(narrateFinding(finding));
+  const id = result.capture?.id || captureId(report);
+  if (id) {
+    try {
+      const files = await api(`/api/captures/${encodeURIComponent(id)}/files`);
+      if (files.shots?.length) pushLine({ kind: "shots", shots: files.shots.slice(0, 3).map((shot) => ({ src: captureUrl(id, shot.src), href: captureUrl(id, shot.src), caption: shot.caption })) });
+      const items = [];
+      if (files.recording) items.push({ icon: "🎬", label: files.recording, href: captureUrl(id, files.recording) });
+      if (files.report) items.push({ icon: "📄", label: "report.html", href: captureUrl(id, files.report) });
+      if (items.length) pushLine({ kind: "attachments", items });
+    } catch { /* the summary still renders */ }
   }
-  const summary = report?.headline
-    || (name === "gate" ? (job.result?.passed === false ? "Release gate blocked this revision." : "Release gate completed.")
-    : name === "audit" ? `Audit complete — ${job.result?.pagesAudited || 0} page(s), ${job.result?.issueCount || 0} distinct issue(s), nothing clicked.`
-    : `${pretty(name)} completed`);
-  state.transcript.push({ at: job.completedAt || new Date().toISOString(), kind: "summary", text: summary });
+  pushLine({ kind: "summary", ...summarize(name, result.exploration ? { ...result, report } : result) });
 }
 
 function seedIdleTranscript() {
@@ -336,8 +399,8 @@ function seedIdleTranscript() {
   const latest = latestRun();
   const report = latest?.report;
   state.transcript = report
-    ? [{ at: latest.createdAt, kind: "summary", text: `Last run: ${report.headline || "release run completed"} · ${report.screensExplored || 0} states · ${(report.findings || []).length} findings` }]
-    : [{ at: new Date().toISOString(), kind: "phase", text: state.project?.state?.inspected ? "Ready. Run a release check to watch Tapp build, launch and explore the real app." : "Inspecting the project…" }];
+    ? [{ at: latest.createdAt, kind: "summary", ...summarize("gate", report) }]
+    : [{ at: new Date().toISOString(), kind: "phase", icon: "👋", text: state.project?.state?.inspected ? "Ready. Run a release check and I'll narrate what the app does while you watch it." : "Inspecting the project…" }];
 }
 
 function renderCommandState(job = null, name = "") {
@@ -361,9 +424,8 @@ function renderCommandState(job = null, name = "") {
   const target = currentTarget();
   const runner = target ? state.session?.runners?.find((item) => item.platform === target.platform) : null;
   $("#idle-badges").innerHTML = [
-    target ? `<span><b>${esc(pretty(target.platform))}</b> · ${esc(target.name)}</span>` : "<span>No target selected</span>",
-    runner ? `<span>${esc(runner.label)} · ${esc(pretty(runner.status))}</span>` : "",
-    `<span>Idle · ${target ? "Ready for the next release check" : "Choose a target to run"}</span>`,
+    target ? `<span><b>${esc(pretty(target.platform))}</b> · ${esc(target.name)}</span>` : "",
+    runner ? `<span>${esc(runner.label)}</span>` : "",
   ].filter(Boolean).join("");
 }
 
@@ -371,9 +433,9 @@ function renderProject() {
   const project = state.project;
   renderRepositoryChrome();
   if (!project?.connected) {
-    // No repository: the Studio is still a run viewer for website audits.
-    if (state.audits.length && state.activeView === "runs") { showProduct(); renderRuns(); return; }
-    showSourceOnboarding();
+    if ((state.audits.length || state.explores.length) && state.activeView === "runs") { showProduct(); renderRuns(); return; }
+    if (state.promptRun) { showProduct(); renderRuns(); renderDeviceChrome(); renderChat(); return; }
+    showPrompt();
     renderRuns();
     return;
   }
@@ -397,25 +459,30 @@ async function refreshSession() {
   const local = state.session.mode === "local";
   $("#mode-pill").textContent = local ? "Self-host · this machine" : "Cloud · outbound runner";
   $("#onboarding-mode-pill").textContent = local ? "Self-host · this machine" : "Cloud";
-  $("#privacy-note-title").textContent = local ? "Your code stays on this machine." : "Your repository stays in your private Tapp workspace.";
+  $("#privacy-note-detail").textContent = local ? "Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key." : "Your repository stays in your private Tapp workspace.";
 }
 
 async function refresh() {
-  [state.project, state.live, { audits: state.audits = [] }] = await Promise.all([api("/api/project"), api("/api/live-session"), api("/api/audits").catch(() => ({ audits: [] }))]);
+  const [project, live, runs] = await Promise.all([api("/api/project"), api("/api/live-session"), api("/api/audits").catch(() => ({ audits: [], explores: [] }))]);
+  state.project = project;
+  state.live = live;
+  state.audits = runs.audits || [];
+  state.explores = runs.explores || [];
   renderProject();
 }
 
-async function runOperation(name, body = {}) {
+async function runOperation(name, body = {}, { input = "" } = {}) {
   if (state.activeJob) throw new Error("Another operation is still running");
   const started = await api(`/api/operations/${name}`, { method:"POST", body:JSON.stringify(body) });
+  if (!started.job) return started; // synchronous answers (open a path, a business name)
   state.activeJob = started.job.id;
   const drawer = $("#operation-drawer");
   drawer.classList.remove("hidden");
   $("#operation-title").textContent = name === "audit" ? "Read-only audit" : pretty(name);
   $("#operation-progress").textContent = "Starting";
   $("#operation-progress-bar").style.width = "6%";
-  syncTranscriptFromJob(name, started.job);
-  if ($("#product-shell").classList.contains("hidden") === false) { renderCommandState(started.job, name); renderChat(); }
+  syncTranscriptFromJob(name, { ...started.job, input });
+  if (!$("#product-shell").classList.contains("hidden")) { renderCommandState(started.job, name); renderChat(); }
   try {
     while (true) {
       await new Promise((resolve) => setTimeout(resolve, 650));
@@ -424,13 +491,13 @@ async function runOperation(name, body = {}) {
       $("#operation-progress").textContent = progress?.text || "Working…";
       const ratio = progress?.current && progress?.total ? Math.min(92, Math.round(progress.current / progress.total * 100)) : Math.min(88, 8 + job.progress.length * 4);
       $("#operation-progress-bar").style.width = `${ratio}%`;
-      syncTranscriptFromJob(name, job);
-      if ($("#product-shell").classList.contains("hidden") === false) { renderCommandState(job, name); renderChat(); }
+      syncTranscriptFromJob(name, { ...job, input });
+      if (!$("#product-shell").classList.contains("hidden")) { renderCommandState(job, name); renderChat(); }
       const screen = [...job.progress].reverse().find((entry) => entry.screen)?.screen;
       if (screen && !state.live?.active) $("#live-screen-title").textContent = screen;
       if (job.frame && !state.jobHasFrame) { state.jobHasFrame = true; refreshLiveFrame(); }
       if (operationIsPending(job.status)) continue;
-      finishTranscript(name, job);
+      await finishTranscript(name, job);
       if (job.status === "failed") throw new Error(job.error?.message || "Operation failed");
       if (job.status !== "completed") throw new Error(`Operation ended in an unknown '${job.status}' state`);
       $("#operation-progress-bar").style.width = "100%";
@@ -438,7 +505,6 @@ async function runOperation(name, body = {}) {
       else if (name === "session-save-flow") toast(`Saved ${job.result.path} as a reviewable deterministic Flow`);
       else if (name === "gate" && job.result.passed === false) toast("The release gate blocked this revision. Tapp did not soften the result.", true);
       else if (name === "audit") toast(`Audited ${job.result.pagesAudited} page(s) — ${job.result.issueCount} distinct issue(s)`);
-      else toast(`${pretty(name)} completed`);
       return job.result;
     }
   } finally {
@@ -448,18 +514,44 @@ async function runOperation(name, body = {}) {
       await refreshSession();
       await refresh();
     } finally {
-      // The operation is not visually complete until the resulting snapshot/frame has rendered.
+      renderChat();
       drawer.classList.add("hidden");
     }
   }
 }
 
+// "What should tapp test?" — route by what was typed. The server classifies again and refuses
+// what the mode cannot do (a hosted Studio cannot open a path on your machine).
+async function startFromPrompt(raw) {
+  const prompt = classifyPrompt(raw);
+  if (prompt.kind === "empty") return;
+  if (prompt.kind === "url") {
+    state.promptRun = true; state.promptPlatform = "web";
+    showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
+    const result = await runOperation("audit", { url: prompt.value }, { input: prompt.value });
+    state.selectedRunId = result?.capture?.id || state.selectedRunId;
+    return;
+  }
+  if (["bundle", "app", "apk"].includes(prompt.kind)) {
+    state.promptRun = true; state.promptPlatform = prompt.kind === "apk" ? "android" : "ios";
+    showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
+    const result = await runOperation("explore-build", { input: prompt.value }, { input: prompt.value });
+    state.selectedRunId = result?.capture?.id || state.selectedRunId;
+    return;
+  }
+  const answer = await runOperation("open", { input: prompt.value }, { input: prompt.value });
+  if (answer?.kind === "business") { toast(answer.message, true); return; }
+  await refreshSession();
+  await refresh();
+  state.selectedTargetId = "";
+  if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
+}
+
 async function auditWebsite(url) {
   const trimmed = String(url || "").trim();
   if (!/^https?:\/\//i.test(trimmed)) { toast("Enter an http(s) URL to audit", true); return; }
-  const result = await runOperation("audit", { url: trimmed });
+  const result = await runOperation("audit", { url: trimmed }, { input: trimmed });
   state.selectedRunId = result?.capture?.id || state.selectedRunId;
-  showProduct();
   activateView("runs");
   renderRuns();
 }
@@ -476,29 +568,29 @@ document.addEventListener("click", (event) => {
   }
   const runButton = event.target.closest("[data-run-id]");
   if (runButton) { state.selectedRunId = runButton.dataset.runId; renderRuns(); }
+  const suggestion = event.target.closest("[data-prompt]");
+  if (suggestion) { const input = $("#prompt-input"); input.value = suggestion.dataset.prompt; input.focus(); input.select(); }
   const liveControl = event.target.closest("[data-live-control]");
   if (liveControl) {
     const target = liveControl.dataset.liveTarget;
     $("#live-action-target").value = target;
-    if (liveControl.dataset.liveInput === "true") {
-      $("#live-action-text").focus();
-    } else {
-      runOperation("session-act", { action:"tap", id:target }).catch((error) => toast(error.message, true));
-    }
+    if (liveControl.dataset.liveInput === "true") $("#live-action-text").focus();
+    else runOperation("session-act", { action:"tap", id:target }).catch((error) => toast(error.message, true));
   }
 });
 
 document.addEventListener("submit", (event) => {
-  const form = event.target.closest("form.audit-form");
-  if (!form) return;
-  event.preventDefault();
-  auditWebsite(form.elements.url.value).catch((error) => toast(error.message, true));
+  const audit = event.target.closest("form.audit-form");
+  if (audit) { event.preventDefault(); auditWebsite(audit.elements.url.value).catch((error) => toast(error.message, true)); return; }
+  const prompt = event.target.closest("#prompt-form");
+  if (prompt) { event.preventDefault(); startFromPrompt(prompt.elements.input.value).catch((error) => toast(error.message, true)); }
 });
 
-$$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showSourceOnboarding()));
+$$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showPrompt()));
 $("#command-run").addEventListener("click", () => runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)));
 $("#refresh-project").addEventListener("click", () => refresh().catch((error) => toast(error.message, true)));
-$("#change-source").addEventListener("click", showSourceOnboarding);
+$("#change-source").addEventListener("click", showPrompt);
+$("#chat-toggle").addEventListener("click", () => setChatCollapsed(!state.chatCollapsed));
 $("#repository-switcher").addEventListener("change", async (event) => {
   try { await api("/api/repositories/select", { method:"POST", body:JSON.stringify({ id:event.target.value }) }); state.selectedTargetId = ""; await refreshSession(); await refresh(); } catch (error) { toast(error.message, true); }
 });
@@ -514,9 +606,8 @@ $("#live-swipe").addEventListener("click", () => runOperation("session-act", { a
 $("#run-gate").addEventListener("click", () => runOperation("gate", operationPayload()).catch((error) => toast(error.message, true)));
 
 try {
+  try { setChatCollapsed(localStorage.getItem("tapp:chat-collapsed") === "1"); } catch { /* storage may be unavailable */ }
   await refreshSession();
   await refresh();
-  // A repository supplied by `tapp app /path` is inspected immediately, then stops for an
-  // explicit target choice when detection is ambiguous.
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
 } catch (error) { toast(error.message, true); }

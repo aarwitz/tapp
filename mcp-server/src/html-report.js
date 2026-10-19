@@ -33,7 +33,7 @@ export function capturePlatform(captureDir) {
 // Two capture layouts exist: web runs write state_*.png at the capture root; iOS runs
 // export XCUITest attachments into screenshots/ as UUID files with a manifest carrying
 // the human-readable state_N_<Screen> names.
-function collectShots(captureDir) {
+export function collectShots(captureDir) {
   const root = fs
     .readdirSync(captureDir)
     .filter((f) => f.endsWith(".png") && f.startsWith("state_"))

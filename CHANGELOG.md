@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.18.3
+
+- **The Studio opens on a prompt.** With nothing open, `tapp app` shows one field — *What should
+  tapp test?* — above a short animation of a device being driven. It takes a website URL, a
+  GitHub `owner/repo` (cloned with `gh` into an isolated workspace on this machine), a folder on
+  this machine, a bundle id on the booted simulator, a simulator `.app`, or an `.apk`; a business
+  name is answered honestly (nothing discovers surfaces from a name yet). New Studio operations
+  `open` and `explore-build`; `GET /api/captures/:id/files` lists a capture's screenshots,
+  recording and report; prompt-started explorations are listed under Runs beside audits.
+- **The Overview is the device.** The stage gives the simulator, emulator or browser every pixel
+  the window allows, in the platform's own aspect ratio, and shows the newest frame the run wrote.
+  The chat floats over its corner on a translucent ground, collapses to a pill, and narrates the
+  engine's own progress log with emoji-led lines, inline screenshot thumbnails, attachment chips
+  for the recording and `report.html`, and a closing pill (`✓ Ready to merge`, `× Do not merge`,
+  `◐ Inconclusive`, or an exploration's counts) with the headline. Nothing is generated after the
+  fact and nothing is a score.
+- `tapp init`-style explorations (`runInitExploration`) now return the exploration `headline`,
+  `screensExplored`, `actionsPerformed` and `findingCounts` beside the findings.
+
 ## 0.18.2
 
 - **The Studio is a run viewer.** After the browser surfaces audit (ADR-0006, owner decision of

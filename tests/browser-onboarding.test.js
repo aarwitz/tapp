@@ -69,14 +69,22 @@ test("without a repository the Studio explains how to open one and audits a webs
     const page = await browser.newPage();
     await page.goto(product.launchUrl, { waitUntil:"networkidle" });
     const onboarding = await page.locator("#source-onboarding").innerText();
-    assert.match(onboarding, /npx -y @aarwitz\/tapp@latest app \/path\/to\/repo/, "a repository is opened from the machine, not uploaded");
+    assert.match(onboarding, /What should tapp test\?/);
+    assert.match(onboarding, /folder on this Mac/, "a repository is opened from the machine, not uploaded");
     assert.doesNotMatch(onboarding, /Upload a project folder|Connect to GitHub/);
-    assert.match(onboarding, /Audit a website/);
+    assert.match(onboarding, /audit a website read-only/);
+    assert.equal(await page.locator(".hero-device").count(), 1, "the empty state shows what tapp does");
 
-    await page.locator("#onboarding-audit-url").fill(site.url);
-    await page.locator("#onboarding-audit-start").click();
+    await page.locator("#prompt-input").fill(site.url);
+    await page.locator("#prompt-start").click();
     await page.locator("#operation-drawer").waitFor({ state:"visible", timeout:5000 });
     await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:60_000 });
+    const chat = await page.locator("#chat-transcript").innerText();
+    assert.match(chat, /read-only — nothing will be clicked/, "the chat opens with what is about to happen");
+    assert.match(chat, /1 issue found/i, "the chat ends with a summary pill");
+    assert.match(chat, /report\.html/, "the report is attached to the transcript");
+    assert.equal(await page.locator("#device-frame.web").count(), 1, "the stage takes the browser's aspect ratio for a website");
+    await page.locator('.primary-nav [data-view="runs"]').click();
     await page.locator("#runs-list .run-row").first().waitFor({ state:"visible" });
     const row = await page.locator("#runs-list .run-row").first().innerText();
     assert.match(row, /Audit · 127\.0\.0\.1/);
