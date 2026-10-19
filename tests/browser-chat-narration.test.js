@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
+// Node 20 has no assert.partialDeepStrictEqual.
+const includes = (actual, expected) => { for (const [key, value] of Object.entries(expected)) assert.deepEqual(actual[key], value, key); };
 import { classifyPrompt, narrate, narrateFinding, summarize } from "../browser/view-model.js";
 
 test.describe("prompt classification", () => {
@@ -29,14 +32,14 @@ test.describe("chat narration", () => {
     assert.equal(narrate({ text: "Could not launch the app within 60s" }).kind, "warning");
   });
   test("folds action counters into a progress entry instead of a chat line", () => {
-    assert.partialDeepStrictEqual(narrate({ text: "12/40 actions · 5 states" }), { kind: "progress", current: 12, total: 40, states: 5 });
+    includes(narrate({ text: "12/40 actions · 5 states" }), { kind: "progress", current: 12, total: 40, states: 5 });
   });
   test("colours findings by severity", () => {
-    assert.partialDeepStrictEqual(narrateFinding({ severity: "high", title: "Dead control", screen: "Checkout" }), { icon: "🟠", text: "Dead control on Checkout" });
+    includes(narrateFinding({ severity: "high", title: "Dead control", screen: "Checkout" }), { icon: "🟠", text: "Dead control on Checkout" });
   });
   test("summarises as a pill plus prose and never as a score", () => {
     const gate = summarize("gate", { report: { gate: { outcome: "pass", reasons: ["All 3 contracts replayed"] } } });
-    assert.partialDeepStrictEqual(gate, { tone: "ready", pill: "✓ Ready to merge" });
+    includes(gate, { tone: "ready", pill: "✓ Ready to merge" });
     assert.match(summarize("audit", { pagesAudited: 4, issueCount: 0 }).pill, /Nothing broken/);
     assert.match(summarize("explore-build", { headline: "Explored 6 screens", screensExplored: 6, actionsPerformed: 20, findings: [] }).text, /not a release decision/);
     assert.doesNotMatch(JSON.stringify(gate), /\b\d{2,3}\/100\b/);
