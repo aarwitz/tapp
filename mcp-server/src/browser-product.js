@@ -170,7 +170,7 @@ function openBrowser(url) {
 function publicJob(job, { hosted = false } = {}) {
   return {
     id: job.id, operation: job.operation, status: job.status, repositoryId: job.repositoryId || null,
-    createdAt: job.createdAt, completedAt: job.completedAt || null, progress: job.progress.slice(-80), frame: !!job.latestFrame,
+    createdAt: job.createdAt, completedAt: job.completedAt || null, progress: job.progress.slice(-80), frame: !!job.latestFrame || !!job.liveSimulator, platform: job.platform || null,
     result: hosted ? hostedPayload(job.result) : job.result || null,
     error: job.error || null,
   };
@@ -489,6 +489,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       const jobFrameMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/frame$/);
       if (request.method === "GET" && jobFrameMatch) {
         const job = jobs.get(jobFrameMatch[1]);
+        if (job && !job.latestFrame && job.liveSimulator && job.status === "running") {
+          // An iOS exploration drives the booted simulator; photograph it (throttled) the way a
+          // live session does, so the stage shows the device while the run happens.
+          const engine = await import("./index.js");
+          const frame = await engine.captureScreenshotImage(1000);
+          if (frame?.error) { json(response, 404, { error: frame.error }); return; }
+          const data = Buffer.from(frame.data, "base64");
+          response.writeHead(200, { "content-type": frame.mimeType || "image/jpeg", "content-length": data.length, "cache-control": "no-store", "x-content-type-options": "nosniff" });
+          response.end(data);
+          return;
+        }
         if (!job?.latestFrame || !fs.existsSync(job.latestFrame)) { json(response, 404, { error: "No exploration frame yet" }); return; }
         const data = fs.readFileSync(job.latestFrame);
         response.writeHead(200, { "content-type": job.latestFrame.endsWith(".jpg") || job.latestFrame.endsWith(".jpeg") ? "image/jpeg" : "image/png", "content-length": data.length, "cache-control": "no-store", "x-content-type-options": "nosniff" });
@@ -549,6 +560,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a simulator .app, or an .apk"), { statusCode: 400 });
         const job = startJob(operation, async (progress) => {
           const engine = await import("./index.js");
+          job.platform = prompt.kind === "apk" ? "android" : "ios";
+          job.liveSimulator = job.platform === "ios";
           const forward = (entry) => progress({ phase: "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || 0} actions · ${entry.states || 0} states`, ...(entry.action ? { current: entry.action, total: entry.max } : {}), ...(entry.screen ? { screen: entry.screen } : {}), ...(entry.screenshot ? { screenshot: entry.screenshot } : {}) });
           let result;
           if (prompt.kind === "apk") {

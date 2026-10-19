@@ -59,7 +59,8 @@ function reportLink(report, label) { return evidenceLink(captureId(report), labe
 
 function currentTarget() { return (state.project?.targets || []).find((target) => target.id === state.selectedTargetId) || null; }
 function targetStorageKey() { return `tapp:selected-target:${state.project?.repository?.id || "none"}`; }
-function currentPlatform() { return state.live?.active ? state.live.platform : (currentTarget()?.platform || state.promptPlatform || ""); }
+// A run started from the prompt is on its own platform, whatever repository happens to be open.
+function currentPlatform() { return state.live?.active ? state.live.platform : (state.promptRun && state.promptPlatform) || currentTarget()?.platform || state.promptPlatform || ""; }
 
 function chooseDefaultTarget() {
   const targets = state.project?.targets || [];
@@ -159,7 +160,7 @@ function renderDeviceChrome() {
   $("#device-frame").className = `device-frame ${platform || "ios"}`;
   $("#stage").className = `stage ${platform || "ios"}`;
   $("#device-feed-label").textContent = platform === "android" ? "Android" : platform === "web" ? "Chromium" : "iPhone";
-  $("#device-meta-device").textContent = platform === "ios" ? (target?.runtime?.surface || "iOS Simulator")
+  $("#device-meta-device").textContent = platform === "ios" ? ((!state.promptRun && target?.runtime?.surface) || "iOS Simulator")
     : platform === "android" ? (target?.runtime?.serial || "Android emulator / device")
     : platform === "web" ? "Local Chromium" : "—";
 }
@@ -369,7 +370,8 @@ function syncTranscriptFromJob(name, job) {
 }
 
 function startLine(name, job) {
-  const input = job.input || "";
+  const raw = job.input || "";
+  const input = /\.(app|apk)$/i.test(raw) ? raw.split("/").filter(Boolean).at(-1) : raw;
   return { initialize: "Starting a release check — build, launch and explore the real app", gate: "Running the release gate", audit: `Opening ${input} read-only — nothing will be clicked`, "explore-build": `Exploring ${input} on the booted device`, open: `Opening ${input}`, "session-start": "Opening a live session", "session-act": "Acting in the live session", "session-save-flow": "Saving the journey as a Flow", "session-end": "Ending the live session" }[name] || `${pretty(name)} started`;
 }
 
@@ -384,7 +386,17 @@ async function finishTranscript(name, job) {
   if (id) {
     try {
       const files = await api(`/api/captures/${encodeURIComponent(id)}/files`);
-      if (files.shots?.length) pushLine({ kind: "shots", shots: files.shots.slice(0, 3).map((shot) => ({ src: captureUrl(id, shot.src), href: captureUrl(id, shot.src), caption: shot.caption })) });
+      if (files.shots?.length) {
+        pushLine({ kind: "shots", shots: files.shots.slice(0, 3).map((shot) => ({ src: captureUrl(id, shot.src), href: captureUrl(id, shot.src), caption: shot.caption })) });
+        // The stage keeps the run's final screen until something newer replaces it.
+        if (!state.live?.active) {
+          const last = files.shots.at(-1);
+          const image = $("#live-frame-image");
+          image.onload = () => { $("#live-frame-loading").classList.add("hidden"); $("#device-placeholder").classList.add("hidden"); };
+          image.src = captureUrl(id, last.src);
+          $("#live-screen-title").textContent = last.caption || "";
+        }
+      }
       const items = [];
       if (files.recording) items.push({ icon: "🎬", label: files.recording, href: captureUrl(id, files.recording) });
       if (files.report) items.push({ icon: "📄", label: "report.html", href: captureUrl(id, files.report) });
@@ -587,14 +599,14 @@ document.addEventListener("submit", (event) => {
 });
 
 $$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showPrompt()));
-$("#command-run").addEventListener("click", () => runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)));
+$("#command-run").addEventListener("click", () => { state.promptRun = false; runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)); });
 $("#refresh-project").addEventListener("click", () => refresh().catch((error) => toast(error.message, true)));
 $("#change-source").addEventListener("click", showPrompt);
 $("#chat-toggle").addEventListener("click", () => setChatCollapsed(!state.chatCollapsed));
 $("#repository-switcher").addEventListener("change", async (event) => {
   try { await api("/api/repositories/select", { method:"POST", body:JSON.stringify({ id:event.target.value }) }); state.selectedTargetId = ""; await refreshSession(); await refresh(); } catch (error) { toast(error.message, true); }
 });
-$("#explore").addEventListener("click", () => runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)));
+$("#explore").addEventListener("click", () => { state.promptRun = false; runOperation("initialize", operationPayload({ explore:true })).catch((error) => toast(error.message, true)); });
 $("#start-session").addEventListener("click", () => runOperation("session-start", operationPayload()).catch((error) => toast(error.message, true)));
 $("#refresh-live-session").addEventListener("click", () => runOperation("session-act", { action:"tree" }).catch((error) => toast(error.message, true)));
 $("#end-session").addEventListener("click", () => runOperation("session-end").catch((error) => toast(error.message, true)));

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.4
+
+- **iOS on the stage, verified by hand.** A build or bundle id pasted into the prompt now shows the
+  booted simulator's screen live while the exploration runs (the job frame falls back to a
+  simulator screenshot the way a live session does), the stage takes the phone's shape even when a
+  web repository is open, the run's last screenshot stays on the stage afterwards, and the frame is
+  sized by the stage's height rather than by the screenshot's pixels. The drawn notch is gone; the
+  simulator's own island is in the frame. Chat icons for probing, swiping, going back and switching
+  tabs; the start line names the `.app`/`.apk` by file name.
+
 ## 0.18.3
 
 - **The Studio opens on a prompt.** With nothing open, `tapp app` shows one field — *What should
