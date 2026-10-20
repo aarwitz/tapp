@@ -18,14 +18,14 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /https:\/\/www\.npmjs\.com\/package\/@aarwitz\/tapp/);
   assert.match(index, /"@type": "SoftwareApplication"/);
   assert.match(index, /"operatingSystem": "macOS, Windows, Linux"/);
-  assert.match(index, /iOS simulators/);
-  assert.match(index, /Android emulators and devices/);
+  assert.match(index, /iOS simulator/);
+  assert.match(index, /Android emulator or device/);
   assert.match(index, /Windows desktop/);
   assert.match(index, /WPF, WinForms, and WinUI/);
   assert.doesNotMatch(index, /\(beta\)|not currently supported/i);
   assert.match(index, /npx -y skills add aarwitz\/tapp --skill tapp/);
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
-  assert.match(index, /Let your coding agent prove the UI it changed/);
+  assert.match(index, /Point tapp at anything\./);
   assert.match(index, /Real evidence/);
   assert.match(index, /The desktop app on a real run/);
   assert.match(index, /assets\/tapp-film\.mp4/);
