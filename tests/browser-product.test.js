@@ -117,6 +117,115 @@ test("hosted browser mode trusts only the authenticated relay and preserves same
   }
 });
 
+test("a public Studio exposes only read-only audits, scoped to the visitor who ran them", async () => {
+  // app.runtapp.com lets anyone in. The boundary is what an anonymous visitor may reach: their
+  // own audit evidence and nothing else. Repositories, the live session, the gate and other
+  // people's captures must stay invisible, on a machine where they all share one directory.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-public-home-"));
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-public-ws-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const plant = (id, owner) => {
+    const dir = path.join(home, "captures", id);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "audit.json"), JSON.stringify({ url: "https://planted.test", pagesAudited: 1, issues: [] }));
+    fs.writeFileSync(path.join(dir, "report.html"), "<h1>evidence</h1>");
+    if (owner) fs.writeFileSync(path.join(dir, ".visitor"), owner);
+  };
+  plant("web-audit-someone-else", "f".repeat(32));
+  plant("web-audit-operator", null);
+
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot });
+  let cookie = "";
+  const call = async (pathname, init = {}) => {
+    const response = await fetch(`${product.origin}${pathname}`, {
+      ...init, redirect: "manual",
+      headers: { ...(init.headers || {}), ...(cookie ? { cookie } : {}) },
+    });
+    const set = response.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0];
+    return response;
+  };
+  try {
+    // Getting in needs no account, and the visitor is given a durable identity.
+    assert.equal((await call("/")).status, 200);
+    assert.match(cookie, /^tapp_visitor=[a-f0-9]{32}$/);
+
+    // The session says what this deployment can honestly do, and names nothing on the machine.
+    const session = await (await call("/api/session")).json();
+    assert.equal(session.access, "anonymous");
+    assert.deepEqual(session.accepts, ["url"]);
+    assert.deepEqual(session.repositories, []);
+    assert.equal(session.root, null);
+
+    // Captures belonging to anyone else are not listed and not served.
+    assert.deepEqual((await (await call("/api/audits")).json()).audits, []);
+    for (const id of ["web-audit-someone-else", "web-audit-operator"]) {
+      assert.equal((await call(`/api/captures/${id}/files`)).status, 404, `${id} must not be readable`);
+      assert.equal((await call(`/evidence/captures/${id}/report.html`)).status, 404, `${id} evidence must not be served`);
+    }
+
+    // Everything beyond a read-only audit needs an account.
+    for (const [method, pathname] of [
+      ["GET", "/api/repositories"], ["GET", "/api/project"], ["GET", "/api/live-session"],
+      ["POST", "/api/repositories/select"], ["POST", "/api/operations/open"],
+      ["POST", "/api/operations/gate"], ["POST", "/api/operations/initialize"],
+    ]) {
+      assert.equal((await call(pathname, { method })).status, 401, `${method} ${pathname} must require an account`);
+    }
+
+    // A visitor does see evidence stamped as their own.
+    const visitorId = cookie.split("=")[1];
+    plant("web-audit-mine", visitorId);
+    assert.deepEqual((await (await call("/api/audits")).json()).audits.map((a) => a.id), ["web-audit-mine"]);
+    assert.equal((await call("/evidence/captures/web-audit-mine/report.html")).status, 200);
+  } finally {
+    await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+});
+
+test("sign-in returns to the requested destination and refuses a foreign one", async () => {
+  // runtapp.com's hero hands a target over as /?target=... Losing it at the login bounce makes
+  // the handoff pointless, and reflecting it unchecked would make /login an open redirect.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-return-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>Return fixture</h1>");
+  const appOrigin = "https://app.runtapp.com";
+  const product = await startBrowserProduct({
+    projectDir: root, launch: false,
+    publicOrigin: appOrigin,
+    directLogin: { username: "demo", password: "demo" },
+  });
+  const signIn = (next) => fetch(`${product.origin}/api/auth`, {
+    method: "POST", redirect: "manual",
+    headers: { origin: appOrigin, "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ username: "demo", password: "demo", next }).toString(),
+  });
+  try {
+    // The bounce remembers a real destination, and stays quiet about the default one.
+    const wanted = await fetch(`${product.origin}/?target=runtapp.com`, { redirect: "manual" });
+    assert.equal(wanted.headers.get("location"), "/login?next=%2F%3Ftarget%3Druntapp.com");
+    assert.equal((await fetch(product.origin, { redirect: "manual" })).headers.get("location"), "/login");
+
+    const page = await fetch(`${product.origin}/login?next=%2F%3Ftarget%3Druntapp.com`).then((r) => r.text());
+    assert.match(page, /name="next" value="\/\?target=runtapp\.com"/);
+
+    assert.equal((await signIn("/?target=runtapp.com")).headers.get("location"), "/?target=runtapp.com");
+
+    // Anything that could leave the origin falls back to the Studio root.
+    for (const hostile of ["//evil.example", "https://evil.example", "/\\evil.example", "/login?x=1"]) {
+      assert.equal((await signIn(hostile)).headers.get("location"), "/", `next=${hostile} must not be honoured`);
+      assert.doesNotMatch(
+        await fetch(`${product.origin}/login?next=${encodeURIComponent(hostile)}`).then((r) => r.text()),
+        /name="next"/,
+        `next=${hostile} must not be reflected into the form`,
+      );
+    }
+  } finally {
+    await product.close();
+  }
+});
+
 test("hosted direct login serves its own sign-in page and mints a first-party session", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-browser-direct-"));
   fs.writeFileSync(path.join(root, "index.html"), "<h1>Direct fixture</h1>");

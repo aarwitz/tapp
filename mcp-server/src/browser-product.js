@@ -110,15 +110,70 @@ function capturePath(captureId, relative = "report.html") {
   return candidate === root || candidate.startsWith(root + path.sep) ? candidate : null;
 }
 
+// Captures live in one flat directory shared by every run on this machine. A public Studio has
+// many visitors in it, so an anonymous visitor's capture is stamped with their visitor id and
+// only ever listed or served back to them. An unstamped capture belongs to the operator.
+const VISITOR_MARKER = ".visitor";
+const VISITOR_COOKIE = "tapp_visitor";
+
+// What a signed-out visitor on a public Studio may reach. Everything absent from this list is
+// refused, so a new route is private until someone deliberately opens it.
+function anonymousAllows(method, pathname) {
+  if (method === "GET") {
+    if (pathname === "/" || pathname === "/api/version" || pathname === "/api/session" || pathname === "/api/audits") return true;
+    if (pathname.startsWith("/assets/")) return true;
+    if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
+    if (/^\/evidence\/captures\//.test(pathname)) return true;
+    if (/^\/api\/jobs\/[a-f0-9]{20}(\/frame)?$/.test(pathname)) return true;
+    return false;
+  }
+  // The only thing a visitor may start is a read-only audit of a public website.
+  return method === "POST" && pathname === "/api/operations/audit";
+}
+
+// One visitor may start a bounded number of audits per hour. Each audit drives a real browser
+// over as many as 20 pages, so this is about the machine, not about abuse alone.
+const AUDIT_LIMIT_PER_HOUR = 10;
+const auditHistory = new Map();
+function auditRateLimit(visitorId, method, pathname) {
+  if (method !== "POST" || pathname !== "/api/operations/audit") return 0;
+  const now = Date.now();
+  const hour = 60 * 60 * 1000;
+  const recent = (auditHistory.get(visitorId) || []).filter((at) => now - at < hour);
+  if (auditHistory.size > 5000) auditHistory.clear();
+  if (recent.length >= AUDIT_LIMIT_PER_HOUR) return Math.ceil((hour - (now - recent[0])) / 1000);
+  recent.push(now);
+  auditHistory.set(visitorId, recent);
+  return 0;
+}
+
+function captureOwner(captureId) {
+  const marker = capturePath(captureId, VISITOR_MARKER);
+  if (!marker) return null;
+  try { return fs.readFileSync(marker, "utf8").trim() || null; } catch { return null; }
+}
+
+function setCaptureOwner(captureId, visitorId) {
+  const marker = capturePath(captureId, VISITOR_MARKER);
+  if (!marker || !visitorId) return;
+  try { fs.writeFileSync(marker, `${visitorId}\n`, { mode: 0o600 }); } catch { /* evidence is still written */ }
+}
+
+// `owner` null means the operator, who sees every capture; a visitor id sees only their own.
+function visibleToOwner(captureId, owner) {
+  return owner === null || captureOwner(captureId) === owner;
+}
+
 // Read-only website audits live in the captures directory like every other run; the Studio
 // lists the ones with a summary file. Newest first, bounded.
-function listAudits(limit = 50) {
+function listAudits(limit = 50, owner = null) {
   const root = captureRoot();
   let names;
   try { names = fs.readdirSync(root); } catch { return []; }
   const audits = [];
   for (const name of names) {
     if (!name.startsWith("web-audit-")) continue;
+    if (!visibleToOwner(name, owner)) continue;
     const summaryPath = path.join(root, name, "audit.json");
     let summary;
     try { summary = JSON.parse(fs.readFileSync(summaryPath, "utf8")); } catch { continue; }
@@ -311,7 +366,23 @@ function readFormBody(request) {
   });
 }
 
-function serveLoginPage(response, { failed = false } = {}) {
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+// A path the sign-in flow may return to. Only a local path is ever accepted: anything with a
+// scheme or authority (including the "//evil.com" protocol-relative form) would make /login an
+// open redirect, so it is rejected rather than sanitized.
+function safeReturnPath(raw) {
+  const value = String(raw || "");
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "";
+  if (value.startsWith("/login")) return "";
+  // "/" is where sign-in lands anyway; carrying it adds a querystring that says nothing.
+  if (value === "/") return "";
+  return value.slice(0, 2048);
+}
+
+function serveLoginPage(response, { failed = false, next = "" } = {}) {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tapp — sign in</title><style>
   body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0c1210;color:#e8efe9;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -329,6 +400,7 @@ function serveLoginPage(response, { failed = false } = {}) {
   <h1>tapp<span>.</span></h1><p class="tag">ship with proof.</p>
   ${failed ? '<p class="err" role="alert">That username or password did not match.</p>' : ""}
   <form method="post" action="/api/auth">
+    ${next ? `<input type="hidden" name="next" value="${escapeHtml(next)}">` : ""}
     <label>Username<input name="username" autocomplete="username" placeholder="username" required></label>
     <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="password" required></label>
     <button type="submit">Launch Tapp →</button>
@@ -339,12 +411,38 @@ function serveLoginPage(response, { failed = false } = {}) {
   response.end(html);
 }
 
-export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null } = {}) {
-  const hosted = !!trustedProxyToken || !!directLogin;
+export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false } = {}) {
+  const hosted = !!trustedProxyToken || !!directLogin || !!publicAccess;
   // publicOrigin accepts a comma-separated allowlist; the first entry is canonical.
   const publicOrigins = String(publicOrigin || "").split(",").map((value) => value.trim().replace(/\/$/, "")).filter(Boolean);
   if (hosted && !publicOrigins.length) throw new Error("Hosted browser mode requires an explicit publicOrigin");
   const loginFailures = { count: 0, windowStartedAt: 0 };
+  // A hosted Studio audits whatever URL a visitor types, from a machine that can also see its
+  // own loopback services and private network. Route the browser through the egress proxy, which
+  // resolves and pins every connection — redirects and subresources included — and refuses
+  // anything that is not a public address. TAPP_ENFORCE_PUBLIC_EGRESS makes a missing proxy fail
+  // the run rather than silently reaching the private network. On by default whenever hosted:
+  // forgetting to opt in is exactly the mistake that matters here.
+  const enforcePublicEgress = publicEgressOnly === null ? hosted : !!publicEgressOnly;
+  // The engine reads the proxy off process.env, so enabling it mutates process-wide state. Keep
+  // what was there and put it back on close: a local Studio started later in the same process
+  // would otherwise inherit a proxy that no longer exists and fail every run.
+  let egressProxy = null;
+  const previousEgressEnv = {
+    server: process.env.TAPP_BROWSER_PROXY_SERVER,
+    enforce: process.env.TAPP_ENFORCE_PUBLIC_EGRESS,
+  };
+  const restoreEgressEnv = () => {
+    for (const [key, value] of [["TAPP_BROWSER_PROXY_SERVER", previousEgressEnv.server], ["TAPP_ENFORCE_PUBLIC_EGRESS", previousEgressEnv.enforce]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  };
+  if (enforcePublicEgress) {
+    const { startPublicBrowserProxy } = await import("./public-network.js");
+    egressProxy = await startPublicBrowserProxy();
+    process.env.TAPP_BROWSER_PROXY_SERVER = egressProxy.url;
+    process.env.TAPP_ENFORCE_PUBLIC_EGRESS = "1";
+  }
   const registry = new BrowserWorkspaceRegistry({ initialProjectDir: projectDir, workspaceRoot, githubProvider });
   const serverStartedAt = new Date().toISOString();
   const sessionToken = crypto.randomBytes(32).toString("base64url");
@@ -409,8 +507,31 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       const proxyAuthenticated = !!trustedProxyToken && sameSecret(request.headers["x-tapp-proxy-token"], trustedProxyToken);
       const authenticated = proxyAuthenticated || sameSecret(cookies(request)[SESSION_COOKIE], sessionToken);
+
+      // A public Studio lets anyone in without an account, but an anonymous visitor gets a far
+      // smaller surface than the operator: audit a public website, and read back only the
+      // evidence from their own audits. Repositories, live sessions, the gate and this
+      // machine's project all stay behind authentication.
+      let visitorId = null;
+      let anonymous = false;
+      if (publicAccess && !authenticated) {
+        anonymous = true;
+        visitorId = String(cookies(request)[VISITOR_COOKIE] || "");
+        if (!/^[a-f0-9]{32}$/.test(visitorId)) {
+          visitorId = crypto.randomBytes(16).toString("hex");
+          response.setHeader("set-cookie", `${VISITOR_COOKIE}=${visitorId}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=2592000`);
+        }
+        if (!anonymousAllows(request.method, url.pathname)) {
+          json(response, 401, { error: "Sign in to use this. A public visitor can audit a website read-only; repositories, live sessions and the release gate need an account." });
+          return;
+        }
+        const limited = auditRateLimit(visitorId, request.method, url.pathname);
+        if (limited) { response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": String(limited) }); response.end(JSON.stringify({ error: `Too many audits from here. Try again in ${Math.ceil(limited / 60)} minute(s).` })); return; }
+      }
+      // The operator sees every capture; a visitor sees only captures stamped with their id.
+      const evidenceOwner = anonymous ? visitorId : null;
       if (!authenticated && directLogin) {
-        if (request.method === "GET" && url.pathname === "/login") { serveLoginPage(response, { failed: url.searchParams.has("failed") }); return; }
+        if (request.method === "GET" && url.pathname === "/login") { serveLoginPage(response, { failed: url.searchParams.has("failed"), next: safeReturnPath(url.searchParams.get("next")) }); return; }
         if (request.method === "POST" && url.pathname === "/api/auth") {
           const now = Date.now();
           if (now - loginFailures.windowStartedAt > 10 * 60_000) { loginFailures.windowStartedAt = now; loginFailures.count = 0; }
@@ -431,20 +552,32 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           if (!valid) {
             loginFailures.count += 1;
             await new Promise((resolve) => setTimeout(resolve, 400));
-            response.writeHead(303, { location: "/login?failed=1" });
+            const retry = safeReturnPath(form.get("next"));
+            response.writeHead(303, { location: retry ? `/login?failed=1&next=${encodeURIComponent(retry)}` : "/login?failed=1" });
             response.end();
             return;
           }
-          response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}; HttpOnly; SameSite=Strict; Secure; Path=/` });
+          response.writeHead(303, { location: safeReturnPath(form.get("next")) || "/", "set-cookie": `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}; HttpOnly; SameSite=Strict; Secure; Path=/` });
           response.end();
           return;
         }
-        if (request.method === "GET" && !url.pathname.startsWith("/api/")) { response.writeHead(302, { location: "/login" }); response.end(); return; }
+        if (request.method === "GET" && !url.pathname.startsWith("/api/")) {
+          // Carry the destination through sign-in; landing on an empty Studio loses whatever
+          // the visitor asked for (the landing page sends ?target=... here).
+          const want = safeReturnPath(`${url.pathname}${url.search}`);
+          response.writeHead(302, { location: want ? `/login?next=${encodeURIComponent(want)}` : "/login" });
+          response.end();
+          return;
+        }
       }
-      if (!authenticated) { response.writeHead(401, { "content-type": "text/plain; charset=utf-8" }); response.end(directLogin ? "Sign in at /login to continue." : "Open Tapp from the authenticated launch URL printed by the CLI."); return; }
+      if (!authenticated && !anonymous) { response.writeHead(401, { "content-type": "text/plain; charset=utf-8" }); response.end(directLogin ? "Sign in at /login to continue." : "Open Tapp from the authenticated launch URL printed by the CLI."); return; }
 
       if (request.method === "GET" && url.pathname === "/") {
-        serveBrowserIndex(response, hosted ? (proxyAuthenticated ? { apiBase:"/api/tapp", loginUrl:"/solutions/tapp" } : { apiBase:"", loginUrl:"/login" }) : {});
+        // Without a sign-in page there is nowhere to bounce an anonymous visitor to, and a
+        // loginUrl would send them in a loop on their first privileged 401.
+        serveBrowserIndex(response, hosted
+          ? (proxyAuthenticated ? { apiBase:"/api/tapp", loginUrl:"/solutions/tapp" } : { apiBase:"", loginUrl: directLogin ? "/login" : "" })
+          : {});
         return;
       }
       if (request.method === "GET" && url.pathname.startsWith("/assets/")) {
@@ -454,13 +587,27 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/session") {
+        if (anonymous) {
+          json(response, 200, {
+            csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
+            contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
+            access: "anonymous",
+            // The prompt screen offers folders, bundle ids and builds. None of them can work in
+            // a hosted Studio — there is no Mac, no simulator and no access to the visitor's
+            // disk — so say so here rather than letting the UI offer them.
+            accepts: ["url"],
+            selfHostOnly: ["path", "github", "bundle", "app", "apk"],
+          });
+          return;
+        }
         json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }) });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
-      if (request.method === "GET" && url.pathname === "/api/audits") { json(response, 200, { audits: hosted ? hostedPayload(listAudits()) : listAudits(), explores: hosted ? hostedPayload(listBuildExplores()) : listBuildExplores() }); return; }
+      if (request.method === "GET" && url.pathname === "/api/audits") { const audits = listAudits(50, evidenceOwner); const explores = anonymous ? [] : listBuildExplores(); json(response, 200, { audits: hosted ? hostedPayload(audits) : audits, explores: hosted ? hostedPayload(explores) : explores }); return; }
       const filesMatch = url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/files$/);
       if (request.method === "GET" && filesMatch) {
+        if (!visibleToOwner(filesMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
         const files = captureFiles(filesMatch[1]);
         if (!files) { json(response, 404, { error: "No such capture" }); return; }
         json(response, 200, files);
@@ -482,11 +629,13 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})$/);
       if (request.method === "GET" && jobMatch) {
         const job = jobs.get(jobMatch[1]);
+        if (job && anonymous && job.visitorId !== visitorId) { response.writeHead(404); response.end("Not found"); return; }
         if (!job) { json(response, 404, { error: "No such operation" }); return; }
         json(response, 200, publicJob(job, { hosted }));
         return;
       }
       const jobFrameMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/frame$/);
+      if (request.method === "GET" && jobFrameMatch && anonymous && jobs.get(jobFrameMatch[1])?.visitorId !== visitorId) { response.writeHead(404); response.end("Not found"); return; }
       if (request.method === "GET" && jobFrameMatch) {
         const job = jobs.get(jobFrameMatch[1]);
         if (job && !job.latestFrame && job.liveSimulator && job.status === "running") {
@@ -508,6 +657,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       const captureMatch = url.pathname.match(/^\/evidence\/captures\/([A-Za-z0-9._-]{1,128})(?:\/(.*))?$/);
       if (request.method === "GET" && captureMatch) {
+        if (!visibleToOwner(captureMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
         const file = capturePath(captureMatch[1], captureMatch[2] || "report.html");
         if (!file) { response.writeHead(404); response.end("Not found"); return; }
         serveFile(response, file);
@@ -601,15 +751,24 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         try { target = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 }); }
         if (!/^https?:$/.test(target.protocol)) throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 });
         const pages = Math.max(1, Math.min(20, Number(body.pages) || 6));
+        // Mint the capture id here so the evidence can be stamped as this visitor's before the
+        // run writes anything; a capture that appeared first and was claimed afterwards would be
+        // briefly readable by everyone.
+        const auditCapture = `web-audit-${Date.now().toString(36)}-${crypto.randomBytes(6).toString("hex")}`;
+        if (visitorId) {
+          try { fs.mkdirSync(path.join(captureRoot(), auditCapture), { recursive: true }); } catch { /* the run reports its own failure */ }
+          setCaptureOwner(auditCapture, visitorId);
+        }
         const job = startJob(operation, async (progress) => {
           const { auditWebSite } = await import("./web-audit.js");
           progress({ phase: "runtime", text: `Opening ${target.href} read-only (up to ${pages} pages, nothing will be clicked)` });
           const summary = await auditWebSite({
-            url: target.href, pages, delayMs: 750, capturesDir: captureRoot(),
+            url: target.href, pages, delayMs: 750, capturesDir: captureRoot(), captureId: auditCapture,
             onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages }),
           });
           return hosted ? hostedPayload(summary) : summary;
         }, null);
+        job.visitorId = visitorId;
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }
@@ -750,6 +909,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (liveManagedRuntime) await engine.stopManagedWebTarget(liveManagedRuntime).catch(() => {});
       }
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      if (egressProxy) { await egressProxy.close().catch(() => {}); restoreEgressEnv(); }
       registry.close();
     },
   };

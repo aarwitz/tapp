@@ -2082,11 +2082,34 @@ switch (command) {
     }
     const port = flags.port === undefined ? 0 : Number(flags.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535) { console.error("❌ --port must be 0..65535"); process.exit(2); }
+    // --public serves the Studio to anyone who can reach it: no account, a read-only website
+    // audit each, evidence scoped per visitor, and every browser connection forced through the
+    // public-egress proxy. Repositories, live sessions and the gate stay unavailable, because
+    // there is no way to offer them safely to an anonymous visitor on a shared machine.
+    const publicAccess = flags.public === true;
+    const publicOrigin = typeof flags.origin === "string" ? flags.origin : "";
+    if (publicAccess && !/^https:\/\/[^\s/]+$/.test(publicOrigin)) {
+      console.error("❌ --public needs --origin https://your.domain (the address visitors use)");
+      process.exit(2);
+    }
+    if (publicAccess && flags.port === undefined) { console.error("❌ --public needs an explicit --port"); process.exit(2); }
     const { startBrowserProduct } = await import(path.join(packageRoot, "mcp-server", "src", "browser-product.js"));
-    const product = await startBrowserProduct({ projectDir, port, launch: flags.open !== false && flags["no-open"] !== true });
-    console.log(`Tapp · ${product.root || "choose a local folder or GitHub repository in the browser"}`);
-    console.log(`Open: ${product.launchUrl}`);
-    console.log("Local-only session; press Ctrl-C to stop.");
+    const product = await startBrowserProduct({
+      projectDir, port,
+      launch: !publicAccess && flags.open !== false && flags["no-open"] !== true,
+      ...(publicAccess ? { publicAccess: true, publicOrigin } : {}),
+    });
+    if (publicAccess) {
+      console.log(`Tapp · public Studio for ${publicOrigin}`);
+      console.log(`Listening on ${product.origin} — put a TLS terminator or tunnel in front of it.`);
+      console.log("Anonymous visitors may audit a public website read-only. Repositories, live");
+      console.log("sessions and the release gate require an authenticated local session.");
+      console.log("Browser egress is pinned to public addresses; private ranges are refused.");
+    } else {
+      console.log(`Tapp · ${product.root || "choose a local folder or GitHub repository in the browser"}`);
+      console.log(`Open: ${product.launchUrl}`);
+      console.log("Local-only session; press Ctrl-C to stop.");
+    }
     const shutdown = async () => { try { await product.close(); } finally { process.exit(0); } };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);

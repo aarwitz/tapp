@@ -56,10 +56,10 @@
         <button class="primary prompt-go" type="submit" id="prompt-start" aria-label="Start">→</button>
       </form>
       <ul class="prompt-suggestions" aria-label="Examples">
-        <li><button type="button" data-prompt="https://example.com"><span>⌁</span><b>https://example.com</b><small>audit a website read-only — safe on production, nothing is clicked</small></button></li>
-        <li><button type="button" data-prompt="~/code/my-app"><span>⌘</span><b>~/code/my-app</b><small>open a repo folder on this Mac — detects iOS, Android and web targets, builds locally</small></button></li>
-        <li><button type="button" data-prompt="owner/repo"><span>🐙</span><b>owner/repo</b><small>clone from GitHub into an isolated workspace, then the same</small></button></li>
-        <li><button type="button" data-prompt="com.company.app"><span>📱</span><b>com.company.app</b><small>explore a build already on the booted simulator (or give a .app / .apk)</small></button></li>
+        <li><button type="button" data-kind="url" data-prompt="https://example.com"><span>⌁</span><b>https://example.com</b><small>audit a website read-only — safe on production, nothing is clicked</small></button></li>
+        <li><button type="button" data-kind="path" data-prompt="~/code/my-app"><span>⌘</span><b>~/code/my-app</b><small>open a repo folder on this Mac — detects iOS, Android and web targets, builds locally</small></button></li>
+        <li><button type="button" data-kind="github" data-prompt="owner/repo"><span>🐙</span><b>owner/repo</b><small>clone from GitHub into an isolated workspace, then the same</small></button></li>
+        <li><button type="button" data-kind="build" data-prompt="com.company.app"><span>📱</span><b>com.company.app</b><small>explore a build already on the booted simulator (or give a .app / .apk)</small></button></li>
       </ul>
       <p class="prompt-note" id="privacy-note-detail">Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key.</p>
       <span class="sr-only" id="privacy-note-title">Your code stays on this machine.</span>

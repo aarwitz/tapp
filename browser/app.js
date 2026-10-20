@@ -88,6 +88,24 @@ function activateView(view) {
   window.scrollTo({ top:0, behavior:"instant" });
 }
 
+// A hosted Studio has no Mac, no simulator and no access to the visitor's disk, so folders,
+// bundle ids and builds cannot work there however the prompt is worded. Offer only what this
+// deployment can actually do, and say where the rest runs, rather than failing after the ask.
+function applyAccessMode() {
+  const session = state.session || {};
+  if (session.access !== "anonymous") return;
+  const accepts = new Set(session.accepts || ["url"]);
+  for (const button of document.querySelectorAll("[data-kind]")) {
+    const kind = button.dataset.kind;
+    const usable = kind === "url" ? accepts.has("url") : accepts.has(kind);
+    button.closest("li")?.classList.toggle("hidden", !usable);
+  }
+  const input = $("#prompt-input");
+  if (input) input.placeholder = "A website URL…";
+  const note = $("#privacy-note-detail");
+  if (note) note.textContent = "Websites are audited read-only in the cloud; nothing is clicked. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
+}
+
 function showPrompt() {
   $("#source-onboarding").classList.remove("hidden");
   $("#product-shell").classList.add("hidden");
@@ -472,9 +490,21 @@ async function refreshSession() {
   $("#mode-pill").textContent = local ? "Self-host · this machine" : "Cloud · outbound runner";
   $("#onboarding-mode-pill").textContent = local ? "Self-host · this machine" : "Cloud";
   $("#privacy-note-detail").textContent = local ? "Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key." : "Your repository stays in your private Tapp workspace.";
+  applyAccessMode();
 }
 
 async function refresh() {
+  // A public visitor has no project and no live session, and asking for them would only earn a
+  // 401 on every poll.
+  if (state.session?.access === "anonymous") {
+    const runs = await api("/api/audits").catch(() => ({ audits: [], explores: [] }));
+    state.project = { connected:false };
+    state.live = { active:false };
+    state.audits = runs.audits || [];
+    state.explores = runs.explores || [];
+    renderProject();
+    return;
+  }
   const [project, live, runs] = await Promise.all([api("/api/project"), api("/api/live-session"), api("/api/audits").catch(() => ({ audits: [], explores: [] }))]);
   state.project = project;
   state.live = live;
@@ -617,9 +647,29 @@ $("#live-back").addEventListener("click", () => runOperation("session-act", { ac
 $("#live-swipe").addEventListener("click", () => runOperation("session-act", { action:"swipe", direction:"up" }).catch((error) => toast(error.message, true)));
 $("#run-gate").addEventListener("click", () => runOperation("gate", operationPayload()).catch((error) => toast(error.message, true)));
 
+// runtapp.com's hero is the same prompt as this screen, so it hands the target over as
+// ?target=... Prefill it and start the run, so arriving here does not mean retyping what was
+// already typed on the landing page. The URL is cleaned up either way so a refresh does not
+// silently re-run it.
+function handoffTarget() {
+  let target = "";
+  try { target = new URLSearchParams(window.location.search).get("target") || ""; } catch { return ""; }
+  target = target.trim().slice(0, 512);
+  if (!target) return "";
+  try { window.history.replaceState({}, "", window.location.pathname); } catch { /* history may be unavailable */ }
+  return target;
+}
+
 try {
   try { setChatCollapsed(localStorage.getItem("tapp:chat-collapsed") === "1"); } catch { /* storage may be unavailable */ }
   await refreshSession();
   await refresh();
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
+
+  const handoff = handoffTarget();
+  if (handoff) {
+    const input = $("#prompt-input");
+    if (input) input.value = handoff;
+    await startFromPrompt(handoff);
+  }
 } catch (error) { toast(error.message, true); }

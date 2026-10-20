@@ -279,7 +279,7 @@
     <input id="prompt-input" type="text" spellcheck="false" autocapitalize="off" autocorrect="off"
            placeholder="runtapp.com"
            aria-label="A website, a GitHub repo, a folder on this machine, a bundle id, an .app or an .apk">
-    <button type="submit" aria-label="Show how to run this target">→</button>
+    <button type="submit" aria-label="Open this target in the tapp Studio">→</button>
   </form>
   <div class="copybox mono">
     <span id="install-command">npx -y skills add aarwitz/tapp --skill tapp</span>
@@ -493,15 +493,10 @@
     }
   }
 
-  // runtapp.com is the landing page; app.runtapp.com runs the Studio.
-  //
-  // TEMPORARY: app.runtapp.com does not serve the Studio yet (the Render service behind it was
-  // decommissioned in 42f4818). Until it does, submitting the prompt prints the self-host command
-  // for whatever was typed instead of navigating to a 403. Flip STUDIO_LIVE to true the day the
-  // Studio answers there, and the fallback below can be deleted wholesale.
-  const STUDIO_LIVE = false;
+  // runtapp.com is the landing page; app.runtapp.com runs the Studio. The hero prompt only
+  // collects a target and hands it over — classification, refusals and execution all live in the
+  // product, so this page has no product logic of its own to drift.
   const STUDIO = "https://app.runtapp.com/";
-
   const EXAMPLES = [
     "runtapp.com",
     "aarwitz/tapp",
@@ -513,68 +508,15 @@
 
   const promptForm = document.getElementById("prompt-form");
   const promptInput = document.getElementById("prompt-input");
-  const commandSlot = document.getElementById("install-command");
-  const noteSlot = document.getElementById("copy-status");
-  const DEFAULT_COMMAND = commandSlot.textContent;
-  const DEFAULT_NOTE = noteSlot.textContent;
-
-  // ---- fallback only: mirrors browser/view-model.js classifyPrompt, deleted when STUDIO_LIVE ----
-  const NPX = "npx -y @aarwitz/tapp@latest";
-
-  function classify(raw) {
-    const input = String(raw || "").trim();
-    if (!input) return { kind: "empty" };
-    if (/\.apk$/i.test(input)) return { kind: "apk", value: input };
-    if (/\.app\/?$/i.test(input) && /[\/~]/.test(input)) return { kind: "app", value: input.replace(/\/$/, "") };
-    const github = input.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?(?:\/.*)?$/i)
-      || input.match(/^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/);
-    if (github && !/^https?:\/\/(?!(?:www\.)?github\.com)/i.test(input) && !input.startsWith("/") && !input.startsWith("~")) {
-      return { kind: "github", value: github[1].replace(/\.git$/, "") };
-    }
-    if (/^https?:\/\//i.test(input)) return { kind: "url", value: input };
-    if (/^(?:com|org|net|io|co|dev|app|ai|me|us|uk|de|fr|se|edu|gov)\.[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)+$/i.test(input)) {
-      return { kind: "bundle", value: input };
-    }
-    if (/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(input)) return { kind: "url", value: "https://" + input };
-    if (/^[/~]|^\.\.?\//.test(input)) return { kind: "path", value: input };
-    return { kind: "business", value: input };
-  }
-
-  function commandFor(target) {
-    switch (target.kind) {
-      case "url": return { command: NPX + " explore --read-only " + target.value, note: "Runs on your machine. Reads the site without clicking anything." };
-      case "github": return { command: NPX + " app", note: "Opens the Studio locally and clones " + target.value + " there. Nothing is uploaded." };
-      case "path": return { command: NPX + " init " + target.value + " --explore", note: "Detects the targets in that folder and grounds a release plan on a real run." };
-      case "app": return { command: NPX + " explore " + target.value, note: "Installs the build on a booted simulator and explores it." };
-      case "apk": return { command: NPX + " explore " + target.value + " --platform android", note: "Needs a connected emulator or device on adb." };
-      case "bundle": return { command: NPX + " explore " + target.value, note: "Explores the app already installed on the booted simulator." };
-      case "business": return { command: DEFAULT_COMMAND, note: "tapp can't find a company's apps from its name yet \u2014 give it the URL instead." };
-      default: return { command: DEFAULT_COMMAND, note: DEFAULT_NOTE };
-    }
-  }
-  // ---- end fallback ----
 
   promptForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const target = promptInput.value.trim();
-    if (STUDIO_LIVE) {
-      const url = new URL(STUDIO);
-      if (target) url.searchParams.set("target", target);
-      window.location.href = url.toString();
-      return;
-    }
-    const { command, note } = commandFor(classify(target));
-    commandSlot.textContent = command;
-    noteSlot.textContent = note;
+    const url = new URL(STUDIO);
+    // An empty box still opens the Studio, which asks for a target itself.
+    if (target) url.searchParams.set("target", target);
+    window.location.href = url.toString();
   });
-
-  if (!STUDIO_LIVE) {
-    promptInput.addEventListener("input", () => {
-      const { command, note } = commandFor(classify(promptInput.value));
-      commandSlot.textContent = command;
-      noteSlot.textContent = note;
-    });
-  }
 
   // Cycle the placeholder so "anything" is demonstrated rather than asserted. It stops for good
   // once the visitor engages, and never starts when reduced motion is requested.
