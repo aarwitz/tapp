@@ -439,7 +439,7 @@ export async function dismissBlockingOverlay(page) {
       .map((element) => (element.innerText || element.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim())
       .filter(Boolean)
       .slice(0, 20);
-  }).catch(() => null);
+  }, undefined, { timeout: 2_000 }).catch(() => null);
   if (!choice || !choice.length) return null;
   const label = chooseOverlayDismissal(choice);
   if (!label) return null;
@@ -1236,16 +1236,24 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       const buttons = page.locator("button:visible, [role=button]:visible, input[type=submit]:visible, summary:visible");
       const buttonTotal = await buttons.count().catch(() => 0);
       const buttonsPerPage = webButtonsPerPage(maxActions);
+      // Reset per page: a blocker that defeats recovery here says nothing about the next route.
+      let pageRecoveryHopeless = false;
       const n = Math.min(buttonTotal, buttonsPerPage);
       if (buttonTotal > buttonsPerPage) probeCapHit = true;
       for (let i = 0; i < n && actions < maxActions && Date.now() < deadline; i++) {
         const b = buttons.nth(i);
+        // Reading a label is metadata, not navigation, but every locator call inherits the
+        // page's 15s default — so five reads on one unstable element cost seventy-five seconds,
+        // which is how three controls consumed three hundred and forty seconds of a run. If an
+        // attribute cannot be read in a second the element is not in a state worth waiting for,
+        // and an empty label is the honest answer.
+        const READ = { timeout: 1_000 };
         const label = webControlLabel({
-          text: await b.textContent().catch(() => ""),
-          value: await b.getAttribute("value").catch(() => ""),
-          ariaLabel: await b.getAttribute("aria-label").catch(() => ""),
-          title: await b.getAttribute("title").catch(() => ""),
-          id: await b.getAttribute("id").catch(() => ""),
+          text: await b.textContent(READ).catch(() => ""),
+          value: await b.getAttribute("value", READ).catch(() => ""),
+          ariaLabel: await b.getAttribute("aria-label", READ).catch(() => ""),
+          title: await b.getAttribute("title", READ).catch(() => ""),
+          id: await b.getAttribute("id", READ).catch(() => ""),
         }).slice(0, 40);
         if (/log ?out|sign ?out|delete|remove/i.test(label)) continue; // don't destroy test state
         // Nor consent on anyone's behalf. Probing clicks every button it can reach, which on a
@@ -1269,31 +1277,38 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         } catch {}
         if (!clickSucceeded) {
           // Something is covering this control — almost always a modal, drawer or cookie banner
-          // opened by a button probed moments ago. Every remaining control on the page used to
-          // be clicked into that overlay and silently skipped, so a page with a modal reported
-          // no dead controls at all however many it had. Clear the overlay and try once more.
-          const dismissed = await dismissBlockingOverlay(page).catch(() => null);
-          if (dismissed) narrate(`Dismissed an overlay with "${dismissed}"`, { screen: ob.screen });
-          else await page.keyboard.press("Escape").catch(() => {});
-          await waitForWebStability(page);
-          // Clearing the obstruction is itself a change to the page, so anything compared against
-          // the snapshot taken before it would look as though this control had done something.
-          beforeState = await captureWebControlState(page, b);
-          try {
-            await b.click({ timeout: 2000 });
-            clickSucceeded = true;
-          } catch {
-            // Escape did not dismiss it. Reloading is the reliable reset, and the BFS frontier
-            // is keyed by route rather than by page object, so it stays valid.
-            await page.goto(beforeState.url, { waitUntil: "domcontentloaded" }).catch(() => {});
-            await waitForWebStability(page);
-            // The reload is itself a change, so the pre-reload snapshot would make any control
-            // look like it did something. Judge this click against the page as it is now.
+          // opened by a button probed moments ago. Every remaining control on the page used to be
+          // clicked into that overlay and silently skipped, so a page with a modal reported no
+          // dead controls at all however many it had.
+          //
+          // Recovery is bounded, and gives up for the whole page rather than per control. An
+          // overlay that survived a dismissal and a reload will survive the next control too, and
+          // paying the reload again for each one is how a single stubborn page turned three
+          // clicks into three hundred and forty seconds.
+          if (!pageRecoveryHopeless) {
+            const dismissed = await dismissBlockingOverlay(page).catch(() => null);
+            if (dismissed) narrate(`Dismissed an overlay with "${dismissed}"`, { screen: ob.screen });
+            else await page.keyboard.press("Escape").catch(() => {});
+            await waitForWebStability(page, { timeoutMs: 2_000 });
+            // Clearing the obstruction is itself a change, so anything compared against the
+            // snapshot taken before it would look as though this control had done something.
             beforeState = await captureWebControlState(page, b);
             try {
-              await b.click({ timeout: 2000 });
+              await b.click({ timeout: 2_000 });
               clickSucceeded = true;
-            } catch {}
+            } catch {
+              // One reload per page, with a short navigation deadline: the default is thirty
+              // seconds, which is most of a run to spend on one unreachable button.
+              await page.goto(beforeState.url, { waitUntil: "domcontentloaded", timeout: 5_000 }).catch(() => {});
+              await waitForWebStability(page, { timeoutMs: 2_000 });
+              beforeState = await captureWebControlState(page, b);
+              try {
+                await b.click({ timeout: 2_000 });
+                clickSucceeded = true;
+              } catch {
+                pageRecoveryHopeless = true;
+              }
+            }
           }
         }
         if (!clickSucceeded) {

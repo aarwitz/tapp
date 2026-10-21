@@ -817,7 +817,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         let target;
         try { target = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 }); }
         if (!/^https?:$/.test(target.protocol)) throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 });
-        const pages = Math.max(1, Math.min(20, Number(body.pages) || 6));
+        // Six was a quiet default with nothing in the UI to change it, so every site a visitor
+        // pointed the Studio at came back as a six-page site — including ones with a dozen
+        // sections, a login and a booking flow. A read-only page costs a couple of seconds.
+        const pages = Math.max(1, Math.min(20, Number(body.pages) || 12));
         // Mint the capture id here so the evidence can be stamped as this visitor's before the
         // run writes anything; a capture that appeared first and was claimed afterwards would be
         // briefly readable by everyone.

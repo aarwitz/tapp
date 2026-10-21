@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.21.1
+
+- **A run finishes the work it was asked to do.** Exploring a real site ended on its time budget
+  at 24 of 40 actions; the same run now completes all 40 in less than half the time — 17.2
+  seconds per action down to 4.7, and 14 screens up to 26. Nothing was made to skip work: three
+  controls had been consuming 340 of 414 seconds between them.
+
+  Every Playwright locator call inherits the page's 15-second default, and reading one control's
+  label makes five of them. On an element that never settles that is seventy-five seconds to
+  learn a button's name. Reading a label is metadata, not navigation: it is bounded to a second
+  now, and an unreadable label is reported as empty rather than waited for.
+
+- **Clearing an obstruction is bounded, and gives up per page.** Recovering from an overlay could
+  reload the page with the default 30-second navigation timeout, once per blocked control. An
+  overlay that survives a dismissal and a reload will survive the next control too, so the page
+  stops paying for it.
+
+- **A hosted audit reads twelve pages, not six.** Six was a quiet default with nothing in the UI
+  to change it, so every site came back looking like a six-page site — including ones with a
+  dozen sections, a login and a booking flow.
+
 ## 0.21.0
 
 - **An overlay is got past, by its own way out.** Cookie banners and intake modals sit in front of
