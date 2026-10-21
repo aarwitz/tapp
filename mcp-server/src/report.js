@@ -98,6 +98,11 @@ export const ISSUE_CATEGORY = {
   unresolvable_host: "broken_link",
   mailto_no_mx: "broken_link",
   outbound_unavailable: "broken_link",
+  // Not a broken link: a third party refusing an automated browser. Kept in the taxonomy so it
+  // is reported and counted, but never as something that is known to be broken.
+  link_unverifiable: "broken_link",
+  // A control that could not be reached to be tested: a coverage hole, stated rather than hidden.
+  control_unprobed: "unresponsive_element",
   dead_end: "navigation_dead_end",
   navigation_loop: "repeated_loop",
   navigation_trap: "navigation_dead_end",
@@ -246,7 +251,10 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
     } else if (t.startsWith("OCQA_STATE:{")) {
       try {
         const s = JSON.parse(t.slice("OCQA_STATE:".length));
-        if (typeof s.screen === "string" && s.screen.trim()) screens.add(s.screen);
+        // Coverage counts distinct observed states, not distinct headings: a modal, a drawer and
+        // the page behind them share a heading but are three different things to have reached.
+        // The signature is only present on captures recorded by a build that emits it.
+        if (typeof s.screen === "string" && s.screen.trim()) screens.add(s.signature ? `${s.screen}::${s.signature}` : s.screen);
         if (typeof s.screen === "string" && s.screen.trim() && Number.isFinite(s.elements)) {
           screenElementCounts[s.screen] = Math.max(screenElementCounts[s.screen] || 0, s.elements);
         }

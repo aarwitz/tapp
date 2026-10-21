@@ -22,7 +22,17 @@ import { execFileSync } from "child_process";
 
 const CLICK_SETTLE_MS = 700;
 export const NAV_TIMEOUT_MS = 15_000;
-const BUTTONS_PER_PAGE = 4;
+// How many of a page's buttons get the dead-control probe. Four was a flat cap regardless of the
+// budget asked for, so `--actions 60` still examined four buttons on a page with fifteen and
+// returned having barely looked. The probe is the expensive part of a run — each click has to be
+// observed and any navigation undone — so it still has a ceiling, but a larger budget now buys a
+// deeper look instead of being left on the table.
+const BUTTONS_PER_PAGE_MIN = 4;
+const BUTTONS_PER_PAGE_MAX = 12;
+export function webButtonsPerPage(maxActions = 40) {
+  const budgeted = Math.ceil(Number(maxActions) / 6);
+  return Math.max(BUTTONS_PER_PAGE_MIN, Math.min(BUTTONS_PER_PAGE_MAX, budgeted));
+}
 const OUTBOUND_LINK_LIMIT = 10;
 const WATCH_ACTION_DELAY_MS = 350;
 // A page's visible signature (waitForWebStability's basis) can go quiet before an async-injected
@@ -335,6 +345,48 @@ export async function submitWebLogin(page, beforeClick = null) {
     }
   }
   return false;
+}
+
+// How many distinct in-page states one URL may contribute before we stop splitting it. A
+// carousel, a live counter or a shuffling feed would otherwise mint states forever; past the cap
+// the route collapses to its heading, which is the behaviour this replaced.
+export const MAX_STATES_PER_ROUTE = 8;
+
+/**
+ * What is on screen right now, as a stable digest.
+ *
+ * A screen used to be identified by its heading, else its title, else its URL — so opening a
+ * modal, a drawer, a tab or an accordion, none of which change the heading, left tapp looking at
+ * "the same screen". The frontier gained nothing, exploration drained early, coverage undercounted,
+ * and the recording showed one near-identical frame for the whole run.
+ *
+ * The digest is over the *identities of visible controls and fields*, sorted and deduped, so it
+ * does not move when text reflows, a counter ticks, or the same controls are painted in a
+ * different order. Content that is merely text is deliberately ignored: it changes constantly on
+ * real sites and says nothing about what can be done here.
+ */
+export function webStateSignature(info) {
+  const parts = [];
+  for (const control of info?.controls || []) {
+    const label = String(control?.label || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 60);
+    const id = String(control?.id || control?.cssId || control?.testId || "").trim().toLowerCase().slice(0, 60);
+    if (label || id) parts.push(`${control?.kind || "control"}:${id || label}`);
+  }
+  for (const field of info?.inputs || []) {
+    const name = String(field?.id || field?.name || field?.label || field?.placeholder || "").trim().toLowerCase().slice(0, 60);
+    if (name) parts.push(`field:${name}`);
+  }
+  if (!parts.length) return "";
+  const unique = [...new Set(parts)].sort();
+  // Short, stable, and not a language runtime's hash — those differ across versions.
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  const text = unique.join("|");
+  for (let i = 0; i < text.length; i += 1) {
+    h1 = Math.imul(h1 ^ text.charCodeAt(i), 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + text.charCodeAt(i) + 1, 0x85ebca6b) >>> 0;
+  }
+  return `${h1.toString(36)}${h2.toString(36)}`.slice(0, 12);
 }
 
 export function webScreenTitle(info, fallback) {
@@ -752,6 +804,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   let probeCapHit = false;
   let actions = 0;
   let screenCount = 0;
+  // Which distinct on-screen states each route has produced, so one route cannot mint states
+  // without limit when something on it never settles.
+  const signaturesByRoute = new Map();
   let lastScreen = null;
   let pendingNavigation = null;
   let loginTried = false;
@@ -859,9 +914,19 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
     const key = screenKey();
     const screen = webScreenTitle(info, key);
-    const evidenceKey = `${key}::${screen}`;
+    // A modal, drawer, tab or wizard step rarely changes the heading, so identity also carries
+    // what is on screen. Past MAX_STATES_PER_ROUTE distinct signatures a route stops splitting:
+    // something on it is non-deterministic and would otherwise mint states forever.
+    const signature = webStateSignature(info);
+    const seenHere = signaturesByRoute.get(key) || new Set();
+    if (signature && seenHere.size < MAX_STATES_PER_ROUTE) {
+      seenHere.add(signature);
+      signaturesByRoute.set(key, seenHere);
+    }
+    const splitting = signature && (seenHere.has(signature) || seenHere.size < MAX_STATES_PER_ROUTE);
+    const evidenceKey = splitting ? `${key}::${screen}::${signature}` : `${key}::${screen}`;
     currentScreen = screen;
-    emit("STATE", { t: Date.now() - startedAtMs, screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
+    emit("STATE", { t: Date.now() - startedAtMs, screen, url: key, ...(signature ? { signature } : {}), elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
     const completedNavigation = pendingNavigation;
     const transitionFrom = webTransitionOrigin(completedNavigation, lastScreen);
     const transitionAction = completedNavigation?.action || lastActionTarget;
@@ -1097,8 +1162,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       // of the iOS dead-button detector). Navigations are undone so BFS order holds.
       const buttons = page.locator("button:visible, [role=button]:visible, input[type=submit]:visible, summary:visible");
       const buttonTotal = await buttons.count().catch(() => 0);
-      const n = Math.min(buttonTotal, BUTTONS_PER_PAGE);
-      if (buttonTotal > BUTTONS_PER_PAGE) probeCapHit = true;
+      const buttonsPerPage = webButtonsPerPage(maxActions);
+      const n = Math.min(buttonTotal, buttonsPerPage);
+      if (buttonTotal > buttonsPerPage) probeCapHit = true;
       for (let i = 0; i < n && actions < maxActions && Date.now() < deadline; i++) {
         const b = buttons.nth(i);
         const label = webControlLabel({
@@ -1112,7 +1178,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         // Capture only durable, user-visible semantics around this control. A global
         // MutationObserver is intentionally avoided: carousels, chat launchers, and live
         // counters can mutate while an unrelated dead button is clicked, creating verdict jitter.
-        const beforeState = await captureWebControlState(page, b);
+        let beforeState = await captureWebControlState(page, b);
         actions += 1;
         lastActionTarget = label;
         emitAction({ type: "tap", target: label, screen: webActionScreen(ob), narrative: `Tapped "${label}"` });
@@ -1123,6 +1189,32 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           clickSucceeded = true;
         } catch {}
         if (!clickSucceeded) {
+          // Something is covering this control — almost always a modal, drawer or cookie banner
+          // opened by a button probed moments ago. Every remaining control on the page used to
+          // be clicked into that overlay and silently skipped, so a page with a modal reported
+          // no dead controls at all however many it had. Clear the overlay and try once more.
+          await page.keyboard.press("Escape").catch(() => {});
+          await waitForWebStability(page);
+          try {
+            await b.click({ timeout: 2000 });
+            clickSucceeded = true;
+          } catch {
+            // Escape did not dismiss it. Reloading is the reliable reset, and the BFS frontier
+            // is keyed by route rather than by page object, so it stays valid.
+            await page.goto(beforeState.url, { waitUntil: "domcontentloaded" }).catch(() => {});
+            await waitForWebStability(page);
+            // The reload is itself a change, so the pre-reload snapshot would make any control
+            // look like it did something. Judge this click against the page as it is now.
+            beforeState = await captureWebControlState(page, b);
+            try {
+              await b.click({ timeout: 2000 });
+              clickSucceeded = true;
+            } catch {}
+          }
+        }
+        if (!clickSucceeded) {
+          // Say so rather than leaving a silent hole in the coverage.
+          issue("control_unprobed", "low", `Control "${label}" could not be clicked — something kept covering it`, ob.screen, label);
           progress();
           continue;
         }
@@ -1176,7 +1268,20 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           continue;
         }
         if (nav && typeof nav.status === "function" && nav.status() >= 400) {
-          issue("broken_link", "medium", `Outbound link returns HTTP ${nav.status()}: ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
+          const status = nav.status();
+          // 401/403/429 from a third party is almost always its bot defence answering an
+          // automated browser, not a link that is broken for the people who click it. npm,
+          // LinkedIn, Instagram and Cloudflare-fronted sites all do this. Reporting it as a
+          // broken link is a false positive that teaches people to distrust the real ones, so
+          // say what was actually observed and leave the judgement to a human.
+          const botDefence = status === 401 || status === 403 || status === 429;
+          if (botDefence) {
+            issue("link_unverifiable", "low",
+              `Outbound link could not be verified — ${new URL(href).hostname} answered HTTP ${status} to an automated browser (usually bot protection, not a broken link): ${href.slice(0, 100)}`,
+              meta.screen, href, meta.sourceUrl);
+            continue;
+          }
+          issue("broken_link", "medium", `Outbound link returns HTTP ${status}: ${href.slice(0, 100)}`, meta.screen, href, meta.sourceUrl);
           continue;
         }
         await auditPage.waitForTimeout(400); // let client-rendered shells paint their copy

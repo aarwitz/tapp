@@ -154,3 +154,42 @@ test("an outbound link is checked as written, not with its query stripped", { sk
     await new Promise((resolve) => external.close(resolve));
   }
 });
+
+test("a control behind a modal is still probed", { skip: skipRealBrowser || !chromium, timeout: 120_000 }, async () => {
+  // Two identical dead buttons. The probe used to click the second one into an overlay opened by
+  // a button it had just pressed, fail silently, and move on — so a page with a modal, a drawer
+  // or a cookie banner reported no dead controls however many it had, and said nothing about
+  // having skipped them. Real applications are mostly such pages.
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Probe order</title>
+<style>#ov{position:fixed;inset:0;background:rgba(0,0,0,.5)}#bx{background:#fff;margin:10% auto;padding:20px;width:300px}[hidden]{display:none!important}</style></head>
+<body><h1>Probe order</h1>
+<button id="dead-early">Dead before modal</button>
+<button id="opener">Open the modal</button>
+<button id="dead-late">Dead after modal</button>
+<div id="ov" hidden><div id="bx"><h2>A modal</h2><button id="close">Close</button></div></div>
+<script>
+document.getElementById("opener").onclick=()=>document.getElementById("ov").hidden=false;
+document.getElementById("close").onclick=()=>document.getElementById("ov").hidden=true;
+</script></body></html>`);
+  });
+  const port = await listen(server);
+  try {
+    const { exploreWeb } = await import("../mcp-server/src/web-explorer.js");
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-modal-probe-"));
+    await exploreWeb({ url: `http://127.0.0.1:${port}/`, maxActions: 30, timeoutSec: 90, outDir });
+    const titles = fs.readFileSync(path.join(outDir, "ocqa-markers.txt"), "utf8")
+      .split("\n")
+      .filter((line) => line.startsWith("OCQA_ISSUE:"))
+      .map((line) => JSON.parse(line.slice("OCQA_ISSUE:".length)).title);
+
+    assert.ok(titles.some((t) => /Dead before modal/.test(t)), `the unobstructed dead button must be found: ${JSON.stringify(titles)}`);
+    assert.ok(
+      titles.some((t) => /Dead after modal/.test(t)),
+      `the dead button behind the modal must be found too, or reported as unprobed: ${JSON.stringify(titles)}`,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

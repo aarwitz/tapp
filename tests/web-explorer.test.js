@@ -480,3 +480,41 @@ test("the audit does not accuse a control whose handler is delegated from the do
     server.close();
   }
 });
+
+// A screen used to be identified by its heading, else its title, else its URL. Modals, drawers,
+// tabs and wizard steps rarely change the heading, so they were all "the same screen": the
+// frontier gained nothing, exploration drained early, coverage undercounted, and the recording
+// showed one near-identical frame for a whole run.
+test("the state signature distinguishes what is on screen, and ignores what does not matter", async () => {
+  const { webStateSignature } = await import("../mcp-server/src/web-explorer.js");
+  const page = { controls: [{ kind: "button", label: "Open cart" }, { kind: "button", label: "Subscribe" }], inputs: [] };
+  const withDrawer = { controls: [...page.controls, { kind: "button", label: "Close" }, { kind: "button", label: "Checkout" }], inputs: [] };
+  const withModal = { controls: page.controls, inputs: [{ id: "sub-email", placeholder: "email" }] };
+
+  assert.notEqual(webStateSignature(page), webStateSignature(withDrawer), "an opened drawer is a different state");
+  assert.notEqual(webStateSignature(page), webStateSignature(withModal), "a modal with a field is a different state");
+  assert.notEqual(webStateSignature(withDrawer), webStateSignature(withModal));
+
+  // Stability: the same controls painted in a different order, or with text reflowed around
+  // them, must not look like somewhere new — otherwise every run invents states.
+  const reordered = { controls: [...page.controls].reverse(), inputs: [] };
+  assert.equal(webStateSignature(page), webStateSignature(reordered), "order must not change identity");
+  const spaced = { controls: [{ kind: "button", label: "  Open   cart " }, { kind: "button", label: "SUBSCRIBE" }], inputs: [] };
+  assert.equal(webStateSignature(page), webStateSignature(spaced), "whitespace and case must not change identity");
+
+  // Nothing actionable on screen is not a signature; it must fall back to the old identity.
+  assert.equal(webStateSignature({ controls: [], inputs: [] }), "");
+  assert.equal(webStateSignature(undefined), "");
+
+  // Stable across runs and processes: a language runtime's own hash is not.
+  assert.equal(webStateSignature(page), webStateSignature(structuredClone(page)));
+  assert.match(webStateSignature(page), /^[a-z0-9]{1,12}$/);
+});
+
+test("one route cannot mint unlimited states", async () => {
+  const { MAX_STATES_PER_ROUTE } = await import("../mcp-server/src/web-explorer.js");
+  // A carousel, a live counter or a shuffling feed changes what is on screen forever. The cap is
+  // what stops a single URL from becoming the entire exploration.
+  assert.ok(Number.isInteger(MAX_STATES_PER_ROUTE) && MAX_STATES_PER_ROUTE > 1 && MAX_STATES_PER_ROUTE <= 20,
+    `the per-route cap must be a small positive integer, got ${MAX_STATES_PER_ROUTE}`);
+});

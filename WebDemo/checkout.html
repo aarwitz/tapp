@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebDemo — Checkout</title>
+<!--
+  A deliberately deep page: a drawer, a modal, and a three-step wizard, none of which change the
+  heading or the URL. That combination is what most real applications are made of, and it is
+  exactly what an exploration that identifies a screen by its heading cannot see. It exists so a
+  demo has somewhere to go, and so the state-signature work has something to prove itself against.
+
+  Two controls here are deliberately dead — "Track order" and "Apply code" — so a run has
+  something true to find.
+-->
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 28px; max-width: 760px; color: #16181d; }
+  nav a { margin-right: 14px; }
+  button { font: inherit; padding: 8px 14px; margin: 4px 6px 4px 0; border-radius: 7px; border: 1px solid #c9ced8; background: #fff; cursor: pointer; }
+  button.primary { background: #2f6df6; border-color: #2f6df6; color: #fff; }
+  input { font: inherit; padding: 8px 10px; border: 1px solid #c9ced8; border-radius: 7px; display: block; margin: 8px 0; width: 260px; }
+  .panel { border: 1px solid #e2e6ee; border-radius: 10px; padding: 16px; margin: 14px 0; }
+  #drawer { position: fixed; top: 0; right: 0; width: 280px; height: 100%; background: #f7f8fb; border-left: 1px solid #dfe3ec; padding: 20px; }
+  #overlay { position: fixed; inset: 0; background: rgba(12,16,24,.45); }
+  #modalbox { background: #fff; width: 320px; margin: 10% auto; padding: 22px; border-radius: 12px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/">Home</a>
+  <a href="/features.html">Features</a>
+  <a href="/pricing.html">Pricing</a>
+  <a href="/status.html">Status</a>
+</nav>
+
+<h1>Checkout</h1>
+<p>Everything below happens on this one URL, under this one heading.</p>
+
+<button id="open-cart" class="primary">Open cart</button>
+<button id="open-offer">Have a promo code?</button>
+<button id="track">Track order</button>
+
+<section class="panel" id="wizard">
+  <h2 id="step-title">Step 1 — Your details</h2>
+  <div id="step-1">
+    <label>Full name <input id="name" name="name" placeholder="Ada Lovelace"></label>
+    <label>Email <input id="email" name="email" type="email" placeholder="ada@example.com"></label>
+    <button id="to-step-2" class="primary">Continue to address</button>
+  </div>
+  <div id="step-2" hidden>
+    <label>Street <input id="street" name="street" placeholder="12 Dean Street"></label>
+    <label>Postcode <input id="postcode" name="postcode" placeholder="SW1A 1AA"></label>
+    <button id="to-step-3" class="primary">Continue to payment</button>
+    <button id="back-to-1">Back</button>
+  </div>
+  <div id="step-3" hidden>
+    <label>Card number <input id="card" name="card" inputmode="numeric" placeholder="4242 4242 4242 4242"></label>
+    <button id="place-order" class="primary">Place order</button>
+    <button id="back-to-2">Back</button>
+  </div>
+  <div id="done" hidden>
+    <h3>Order confirmed</h3>
+    <p>A receipt is on its way.</p>
+    <a href="/status.html">Check service status</a>
+  </div>
+</section>
+
+<aside id="drawer" hidden aria-label="Cart">
+  <h2>Your cart</h2>
+  <p>1 × Starter plan — £19</p>
+  <button id="checkout-now" class="primary">Checkout now</button>
+  <button id="close-cart">Close cart</button>
+</aside>
+
+<div id="overlay" hidden>
+  <div id="modalbox" role="dialog" aria-label="Promo code">
+    <h2>Promo code</h2>
+    <label>Code <input id="promo" name="promo" placeholder="WELCOME10"></label>
+    <button id="apply-code" class="primary">Apply code</button>
+    <button id="dismiss-offer">No thanks</button>
+  </div>
+</div>
+
+<script>
+  const show = (id, visible) => { document.getElementById(id).hidden = !visible; };
+  const step = (n) => {
+    for (const id of ["step-1", "step-2", "step-3", "done"]) show(id, false);
+    show(n === 4 ? "done" : `step-${n}`, true);
+    document.getElementById("step-title").textContent =
+      n === 1 ? "Step 1 — Your details"
+      : n === 2 ? "Step 2 — Delivery address"
+      : n === 3 ? "Step 3 — Payment"
+      : "Order confirmed";
+  };
+
+  document.getElementById("open-cart").onclick = () => show("drawer", true);
+  document.getElementById("close-cart").onclick = () => show("drawer", false);
+  document.getElementById("checkout-now").onclick = () => { show("drawer", false); step(1); };
+  document.getElementById("open-offer").onclick = () => show("overlay", true);
+  document.getElementById("dismiss-offer").onclick = () => show("overlay", false);
+  document.getElementById("to-step-2").onclick = () => step(2);
+  document.getElementById("to-step-3").onclick = () => step(3);
+  document.getElementById("back-to-1").onclick = () => step(1);
+  document.getElementById("back-to-2").onclick = () => step(2);
+  document.getElementById("place-order").onclick = () => step(4);
+  // "Track order" and "Apply code" are intentionally not wired.
+</script>
+</body>
+</html>

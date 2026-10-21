@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.20.0
+
+Four reasons an exploration came back having barely looked, found by pointing tapp at a fixture
+built to be deep and asking why the run was short.
+
+- **A control behind a modal is probed.** The dead-control pass clicked each button in turn, so
+  once one of them opened a modal, drawer or cookie banner, every later control was clicked into
+  the overlay, failed silently, and was skipped — a page with a modal reported no dead controls
+  however many it had, and said nothing about having skipped them. The probe now clears the
+  obstruction and retries, judging the retry against the page as it is then, and reports a
+  control it still cannot reach instead of leaving a hole in the coverage. Real applications are
+  mostly pages like this.
+- **In-page state is a state.** A screen was identified by its heading, else its title, else its
+  URL, so a modal, a drawer, a tab or a wizard step — none of which change the heading — was "the
+  same screen". The frontier gained nothing, exploration drained early, coverage undercounted,
+  and the recording showed one near-identical frame for a whole run. Identity now also carries a
+  signature of what is on screen, stable under reordering and reflow, capped per route so a
+  carousel cannot mint states forever.
+- **The budget you ask for is spent.** The dead-control probe examined the first four buttons on
+  a page regardless of `--actions`, so a sixty-action budget still barely looked at a page with
+  fifteen controls. Depth now scales with the budget, between four and twelve.
+- **A third party blocking robots is not a broken link.** npm, and anything behind a bot defence,
+  answers 401/403/429 to an automated browser. That was reported as a broken link — on tapp's own
+  landing page among others. It is now a low-severity "could not be verified" that says what was
+  actually observed.
+
+`WebDemo/checkout.html` is a deliberately deep page — drawer, modal, three-step wizard, two dead
+controls — so a demo has somewhere to go and these behaviours have something to prove against.
+
 ## 0.19.3
 
 - **An outbound link is checked as written.** Tapp fetched `origin + pathname` and threw the
