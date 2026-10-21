@@ -364,7 +364,13 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
     if (video) {
       try {
         const produced = await video.path();
-        if (produced && fs.existsSync(produced)) fs.renameSync(produced, path.join(recordVideoDir, "replay.webm"));
+        if (produced && fs.existsSync(produced)) {
+          const finalPath = path.join(recordVideoDir, "replay.webm");
+          fs.renameSync(produced, finalPath);
+          // VP9 is unopenable in QuickTime and Preview; ship an H.264 sibling beside it.
+          const { writePlayableCopy } = await import("./capture-frames.js");
+          await writePlayableCopy(finalPath).catch(() => {});
+        }
       } catch { /* the replay result matters more than its recording */ }
     }
   }

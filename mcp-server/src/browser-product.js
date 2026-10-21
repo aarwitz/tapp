@@ -16,6 +16,7 @@ import { initializeProductProject, prepareProductTarget, readProductProject, run
 import { readCaptureProvenance } from "./capture-provenance.js";
 import { collectShots } from "./html-report.js";
 import { classifyPrompt } from "../../browser/view-model.js";
+import { JobLanes } from "./job-lanes.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -450,18 +451,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
   const jobs = new Map();
-  let activeMutation = null;
+  // Work is serialized per lane rather than globally; see job-lanes.js for why.
+  const OPERATOR_LANE = "operator";
+  const lanes = new JobLanes({ operatorLane: OPERATOR_LANE });
   let liveSession = null;
   let liveManagedRuntime = null;
   let origin = "";
 
-  const startJob = (operation, work, repositoryId = registry.current()?.id || null) => {
-    if (activeMutation) {
-      const error = new Error(`Operation '${activeMutation.operation}' is still running`);
-      error.statusCode = 409;
-      throw error;
-    }
-    const job = { id: crypto.randomBytes(10).toString("hex"), operation, repositoryId, status: "running", createdAt: new Date().toISOString(), progress: [] };
+  const startJob = (operation, work, repositoryId = registry.current()?.id || null, { lane = OPERATOR_LANE } = {}) => {
+    const job = { id: crypto.randomBytes(10).toString("hex"), operation, repositoryId, lane, status: "running", createdAt: new Date().toISOString(), progress: [] };
+    const claimed = lanes.claim(lane, job);
+    if (!claimed.ok) throw Object.assign(new Error(claimed.message), { statusCode: claimed.statusCode });
     const progress = (entry) => {
       const normalized = typeof entry === "string" ? { text: entry } : entry || {};
       job.progress.push({ at: new Date().toISOString(), phase: normalized.phase || operation, text: String(normalized.text || "").slice(-1200), ...(normalized.current ? { current: normalized.current, total: normalized.total } : {}), ...(normalized.screen ? { screen: String(normalized.screen).slice(0, 200) } : {}) });
@@ -471,7 +471,6 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (normalized.screenshot && path.isAbsolute(normalized.screenshot)) job.latestFrame = normalized.screenshot;
     };
     jobs.set(job.id, job);
-    activeMutation = job;
     Promise.resolve().then(() => work(progress)).then((result) => {
       job.status = "completed";
       job.result = result;
@@ -480,7 +479,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       job.error = { message: error.message || String(error), ...(error.details ? { details: error.details } : {}) };
     }).finally(() => {
       job.completedAt = new Date().toISOString();
-      if (activeMutation === job) activeMutation = null;
+      lanes.release(lane, job);
     });
     return job;
   };
@@ -668,7 +667,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
 
       if (request.method === "POST" && url.pathname === "/api/repositories/select") {
         requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
-        if (activeMutation) throw Object.assign(new Error(`Operation '${activeMutation.operation}' is still running`), { statusCode: 409 });
+        const busy = lanes.running(OPERATOR_LANE);
+        if (busy) throw Object.assign(new Error(`Operation '${busy.operation}' is still running`), { statusCode: 409 });
         if (liveSession?.active) throw Object.assign(new Error("End the active live session before changing repositories"), { statusCode:409 });
         const body = await readJsonBody(request);
         const repository = registry.select(body.id);
@@ -789,7 +789,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages, ...(page.screenshot ? { screenshot: page.screenshot } : {}) }),
           });
           return hosted ? hostedPayload(summary) : summary;
-        }, null);
+        }, null, { lane: visitorId || OPERATOR_LANE });
         job.visitorId = visitorId;
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;

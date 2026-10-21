@@ -106,7 +106,12 @@ function applyAccessMode() {
   // runner, a release gate, a decision. A hosted visitor auditing a URL has none of them, and
   // showing the empty frames makes a working run look like a broken one.
   for (const node of document.querySelectorAll("[data-repo-only]")) node.classList.add("hidden");
-  setHeading("tapp", "Give it a public website and it will audit the pages read-only.");
+  // "What the last run proved" reports a release decision. A read-only website audit never
+  // produces one, so the panel can only ever say "No run yet" here.
+  document.querySelector(".summary-panel")?.classList.add("hidden");
+  // refreshSession() runs on every poll, so this must not overwrite a heading the current run
+  // already set — that is what made "Website audit" revert to "tapp" when a run finished.
+  if (!state.headingOwnedByRun) setHeading("tapp", "Give it a public website and it will audit the pages read-only.");
   const note = $("#privacy-note-detail");
   if (note) note.textContent = "Websites are audited read-only in the cloud; nothing is clicked. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
 }
@@ -569,7 +574,10 @@ async function runOperation(name, body = {}, { input = "" } = {}) {
 
 // "What should tapp test?" — route by what was typed. The server classifies again and refuses
 // what the mode cannot do (a hosted Studio cannot open a path on your machine).
-function setHeading(title, summary) {
+// `owned` marks a heading as belonging to whatever is happening now, so periodic re-renders
+// leave it alone until something else takes over.
+function setHeading(title, summary, { owned = false } = {}) {
+  state.headingOwnedByRun = owned;
   const heading = $("#app-name");
   if (heading) heading.textContent = title;
   const note = $("#app-summary");
@@ -580,7 +588,7 @@ function setHeading(title, summary) {
 // simulator build, a repository that needs a toolchain. The engine answers with where they do
 // run; show that answer where it stays put, not in a toast that disappears in six seconds.
 function answerSelfHost(answer) {
-  setHeading("Run this on your machine", "The cloud Studio audits websites; this target needs your toolchain.");
+  setHeading("Run this on your machine", "The cloud Studio audits websites; this target needs your toolchain.", { owned: true });
   document.querySelector(".summary-panel")?.classList.add("hidden");
   document.querySelector(".device-stage")?.classList.add("hidden");
   state.transcript = [];
@@ -598,8 +606,8 @@ async function startFromPrompt(raw) {
     state.promptRun = true; state.promptPlatform = "web";
     showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
     document.querySelector(".device-stage")?.classList.remove("hidden");
-    document.querySelector(".summary-panel")?.classList.remove("hidden");
-    if (state.session?.access === "anonymous") setHeading("Website audit", "Read-only. Nothing on the page is clicked.");
+    if (state.session?.access !== "anonymous") document.querySelector(".summary-panel")?.classList.remove("hidden");
+    if (state.session?.access === "anonymous") setHeading("Website audit", "Read-only. Nothing on the page is clicked.", { owned: true });
     const result = await runOperation("audit", { url: prompt.value }, { input: prompt.value });
     state.selectedRunId = result?.capture?.id || state.selectedRunId;
     return;

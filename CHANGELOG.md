@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.19.1
+
+- **Two people can use a public Studio at once.** Work was serialized globally, so one visitor's
+  audit answered every other visitor with 409 — which reads as broken rather than busy. Runs are
+  now serialized per lane: the operator's lane stays strictly one at a time because it owns the
+  simulator, the repository and the live session, while an anonymous audit owns nothing but its
+  own browser and capture and gets a lane of its own. Three concurrent visitor runs, and beyond
+  that the answer is 503 ("busy") rather than a 409 that falsely blames your own run.
+- **The heading stops reverting.** "Website audit" was overwritten back to "tapp" the moment a
+  run finished, because the session poll re-rendered over it. A heading set by whatever is
+  happening now survives until something else takes over.
+- **No empty decision panel on a website audit.** "What the last run proved" reports a release
+  decision, which a read-only audit never produces, so it could only ever read "No run yet".
+- **Recordings are playable where they land.** The H.264 sibling is written when the recording is
+  finalised, not only when `look` is asked for frames, so `exploration.mp4` sits beside
+  `exploration.webm` in every capture. QuickTime and Preview cannot open VP9.
+
 ## 0.19.0
 
 - **`app.runtapp.com` is a public Studio.** `tapp app --public --origin https://host --port N`

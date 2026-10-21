@@ -1213,9 +1213,15 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     const video = page.video();
     await context.close().catch(() => {});
     if (video) {
-      await video.path()
-        .then((p) => fs.renameSync(p, path.join(outDir, "exploration.webm")))
-        .catch(() => {});
+      const finalPath = path.join(outDir, "exploration.webm");
+      await video.path().then((p) => fs.renameSync(p, finalPath)).catch(() => {});
+      // Playwright records VP9, which QuickTime and Preview cannot open. Write an H.264 sibling
+      // so the evidence is playable where it lands, instead of needing a conversion step that
+      // whoever opens it has to know about. Best effort: no ffmpeg just means no mp4.
+      if (fs.existsSync(finalPath)) {
+        const { writePlayableCopy } = await import("./capture-frames.js");
+        await writePlayableCopy(finalPath).catch(() => {});
+      }
     }
     await browser.close().catch(() => {});
   }
