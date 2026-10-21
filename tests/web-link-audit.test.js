@@ -104,3 +104,53 @@ test("field-report fixture: the complete link audit surfaces all eight cases", {
     external.close();
   }
 });
+
+test("an outbound link is checked as written, not with its query stripped", { skip: skipRealBrowser || !chromium, timeout: 120_000 }, async () => {
+  // runtapp.com links to the VS Code marketplace as /items?itemName=lidi-solutions.tapp, which
+  // returns 200; /items alone returns 404. Tapp checked the path only and reported a broken
+  // link on its own landing page. For a great many URLs — store, marketplace, search — the
+  // query *is* the resource.
+  const external = http.createServer((req, res) => {
+    if (req.url.startsWith("/items?")) {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<!doctype html><title>Extension</title><h1>The extension page</h1>");
+      return;
+    }
+    res.writeHead(404, { "content-type": "text/html" });
+    res.end("<!doctype html><title>Not found</title><h1>404</h1>");
+  });
+  const externalPort = await listen(external);
+
+  const main = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Home</title></head>
+<body><h1>Home</h1>
+<p><a href="http://127.0.0.1:${externalPort}/items?itemName=lidi-solutions.tapp">The extension</a></p>
+</body></html>`);
+  });
+  const mainPort = await listen(main);
+
+  try {
+    const { exploreWeb } = await import("../mcp-server/src/web-explorer.js");
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-outbound-query-"));
+    await exploreWeb({ url: `http://127.0.0.1:${mainPort}/`, maxActions: 6, timeoutSec: 60, outDir });
+    const markers = fs.readFileSync(path.join(outDir, "ocqa-markers.txt"), "utf8").split("\n");
+
+    // The run must actually have checked the link, or this test proves nothing.
+    const complete = markers.find((line) => line.startsWith("OCQA_COMPLETE:"));
+    const outbound = JSON.parse(complete.slice("OCQA_COMPLETE:".length)).outbound;
+    assert.equal(outbound.checked, 1, "the outbound link must have been checked");
+
+    const issues = markers
+      .filter((line) => line.startsWith("OCQA_ISSUE:"))
+      .map((line) => JSON.parse(line.slice("OCQA_ISSUE:".length)));
+    assert.deepEqual(
+      issues.map((issue) => issue.title),
+      [],
+      "a link whose query makes it valid must not be reported broken",
+    );
+  } finally {
+    await new Promise((resolve) => main.close(resolve));
+    await new Promise((resolve) => external.close(resolve));
+  }
+});

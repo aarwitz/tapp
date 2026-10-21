@@ -1078,7 +1078,11 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           const u = new URL(link.href);
           if (!/^https?:$/.test(u.protocol)) continue;
           if (u.origin !== start.origin) {
-            const clean = u.origin + u.pathname;
+            // Keep the query: for a great many links the query *is* the resource
+            // (`/items?itemName=…`, `/search?q=…`, store and marketplace pages), and checking
+            // the path alone reports a confident 404 for a link that works. Only the fragment
+            // is dropped, since it names a place within an already-fetched page.
+            const clean = u.origin + u.pathname + u.search;
             if (!outboundLinks.has(clean)) outboundLinks.set(clean, { label: link.label, screen: ob.screen, sourceUrl: start.origin + ob.key });
             continue;
           }

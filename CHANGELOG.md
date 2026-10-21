@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.3
+
+- **An outbound link is checked as written.** Tapp fetched `origin + pathname` and threw the
+  query away, so `/items?itemName=lidi-solutions.tapp` (200) was checked as `/items` (404) and
+  reported as a broken link — on tapp's own landing page, among others. For marketplace, store
+  and search links the query *is* the resource. Only the fragment is dropped now.
+- Fixed on runtapp.com in the same pass: an uncaught `commandSlot is not defined` on every page
+  load, which had left the copy button dead. Tapp found it by exploring the site.
+
 ## 0.19.2
 
 - **A public Studio records that it was used.** It served strangers while logging only its own
