@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.2
+
+- **A public Studio records that it was used.** It served strangers while logging only its own
+  startup, so there was no way to tell whether anyone had found it. Usage lines now go to stdout,
+  which journald already keeps (`journalctl -u tapp-demo | grep tapp-usage`): a visitor arriving,
+  an audit starting and finishing with the host and duration, refusals and why, a target the
+  cloud cannot run, and an hourly rollup so the answer survives log rotation. Off unless the
+  Studio is public — a local Studio logging its owner's own use is noise.
+- Deliberately not collected: no IP address, no full URL, and only the first eight characters of
+  the visitor id. Engine errors quote the URL they failed on, so logged messages have their query
+  strings redacted — the first version of this put a token from a test link straight into the log
+  it promised not to hold, and a test now asserts it cannot.
+
 ## 0.19.1
 
 - **Two people can use a public Studio at once.** Work was serialized globally, so one visitor's

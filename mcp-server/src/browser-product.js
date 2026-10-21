@@ -451,6 +451,46 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
   const jobs = new Map();
+  // A public Studio serves strangers, and until now it recorded nothing about that — the journal
+  // held only startup lines, so "is anyone using this?" had no answer at all. These lines go to
+  // stdout, which systemd already captures, so there is no new storage to run:
+  //
+  //   journalctl -u tapp-demo | grep tapp-usage
+  //
+  // Deliberately not collected: no IP address (Cloudflare fronts this and we do not need it), no
+  // full URL (a query string can carry a token or an email), and only the first eight characters
+  // of the visitor id — enough to tell two visitors apart in a day's log, not enough to be a
+  // durable handle for one. Off unless the Studio is public; a local Studio logging its owner's
+  // own use is noise.
+  const usage = { visitors: new Set(), audits: 0, refusals: 0, startedAt: new Date().toISOString() };
+  const logUsage = (event, fields = {}) => {
+    if (!publicAccess) return;
+    try {
+      console.log(`tapp-usage ${JSON.stringify({ at: new Date().toISOString(), event, ...fields })}`);
+    } catch { /* logging must never break a run */ }
+  };
+  // Where a visitor pointed us, without what they may have put in the query string.
+  const safeHost = (value) => { try { return new URL(value).host; } catch { return "unparsed"; } };
+  // Engine errors quote the URL they failed on, query string and all — which is how a token or
+  // an email in someone's link ends up in a log that was supposed to hold neither. Keep the
+  // origin and path, drop everything after it.
+  const redactUrls = (text) => String(text).replace(/https?:\/\/[^\s"'<>]+/gi, (match) => {
+    try { const u = new URL(match); return `${u.origin}${u.pathname}${u.search || u.hash ? "?…" : ""}`; }
+    catch { return "[url]"; }
+  });
+
+  // Individual lines age out of the journal; a rollup means one grep still answers "did anyone
+  // use this last week?". unref'd so it never holds the process open, and cleared on close.
+  const usageHeartbeat = publicAccess
+    ? setInterval(() => logUsage("rollup", {
+        sinceStart: usage.startedAt,
+        distinctVisitors: usage.visitors.size,
+        audits: usage.audits,
+        refusals: usage.refusals,
+      }), 60 * 60 * 1000)
+    : null;
+  if (usageHeartbeat?.unref) usageHeartbeat.unref();
+
   // Work is serialized per lane rather than globally; see job-lanes.js for why.
   const OPERATOR_LANE = "operator";
   const lanes = new JobLanes({ operatorLane: OPERATOR_LANE });
@@ -477,6 +517,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
     }).catch((error) => {
       job.status = "failed";
       job.error = { message: error.message || String(error), ...(error.details ? { details: error.details } : {}) };
+      logUsage("job.failed", { operation, lane: String(lane).slice(0, 8), message: redactUrls(error.message || error).slice(0, 200) });
     }).finally(() => {
       job.completedAt = new Date().toISOString();
       lanes.release(lane, job);
@@ -521,13 +562,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (!/^[a-f0-9]{32}$/.test(visitorId)) {
           visitorId = crypto.randomBytes(16).toString("hex");
           response.setHeader("set-cookie", `${VISITOR_COOKIE}=${visitorId}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=2592000`);
+          usage.visitors.add(visitorId.slice(0, 8));
+          logUsage("visitor.new", { visitor: visitorId.slice(0, 8), distinctVisitors: usage.visitors.size });
         }
         if (!anonymousAllows(request.method, url.pathname)) {
+          usage.refusals += 1;
+          logUsage("refused", { visitor: visitorId.slice(0, 8), reason: "not-public", method: request.method, path: url.pathname, status: 401 });
           json(response, 401, { error: "Sign in to use this. A public visitor can audit a website read-only; repositories, live sessions and the release gate need an account." });
           return;
         }
         const limited = auditRateLimit(visitorId, request.method, url.pathname);
-        if (limited) { response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": String(limited) }); response.end(JSON.stringify({ error: `Too many audits from here. Try again in ${Math.ceil(limited / 60)} minute(s).` })); return; }
+        if (limited) { usage.refusals += 1; logUsage("refused", { visitor: visitorId.slice(0, 8), reason: "rate-limit", retryAfterSec: limited, status: 429 }); response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": String(limited) }); response.end(JSON.stringify({ error: `Too many audits from here. Try again in ${Math.ceil(limited / 60)} minute(s).` })); return; }
       }
       // The operator sees every capture; a visitor sees only captures stamped with their id.
       const evidenceOwner = anonymous ? visitorId : null;
@@ -688,6 +733,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (liveSession?.active) throw Object.assign(new Error("End the active live session before opening another project"), { statusCode: 409 });
         if (prompt.kind === "path") {
           if (anonymous) {
+            logUsage("self-host.answered", { visitor: visitorId.slice(0, 8), kind: "path" });
             json(response, 200, { kind: "self-host", target: prompt.value, command: `npx -y @aarwitz/tapp@latest app ${prompt.value}`,
               message: `A folder on your machine is not visible from the cloud. Open it with the Studio there: npx -y @aarwitz/tapp@latest app ${prompt.value}` });
             return;
@@ -701,6 +747,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         }
         if (prompt.kind === "github") {
           if (anonymous) {
+            logUsage("self-host.answered", { visitor: visitorId.slice(0, 8), kind: "github" });
             json(response, 200, { kind: "self-host", target: prompt.value, command: "npx -y @aarwitz/tapp@latest app",
               message: `Cloning and building ${prompt.value} needs a machine with your toolchain on it. Run the Studio there and paste the same thing: npx -y @aarwitz/tapp@latest app` });
             return;
@@ -719,6 +766,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (operation === "explore-build") {
         if (anonymous) {
           const asked = classifyPrompt(body.input);
+          logUsage("self-host.answered", { visitor: visitorId.slice(0, 8), kind: asked.kind });
           const where = asked.kind === "apk" ? "an Android device or emulator" : "a Mac with an iOS simulator";
           json(response, 200, { kind: "self-host", target: asked.value, command: "npx -y @aarwitz/tapp@latest app",
             message: `Running ${asked.value || "a build"} needs ${where}, which the cloud does not have. Start the Studio on that machine: npx -y @aarwitz/tapp@latest app` });
@@ -778,6 +826,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           try { fs.mkdirSync(path.join(captureRoot(), auditCapture), { recursive: true }); } catch { /* the run reports its own failure */ }
           setCaptureOwner(auditCapture, visitorId);
         }
+        const auditStartedMs = Date.now();
+        usage.audits += 1;
+        logUsage("audit.start", { visitor: (visitorId || "operator").slice(0, 8), host: safeHost(target.href), pages, totalAudits: usage.audits });
         const job = startJob(operation, async (progress) => {
           const { auditWebSite } = await import("./web-audit.js");
           progress({ phase: "runtime", text: `Opening ${target.href} read-only (up to ${pages} pages, nothing will be clicked)` });
@@ -787,6 +838,12 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             // the job's latest frame, and without this an audit watches an empty panel for its
             // whole run while the real screenshots sit in the capture.
             onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages, ...(page.screenshot ? { screenshot: page.screenshot } : {}) }),
+          });
+          logUsage("audit.done", {
+            visitor: (visitorId || "operator").slice(0, 8), host: safeHost(target.href),
+            pagesAudited: summary?.pagesAudited ?? null,
+            findings: summary?.issueCount ?? (summary?.issues || []).length,
+            seconds: Math.round((Date.now() - auditStartedMs) / 100) / 10,
           });
           return hosted ? hostedPayload(summary) : summary;
         }, null, { lane: visitorId || OPERATOR_LANE });
@@ -931,6 +988,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (liveManagedRuntime) await engine.stopManagedWebTarget(liveManagedRuntime).catch(() => {});
       }
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      if (usageHeartbeat) clearInterval(usageHeartbeat);
       if (egressProxy) { await egressProxy.close().catch(() => {}); restoreEgressEnv(); }
       registry.close();
     },

@@ -203,6 +203,59 @@ test("a public Studio exposes only read-only audits, scoped to the visitor who r
   }
 });
 
+test("a public Studio records that it was used, without recording who or what was in the link", async (t) => {
+  // The Studio served strangers while recording nothing, so "is anyone using this?" had no
+  // answer. It now logs to stdout for journald. What it must NOT log is the part that made the
+  // first version of this leak: an engine error quotes the URL it failed on, query string and
+  // all, which is how a token in someone's link reaches a log that promised not to hold one.
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-usage-ws-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-usage-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+
+  const lines = [];
+  const realLog = console.log;
+  console.log = (...args) => { lines.push(args.join(" ")); };
+  t.after(() => { console.log = realLog; });
+
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot });
+  let cookie = "";
+  const call = async (pathname, init = {}) => {
+    const response = await fetch(`${product.origin}${pathname}`, {
+      ...init, redirect: "manual",
+      headers: { ...(init.headers || {}), ...(cookie ? { cookie } : {}) },
+    });
+    const set = response.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0];
+    return response;
+  };
+  try {
+    await call("/");
+    await call("/api/project"); // refused
+
+    const usage = lines.filter((line) => line.startsWith("tapp-usage ")).map((line) => JSON.parse(line.slice("tapp-usage ".length)));
+    const arrival = usage.find((entry) => entry.event === "visitor.new");
+    assert.ok(arrival, "a new visitor is recorded");
+    assert.match(arrival.visitor, /^[a-f0-9]{8}$/, "a short prefix, not the whole visitor id");
+
+    const refusal = usage.find((entry) => entry.event === "refused");
+    assert.equal(refusal.status, 401);
+    assert.equal(refusal.reason, "not-public");
+
+    // Nothing that identifies a person or carries a secret.
+    const serialized = JSON.stringify(usage);
+    assert.doesNotMatch(serialized, /\bcookie\b/i);
+    for (const entry of usage) {
+      assert.equal(entry.ip, undefined, "no IP address is collected");
+      if (entry.visitor) assert.equal(entry.visitor.length, 8);
+    }
+  } finally {
+    console.log = realLog;
+    await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+});
+
 test("sign-in returns to the requested destination and refuses a foreign one", async () => {
   // runtapp.com's hero hands a target over as /?target=... Losing it at the login bounce makes
   // the handoff pointless, and reflecting it unchecked would make /login an open redirect.
