@@ -138,8 +138,16 @@ function looksLikeCapture(value) {
   const raw = String(value || "").trim();
   if (!raw || raw.startsWith("-") || /^https?:\/\//i.test(raw)) return false;
   if (raw === "latest") return true;
-  const marked = (dir) => { try { return fs.existsSync(path.join(dir, "ocqa-markers.txt")); } catch { return false; } };
-  return marked(path.resolve(raw)) || marked(path.join(tappHome, "captures", raw));
+  // Markers, or a recording: a replayed Flow writes video and no markers, and reading it back is
+  // exactly what this is for.
+  const RECORDINGS = ["exploration.webm", "replay.webm", "exploration.mp4", "replay.mp4", "exploration.mov"];
+  const readable = (dir) => {
+    try {
+      if (fs.existsSync(path.join(dir, "ocqa-markers.txt"))) return true;
+      return RECORDINGS.some((name) => fs.existsSync(path.join(dir, name)));
+    } catch { return false; }
+  };
+  return readable(path.resolve(raw)) || readable(path.join(tappHome, "captures", raw));
 }
 
 function artifactKind(file) {

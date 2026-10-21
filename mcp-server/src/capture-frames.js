@@ -29,13 +29,17 @@ export function resolveCapture(target = "") {
     try { entries = fs.readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()); } catch { return null; }
     const newest = entries
       .map((e) => ({ dir: path.join(root, e.name), at: fs.statSync(path.join(root, e.name)).mtimeMs }))
-      .sort((a, b) => b.at - a.at)[0];
+      .sort((a, b) => b.at - a.at)
+      .find(({ dir }) => fs.existsSync(path.join(dir, "ocqa-markers.txt")) || !!findRecording(dir));
     return newest ? newest.dir : null;
   }
+  // A replayed Flow records video but writes no markers, so "has markers" was too narrow a test
+  // and `look` refused to open the very recordings it exists to read.
+  const readable = (dir) => fs.existsSync(path.join(dir, "ocqa-markers.txt")) || !!findRecording(dir);
   const direct = path.resolve(value);
-  if (fs.existsSync(path.join(direct, "ocqa-markers.txt"))) return direct;
+  if (readable(direct)) return direct;
   const byId = path.join(root, value);
-  if (fs.existsSync(path.join(byId, "ocqa-markers.txt"))) return byId;
+  if (readable(byId)) return byId;
   return null;
 }
 

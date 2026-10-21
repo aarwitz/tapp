@@ -416,10 +416,13 @@ async function finishTranscript(name, job) {
       const files = await api(`/api/captures/${encodeURIComponent(id)}/files`);
       if (files.shots?.length) {
         pushLine({ kind: "shots", shots: files.shots.slice(0, 3).map((shot) => ({ src: captureUrl(id, shot.src), href: captureUrl(id, shot.src), caption: shot.caption })) });
-        // The stage keeps the run's final screen until something newer replaces it.
-        if (!state.live?.active) {
+        // The stage keeps the run's final screen until something newer replaces it — but only
+        // when the run never put a live frame there. Evidence screenshots are full-page, so a
+        // long marketing page becomes a tall sliver once it is fitted to the stage; the viewport
+        // frame the run was already showing is the better picture of where it ended.
+        const image = $("#live-frame-image");
+        if (!state.live?.active && !image.getAttribute("src")) {
           const last = files.shots.at(-1);
-          const image = $("#live-frame-image");
           image.onload = () => { $("#live-frame-loading").classList.add("hidden"); $("#device-placeholder").classList.add("hidden"); };
           image.src = captureUrl(id, last.src);
           $("#live-screen-title").textContent = last.caption || "";

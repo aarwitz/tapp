@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.1
+
+- **The stage shows what a person would be looking at.** A website audit put its full-page
+  evidence screenshot on the live stage, and a full page of a long marketing site is a tall
+  sliver once fitted to a device frame — so a run that was working looked like nothing much. The
+  audit now writes a viewport-shaped frame alongside the evidence, the stage uses that, and a
+  finished run keeps the frame it ended on instead of swapping to the full-page shot.
+- **`look` can read a replayed Flow.** A capture was only recognised if it had markers, which a
+  Flow replay does not write — so `tapp look <capture>` refused to open the very recordings the
+  feature exists to read. A directory with a recording is now a capture.
+
 ## 0.20.0
 
 Four reasons an exploration came back having barely looked, found by pointing tapp at a fixture

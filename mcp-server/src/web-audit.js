@@ -260,11 +260,17 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
     // Where this page's screenshot landed, so a live viewer can show the page being audited
     // instead of an empty panel. Absolute, because that is what the progress channel forwards.
     let statePath = "";
+    let framePath = "";
     if (capture) {
       capture.states += 1;
       const stateName = `state_${capture.states}_${slug(target.pathname === "/" ? (controls.title || "home") : target.pathname)}.png`;
       statePath = path.join(capture.dir, stateName);
       await page.screenshot({ path: statePath, fullPage: true }).catch(() => page.screenshot({ path: statePath }).catch(() => {}));
+      // Evidence wants the whole page; a live viewer wants what a person would be looking at. A
+      // full-page shot of a long marketing page is a tall sliver once it is fitted into a
+      // device stage, so write a viewport-shaped frame alongside it for anything watching.
+      framePath = path.join(capture.dir, `frame_${capture.states}.png`);
+      await page.screenshot({ path: framePath }).catch(() => { framePath = statePath; });
       capture.emit("STATE", { screen, url: page.url(), elements: controls.controlCount, role: "page", controls: controls.dead.map((d) => d.label).filter(Boolean).slice(0, 40), inputs: [], settled: true, screenshot: stateName });
       for (const f of findings) {
         if (f.selector) {
@@ -290,6 +296,7 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
       ...(controls.wiringUnverifiable ? { wiringUnverifiable: controls.wiringUnverifiable } : {}),
       findings,
       ...(statePath ? { screenshot: statePath } : {}),
+      ...(framePath ? { frame: framePath } : {}),
       links: allowedLinks,
     };
   } finally {

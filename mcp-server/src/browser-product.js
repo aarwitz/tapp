@@ -837,7 +837,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             // Hand the page's screenshot to the progress channel: the Studio's device stage polls
             // the job's latest frame, and without this an audit watches an empty panel for its
             // whole run while the real screenshots sit in the capture.
-            onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages, ...(page.screenshot ? { screenshot: page.screenshot } : {}) }),
+            onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages, ...(page.frame || page.screenshot ? { screenshot: page.frame || page.screenshot } : {}) }),
           });
           logUsage("audit.done", {
             visitor: (visitorId || "operator").slice(0, 8), host: safeHost(target.href),
