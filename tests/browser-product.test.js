@@ -242,6 +242,19 @@ test("a public Studio records that it was used, without recording who or what wa
     assert.equal(refusal.status, 401);
     assert.equal(refusal.reason, "not-public");
 
+    // A public host is scanned constantly. In one afternoon this recorded 404 "new visitors",
+    // 383 of which were bots probing for .env files — a reading that answers "is anyone using
+    // this?" with noise. Scanners are refused and counted, but neither logged line by line nor
+    // counted as visitors.
+    const before = lines.length;
+    for (const probe of ["/wp-content/.env", "/.git/config", "/vendor/phpunit.xml", "/aws/credentials"]) {
+      assert.equal((await call(probe)).status, 401, `${probe} must still be refused`);
+    }
+    const added = lines.slice(before)
+      .filter((line) => line.startsWith("tapp-usage "))
+      .map((line) => JSON.parse(line.slice("tapp-usage ".length)));
+    assert.deepEqual(added, [], `secret probes must not fill the log: ${JSON.stringify(added)}`);
+
     // Nothing that identifies a person or carries a secret.
     const serialized = JSON.stringify(usage);
     assert.doesNotMatch(serialized, /\bcookie\b/i);

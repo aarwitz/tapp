@@ -559,15 +559,27 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (publicAccess && !authenticated) {
         anonymous = true;
         visitorId = String(cookies(request)[VISITOR_COOKIE] || "");
-        if (!/^[a-f0-9]{32}$/.test(visitorId)) {
+        const returning = /^[a-f0-9]{32}$/.test(visitorId);
+        if (!returning) {
           visitorId = crypto.randomBytes(16).toString("hex");
           response.setHeader("set-cookie", `${VISITOR_COOKIE}=${visitorId}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=2592000`);
-          usage.visitors.add(visitorId.slice(0, 8));
+        }
+        const permitted = anonymousAllows(request.method, url.pathname);
+        // Count someone as a visitor only when they ask for something the Studio actually
+        // offers. A public host is scanned constantly — in one afternoon this recorded 404
+        // "new visitors", 383 of which were bots probing for .env files, which is a reading
+        // that answers "is anyone using this?" with noise.
+        if (!returning && permitted) {
+          if (usage.visitors.size < 50_000) usage.visitors.add(visitorId.slice(0, 8));
           logUsage("visitor.new", { visitor: visitorId.slice(0, 8), distinctVisitors: usage.visitors.size });
         }
-        if (!anonymousAllows(request.method, url.pathname)) {
+        if (!permitted) {
           usage.refusals += 1;
-          logUsage("refused", { visitor: visitorId.slice(0, 8), reason: "not-public", method: request.method, path: url.pathname, status: 401 });
+          // Scanners are the overwhelming majority of refusals and say nothing about the
+          // product; count them, and keep one line per path rather than one per request.
+          const scanning = /\.(env|git|aws|ssh)|wp-|phpunit|vendor\/|\.ya?ml$|\.ini$|credentials/i.test(url.pathname);
+          if (!scanning) logUsage("refused", { visitor: visitorId.slice(0, 8), reason: "not-public", method: request.method, path: url.pathname, status: 401 });
+          else if (usage.refusals % 100 === 0) logUsage("scanned", { refusalsSoFar: usage.refusals, note: "automated probes for secrets; all refused" });
           json(response, 401, { error: "Sign in to use this. A public visitor can audit a website read-only; repositories, live sessions and the release gate need an account." });
           return;
         }

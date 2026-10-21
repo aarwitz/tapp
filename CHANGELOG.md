@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.2
+
+- **Usage logging counts people, not scanners.** A public host is probed constantly: in one
+  afternoon the Studio recorded 404 "new visitors", 383 of which were bots looking for `.env`
+  files — a reading that answers "is anyone using this?" with noise. Automated secret probes are
+  still refused and still counted, but they no longer mint a visitor, no longer appear line by
+  line, and are summarised instead. The distinct-visitor count is also bounded, since a counter
+  fed by every scanner on the internet grows without end.
+
 ## 0.21.1
 
 - **A run finishes the work it was asked to do.** Exploring a real site ended on its time budget
