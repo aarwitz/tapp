@@ -389,6 +389,71 @@ export function webStateSignature(info) {
   return `${h1.toString(36)}${h2.toString(36)}`.slice(0, 12);
 }
 
+// What a dismissal looks like, in the order we would rather press it.
+//
+// Consent first, and declining: a crawler must not grant permissions or accept tracking on
+// someone's behalf, so "reject" beats "accept" and "Allow Device Location" is never a candidate
+// however prominent it is. Then the ordinary ways out of an intake modal. A bare "no" or "close"
+// is last because it is the most likely to mean something else on a page.
+const OVERLAY_DISMISSALS = [
+  /^(reject|decline)( all| cookies| non-essential)?$/i,
+  /^(necessary|essential) (cookies )?only$/i,
+  /^(manage |cookie )?(preferences|settings)$/i,
+  /^(not now|no thanks?|maybe later|later|skip|skip for now)$/i,
+  /^(dismiss|close|got it|ok|okay|continue without|don't ask again)$/i,
+  /^(×|✕|✖|x)$/i,
+];
+// Never press these to get past an overlay: each one grants something on the person's behalf.
+const OVERLAY_NEVER = /allow|accept|enable|agree|subscribe|sign ?up|turn on|share (my )?location|grant/i;
+
+export function chooseOverlayDismissal(labels = []) {
+  const cleaned = labels.map((label) => String(label || "").replace(/\s+/g, " ").trim()).filter(Boolean);
+  for (const pattern of OVERLAY_DISMISSALS) {
+    const match = cleaned.find((label) => pattern.test(label) && !OVERLAY_NEVER.test(label));
+    if (match) return match;
+  }
+  return null;
+}
+
+/**
+ * Clear whatever is covering the page, by pressing its own way out.
+ *
+ * Cookie banners and intake modals sit in front of a large share of real sites, and a crawler
+ * that cannot get past them never sees the application at all — on one real site this left every
+ * control on the home page unreachable and the coach search, sign-in and booking flows entirely
+ * undiscovered. Escape closes a well-built dialog and nothing else, so find the dismissal the
+ * overlay itself offers.
+ */
+export async function dismissBlockingOverlay(page) {
+  const choice = await page.evaluate(() => {
+    const covering = [...document.querySelectorAll("div,section,aside,dialog")].filter((element) => {
+      const style = window.getComputedStyle(element);
+      if (style.position !== "fixed" && style.position !== "sticky") return false;
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > window.innerWidth * 0.4 && rect.height > window.innerHeight * 0.2;
+    });
+    if (!covering.length) return null;
+    const topmost = covering.sort((a, b) => (Number(window.getComputedStyle(b).zIndex) || 0) - (Number(window.getComputedStyle(a).zIndex) || 0))[0];
+    return [...topmost.querySelectorAll("button,a,[role=button]")]
+      .map((element) => (element.innerText || element.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, 20);
+  }).catch(() => null);
+  if (!choice || !choice.length) return null;
+  const label = chooseOverlayDismissal(choice);
+  if (!label) return null;
+  try {
+    await page.getByRole("button", { name: label, exact: true }).first().click({ timeout: 2500 });
+    return label;
+  } catch {
+    try {
+      await page.getByText(label, { exact: true }).first().click({ timeout: 2000 });
+      return label;
+    } catch { return null; }
+  }
+}
+
 export function webScreenTitle(info, fallback) {
   return String(info?.heading || info?.title || fallback || "").trim();
 }
@@ -1067,6 +1132,14 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       }
       if (watch) await showWebWatchAction(page, { action: "Open", target });
       await waitForWebStability(page);
+      // Clear whatever greets a first visit before looking at the page, rather than discovering
+      // it control by control. A cookie banner or intake modal covering the viewport otherwise
+      // makes every control on the page unreachable and the application behind it invisible.
+      const greeting = await dismissBlockingOverlay(page).catch(() => null);
+      if (greeting) {
+        narrate(`Dismissed an overlay with "${greeting}"`, { screen: target });
+        await waitForWebStability(page);
+      }
       if (nav && typeof nav.status === "function" && nav.status() === 404) {
         issue("broken_link", "medium", `Broken link: ${target} → 404`, target);
       }
@@ -1175,6 +1248,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           id: await b.getAttribute("id").catch(() => ""),
         }).slice(0, 40);
         if (/log ?out|sign ?out|delete|remove/i.test(label)) continue; // don't destroy test state
+        // Nor consent on anyone's behalf. Probing clicks every button it can reach, which on a
+        // real site means pressing "Allow Device Location", "Accept all cookies" or "Subscribe"
+        // — granting a permission, accepting tracking, or signing someone up, none of which an
+        // observation should do. Dismissals ("Not now", "Reject all") stay clickable, so an
+        // overlay can still be got past; see chooseOverlayDismissal.
+        if (OVERLAY_NEVER.test(label)) continue;
         // Capture only durable, user-visible semantics around this control. A global
         // MutationObserver is intentionally avoided: carousels, chat launchers, and live
         // counters can mutate while an unrelated dead button is clicked, creating verdict jitter.
@@ -1193,8 +1272,13 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           // opened by a button probed moments ago. Every remaining control on the page used to
           // be clicked into that overlay and silently skipped, so a page with a modal reported
           // no dead controls at all however many it had. Clear the overlay and try once more.
-          await page.keyboard.press("Escape").catch(() => {});
+          const dismissed = await dismissBlockingOverlay(page).catch(() => null);
+          if (dismissed) narrate(`Dismissed an overlay with "${dismissed}"`, { screen: ob.screen });
+          else await page.keyboard.press("Escape").catch(() => {});
           await waitForWebStability(page);
+          // Clearing the obstruction is itself a change to the page, so anything compared against
+          // the snapshot taken before it would look as though this control had done something.
+          beforeState = await captureWebControlState(page, b);
           try {
             await b.click({ timeout: 2000 });
             clickSucceeded = true;

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.21.0
+
+- **An overlay is got past, by its own way out.** Cookie banners and intake modals sit in front of
+  a large share of real sites, and a crawler that cannot dismiss one never sees the application
+  behind it. On a real site a location-intake modal made every control on the home page
+  unreachable: the run reported seventeen controls it "could not click", reached ten screens, and
+  the coach search, sign-in and booking flows were never discovered — the site looked, from
+  outside, like a six-page brochure. The same run now reaches eighteen screens with one low
+  finding.
+- **Nothing is consented to on your behalf.** Probing clicks every button it can reach, which on
+  a real page means pressing "Allow Device Location", "Accept all cookies" or "Subscribe" —
+  granting a permission, accepting tracking, or signing someone up. Those are skipped now, the
+  way logout and delete already were. When an overlay must be dismissed, a decline is preferred
+  to an accept, and if the only way out would grant something there is no way out: it is reported
+  rather than pressed.
+- The dead-control probe refreshes its baseline whenever it has to clear an obstruction first,
+  since clearing one is itself a change and the control would otherwise look alive.
+
 ## 0.20.2
 
 - **A replay is filmed at the size it runs at.** Without an explicit size Playwright fits a

@@ -518,3 +518,37 @@ test("one route cannot mint unlimited states", async () => {
   assert.ok(Number.isInteger(MAX_STATES_PER_ROUTE) && MAX_STATES_PER_ROUTE > 1 && MAX_STATES_PER_ROUTE <= 20,
     `the per-route cap must be a small positive integer, got ${MAX_STATES_PER_ROUTE}`);
 });
+
+// Cookie banners and intake modals sit in front of a large share of real sites. On one real site
+// a location-intake modal made every control on the home page unreachable, so the coach search,
+// sign-in and booking flows were never discovered and the run reported seventeen controls it
+// "could not click" — while the site looked, from the outside, like a six-page brochure.
+test("an overlay is dismissed by its own way out, never by consenting", async () => {
+  const { chooseOverlayDismissal } = await import("../mcp-server/src/web-explorer.js");
+
+  // The real modal that prompted this.
+  assert.equal(
+    chooseOverlayDismissal(["Allow Device Location", "Enter Zip Code Instead", "Save", "Not now", "Don't ask again"]),
+    "Not now",
+  );
+
+  // Consent: decline rather than accept, and never on someone's behalf.
+  assert.equal(chooseOverlayDismissal(["Accept all", "Reject all", "Manage preferences"]), "Reject all");
+  assert.equal(chooseOverlayDismissal(["Accept all cookies", "Necessary only"]), "Necessary only");
+
+  // When the only way out would grant something, there is no way out: refuse rather than press it.
+  assert.equal(chooseOverlayDismissal(["Accept all cookies", "Learn more"]), null);
+  assert.equal(chooseOverlayDismissal(["Allow notifications", "Enable location"]), null);
+  assert.equal(chooseOverlayDismissal(["Sign up", "Subscribe"]), null);
+  assert.equal(chooseOverlayDismissal([]), null);
+
+  // Ordinary dismissals.
+  for (const [labels, expected] of [
+    [["No thanks", "Allow"], "No thanks"],
+    [["Maybe later"], "Maybe later"],
+    [["Got it"], "Got it"],
+    [["✕"], "✕"],
+  ]) {
+    assert.equal(chooseOverlayDismissal(labels), expected, `expected ${expected} from ${JSON.stringify(labels)}`);
+  }
+});
