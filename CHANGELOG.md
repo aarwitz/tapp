@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.19.0
+
+- **`app.runtapp.com` is a public Studio.** `tapp app --public --origin https://host --port N`
+  serves the Studio to anyone, with no account, and narrows what a signed-out visitor can reach
+  to one thing: a read-only audit of a public website, plus the evidence from their own audits.
+  Repositories, live sessions and the release gate stay behind an authenticated local session.
+  The browser is routed through the public-egress proxy, which pins every connection — redirects
+  and subresources included — and refuses loopback, private, link-local and metadata addresses;
+  `TAPP_ENFORCE_PUBLIC_EGRESS` fails a run rather than reaching a private network. Anonymous
+  captures are stamped with their visitor before the run writes anything, so evidence is never
+  readable by anyone else. Ten audits per visitor per hour. Decided in ADR-0008; the demo
+  sign-in and the private-pilot adapter behind it are retired.
+- **A target the cloud cannot run is answered, not refused.** A folder, a repository, a bundle
+  id, an `.app` or an `.apk` now returns the command that runs it on your own machine instead of
+  a bare 401 that surfaced as a toast and cleared itself. The hosted Studio also stops
+  advertising what it does not have — no target picker, no runner, no release gate, no decision
+  card — and an audit shows the page being audited on the stage as it goes, rather than "No live
+  feed yet" for the whole run.
+- **`look` reads a finished run.** `tapp look <capture>` returns the screens a run observed with
+  the moment each was reached; `--at N|"screen"` pulls that screen's frame out of the recording;
+  `--frames` writes contact sheets (many frames per image) so a recording can be scanned cheaply
+  instead of one frame at a time; `--json` returns the index. `tapp_look` gains the same through
+  `capture`, `at` and `frames`, so MCP stays at thirteen tools. No new verb: a frame is a screen,
+  and `report [capture]` already took a capture (ADR-0007, amended).
+- **The index is written, not derived.** `OCQA_STATE` and `OCQA_ISSUE` now carry the timestamp
+  `OCQA_ACTION` already had, and a `RECORDING` marker anchors the video to the same clock, so a
+  screen's frame is a seek rather than a scan and "where was this finding observed" is a lookup.
+- **Recordings are openable.** A replayed web Flow records video when asked
+  (`TAPP_FLOW_RECORD_VIDEO=1`), which previously produced a file named by an internal id that
+  nothing ever renamed, and every recording is written as H.264 mp4 beside the VP9 webm, because
+  QuickTime and Preview cannot open VP8/VP9.
+
 ## 0.18.4
 
 - **iOS on the stage, verified by hand.** A build or bundle id pasted into the prompt now shows the

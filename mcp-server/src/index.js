@@ -2741,7 +2741,9 @@ export const TOOLS = [
       "The fast way (seconds) to SEE the app: with appBundleId/androidAppId it launches the installed app fresh and returns a screenshot " +
       "plus the accessibility tree of the screen it lands on; with no target it photographs whatever is on the booted simulator right now " +
       "(tree:true returns the accessibility tree instead). No exploration, no findings. Use appLaunchArgs/appLaunchEnv for a login bypass " +
-      "or backend override. For a screen reached by signing in or several taps, use tapp_session.",
+      "or backend override. For a screen reached by signing in or several taps, use tapp_session. " +
+      "Pass `capture` (an id, a path, or \"latest\") to read a finished run instead of a live app: its screens with the moment each " +
+      "was reached, `at` for one screen's frame, `frames:true` for contact sheets that make a recording cheap to scan.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2752,6 +2754,9 @@ export const TOOLS = [
         appLaunchArgs: { type: "array", items: { type: "string" }, description: "Launch args, e.g. [\"--uitesting\"]" },
         appLaunchEnv: { type: "object", additionalProperties: { type: "string" }, description: "Launch env, e.g. {\"UI_TEST_BACKEND\": \"staging\"}" },
         maxWidth: { type: "integer", minimum: 200, maximum: 1400, default: 700, description: "Max screenshot width in px" },
+        capture: { type: "string", description: "Read a FINISHED run instead of a live app: a capture id, a capture directory, or \"latest\". Returns the screens it observed with the moment each was reached." },
+        at: { type: "string", description: "With capture: pull the frame for one screen, by index (\"3\") or screen name (\"Checkout\")" },
+        frames: { type: "boolean", default: false, description: "With capture: contact sheets — many frames per image, for scanning a recording cheaply instead of one frame at a time" },
       },
     },
   },
@@ -3047,6 +3052,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }))
 
 // The in-flight MCP request (progress tokens); routed and legacy calls share it.
 let currentRequest = null;
+
+// Reading a finished run: the same question `tapp_look` always answered ("what was on screen"),
+// asked of a recording instead of a live app. The engine indexed the states while the run
+// happened, so a screen's frame is a seek rather than a scan of the whole video.
+async function lookAtCapture(args = {}) {
+  const frames = await import("./capture-frames.js");
+  const dir = frames.resolveCapture(args.capture);
+  if (!dir) return errorResult(`No capture found for '${args.capture}'`, { hint: "Pass a capture id, a capture directory, or \"latest\"." });
+  const index = frames.captureIndex(dir);
+
+  if (isNonEmptyString(args.at)) {
+    const state = frames.selectState(index, args.at);
+    if (!state) {
+      return errorResult(`No screen matching '${args.at}' in ${index.capture}`, { screens: index.states.map((s) => ({ index: s.index, screen: s.screen })) });
+    }
+    const out = path.join(dir, `frame_${state.index}.png`);
+    const got = await frames.extractFrame(index, state, out).catch((error) => ({ error }));
+    if (!got || got.error) return errorResult(`No frame or screenshot for screen ${state.index}`, { detail: got?.error?.message });
+    const summary = `📼 ${index.capture} · screen ${state.index}/${index.states.length}: ${state.screen}${state.url ? ` (${state.url})` : ""}` +
+      `\n${got.from === "recording" ? `frame at ${(got.atMs / 1000).toFixed(1)}s of ${index.recording.file}` : "screenshot written during the run"}` +
+      (state.findings.length ? `\nfindings here: ${state.findings.map((f) => `${f.severity} ${f.title}`).join("; ")}` : "");
+    return {
+      content: [
+        { type: "text", text: summary },
+        { type: "image", data: fs.readFileSync(out).toString("base64"), mimeType: "image/png" },
+      ],
+      structuredContent: { capture: index.capture, state },
+    };
+  }
+
+  if (args.frames === true) {
+    const sheets = await frames.contactSheets(index, path.join(dir, "frames")).catch((error) => ({ error }));
+    if (!sheets || sheets.error || !sheets.length) {
+      return errorResult("Could not build contact sheets", { detail: sheets?.error?.message || "the run recorded no video and no screenshots" });
+    }
+    return {
+      content: [
+        { type: "text", text: `📼 ${index.capture} · ${sheets.length} contact sheet(s), many frames per image.` +
+          `\nSheets: ${sheets.map((sheet) => path.basename(sheet)).join(", ")} in ${path.join(dir, "frames")}` +
+          `\nShowing the first; read the rest from disk, or ask for one screen with at:"<n|screen>".` },
+        { type: "image", data: fs.readFileSync(sheets[0]).toString("base64"), mimeType: "image/png" },
+      ],
+      structuredContent: { capture: index.capture, sheets },
+    };
+  }
+
+  const screens = index.states.map((state) => `${String(state.index).padStart(2)}. ${state.videoAtMs != null ? `${(state.videoAtMs / 1000).toFixed(1)}s` : "—"}  ${state.screen}${state.url ? `  ${state.url}` : ""}`).join("\n");
+  return {
+    content: [{ type: "text", text: `📼 ${index.capture} — ${index.states.length} screen(s), ${index.actions} action(s), ${index.findings} finding(s)\n${index.recording ? `recording: ${index.recording.file}${index.recording.indexed ? "" : " (no frame index)"}` : "recording: none"}\n\n${screens}` }],
+    structuredContent: {
+    capture: index.capture,
+    recording: index.recording ? { file: index.recording.file, indexed: index.recording.indexed } : null,
+    screens: index.states.map((s) => ({ index: s.index, screen: s.screen, url: s.url, atMs: s.videoAtMs ?? s.t, screenshot: s.screenshot, findings: s.findings })),
+    actions: index.actions,
+    findings: index.findings,
+    next: index.recording?.indexed
+      ? 'Ask for one screen with at:"<n|screen>", or frames:true to scan the recording.'
+      : 'This run predates frame indexing, so screens have no video timestamp; at:"<n>" falls back to the screenshot.',
+    },
+  };
+}
 
 async function handleTool(name, args = {}) {
   const request = currentRequest || { params: { name, arguments: args, _meta: {} } };
@@ -3951,6 +4017,8 @@ async function handleTool(name, args = {}) {
           url: isNonEmptyString(args.url) ? args.url.trim() : undefined,
           logPath: flowLog,
           screenshotDir: evidenceDir,
+          // Opt-in, matching scripts/run-web-flow.js rather than inventing a second convention.
+          ...(process.env.TAPP_FLOW_RECORD_VIDEO === "1" ? { recordVideoDir: evidenceDir } : {}),
           device: isNonEmptyString(args.device) ? args.device.trim() : "",
           viewport: isNonEmptyString(args.viewport) ? args.viewport.trim() : "",
         });
@@ -4510,9 +4578,12 @@ export async function routePublicTool(name, args = {}) {
       if (readOnly === true) return handleTool("tapp_audit", rest);
       if (isNonEmptyString(goal)) return handleTool("tapp_focus", { query: goal, projectDir: rest.projectDir, platform: rest.platform, mapPath: rest.mapPath, authToken: rest.authToken });
       return handleTool("tapp_explore", rest);
-    case "tapp_look":
+    case "tapp_look": {
+      // A capture is a target like any other; the screen is recorded rather than live.
+      if (isNonEmptyString(rest.capture)) return lookAtCapture(rest);
       if (isNonEmptyString(rest.appBundleId) || isNonEmptyString(rest.androidAppId)) return handleTool("tapp_open_app", rest);
       return handleTool(tree === true ? "tapp_ui_tree" : "tapp_screenshot", rest);
+    }
     case "tapp_run": {
       if (rest.flow || isNonEmptyString(rest.flowPath)) return handleTool("tapp_flow_run", rest);
       if (rest.scenario || isNonEmptyString(rest.scenarioPath)) return handleTool("tapp_scenario_run", rest);

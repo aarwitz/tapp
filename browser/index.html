@@ -80,9 +80,9 @@
       <div class="sidebar-project">
         <p class="eyebrow">Project</p>
         <div class="row"><span><svg><use href="#i-folder"/></svg></span><span><strong id="sidebar-project-name">Product</strong></span></div>
-        <div class="row"><span><svg><use href="#i-branch"/></svg></span><span id="sidebar-project-source">Repository</span></div>
-        <div class="row"><span><svg><use href="#i-target"/></svg></span><span id="sidebar-target">Select a target</span></div>
-        <div class="row"><span><svg><use href="#i-server"/></svg></span><span id="sidebar-runner">Runner not checked</span></div>
+        <div class="row" data-repo-only><span><svg><use href="#i-branch"/></svg></span><span id="sidebar-project-source">Repository</span></div>
+        <div class="row" data-repo-only><span><svg><use href="#i-target"/></svg></span><span id="sidebar-target">Select a target</span></div>
+        <div class="row" data-repo-only><span><svg><use href="#i-server"/></svg></span><span id="sidebar-runner">Runner not checked</span></div>
         <div class="row hidden" id="sidebar-app-row"><span><svg><use href="#i-app"/></svg></span><span><code id="sidebar-app-id"></code></span></div>
         <span class="mode-pill" id="mode-pill">Self-host · this machine</span>
       </div>
@@ -99,7 +99,7 @@
           <div class="command-actions">
             <span class="phase-pill hidden" id="phase-pill"><span class="spinner"></span><span id="phase-pill-text">Working…</span></span>
             <div class="idle-badges" id="idle-badges"></div>
-            <button class="primary" id="command-run">Run release check</button>
+            <button class="primary" id="command-run" data-repo-only>Run release check</button>
           </div>
         </div>
         <div class="run-progress hidden" id="run-progress"><span class="progress-track"><span id="run-progress-bar"></span></span><span id="run-progress-text">Starting…</span></div>
@@ -127,7 +127,7 @@
           </aside>
         </section>
 
-        <section class="panel section" id="target-stage">
+        <section class="panel section" id="target-stage" data-repo-only>
           <div class="section-heading"><div><p class="eyebrow">Build & run</p><h2>Choose the product target</h2><p>Tapp detected these targets from source. With more than one, you choose; nothing builds until you do.</p></div><span class="status-chip" id="target-status">No target selected</span></div>
           <div class="target-choice-callout hidden" id="target-choice-callout"><span>1</span><div><strong>Choose what Tapp should test</strong><small>Nothing will build until you select a target. Tapp never guesses when a repository contains multiple applications.</small></div></div>
           <div id="targets" class="target-grid"><div class="empty">Inspecting the repository for iOS, Android and web targets…</div></div>
@@ -147,12 +147,12 @@
         </section>
 
         <section class="overview-grid">
-          <article class="panel summary-panel"><div class="section-heading compact"><div><p class="eyebrow">Latest evidence</p><h2>What the last run proved</h2></div><button class="quiet" data-view="runs">All runs</button></div><div class="decision-card neutral" id="decision-card"><span class="decision-label">CURRENT DECISION</span><strong id="decision-title">Not evaluated</strong><span id="decision-detail">Run a conclusive release gate to establish evidence.</span></div><div id="overview-evidence"><div class="empty">No run yet.</div></div></article>
+          <article class="panel summary-panel"><div data-repo-only-marker></div><div class="section-heading compact"><div><p class="eyebrow">Latest evidence</p><h2>What the last run proved</h2></div><button class="quiet" data-view="runs">All runs</button></div><div class="decision-card neutral" id="decision-card" data-repo-only><span class="decision-label">CURRENT DECISION</span><strong id="decision-title">Not evaluated</strong><span id="decision-detail">Run a conclusive release gate to establish evidence.</span></div><div id="overview-evidence"><div class="empty">No run yet.</div></div></article>
         </section>
       </section>
 
       <section class="workspace-view" data-view-panel="runs">
-        <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks, explorations and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate">Run release gate</button></div>
+        <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks, explorations and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate" data-repo-only>Run release gate</button></div>
         <section class="panel section audit-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Website</p><h2>Audit a website — read-only</h2><p>Up to six pages, nothing clicked. Safe on production or a site you do not own; no release verdict without source.</p></div></div>
           <form class="audit-form" id="runs-audit-form">

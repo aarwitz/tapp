@@ -17,6 +17,9 @@ npx -y @aarwitz/tapp@latest explore --goal "SCREEN OR CONTROL" [target] # source
 npx -y @aarwitz/tapp@latest explore https://your-app.example --watch  # web: visibly follow the same exploration
 npx -y @aarwitz/tapp@latest explore --read-only https://example.com --pages 5  # never clicks: production or a site you do not own
 npx -y @aarwitz/tapp@latest look [target]        # launch + screen summary + screenshot saved to a file (≈ tapp_look)
+npx -y @aarwitz/tapp@latest look latest          # a finished run: its screens, each with its moment in the recording
+npx -y @aarwitz/tapp@latest look latest --at 6   # one screen's frame, seeked (not scanned) out of the video
+npx -y @aarwitz/tapp@latest look latest --frames # contact sheets — many frames per image, to scan a run cheaply
 npx -y @aarwitz/tapp@latest look [target] --tree # + the accessibility tree, --json for every element
 npx -y @aarwitz/tapp@latest look                 # no target on iOS: the booted sim as it is → file path
 npx -y @aarwitz/tapp@latest explore app.apk --platform android --app-id com.acme.app
@@ -70,6 +73,8 @@ installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 | "Is this live site / production / a prospect's site broken?" | `tapp_explore {readOnly:true}` (CLI `tapp explore --read-only <url> --pages N`) — read-only: dead controls, broken images/links/assets, failed requests, JS errors, mixed content, overflow; writes a capture with evidence | `tapp_explore` (it clicks, types and submits) |
 | "Make this flow a repeatable test" | drive it in a session, then `tapp_session {action:"save_flow"}`; replay with `tapp_run` | re-driving it by hand every time |
 | "What's on screen right now?" | `tapp_look` | relaunching the app |
+| "What happened during that run?" / "show me the frame where X" | `tapp_look {capture:"latest", at:"<n\|screen>"}` | re-running the app to reproduce something already recorded |
+| "Scan a recording for something odd" | `tapp_look {capture:"latest", frames:true}` (contact sheets) | pulling frames one at a time, or sampling a handful and calling it a look |
 
 ## Session driving (the Playwright loop)
 

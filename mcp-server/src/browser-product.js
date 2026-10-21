@@ -127,8 +127,10 @@ function anonymousAllows(method, pathname) {
     if (/^\/api\/jobs\/[a-f0-9]{20}(\/frame)?$/.test(pathname)) return true;
     return false;
   }
-  // The only thing a visitor may start is a read-only audit of a public website.
-  return method === "POST" && pathname === "/api/operations/audit";
+  // A visitor may start a read-only audit, and may *ask* about the other kinds of target so the
+  // Studio can say where they actually run. A bare 401 reads as "broken" to someone who typed a
+  // repo into the landing page, which is how five of its six examples used to dead-end.
+  return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build"].includes(pathname);
 }
 
 // One visitor may start a bounded number of audits per hour. Each audit drives a real browser
@@ -685,6 +687,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         const prompt = classifyPrompt(body.input);
         if (liveSession?.active) throw Object.assign(new Error("End the active live session before opening another project"), { statusCode: 409 });
         if (prompt.kind === "path") {
+          if (anonymous) {
+            json(response, 200, { kind: "self-host", target: prompt.value, command: `npx -y @aarwitz/tapp@latest app ${prompt.value}`,
+              message: `A folder on your machine is not visible from the cloud. Open it with the Studio there: npx -y @aarwitz/tapp@latest app ${prompt.value}` });
+            return;
+          }
           if (hosted) throw Object.assign(new Error("A hosted Studio cannot open a path on your machine; run `tapp app /path/to/repo` locally"), { statusCode: 400 });
           const resolved = prompt.value.startsWith("~") ? path.join(os.homedir(), prompt.value.slice(1)) : path.resolve(prompt.value);
           if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) throw Object.assign(new Error(`No folder at ${resolved}`), { statusCode: 400 });
@@ -693,6 +700,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           return;
         }
         if (prompt.kind === "github") {
+          if (anonymous) {
+            json(response, 200, { kind: "self-host", target: prompt.value, command: "npx -y @aarwitz/tapp@latest app",
+              message: `Cloning and building ${prompt.value} needs a machine with your toolchain on it. Run the Studio there and paste the same thing: npx -y @aarwitz/tapp@latest app` });
+            return;
+          }
           const job = startJob(operation, async (progress) => ({ kind: "repository", repository: await registry.cloneGithub(prompt.value, progress) }), null);
           json(response, 202, { job: publicJob(job, { hosted }) });
           return;
@@ -705,6 +717,13 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (operation === "explore-build") {
+        if (anonymous) {
+          const asked = classifyPrompt(body.input);
+          const where = asked.kind === "apk" ? "an Android device or emulator" : "a Mac with an iOS simulator";
+          json(response, 200, { kind: "self-host", target: asked.value, command: "npx -y @aarwitz/tapp@latest app",
+            message: `Running ${asked.value || "a build"} needs ${where}, which the cloud does not have. Start the Studio on that machine: npx -y @aarwitz/tapp@latest app` });
+          return;
+        }
         if (hosted) throw Object.assign(new Error("Builds are explored on the machine that has the simulator; run the Studio locally"), { statusCode: 400 });
         const prompt = classifyPrompt(body.input);
         if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a simulator .app, or an .apk"), { statusCode: 400 });
@@ -764,7 +783,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           progress({ phase: "runtime", text: `Opening ${target.href} read-only (up to ${pages} pages, nothing will be clicked)` });
           const summary = await auditWebSite({
             url: target.href, pages, delayMs: 750, capturesDir: captureRoot(), captureId: auditCapture,
-            onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages }),
+            // Hand the page's screenshot to the progress channel: the Studio's device stage polls
+            // the job's latest frame, and without this an audit watches an empty panel for its
+            // whole run while the real screenshots sit in the capture.
+            onPage: (page, n) => progress({ phase: "explore", text: `Audited ${page.url} — ${page.findings.length} finding(s)`, current: n, total: pages, ...(page.screenshot ? { screenshot: page.screenshot } : {}) }),
           });
           return hosted ? hostedPayload(summary) : summary;
         }, null);

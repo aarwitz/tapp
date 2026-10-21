@@ -14,6 +14,7 @@ screen or journey works from source inspection alone.
 |---|---|
 | See or screenshot one screen | `look` / `tapp_look` |
 | Inspect controls on the current screen | `look --tree` / `tapp_look {tree:true}` |
+| See what a finished run saw | `look <capture>` / `tapp_look {capture}` — add `at` for one screen's frame, `frames:true` to scan |
 | Reach a named screen/control | `explore --goal` / `tapp_explore {goal}` (source + observed UI Map fast path) |
 | Drive a specific journey | `tapp_session` start → act → end |
 | Find bugs autonomously (owned app/environment; it clicks) | `explore` / `tapp_explore` |

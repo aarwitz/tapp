@@ -257,10 +257,14 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
     const screen = target.pathname + target.search;
     for (const f of findings) { f.screen = screen; if (!f.url) f.url = page.url(); }
 
+    // Where this page's screenshot landed, so a live viewer can show the page being audited
+    // instead of an empty panel. Absolute, because that is what the progress channel forwards.
+    let statePath = "";
     if (capture) {
       capture.states += 1;
       const stateName = `state_${capture.states}_${slug(target.pathname === "/" ? (controls.title || "home") : target.pathname)}.png`;
-      await page.screenshot({ path: path.join(capture.dir, stateName), fullPage: true }).catch(() => page.screenshot({ path: path.join(capture.dir, stateName) }).catch(() => {}));
+      statePath = path.join(capture.dir, stateName);
+      await page.screenshot({ path: statePath, fullPage: true }).catch(() => page.screenshot({ path: statePath }).catch(() => {}));
       capture.emit("STATE", { screen, url: page.url(), elements: controls.controlCount, role: "page", controls: controls.dead.map((d) => d.label).filter(Boolean).slice(0, 40), inputs: [], settled: true, screenshot: stateName });
       for (const f of findings) {
         if (f.selector) {
@@ -285,6 +289,7 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
       // Why the wiring-dependent checks were skipped on this page, if they were.
       ...(controls.wiringUnverifiable ? { wiringUnverifiable: controls.wiringUnverifiable } : {}),
       findings,
+      ...(statePath ? { screenshot: statePath } : {}),
       links: allowedLinks,
     };
   } finally {

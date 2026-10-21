@@ -102,6 +102,11 @@ function applyAccessMode() {
   }
   const input = $("#prompt-input");
   if (input) input.placeholder = "A website URL…";
+  // Everything that only means something against a source repository: a target to build, a
+  // runner, a release gate, a decision. A hosted visitor auditing a URL has none of them, and
+  // showing the empty frames makes a working run look like a broken one.
+  for (const node of document.querySelectorAll("[data-repo-only]")) node.classList.add("hidden");
+  setHeading("tapp", "Give it a public website and it will audit the pages read-only.");
   const note = $("#privacy-note-detail");
   if (note) note.textContent = "Websites are audited read-only in the cloud; nothing is clicked. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
 }
@@ -564,12 +569,37 @@ async function runOperation(name, body = {}, { input = "" } = {}) {
 
 // "What should tapp test?" — route by what was typed. The server classifies again and refuses
 // what the mode cannot do (a hosted Studio cannot open a path on your machine).
+function setHeading(title, summary) {
+  const heading = $("#app-name");
+  if (heading) heading.textContent = title;
+  const note = $("#app-summary");
+  if (note) note.textContent = summary;
+}
+
+// Some targets simply cannot run where this Studio is running — a folder on someone's disk, a
+// simulator build, a repository that needs a toolchain. The engine answers with where they do
+// run; show that answer where it stays put, not in a toast that disappears in six seconds.
+function answerSelfHost(answer) {
+  setHeading("Run this on your machine", "The cloud Studio audits websites; this target needs your toolchain.");
+  document.querySelector(".summary-panel")?.classList.add("hidden");
+  document.querySelector(".device-stage")?.classList.add("hidden");
+  state.transcript = [];
+  pushLine({ kind: "step", icon: "🖥️", text: answer.message });
+  if (answer.command) pushLine({ kind: "step", icon: "⌨️", text: answer.command });
+  renderChat();
+  setChatCollapsed(false);
+  toast(answer.message, true);
+}
+
 async function startFromPrompt(raw) {
   const prompt = classifyPrompt(raw);
   if (prompt.kind === "empty") return;
   if (prompt.kind === "url") {
     state.promptRun = true; state.promptPlatform = "web";
     showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
+    document.querySelector(".device-stage")?.classList.remove("hidden");
+    document.querySelector(".summary-panel")?.classList.remove("hidden");
+    if (state.session?.access === "anonymous") setHeading("Website audit", "Read-only. Nothing on the page is clicked.");
     const result = await runOperation("audit", { url: prompt.value }, { input: prompt.value });
     state.selectedRunId = result?.capture?.id || state.selectedRunId;
     return;
@@ -578,11 +608,14 @@ async function startFromPrompt(raw) {
     state.promptRun = true; state.promptPlatform = prompt.kind === "apk" ? "android" : "ios";
     showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
     const result = await runOperation("explore-build", { input: prompt.value }, { input: prompt.value });
+    if (result?.kind === "self-host") { answerSelfHost(result); return; }
     state.selectedRunId = result?.capture?.id || state.selectedRunId;
     return;
   }
+  showProduct(); activateView("overview"); renderChat();
   const answer = await runOperation("open", { input: prompt.value }, { input: prompt.value });
-  if (answer?.kind === "business") { toast(answer.message, true); return; }
+  if (answer?.kind === "self-host") { answerSelfHost(answer); return; }
+  if (answer?.kind === "business") { answerSelfHost({ message: answer.message }); return; }
   await refreshSession();
   await refresh();
   state.selectedTargetId = "";

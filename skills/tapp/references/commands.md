@@ -18,6 +18,9 @@ npx -y @aarwitz/tapp@latest explore --read-only https://example.com --pages 5 --
 #   several URLs or --urls FILE batch sites · --device "iPhone 13" audits the mobile rendering · --json FILE writes the result · exit 1 = defects found
 npx -y @aarwitz/tapp@latest look [target]          # one screen: summary + screenshot file
 npx -y @aarwitz/tapp@latest look [target] --tree --json   # + the accessibility tree (every element with --json)
+npx -y @aarwitz/tapp@latest look latest             # a finished run: its screens and when each was reached
+npx -y @aarwitz/tapp@latest look latest --at 6      # that screen's frame, seeked out of the recording
+npx -y @aarwitz/tapp@latest look latest --frames    # contact sheets: ~25 frames per image, for scanning
 npx -y @aarwitz/tapp@latest report latest
 npx -y @aarwitz/tapp@latest doctor                 # toolchain check · --install prebuilds the iOS harness (~2 min, once)
 npx -y @aarwitz/tapp@latest feedback "short title" --body "what happened" --type bug|idea|question   # draft; add --submit to file (public)
@@ -56,6 +59,10 @@ npx -y @aarwitz/tapp@latest look https://example.com --tap "Not now" --wait-for 
 - `tapp_look`: the current real surface — screen summary plus inline screenshot; `tree:true` adds
   the accessibility tree (`full:true` for the complete raw element list when the default
   ≤160-element projection might omit the text you are checking for).
+  Also reads a **finished run**: `capture:"<id>|<path>|latest"` returns the screens it observed
+  with the moment each was reached, `at:"<n>|<screen>"` pulls that screen's frame out of the
+  recording, `frames:true` returns contact sheets (many frames per image) for scanning a run
+  cheaply. Prefer `at:` over `frames:` when you know which screen you want — it is one seek.
 - `tapp_session`: one persistent journey. `action:"start"` → `tap|type|swipe|back|wait|tree|login`
   → `action:"end"`. `action:"save_flow"` keeps the driven journey as a Flow; `action:"draft_flow"`
   proposes one from a goal (an untrusted draft until replayed). Sessions begin from a **cold**

@@ -165,14 +165,32 @@ test("a public Studio exposes only read-only audits, scoped to the visitor who r
       assert.equal((await call(`/evidence/captures/${id}/report.html`)).status, 404, `${id} evidence must not be served`);
     }
 
-    // Everything beyond a read-only audit needs an account.
+    // Everything that would act on this machine needs an account.
     for (const [method, pathname] of [
       ["GET", "/api/repositories"], ["GET", "/api/project"], ["GET", "/api/live-session"],
-      ["POST", "/api/repositories/select"], ["POST", "/api/operations/open"],
+      ["POST", "/api/repositories/select"],
       ["POST", "/api/operations/gate"], ["POST", "/api/operations/initialize"],
     ]) {
       assert.equal((await call(pathname, { method })).status, 401, `${method} ${pathname} must require an account`);
     }
+
+    // A visitor may still *ask* about a repository or a build, and is told where it runs instead
+    // of being refused — five of the landing page's six examples used to dead-end on a bare 401.
+    const csrfToken = (await (await call("/api/session")).json()).csrfToken;
+    const ask = (operation, input) => call(`/api/operations/${operation}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tapp-csrf": csrfToken, origin: "https://app.runtapp.com" },
+      body: JSON.stringify({ input }),
+    });
+    for (const [operation, input] of [["open", "owner/repo"], ["open", "~/code/my-app"], ["explore-build", "app-release.apk"], ["explore-build", "com.company.app"]]) {
+      const answer = await ask(operation, input);
+      assert.equal(answer.status, 200, `${operation} ${input} should answer, not refuse`);
+      const body = await answer.json();
+      assert.equal(body.kind, "self-host", `${operation} ${input} should say where it runs`);
+      assert.match(body.command, /@aarwitz\/tapp@latest app/, `${operation} ${input} should hand over a command`);
+    }
+    // Asking must not have started anything or created a project on this machine.
+    assert.deepEqual((await (await call("/api/session")).json()).repositories, []);
 
     // A visitor does see evidence stamped as their own.
     const visitorId = cookie.split("=")[1];

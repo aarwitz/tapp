@@ -131,6 +131,17 @@ function parseVerbArgs(argv) {
 // ADR-0007: twelve public verbs, one engine. The resolver maps the public surface onto the
 // internal case labels below (which keep their original argument shapes), and keeps every older
 // verb working as a hidden alias that names its new form once on stderr.
+// Is this target a finished run rather than something to launch? A capture is a directory with
+// the markers a run writes, addressed by id, by path, or as "latest". Deliberately narrow: a
+// bundle id, a URL, a repo dir and an .apk must all still mean what they meant before.
+function looksLikeCapture(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.startsWith("-") || /^https?:\/\//i.test(raw)) return false;
+  if (raw === "latest") return true;
+  const marked = (dir) => { try { return fs.existsSync(path.join(dir, "ocqa-markers.txt")); } catch { return false; } };
+  return marked(path.resolve(raw)) || marked(path.join(tappHome, "captures", raw));
+}
+
 function artifactKind(file) {
   if (!file) return "flow";
   if (/\.ts$/.test(file)) return "contract";
@@ -156,10 +167,16 @@ function resolveCommand(command, rest) {
       if (goal >= 0 && rest[goal + 1] !== undefined) return { command: "focus", rest: [rest[goal + 1], ...rest.slice(0, goal), ...rest.slice(goal + 2)] };
       return { command, rest };
     }
-    case "look":
+    case "look": {
+      // A capture is a target like any other (`report [capture]` already takes one), so looking
+      // at a finished run is the same verb as looking at a running app — only the screen is
+      // recorded rather than live. See the 2026-10-21 amendment to ADR-0007.
+      const subject = rest.find((a) => !a.startsWith("--"));
+      if (looksLikeCapture(subject) || has("--frames") || has("--at")) return { command: "frames", rest };
       if (has("--sim")) return { command: "shot", rest: without("--sim") };
       if (has("--tree")) return { command: "tree", rest: without("--tree") };
       return { command: "open", rest };
+    }
     case "run":
       return { command: artifactKind(rest.find((a) => !a.startsWith("--"))), rest: ["run", ...rest] };
     case "validate": {
@@ -343,7 +360,7 @@ function safeCommandUsage(verb) {
     explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default)\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
     focus: "tapp explore --goal \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
-    open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  --sim: screenshot the booted simulator only (never builds or installs)\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
+    open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  <capture>|latest: the screens of a finished run — [--at N|\"screen\"] one frame, [--frames] contact sheets for scanning, [--json] the index\n  --sim: screenshot the booted simulator only (never builds or installs)\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
     tree: "tapp look --tree [target] [--platform ios|android|web] [--json] [--tap TEXT] [--wait-for TEXT]\n  iOS: inspects an installed app; never builds or installs.\n  Web: [--device \"iPhone 13\"] [--viewport 390x844]",
     shot: "tapp look --sim [--out FILE]",
     apps: "tapp apps",
@@ -2088,8 +2105,11 @@ switch (command) {
     // there is no way to offer them safely to an anonymous visitor on a shared machine.
     const publicAccess = flags.public === true;
     const publicOrigin = typeof flags.origin === "string" ? flags.origin : "";
-    if (publicAccess && !/^https:\/\/[^\s/]+$/.test(publicOrigin)) {
-      console.error("❌ --public needs --origin https://your.domain (the address visitors use)");
+    // https for anything real; plain http on loopback so the public mode can be dry-run locally
+    // before a tunnel or TLS terminator is in front of it.
+    const localOrigin = /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(publicOrigin);
+    if (publicAccess && !localOrigin && !/^https:\/\/[^\s/]+$/.test(publicOrigin)) {
+      console.error("❌ --public needs --origin https://your.domain (or an http://127.0.0.1:PORT origin to try it locally)");
       process.exit(2);
     }
     if (publicAccess && flags.port === undefined) { console.error("❌ --public needs an explicit --port"); process.exit(2); }
@@ -2114,6 +2134,67 @@ switch (command) {
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
     await new Promise(() => {});
+    break;
+  }
+
+  // `tapp look <capture>` — the screens of a finished run. Same verb as looking at a live app;
+  // the screen is recorded rather than in front of us (ADR-0007, amended 2026-10-21).
+  case "frames": {
+    const { flags, positionals } = parseVerbArgs(rest);
+    const { resolveCapture, captureIndex, selectState, extractFrame, contactSheets, writePlayableCopy } =
+      await import(path.join(packageRoot, "mcp-server", "src", "capture-frames.js"));
+
+    const dir = resolveCapture(positionals[0] || "latest");
+    if (!dir) { console.error(`❌ No capture found for ${positionals[0] || "latest"}`); process.exit(2); }
+    const index = captureIndex(dir);
+
+    if (flags.json !== undefined) {
+      const out = typeof flags.json === "string" ? flags.json : "";
+      const payload = JSON.stringify(index, null, 2);
+      if (out) { fs.writeFileSync(out, payload); console.log(`Wrote ${out}`); } else console.log(payload);
+      break;
+    }
+
+    console.log(`📼 ${index.capture} — ${index.states.length} screen(s), ${index.actions} action(s), ${index.findings} finding(s)`);
+    if (index.recording) {
+      console.log(`   recording: ${index.recording.file}${index.recording.indexed ? "" : "  (no frame index — re-run to seek by screen)"}`);
+      const playable = await writePlayableCopy(index.recording.path).catch(() => null);
+      if (playable) console.log(`   playable:  ${path.basename(playable)}`);
+    } else {
+      console.log("   recording: none — screenshots only");
+    }
+
+    if (flags.at !== undefined) {
+      const state = selectState(index, flags.at);
+      if (!state) { console.error(`❌ No screen matching '${flags.at}'. Screens: ${index.states.map((x) => `${x.index}:${x.screen}`).join(", ")}`); process.exit(2); }
+      const out = typeof flags.out === "string" ? flags.out : path.join(dir, `frame_${state.index}.png`);
+      const got = await extractFrame(index, state, out);
+      if (!got) { console.error("❌ No frame or screenshot exists for that screen"); process.exit(1); }
+      console.log(`\n${state.index}. ${state.screen}${state.url ? `  ${state.url}` : ""}`);
+      console.log(`   ${got.from === "recording" ? `frame at ${(got.atMs / 1000).toFixed(1)}s` : "screenshot"} → ${got.file}`);
+      if (state.findings.length) for (const f of state.findings) console.log(`   • ${f.severity} ${f.title}`);
+      break;
+    }
+
+    if (flags.frames) {
+      const out = typeof flags.frames === "string" ? flags.frames : path.join(dir, "frames");
+      const sheets = await contactSheets(index, out);
+      if (!sheets.length) { console.error("❌ Nothing to tile — the run recorded no video and no screenshots"); process.exit(1); }
+      console.log(`\n${sheets.length} contact sheet(s) — many frames per image, for scanning:`);
+      for (const sheet of sheets) console.log(`   ${sheet}`);
+      break;
+    }
+
+    // Default: the screens, with where each one is in the recording.
+    console.log("");
+    for (const state of index.states) {
+      const when = state.videoAtMs != null ? `${(state.videoAtMs / 1000).toFixed(1)}s` : state.t != null ? `${(state.t / 1000).toFixed(1)}s` : "—";
+      console.log(`${String(state.index).padStart(2)}. ${when.padStart(7)}  ${state.screen}${state.url ? `  ${state.url}` : ""}`);
+      if (state.screenshot) console.log(`              ${state.screenshot}`);
+      for (const f of state.findings) console.log(`              • ${f.severity} ${f.title}`);
+    }
+    console.log(`\nOne screen: tapp look ${index.capture} --at <n|"screen">`);
+    console.log(`Scan them:  tapp look ${index.capture} --frames`);
     break;
   }
 
@@ -2224,6 +2305,9 @@ Observe — look at the real app (no Tapp account or server required):
                            straight to a named screen · web: --watch · --platform ios|android|web · --actions N)
   tapp look [target]       One screen: summary + screenshot (--tree adds the accessibility tree,
                            --sim screenshots the booted simulator · web: --tap TEXT · --wait-for TEXT)
+                           A capture id, a capture path, or 'latest' reads a finished run instead:
+                           its screens with the moment each was reached (--at N|"screen" pulls one
+                           frame · --frames tiles many frames per image for scanning · --json)
 
 Replay — deterministic, keyless:
   tapp run FILE            Replay a committed Flow, Task, release contract, or Scenario

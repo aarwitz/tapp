@@ -686,7 +686,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   emit("CONTEXT", { ...(String(device || "").trim() ? { device: String(device).trim() } : {}), viewport: captureProfile.viewport, deviceScaleFactor: captureProfile.deviceScaleFactor ?? 1 });
   // Playwright records natively (no ffmpeg transcode needed, unlike simctl's .mov output) —
   // written to a Playwright-chosen filename in outDir, finalized only on context.close().
+  // The video and the markers have to share a clock, or a state's frame cannot be found without
+  // searching the whole recording. Record where the capture begins relative to the marker
+  // timebase; every STATE below carries the same `t`, so a frame is a seek.
+  const recordingStartedMs = Date.now() - startedAtMs;
   const context = await browser.newContext({ ...captureProfile, recordVideo: { dir: outDir, size: captureProfile.viewport } });
+  emit("RECORDING", { file: "exploration.webm", startsAtMs: recordingStartedMs, fps: 25 });
   await installWebListenerTracking(context);
   if (watch) await installWebWatchUi(context);
   const page = await context.newPage();
@@ -700,7 +705,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     // current page; the post-crawl outbound audit passes the link's source page explicitly so
     // a bad footer link is never attributed to whatever page happened to be visited last.
     const pageUrl = sourceUrl || page.url();
-    emit("ISSUE", { type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}), ...(evidence ? { evidence } : {}) });
+    emit("ISSUE", { t: Date.now() - startedAtMs, type, severity, title, screen, ...(target ? { target } : {}), ...(pageUrl && pageUrl !== "about:blank" ? { url: pageUrl } : {}), ...(evidence ? { evidence } : {}) });
   };
 
   // Async defect listeners: attribute to whatever screen is current when they fire.
@@ -856,7 +861,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     const screen = webScreenTitle(info, key);
     const evidenceKey = `${key}::${screen}`;
     currentScreen = screen;
-    emit("STATE", { screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
+    emit("STATE", { t: Date.now() - startedAtMs, screen, url: key, elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
     const completedNavigation = pendingNavigation;
     const transitionFrom = webTransitionOrigin(completedNavigation, lastScreen);
     const transitionAction = completedNavigation?.action || lastActionTarget;

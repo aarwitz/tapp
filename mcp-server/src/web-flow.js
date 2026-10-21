@@ -354,9 +354,19 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
     }
   } finally {
     await requestPhase(teardown);
+    // Playwright only finalizes a recording when its context closes, and names the file by an
+    // internal id. Capture the handle first, then give it the name the evidence page expects —
+    // the same convention exploration already uses.
+    const video = recordVideoDir && typeof page.video === "function" ? page.video() : null;
     // Test doubles for playwright may not model a context; a real one always closes.
     if (typeof context.close === "function") await context.close().catch(() => {});
     await browser.close().catch(() => {});
+    if (video) {
+      try {
+        const produced = await video.path();
+        if (produced && fs.existsSync(produced)) fs.renameSync(produced, path.join(recordVideoDir, "replay.webm"));
+      } catch { /* the replay result matters more than its recording */ }
+    }
   }
   return log.finish({ url: startUrl });
 }
