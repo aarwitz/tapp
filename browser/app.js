@@ -224,6 +224,16 @@ function renderLiveSession() {
     const hasFrame = !!$("#live-frame-image").getAttribute("src");
     $("#live-frame-loading").classList.toggle("hidden", hasFrame || !frameSource());
     $("#device-placeholder").classList.toggle("hidden", hasFrame);
+    // While a run is starting there is genuinely nothing to show yet — a browser is launching —
+    // but telling someone to "run a release check" while their run is already going reads as
+    // though nothing happened. Say what is actually true.
+    const waiting = !!state.activeJob && !hasFrame;
+    const title = $("#device-placeholder-title");
+    const detail = $("#device-placeholder-detail");
+    if (title) title.textContent = waiting ? "Opening the browser…" : "No live feed yet";
+    if (detail) detail.textContent = waiting
+      ? "The first screen appears here as soon as the page is rendered."
+      : "Run a release check or open a live session to see the real application here.";
     if (!state.activeJob) $("#live-screen-title").textContent = hasFrame ? $("#live-screen-title").textContent : "—";
     renderDeviceChrome();
     return;

@@ -304,7 +304,14 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
   const pw = playwright || await loadPlaywright();
   const { webBrowserLaunchOptions } = await import("./web-explorer.js");
   const browser = await pw.chromium.launch(webBrowserLaunchOptions());
-  const context = await browser.newContext({...webContextOptions({ device, viewport, devices: pw.devices }),...(recordVideoDir ? {recordVideo:{dir:recordVideoDir}} : {})});
+  const contextOptions = webContextOptions({ device, viewport, devices: pw.devices });
+  // Without an explicit size Playwright fits the recording into 800px, so a replay filmed at a
+  // desktop viewport came out small and soft however large the window was. Film at the size the
+  // run is actually rendered at, which is what exploration already does.
+  const context = await browser.newContext({
+    ...contextOptions,
+    ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir, ...(contextOptions.viewport ? { size: contextOptions.viewport } : {}) } } : {}),
+  });
   const page = await context.newPage();
   const timeout = Number(flow.timeoutMs ?? flow.timeout) || DEFAULT_TIMEOUT;
   page.setDefaultTimeout(timeout);

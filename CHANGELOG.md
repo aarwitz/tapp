@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.2
+
+- **A replay is filmed at the size it runs at.** Without an explicit size Playwright fits a
+  recording into 800px, so `tapp run --viewport 1440x900` produced a small, soft video whatever
+  the run was rendered at. Exploration already passed its viewport through; replay now does too.
+- **The device panel stops telling you to start a run that is already running.** While the
+  browser is launching there is nothing to show yet, but "Run a release check or open a live
+  session" during your own run reads as though nothing happened. It now says what is true.
+
 ## 0.20.1
 
 - **The stage shows what a person would be looking at.** A website audit put its full-page
