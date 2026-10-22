@@ -4,13 +4,13 @@
   "platform": "web",
   "target": "http://127.0.0.1:9/",
   "project": {
-    "dir": "/tmp/tmp.WryiOg3zfZ",
-    "name": "tmp.WryiOg3zfZ",
+    "dir": "/tmp/tmp.VDtEnn2WLd",
+    "name": "tmp.VDtEnn2WLd",
     "remote": null
   },
   "tool": {
     "name": "tapp",
-    "version": "0.24.0"
+    "version": "0.24.1"
   },
-  "createdAt": "2026-10-22T16:38:10.554Z"
+  "createdAt": "2026-10-22T16:50:24.172Z"
 }

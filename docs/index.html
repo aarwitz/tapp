@@ -242,12 +242,6 @@
   .mini-comment .title { font-weight: 700; color: var(--green); margin-bottom: 0.4rem; }
   .mini-comment .row { display: flex; justify-content: space-between; color: var(--fg-dim); border-top: 1px solid var(--border); padding: 0.3rem 0; }
 
-  .pilot-panel { border-radius: 16px; padding: 2.2rem; background: linear-gradient(135deg, #10182d, #193c80); color: #fff; display: grid; grid-template-columns: 1.25fr 0.75fr; gap: 2rem; align-items: center; }
-  .pilot-panel h2 { font-size: 2rem; }
-  .pilot-panel p { color: #d4def2; margin: 0.7rem 0 0; }
-  .pilot-panel .btn.primary { background: #fff; color: #172d5d; justify-content: center; }
-  .pilot-panel .small { font-size: 0.78rem; color: #b9c7e4; text-align: center; margin-top: 0.65rem; }
-  @media (max-width: 720px) { .pilot-panel { grid-template-columns: 1fr; padding: 1.6rem; } }
 
   footer { border-top: 1px solid var(--border); padding: 2.5rem 0; color: var(--fg-dim); font-size: 0.85rem; }
   footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
@@ -255,6 +249,13 @@
 
   .tag { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
     color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 0.2rem 0.55rem; border-radius: 999px; margin-bottom: 0.8rem; }
+.hero-sub { max-width: 46rem; margin: 0.4rem auto 1.1rem; text-align: center; font-size: 1.08rem; line-height: 1.55; opacity: .85; }
+.story-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.1rem; margin-top: 1.6rem; }
+.story-grid figure { margin: 0; }
+.story-grid img { width: 100%; height: auto; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); display: block; }
+.story-grid figcaption { font-size: .92rem; line-height: 1.45; margin-top: .55rem; opacity: .85; }
+.story-grid figcaption b { display: block; opacity: 1; margin-bottom: .1rem; }
+@media (max-width: 760px) { .story-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -268,13 +269,13 @@
       <a href="#platforms">Platforms</a>
       <a href="https://github.com/aarwitz/tapp">GitHub</a>
       <a href="https://www.npmjs.com/package/@aarwitz/tapp">npm</a>
-      <a href="#pilot">Pilot</a>
     </nav>
   </div>
 </header>
 
 <div class="hero wrap">
   <h1>Point tapp at anything.</h1>
+  <p class="hero-sub">It goes inside — asks you for a test account the first time, remembers it — and keeps the journeys that matter working.</p>
   <form class="prompt" id="prompt-form" autocomplete="off" novalidate>
     <input id="prompt-input" type="text" spellcheck="false" autocapitalize="off" autocorrect="off"
            placeholder="runtapp.com"
@@ -295,6 +296,29 @@
     </div>
   </div>
 </div>
+
+<section id="inside">
+  <div class="wrap">
+    <span class="tag">Behind the sign-in</span>
+    <h2>A run becomes a journey you own.</h2>
+    <p class="lead">
+      Real applications live behind a login, so a crawl never meets them. tapp stops at the sign-in
+      and <strong>asks you</strong> in the chat. What you type is kept encrypted, used only to sign
+      in, and never shown again — the next run starts inside. When a run gets somewhere, tapp offers
+      to <strong>keep it as a journey</strong>: it replays exactly that path, every day, and tells you
+      the moment it stops working.
+    </p>
+    <div class="story-grid">
+      <figure><img src="/assets/studio-ask.jpg" alt="The tapp Studio stopped at a sign-in page, asking in the chat for an email and password, with a checkbox to remember them for this site" loading="lazy"><figcaption><b>1 · It asks.</b> A sign-in it has no account for pauses the run and asks — once.</figcaption></figure>
+      <figure><img src="/assets/studio-keep.jpg" alt="The tapp Studio inside the application after signing in, offering to keep the run as a journey named after where it went" loading="lazy"><figcaption><b>2 · It goes inside, then offers to keep the path.</b> Sign in → Dashboard → Orders → Settings, 13 steps, one click.</figcaption></figure>
+      <figure><img src="/assets/studio-journeys.jpg" alt="The Journeys panel listing kept journeys with a passing status and the time of the last check, next to the test accounts tapp holds" loading="lazy"><figcaption><b>3 · It keeps it working.</b> Every journey, with how its last check went. Forget a test account any time.</figcaption></figure>
+    </div>
+    <div class="cta-row" style="margin-top:1.6rem">
+      <a class="btn primary" href="https://app.runtapp.com/">Open the Studio</a>
+      <a class="btn ghost" href="https://github.com/aarwitz/tapp/blob/main/docs/BROWSER-PRODUCT.md#accounts-on-a-public-studio">How test accounts are kept</a>
+    </div>
+  </div>
+</section>
 
 <section class="flush" id="proof">
   <div class="wrap">
@@ -347,7 +371,7 @@
         <div class="icon">🪟</div>
         <h3>Windows desktop</h3>
         <p>WPF, WinForms, and WinUI apps, driven through Windows UI Automation — the same
-        commands, evidence, and CI check. Early Windows runs are set up through the pilot.</p>
+        commands, evidence, and CI check. Early Windows runs are set up with us — write to hello@runtapp.com.</p>
       </div>
     </div>
     <p class="lead" style="margin-top:1.4rem">
@@ -433,9 +457,9 @@
     <span class="tag">On every pull request</span>
     <h2>Turn the journeys you care about into merge checks.</h2>
     <p class="lead">
-      Pick the journeys that must keep working — checkout, sign-in, onboarding — and tapp runs them
-      on the real app for every PR. Each PR gets one answer, with evidence:
-      <strong>did this change break something that used to work?</strong>
+      A journey you kept in the Studio is a file your coding agent can commit — <code>.tapp/flows/</code>
+      — and tapp runs every committed journey on the real app for every PR. Each PR gets one answer,
+      with evidence: <strong>did this change break something that used to work?</strong>
     </p>
     <div class="gate-panel">
       <ul>
@@ -459,21 +483,6 @@
   </div>
 </section>
 
-<section id="pilot">
-  <div class="wrap">
-    <div class="pilot-panel">
-      <div>
-        <span class="tag">Founding tapp Teams</span>
-        <h2>Try it on your real app, with help.</h2>
-        <p>We're taking a small number of paid pilot teams. We set tapp up on your repo, pick the journeys that matter, and wire up the CI check — together. tapp itself is MIT licensed and runs on infrastructure you control.</p>
-      </div>
-      <div>
-        <a class="btn primary" href="https://github.com/aarwitz/tapp/issues/new?template=founding-pilot.yml">Apply for the founding pilot →</a>
-        <div class="small">The application opens a public GitHub issue. Do not include private code, credentials, or customer data.</div>
-      </div>
-    </div>
-  </div>
-</section>
 
 <footer>
   <div class="wrap">

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.24.1
+
+- **Kept journeys are checked every day.** On a public Studio, every account's kept web journeys
+  are replayed on a schedule (`TAPP_JOURNEY_CHECK_HOURS`, default 24), each in its owner's lane so
+  a check never queues ahead of the owner's own run, and the Journeys panel shows the result —
+  that is the product's answer to "make sure this always works". A restart does not re-run
+  everything: a journey is due only when its last result is older than the interval.
+- **runtapp.com leads with what tapp does behind a sign-in.** A new section shows the real
+  Studio: it asks at the login, goes inside and offers to keep the path, and lists every journey
+  with how its last check went. The pilot intake is gone.
+- A visitor's read-only audit now says what the next step is: sign in and tapp goes inside.
+- `replayJourney` is shared by the Run button and the daily check; `dueJourneys` is tested.
+
 ## 0.24.0
 
 Slice 3 of ADR-0009: **a proven run becomes a journey you own.**

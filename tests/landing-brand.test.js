@@ -33,7 +33,11 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /assets\/tapp-desktop-demo\.mp4/);
   assert.match(index, /assets\/tapp-film-poster\.jpg/);
   assert.match(index, /evidence\/webdemo\/report\.html/);
-  assert.match(index, /founding-pilot\.yml/);
+  // The pilot intake was retired on 2026-10-22 (owner decision: "there is no founding pilot");
+  // the landing now leads with what the Studio does behind a sign-in, shown with real frames.
+  assert.doesNotMatch(index, /founding-pilot\.yml|Founding tapp Teams/);
+  assert.match(index, /A run becomes a journey you own/);
+  for (const frame of ["studio-ask.jpg", "studio-keep.jpg", "studio-journeys.jpg"]) assert.match(index, new RegExp(`assets/${frame.replace(".", "\\.")}`));
   assert.match(index, /og:image" content="https:\/\/runtapp\.com\/assets\/tapp-social\.png/);
   assert.doesNotMatch(index, /href="#"/);
   assert.doesNotMatch(index, /onclick=/);
@@ -41,7 +45,7 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.doesNotMatch(index, /tapp-mcp|npmjs\.com\/package\/runtapp|npx(?:\s+-y)?\s+runtapp|\bAutoTap\b/i);
 });
 
-test("landing proof assets and public pilot intake ship together", () => {
+test("landing proof assets ship together", () => {
   for (const file of [
     "assets/tapp-mark.svg",
     "assets/tapp-icon.png",
@@ -50,6 +54,9 @@ test("landing proof assets and public pilot intake ship together", () => {
     "assets/tapp-film-poster.jpg",
     "assets/tapp-desktop-demo.mp4",
     "assets/tapp-desktop-demo-poster.jpg",
+    "assets/studio-ask.jpg",
+    "assets/studio-keep.jpg",
+    "assets/studio-journeys.jpg",
     "evidence/webdemo/report.html",
   ]) {
     assert.ok(fs.existsSync(path.join(landingRoot, file)), `${file} exists`);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeInteractiveElements, startBrowserProduct } from "../mcp-server/src/browser-product.js";
+import { normalizeInteractiveElements, startBrowserProduct, dueJourneys } from "../mcp-server/src/browser-product.js";
 
 function cookieFrom(response) {
   return response.headers.get("set-cookie").split(";", 1)[0];
@@ -687,4 +687,16 @@ test("an account keeps a run that got somewhere as a journey, sees its status, a
     assert.deepEqual((await (await call("/api/journeys")).json()).journeys, []);
     assert.equal(fs.existsSync(file), false);
   } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
+});
+
+test("a kept journey is due for its daily check when its last result is older than the interval", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const now = Date.parse("2026-10-22T18:00:00Z");
+  const journeys = [
+    { slug: "never", platform: "web", status: null },
+    { slug: "fresh", platform: "web", status: { passed: true, at: "2026-10-22T12:00:00Z" } },
+    { slug: "stale", platform: "web", status: { passed: false, at: "2026-10-21T12:00:00Z" } },
+    { slug: "ios", platform: "ios", status: null },
+  ];
+  assert.deepEqual(dueJourneys(journeys, { intervalMs: day, now }).map((j) => j.slug), ["never", "stale"], "never-run and day-old journeys are due; a fresh one and a non-web one are not");
 });

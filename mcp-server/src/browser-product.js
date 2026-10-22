@@ -259,6 +259,57 @@ function markPromptStarted(structured) {
   } catch { /* listing is a convenience; the capture is the evidence */ }
 }
 
+// Replay one web journey and record how it went. Shared by the Studio's Run button and the
+// daily check, so both leave the same status and the same evidence behind.
+async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = null, progress = () => {} }) {
+  // A journey that signs in does so as the test account tapp was told about for that site: the
+  // values come from the encrypted actor store at replay and never from the file.
+  const variables = {};
+  let storageStatePath = "";
+  if (flow.url && (flow.actor || (flow.steps || []).some((step) => step && typeof step === "object" && "login" in step))) {
+    const actors = new ActorStore(actorRoot ? { root: actorRoot } : {});
+    const record = actors.read(flow.url, flow.actor || "default");
+    if (record?.credentials?.email) variables.TEST_EMAIL = record.credentials.email;
+    if (record?.credentials?.password) variables.TEST_PASSWORD = record.credentials.password;
+    // A journey that began inside replays from the actor's saved session, like the run did.
+    if (flow.actor) storageStatePath = actors.sessionFile(flow.url, flow.actor) || "";
+  }
+  const captureId = `flow-web-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
+  const evidenceDir = path.join(captureRoot(), captureId);
+  fs.mkdirSync(evidenceDir, { recursive: true });
+  if (ownerKey) setCaptureOwner(captureId, ownerKey);
+  progress({ phase: "runtime", text: `Replaying ${flow.name || slug}` });
+  const { runWebFlow } = await import("./web-flow.js");
+  let result;
+  try { result = await runWebFlow({ flow, variables, storageStatePath, logPath: path.join(evidenceDir, "flow.log"), screenshotDir: evidenceDir, recordVideoDir: evidenceDir }); }
+  finally { if (storageStatePath) { try { fs.rmSync(storageStatePath, { force: true }); } catch { /* temp */ } } }
+  // The runner's log is marker lines; the chat wants one plain sentence per step.
+  for (const line of result.lines || []) {
+    const raw = typeof line === "string" ? line : (line.text || "");
+    const step = raw.match(/^OCQA_FLOW_STEP:(\{.*\})$/);
+    if (step) {
+      try {
+        const st = JSON.parse(step[1]);
+        const what = st.action === "login" ? "Signed in" : st.action === "wait_for" ? `Reached ${st.target}` : st.action === "assert_screen" ? `On ${st.target}` : st.action === "tap" ? `Tapped "${st.target}"` : `${st.action} ${st.target || ""}`.trim();
+        progress({ phase: "replay", text: st.status === "pass" ? `${what}` : `Step ${st.index}: ${what} — ${st.detail || "failed"}` });
+      } catch { progress({ phase: "replay", text: raw }); }
+      continue;
+    }
+    if (/^OCQA_(FLOW_RESULT|ISSUE):/.test(raw)) continue;
+    if (raw) progress({ phase: "replay", text: raw });
+  }
+  const status = store.recordRun(slug, { passed: result.passed, captureId, executed: result.executed, total: result.total, failed: result.failed });
+  return { kind: "journey", name: flow.name || slug, slug, passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, status, capture: { id: captureId, path: evidenceDir } };
+}
+
+// "Make sure this always works": kept journeys on a public Studio are replayed on a schedule,
+// each in its owner's lane so a check never queues ahead of the owner's own run. A journey is
+// due when its last result is older than the interval (TAPP_JOURNEY_CHECK_HOURS, default 24);
+// a restart therefore does not re-run everything, and a busy lane simply waits for the next tick.
+export function dueJourneys(journeys, { intervalMs, now = Date.now() }) {
+  return journeys.filter((j) => (j.platform || "web") === "web" && (!j.status || now - Date.parse(j.status.at || 0) >= intervalMs));
+}
+
 function openBrowser(url) {
   const invocation = process.platform === "darwin" ? ["open", [url]]
     : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
@@ -586,6 +637,37 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
     });
     return job;
   };
+
+  // Daily checks of every account's kept journeys (public Studio only; a local Studio is not
+  // always running, and its journeys are the repository's to guard in CI).
+  const checkIntervalMs = Math.max(1, Number(process.env.TAPP_JOURNEY_CHECK_HOURS) || 24) * 60 * 60 * 1000;
+  const runJourneyChecks = async () => {
+    if (!accounts) return;
+    const journeysRoot = path.join(accounts.root, "journeys");
+    let owners = [];
+    try { owners = fs.readdirSync(journeysRoot, { withFileTypes: true }).filter((d) => d.isDirectory() && /^[a-f0-9]{24}$/.test(d.name)).map((d) => d.name); } catch { return; }
+    for (const accountId of owners) {
+      const store = JourneyStore.forAccount(accountId);
+      const ownerKey = `acct:${accountId}`;
+      for (const journey of dueJourneys(store.list(), { intervalMs: checkIntervalMs })) {
+        const flowPath = store.flowPath(journey.slug);
+        let flow;
+        try { const { loadFlowFile } = await import("./flow-runtime.js"); flow = loadFlowFile(flowPath); } catch { continue; }
+        let job;
+        try {
+          job = startJob("check-journey", (progress) => replayJourney({ store, slug: journey.slug, flow, actorRoot: accounts.actorRoot(accountId), ownerKey, progress }), null, { lane: ownerKey });
+        } catch { continue; /* the owner is busy; next tick */ }
+        job.ownerKey = ownerKey;
+        // One at a time per owner: wait for this check before starting the next.
+        await new Promise((resolve) => { const tick = () => (job.status === "running" ? setTimeout(tick, 1000) : resolve()); tick(); });
+        logUsage("journey.checked", { owner: ownerKey.slice(0, 13), passed: job.result?.passed ?? null });
+      }
+    }
+  };
+  const checkTimer = publicAccess ? setInterval(() => { runJourneyChecks().catch(() => {}); }, 60 * 60 * 1000) : null;
+  if (checkTimer?.unref) checkTimer.unref();
+  const firstCheck = publicAccess ? setTimeout(() => { runJourneyChecks().catch(() => {}); }, 10 * 60 * 1000) : null;
+  if (firstCheck?.unref) firstCheck.unref();
 
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", origin || "http://127.0.0.1");
@@ -1103,46 +1185,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             message: `${flow.name || name} runs on ${platform === "android" ? "an Android device or emulator" : "an iOS simulator"}, which the Studio does not have. Run it where that is: npx -y @aarwitz/tapp@latest run ${shown}` });
           return;
         }
-        // A journey that signs in does so as the test account tapp was told about for that
-        // site: the values come from the encrypted actor store at replay and never from the file.
-        const variables = {};
-        let storageStatePath = "";
-        if (flow.url && (flow.actor || (flow.steps || []).some((step) => step && typeof step === "object" && "login" in step))) {
-          const actors = new ActorStore(actorRootFor() ? { root: actorRootFor() } : {});
-          const record = actors.read(flow.url, flow.actor || "default");
-          if (record?.credentials?.email) variables.TEST_EMAIL = record.credentials.email;
-          if (record?.credentials?.password) variables.TEST_PASSWORD = record.credentials.password;
-          // A journey that began inside replays from the actor's saved session, like the run did.
-          if (flow.actor) storageStatePath = actors.sessionFile(flow.url, flow.actor) || "";
-        }
-        const captureId = `flow-web-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
-        const evidenceDir = path.join(captureRoot(), captureId);
-        fs.mkdirSync(evidenceDir, { recursive: true });
+        const slug = root ? name : slugify(name);
         const job = startJob(operation, async (progress) => {
-          progress({ phase: "runtime", text: `Replaying ${flow.name || name}` });
-          const { runWebFlow } = await import("./web-flow.js");
-          let result;
-          try { result = await runWebFlow({ flow, variables, storageStatePath, logPath: path.join(evidenceDir, "flow.log"), screenshotDir: evidenceDir, recordVideoDir: evidenceDir }); }
-          finally { if (storageStatePath) { try { fs.rmSync(storageStatePath, { force: true }); } catch { /* temp */ } } }
-          // The runner's log is marker lines; the chat wants one plain sentence per step.
-          for (const line of result.lines || []) {
-            const raw = typeof line === "string" ? line : (line.text || "");
-            const step = raw.match(/^OCQA_FLOW_STEP:(\{.*\})$/);
-            if (step) {
-              try {
-                const s = JSON.parse(step[1]);
-                const what = s.action === "login" ? "Signed in" : s.action === "wait_for" ? `Reached ${s.target}` : s.action === "assert_screen" ? `On ${s.target}` : s.action === "tap" ? `Tapped "${s.target}"` : `${s.action} ${s.target || ""}`.trim();
-                progress({ phase: "replay", text: s.status === "pass" ? `${what}` : `Step ${s.index}: ${what} — ${s.detail || "failed"}` });
-              } catch { progress({ phase: "replay", text: raw }); }
-              continue;
-            }
-            if (/^OCQA_(FLOW_RESULT|ISSUE):/.test(raw)) continue;
-            if (raw) progress({ phase: "replay", text: raw });
-          }
-          const status = store.recordRun(root ? name : slugify(name), { passed: result.passed, captureId, executed: result.executed, total: result.total, failed: result.failed });
-          if (ownerKey) setCaptureOwner(captureId, ownerKey);
+          const result = await replayJourney({ store, slug, flow, actorRoot: actorRootFor() || "", ownerKey, progress });
           logUsage("journey.run", { owner: (ownerKey || "operator").slice(0, 13), passed: result.passed });
-          return { kind: "journey", name: flow.name || name, slug: root ? name : slugify(name), passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, status, capture: { id: captureId, path: evidenceDir } };
+          return result;
         }, null, { lane: ownerKey || OPERATOR_LANE });
         job.ownerKey = ownerKey;
         json(response, 202, { job: publicJob(job, { hosted }) });
@@ -1327,6 +1374,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       if (usageHeartbeat) clearInterval(usageHeartbeat);
+      if (checkTimer) clearInterval(checkTimer);
+      if (firstCheck) clearTimeout(firstCheck);
       if (egressProxy) { await egressProxy.close().catch(() => {}); restoreEgressEnv(); }
       registry.close();
     },

@@ -369,7 +369,9 @@ function renderJourneys() {
   const note = $("#journeys-note");
   if (note) note.textContent = journeys.some((j) => j.source === "repo")
     ? "Committed under .tapp/flows/. Each replays exactly as written — no model, no key — and is what the release gate guards."
-    : "Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.";
+    : state.session?.access === "account"
+      ? "Each replays exactly as written — no model, no key. Keep one from any run that got somewhere. tapp re-runs every kept journey daily and shows the result here."
+      : "Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.";
   if (!journeys.length) { node.innerHTML = '<div class="empty">No journeys yet. Explore a site — when a run gets somewhere, tapp offers to keep it.</div>'; return; }
   const groups = new Map();
   for (const journey of journeys) { const key = journey.group || ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(journey); }
@@ -640,7 +642,7 @@ async function finishTranscript(name, job) {
       if (items.length) pushLine({ kind: "attachments", items });
     } catch { /* the summary still renders */ }
   }
-  pushLine({ kind: "summary", ...summarize(name, result.exploration ? { ...result, report } : result) });
+  pushLine({ kind: "summary", ...summarize(name, result.exploration ? { ...result, report } : result, { access: state.session?.access || "" }) });
 }
 
 function seedIdleTranscript() {

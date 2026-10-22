@@ -85,12 +85,15 @@ export function narrateFinding(finding = {}) {
 
 // The summary card at the end of a run: the gate's outcome when there is one, otherwise what the
 // engine's headline says it observed. Never a score.
-export function summarize(name, result = {}) {
+export function summarize(name, result = {}, { access = "" } = {}) {
   const report = result?.report || result;
   const gateOutcome = report?.gate?.outcome || (report?.gate?.failed === true ? "fail" : report?.gate ? "pass" : null);
   if (name === "audit") {
     const issues = result.issueCount || 0;
-    return { tone: issues ? "caution" : "ready", pill: issues ? `${issues} issue${issues === 1 ? "" : "s"} found` : "✓ Nothing broken observed", text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "This says the pages are served without structural defects, not that the site works."}` };
+    // A visitor only ever gets the read-only look; say what the next step is, because the
+    // interesting part of any real application is behind its sign-in.
+    const next = access === "anonymous" ? " Sign in and tapp will go inside — and ask you for a test account if it meets a sign-in." : "";
+    return { tone: issues ? "caution" : "ready", pill: issues ? `${issues} issue${issues === 1 ? "" : "s"} found` : "✓ Nothing broken observed", text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "This says the pages are served without structural defects, not that the site works."}${next}` };
   }
   if (gateOutcome) {
     const tone = { pass: "ready", fail: "blocked", inconclusive: "caution" }[gateOutcome] || "caution";
