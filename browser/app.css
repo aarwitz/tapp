@@ -582,3 +582,15 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .journey-status.never { background:var(--control); color:var(--muted); }
 .journey-actions { display:flex; gap:6px; }
 .chat-keep .ask-field input { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--tapp-border); background:rgba(0,0,0,.25); color:var(--tapp-text); }
+
+/* Agent access (ADR-0009 slice 4). */
+.token-row { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--tapp-border); font-size:13px; }
+.token-row:last-child { border-bottom:0; }
+.token-row small { color:var(--muted); }
+.token-reveal { margin:10px 0 2px; padding:12px; border-radius:var(--tapp-radius-lg, 12px); border:1px solid var(--tapp-accent, #4f6cf7); background:rgba(15,26,34,.85); display:grid; gap:8px; }
+.token-reveal p { margin:0; font-size:13px; line-height:1.5; }
+.token-reveal code { display:block; overflow-x:auto; white-space:pre; font-size:12px; padding:9px 10px; border-radius:8px; background:rgba(0,0,0,.35); border:1px solid var(--tapp-border); }
+.token-reveal .ask-actions { display:flex; gap:8px; }
+.token-reveal button { font:inherit; font-size:12px; padding:7px 12px; border-radius:8px; cursor:pointer; }
+.owned-link { text-align:center; margin-top:10px; }
+.owned-link button { font:inherit; font-size:13px; padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--control); color:inherit; cursor:pointer; }

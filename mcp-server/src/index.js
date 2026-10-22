@@ -2797,6 +2797,9 @@ export const TOOLS = [
       properties: {
         ...AUTH,
         flowPath: { type: "string", description: "Repo-relative Flow (.yml/.json), e.g. .tapp/flows/login.yml" },
+        journey: { type: "string", description: "Name of a journey on a hosted Studio to replay there (with `studio` + `token`, or $TAPP_STUDIO/$TAPP_TOKEN)" },
+        studio: { type: "string", description: "Hosted Studio origin for `journey`, e.g. https://app.runtapp.com (default $TAPP_STUDIO)" },
+        token: { type: "string", description: "Personal access token for `journey` (default $TAPP_TOKEN)" },
         flow: { type: "object", description: "Inline Flow instead of flowPath" },
         taskPath: { type: "string", description: "Repo-relative .tapp/tasks/*.yml Task" },
         inputs: { type: "object", additionalProperties: { type: "string" }, description: "Task inputs; secrets as $ENV placeholders, never plaintext" },
@@ -2960,7 +2963,9 @@ export const TOOLS = [
     title: "Evidence: recent runs, or one run's summary",
     description:
       "Without captureId: list recent capture runs for THIS project (other projects' captures are counted but hidden unless allProjects). " +
-      "With captureId: that run's summary metadata. Cite only the capture a command just returned as evidence.",
+      "With captureId: that run's summary metadata. Cite only the capture a command just returned as evidence. " +
+      "With journeys:true: the journeys you own and how each one's last check went — this repository's committed Flows, or, with " +
+      "`studio` + `token` (or $TAPP_STUDIO/$TAPP_TOKEN), the ones on your hosted Studio. That is how to answer \"is everything still working?\".",
     inputSchema: {
       type: "object",
       properties: {
@@ -2968,6 +2973,9 @@ export const TOOLS = [
         runPath: { type: "string", description: "Absolute capture path override (must stay under captures/)" },
         limit: { type: "integer", minimum: 1, maximum: 100, default: 10 },
         allProjects: { type: "boolean", default: false, description: "Include other projects' and pre-provenance captures" },
+        journeys: { type: "boolean", default: false, description: "List journeys and their last result instead of captures" },
+        studio: { type: "string", description: "journeys: a hosted Studio origin, e.g. https://app.runtapp.com (default $TAPP_STUDIO)" },
+        token: { type: "string", description: "journeys: personal access token from the Studio's “Your coding agent” card (default $TAPP_TOKEN)" },
       },
     },
   },
@@ -3381,6 +3389,59 @@ async function handleTool(name, args = {}) {
       `Screens: ${screens.length ? screens.slice(0, 8).join(", ") : "none"}${screens.length > 8 ? ` (+${screens.length - 8} more)` : ""}`,
     ];
     return richResult(L.join("\n"), parsed);
+  }
+
+  // The journeys this agent's owner owns, and how each one's last check went. Locally that is
+  // the repository's committed Flows; with a hosted Studio and a token it is the account's.
+  if (name === "tapp_journeys") {
+    const { studioConfig, listStudioJourneys, formatJourneyStatus } = await import("./studio-client.js");
+    let config = null;
+    try { config = studioConfig({ studio: args.studio, token: args.token }); }
+    catch (error) { return errorResult(error.message); }
+    let journeys = [];
+    let where = "";
+    if (config) {
+      try { journeys = await listStudioJourneys(config); } catch (error) { return errorResult(error.message); }
+      where = config.origin;
+    } else {
+      const { JourneyStore } = await import("./journeys.js");
+      const root = workspaceRoot;
+      if (fs.existsSync(path.join(root, ".tapp", "flows"))) {
+        const { readProductProject } = await import("./product-operations.js");
+        const store = JourneyStore.forRepository(root);
+        journeys = (readProductProject({ projectDir: root }).flows || []).map((flow) => {
+          const slug = flow.relativePath.replace(/^\.tapp\/flows\//, "").replace(/\.(?:ya?ml|json)$/i, "");
+          return { name: flow.name, slug, platform: flow.platform, steps: flow.steps, source: "repo", status: store.status(slug) };
+        });
+        where = ".tapp/flows";
+      } else {
+        journeys = JourneyStore.forMachine().list();
+        where = "this machine";
+      }
+    }
+    const failing = journeys.filter((j) => j.status && !j.status.passed);
+    const header = journeys.length
+      ? `${journeys.length} journey(s) · ${where}${failing.length ? ` — ${failing.length} FAILING` : ""}`
+      : `No journeys yet (${where}). Explore an app; when a run gets somewhere, tapp offers to keep it.`;
+    return richResult([header, ...journeys.map((j) => `  ${formatJourneyStatus(j)}`)].join("\n"), { where, journeys, failing: failing.length });
+  }
+
+  // Replay one journey on a hosted Studio, as the owner, and report the verdict.
+  if (name === "tapp_journey_run") {
+    const { studioConfig, runStudioJourney } = await import("./studio-client.js");
+    let config = null;
+    try { config = studioConfig({ studio: args.studio, token: args.token }); }
+    catch (error) { return errorResult(error.message); }
+    if (!config) return errorResult("`journey` replays on a hosted Studio: pass `studio` + `token` (or set $TAPP_STUDIO/$TAPP_TOKEN). To replay a committed Flow here, use flowPath.");
+    const lines = [];
+    let result;
+    try { result = await runStudioJourney(config, String(args.journey).replace(/\.ya?ml$/i, ""), { onProgress: (line) => lines.push(line) }); }
+    catch (error) { return errorResult(error.message); }
+    if (result.kind === "self-host") return richResult(`${result.message}`, result);
+    const headline = result.passed
+      ? `✓ ${result.name} — ${result.executed}/${result.total} steps on ${config.origin}`
+      : `✗ ${result.name} — ${result.executed}/${result.total} steps, ${result.failed} failed, on ${config.origin}`;
+    return richResult([headline, ...lines.map((line) => `  ${line}`)].join("\n"), result);
   }
 
   if (name === "tapp_list_captures") {
@@ -4608,6 +4669,7 @@ export async function routePublicTool(name, args = {}) {
       return handleTool(tree === true ? "tapp_ui_tree" : "tapp_screenshot", rest);
     }
     case "tapp_run": {
+      if (isNonEmptyString(rest.journey)) return handleTool("tapp_journey_run", rest);
       if (rest.flow || isNonEmptyString(rest.flowPath)) return handleTool("tapp_flow_run", rest);
       if (rest.scenario || isNonEmptyString(rest.scenarioPath)) return handleTool("tapp_scenario_run", rest);
       if (isNonEmptyString(rest.contractPath)) return handleTool("tapp_release_contract", { ...rest, operation: "run" });
@@ -4632,6 +4694,7 @@ export async function routePublicTool(name, args = {}) {
     case "tapp_ci":
       return handleTool("tapp_ci_setup", { ...rest, operation: action || rest.operation || "inspect" });
     case "tapp_report":
+      if (rest.journeys === true) return handleTool("tapp_journeys", rest);
       if (isNonEmptyString(rest.captureId) || isNonEmptyString(rest.runPath)) return handleTool("tapp_capture_summary", { runId: rest.captureId, runPath: rest.runPath });
       return handleTool("tapp_list_captures", rest);
     case "tapp_session": {

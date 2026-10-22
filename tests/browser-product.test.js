@@ -717,3 +717,58 @@ test("a journey that types its own credentials is never handed a saved session",
   assert.deepEqual(journeySignInPlan({ steps: [{ tap: "Orders" }] }), { signsIn: false, usesSession: false });
   assert.deepEqual(journeySignInPlan({}), { signsIn: false, usesSession: false });
 });
+
+test("a personal access token lets a coding agent act as its owner, and only as its owner", async () => {
+  // ADR-0009 slice 4: the owner's agent asks "is everything still passing?" without a browser.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-agent-home-"));
+  const previous = process.env.TAPP_HOME; process.env.TAPP_HOME = home;
+  const origin = "https://app.runtapp.com";
+  let nextEmail = "owner@example.test";
+  const accessVerifier = { verify: async () => ({ email: nextEmail }) };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-agent-ws-")), accessVerifier });
+  const signIn = async () => {
+    const res = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = res.headers.get("set-cookie").split(";")[0];
+    const { csrfToken } = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    return { cookie, csrfToken };
+  };
+  try {
+    const owner = await signIn();
+    const asOwner = (p, init = {}) => fetch(`${product.origin}${p}`, { ...init, headers: { cookie: owner.cookie, origin, "x-tapp-csrf": owner.csrfToken, "content-type": "application/json", ...(init.headers || {}) } });
+
+    const issued = await (await asOwner("/api/tokens", { method: "POST", body: JSON.stringify({ label: "Claude Code" }) })).json();
+    assert.match(issued.token, /^tapp_/);
+    assert.deepEqual((await (await asOwner("/api/tokens")).json()).tokens.map((t) => t.label), ["Claude Code"]);
+
+    // The agent uses the token with no cookie and no CSRF header — a bearer token is never
+    // sent ambiently by a browser, so the CSRF check neither applies nor blocks it.
+    const asAgent = (p, init = {}) => fetch(`${product.origin}${p}`, { ...init, headers: { authorization: `Bearer ${issued.token}`, "content-type": "application/json", ...(init.headers || {}) } });
+    const session = await (await asAgent("/api/session")).json();
+    assert.equal(session.access, "account");
+    assert.equal(session.email, "owner@example.test");
+    assert.equal(session.viaToken, true, "the Studio knows this is an agent");
+    assert.equal((await asAgent("/api/journeys")).status, 200, "the agent can read its owner's journeys");
+    assert.equal((await asAgent("/api/actors")).status, 200);
+    assert.equal((await asAgent("/api/operations/explore", { method: "POST", body: JSON.stringify({ url: "http://127.0.0.1:9/" }) })).status, 202, "and start work without a CSRF token");
+
+    // An agent is not a person: it cannot mint or revoke tokens, so a leaked token cannot
+    // outlive the revocation of itself.
+    assert.equal((await asAgent("/api/tokens", { method: "POST", body: JSON.stringify({ label: "second" }) })).status, 403);
+    assert.equal((await asAgent(`/api/tokens/${issued.id}`, { method: "DELETE" })).status, 403);
+    // This machine stays the operator's whoever is asking.
+    assert.equal((await asAgent("/api/project")).status, 401);
+
+    // Another account's token is another account: it sees its own (empty) world, not this one.
+    nextEmail = "someone@else.test";
+    const stranger = await signIn();
+    const strangerToken = await (await fetch(`${product.origin}/api/tokens`, { method: "POST", headers: { cookie: stranger.cookie, origin, "x-tapp-csrf": stranger.csrfToken, "content-type": "application/json" }, body: "{}" })).json();
+    const strangerSession = await (await fetch(`${product.origin}/api/session`, { headers: { authorization: `Bearer ${strangerToken.token}` } })).json();
+    assert.equal(strangerSession.email, "someone@else.test");
+    assert.deepEqual((await (await fetch(`${product.origin}/api/tokens`, { headers: { cookie: stranger.cookie } })).json()).tokens.map((t) => t.label), ["coding agent"], "one account never lists another's tokens");
+
+    // Revoking it stops it dead.
+    assert.equal((await asOwner(`/api/tokens/${issued.id}`, { method: "DELETE" })).status, 200);
+    assert.equal((await (await asAgent("/api/session")).json()).access, "anonymous", "a revoked token is a stranger");
+    assert.equal((await asAgent("/api/journeys")).status, 401);
+  } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
+});

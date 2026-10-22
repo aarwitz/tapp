@@ -13,12 +13,16 @@
 //            accounts/<id>.json            { id, email, createdAt, lastSeenAt }
 //            links/<sha256(token)>.json    { email, expiresAt }      (removed on use)
 //            sessions/<sha256(token)>.json { accountId, createdAt, expiresAt }
+//            tokens/<sha256(token)>.json   { id, accountId, label, createdAt, lastUsedAt }
 //            actors/<id>/                  that account's ActorStore root
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+// A personal access token lets the owner's coding agent act as them without a browser. It is
+// shown once, stored only as a hash, and never expires on its own — it is revoked by name.
+export const TOKEN_PREFIX = "tapp_";
 export const LINK_TTL_MS = 15 * 60 * 1000;
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 // One address may ask for this many links in a ten-minute window; more is someone else's mailbox
@@ -111,6 +115,60 @@ export class AccountStore {
   signOut(value) {
     if (!/^[A-Za-z0-9_-]{20,}$/.test(String(value || ""))) return;
     try { fs.rmSync(this.#file("sessions", sha(value)), { force: true }); } catch { /* already gone */ }
+  }
+
+  /**
+   * Issue a personal access token. The returned `token` is the only time it exists in the clear;
+   * what lands on disk is its hash, so a copy of this directory cannot act as anyone.
+   */
+  issueToken(accountId, label = "coding agent") {
+    if (!/^[a-f0-9]{24}$/.test(String(accountId || ""))) throw new Error("Not an account id");
+    const name = String(label || "coding agent").trim().slice(0, 60) || "coding agent";
+    const value = `${TOKEN_PREFIX}${token()}`;
+    const id = crypto.randomBytes(6).toString("hex");
+    writeJson(this.#file("tokens", sha(value)), { id, accountId, label: name, createdAt: new Date(this.now()).toISOString(), lastUsedAt: null });
+    return { token: value, id, label: name };
+  }
+
+  /** The account behind a personal access token, or null. */
+  tokenAccount(value) {
+    const raw = String(value || "");
+    if (!raw.startsWith(TOKEN_PREFIX) || raw.length < TOKEN_PREFIX.length + 20) return null;
+    const file = this.#file("tokens", sha(raw));
+    const record = readJson(file);
+    if (!record) return null;
+    const account = readJson(this.#file("accounts", record.accountId));
+    if (!account) return null;
+    // Coarse on purpose: a day, so "is this token still in use?" is answerable without a log of
+    // every request an agent makes.
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    if ((record.lastUsedAt || "").slice(0, 10) !== day) { record.lastUsedAt = new Date(this.now()).toISOString(); writeJson(file, record); }
+    return account;
+  }
+
+  /** Tokens this account holds — labels and dates, never a value. */
+  listTokens(accountId) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(this.root, "tokens")); } catch { return []; }
+    const out = [];
+    for (const name of names) {
+      const record = readJson(path.join(this.root, "tokens", name));
+      if (record?.accountId !== accountId) continue;
+      out.push({ id: record.id, label: record.label, createdAt: record.createdAt, lastUsedAt: record.lastUsedAt || null });
+    }
+    return out.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  }
+
+  revokeToken(accountId, id) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(this.root, "tokens")); } catch { return false; }
+    for (const name of names) {
+      const file = path.join(this.root, "tokens", name);
+      const record = readJson(file);
+      if (record?.accountId !== accountId || record?.id !== String(id)) continue;
+      try { fs.rmSync(file, { force: true }); return true; } catch { return false; }
+    }
+    return false;
   }
 
   /** Where this account's encrypted test accounts live. */

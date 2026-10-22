@@ -156,6 +156,7 @@ function applyAccessMode() {
     : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
   $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
+  $("#agent-panel")?.classList.toggle("hidden", !signedIn);
 }
 
 // The test accounts tapp holds, by application — names and what is held, never a value.
@@ -172,11 +173,64 @@ function renderActors() {
   }).join("")}`).join("");
 }
 
+// Tokens are labels and dates here; the value exists once, in the card below, and never again.
+function renderTokens() {
+  const node = $("#token-list");
+  if (!node) return;
+  const tokens = state.tokens || [];
+  setCount("#token-count", tokens.length);
+  const reveal = state.newToken ? `<div class="token-reveal">
+      <p><b>Copy this now — it is not shown again.</b> Give your coding agent these two values:</p>
+      <code id="token-value">export TAPP_STUDIO=${esc(location.origin)}
+export TAPP_TOKEN=${esc(state.newToken.token)}</code>
+      <p>Then it can ask <code style="display:inline;padding:2px 5px">tapp report --journeys</code> and replay one with <code style="display:inline;padding:2px 5px">tapp run &lt;journey&gt;</code>.</p>
+      <div class="ask-actions"><button type="button" class="primary" data-copy-token>Copy</button><button type="button" class="quiet" data-dismiss-token>Done</button></div>
+    </div>` : "";
+  const rows = tokens.length
+    ? tokens.map((token) => `<div class="token-row"><span><strong>${esc(token.label)}</strong><br><small>created ${esc(compactDate(token.createdAt))}${token.lastUsedAt ? ` · last used ${esc(compactDate(token.lastUsedAt))}` : " · never used"}</small></span><button class="quiet" type="button" data-revoke-token="${esc(token.id)}">Revoke</button></div>`).join("")
+    : '<div class="empty">No tokens yet.</div>';
+  node.innerHTML = reveal + rows;
+}
+
+async function loadTokens() {
+  if (state.session?.access !== "account") { state.tokens = []; return; }
+  state.tokens = (await api("/api/tokens").catch(() => ({ tokens: [] }))).tokens || [];
+}
+
+async function createToken() {
+  const label = (prompt("What is this token for?", "coding agent") || "").trim();
+  if (label === "") return;
+  try {
+    state.newToken = await api("/api/tokens", { method: "POST", body: JSON.stringify({ label }) });
+    await loadTokens();
+    renderTokens();
+  } catch (error) { toast(error.message, true); }
+}
+
+async function revokeToken(id) {
+  await api(`/api/tokens/${encodeURIComponent(id)}`, { method: "DELETE" });
+  state.newToken = null;
+  await loadTokens();
+  renderTokens();
+  toast("Revoked. That agent can no longer act as you.");
+}
+
 async function forgetActor(host, actor) {
   await api(`/api/actors/${encodeURIComponent(host)}/${encodeURIComponent(actor)}`, { method:"DELETE" });
   state.actors = (state.actors || []).map((app) => app.host === host ? { ...app, actors: app.actors.filter((a) => a.actor !== actor) } : app).filter((app) => app.actors.length);
   renderActors();
   toast(`Forgot ${actor} on ${host}. tapp will ask again next time.`);
+}
+
+// Someone who already owns journeys comes back to check on them, not to start something new —
+// and the prompt screen is the whole page until a run happens. Give them the way in.
+function renderOwnedLink() {
+  const slot = $("#owned-link");
+  if (!slot) return;
+  const journeys = state.journeys?.length || 0;
+  const show = state.session?.access === "account" && journeys > 0;
+  slot.classList.toggle("hidden", !show);
+  if (show) slot.innerHTML = `<button type="button" class="quiet" data-open-owned>You have ${journeys} journey${journeys === 1 ? "" : "s"} — see how they are doing →</button>`;
 }
 
 function showPrompt() {
@@ -448,6 +502,7 @@ async function keepJourney(form) {
 function renderRuns() {
   renderJourneys();
   renderActors();
+  renderTokens();
   const runs = allRuns();
   setCount("#run-count", runs.length);
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
@@ -684,7 +739,8 @@ function renderProject() {
   const project = state.project;
   renderRepositoryChrome();
   if (!project?.connected) {
-    if ((state.audits.length || state.explores.length) && state.activeView === "runs") { showProduct(); renderRuns(); return; }
+    renderOwnedLink();
+    if ((state.journeys?.length || state.audits.length || state.explores.length) && state.activeView === "runs") { showProduct(); renderRuns(); return; }
     if (state.promptRun) { showProduct(); renderRuns(); renderDeviceChrome(); renderChat(); return; }
     showPrompt();
     renderRuns();
@@ -727,7 +783,7 @@ async function refresh() {
     state.audits = runs.audits || [];
     state.explores = runs.explores || [];
     state.actors = actors.apps || [];
-    await loadJourneys();
+    await Promise.all([loadJourneys(), loadTokens()]);
     renderProject();
     return;
   }
@@ -932,6 +988,16 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-keep=dismiss]")) { event.preventDefault(); state.pendingKeep = null; renderChat(); }
   const forgetJ = event.target.closest("[data-forget-journey]");
   if (forgetJ) { event.preventDefault(); forgetJourney(forgetJ.dataset.forgetJourney).catch((error) => toast(error.message, true)); }
+  if (event.target.closest("[data-open-owned]")) { event.preventDefault(); showProduct(); activateView("runs"); renderRuns(); }
+  if (event.target.closest("#create-token")) { event.preventDefault(); createToken(); }
+  const revoke = event.target.closest("[data-revoke-token]");
+  if (revoke) { event.preventDefault(); revokeToken(revoke.dataset.revokeToken).catch((error) => toast(error.message, true)); }
+  if (event.target.closest("[data-dismiss-token]")) { event.preventDefault(); state.newToken = null; renderTokens(); }
+  if (event.target.closest("[data-copy-token]")) {
+    event.preventDefault();
+    const text = $("#token-value")?.textContent || "";
+    navigator.clipboard?.writeText(text).then(() => toast("Copied. Paste it where your agent runs."), () => toast("Select the text and copy it.", true));
+  }
   const forget = event.target.closest("[data-forget-actor]");
   if (forget) { event.preventDefault(); forgetActor(forget.dataset.forgetHost, forget.dataset.forgetActor).catch((error) => toast(error.message, true)); }
 });
@@ -984,6 +1050,10 @@ try {
   await refresh();
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
   signInOutcome();
+  // A link to /#runs (or a bookmark) opens what you own rather than the empty prompt.
+  if (window.location.hash === "#runs" && (state.journeys?.length || state.audits?.length || state.explores?.length)) {
+    showProduct(); activateView("runs"); renderRuns();
+  }
 
   const handoff = handoffTarget();
   if (handoff) {

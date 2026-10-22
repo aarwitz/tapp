@@ -72,6 +72,7 @@
         </form>
         <p class="signin-sent hidden" id="signin-sent"></p>
       </section>
+      <div class="owned-link hidden" id="owned-link"></div>
       <p class="prompt-note" id="privacy-note-detail">Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key.</p>
       <span class="sr-only" id="privacy-note-title">Your code stays on this machine.</span>
     </section>
@@ -175,6 +176,13 @@
         <section class="panel section hidden" id="actors-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Test accounts</p><h2>What tapp can sign in as <i id="actor-count" class="zero">0</i></h2><p>Kept encrypted. Shown here is only the name and whether a password or a signed-in session is held — never the values. Forget one and tapp will ask again next time.</p></div></div>
           <div id="actors-list"><div class="empty">None yet. Explore a site with a sign-in and tapp will ask.</div></div>
+        </section>
+        <section class="panel section hidden" id="agent-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">Your coding agent</p><h2>Let your agent check these journeys <i id="token-count" class="zero">0</i></h2><p>A token lets your coding agent ask “is everything still passing?” and replay a journey — as you, without a browser. It is shown once and can be revoked at any time.</p></div>
+            <button class="quiet" id="create-token" type="button">＋ New token</button>
+          </div>
+          <div id="token-list"><div class="empty">No tokens yet.</div></div>
         </section>
         <section class="panel section" id="journeys-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Journeys</p><h2>What this app has proven <i id="journey-count" class="zero">0</i></h2><p id="journeys-note">Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.</p></div></div>

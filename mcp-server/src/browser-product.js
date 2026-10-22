@@ -154,7 +154,10 @@ function anonymousAllows(method, pathname) {
 function accountAllows(method, pathname) {
   if (anonymousAllows(method, pathname)) return true;
   if (method === "POST" && (pathname === "/api/auth/signout" || /^\/api\/jobs\/[a-f0-9]{20}\/input$/.test(pathname))) return true;
-  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys")) return true;
+  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys" || pathname === "/api/tokens")) return true;
+  // Personal access tokens: the owner's coding agent acting as them (ADR-0009 slice 4).
+  if (method === "POST" && pathname === "/api/tokens") return true;
+  if (method === "DELETE" && /^\/api\/tokens\/[a-f0-9]{12}$/.test(pathname)) return true;
   if (method === "DELETE" && /^\/api\/actors\/[A-Za-z0-9.:-]{1,253}\/[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(pathname)) return true;
   // Journeys: keep a proven run, replay it, forget it (ADR-0009 slice 3).
   if (method === "POST" && (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname) || pathname === "/api/operations/run-flow")) return true;
@@ -722,7 +725,21 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       let visitorId = null;
       let anonymous = false;
       // A signed-in account sits between the two: more than a visitor, less than the operator.
-      const account = publicAccess && !authenticated ? accounts.sessionAccount(cookies(request)[ACCOUNT_COOKIE] || "") : null;
+      // It arrives either as a browser session cookie or as a personal access token on the
+      // Authorization header — the owner's coding agent acting as them.
+      let account = null;
+      let viaToken = false;
+      if (publicAccess && !authenticated) {
+        account = accounts.sessionAccount(cookies(request)[ACCOUNT_COOKIE] || "");
+        if (!account) {
+          const bearer = /^Bearer\s+(\S+)$/i.exec(String(request.headers.authorization || ""))?.[1] || "";
+          if (bearer) { account = accounts.tokenAccount(bearer); viaToken = !!account; }
+        }
+      }
+      // CSRF defends against a browser being made to act with its ambient cookie. A bearer token
+      // is never sent ambiently, so the check does not apply to it — and must not, or no agent
+      // could ever post anything.
+      const guardMutation = (req) => { if (viaToken) return; requireMutationAuth(req, hosted ? publicOrigins : origin, csrfToken); };
       if (account && !accountAllows(request.method, url.pathname)) {
         json(response, 401, { error: "That part of the Studio runs on your own machine: npx -y @aarwitz/tapp@latest app" });
         return;
@@ -828,7 +845,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // The response to the request is the same whether or not the address was ever seen, so
       // this cannot be used to find out who has an account.
       if (publicAccess && request.method === "POST" && url.pathname === "/api/auth/link") {
-        requireMutationAuth(request, publicOrigins, csrfToken);
+        guardMutation(request);
         const body = await readJsonBody(request);
         let link;
         try { link = accounts.requestLink(body.email); }
@@ -869,7 +886,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (account && request.method === "POST" && url.pathname === "/api/auth/signout") {
-        requireMutationAuth(request, publicOrigins, csrfToken);
+        guardMutation(request);
         accounts.signOut(cookies(request)[ACCOUNT_COOKIE] || "");
         response.writeHead(200, { "content-type": "application/json; charset=utf-8", "set-cookie": `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=0` });
         response.end(JSON.stringify({ ok: true }));
@@ -888,7 +905,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       const actorForgetMatch = !anonymous && request.method === "DELETE" ? url.pathname.match(/^\/api\/actors\/([A-Za-z0-9.:-]{1,253})\/([A-Za-z][A-Za-z0-9_-]{0,63})$/) : null;
       if (actorForgetMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        guardMutation(request);
         const store = new ActorStore(actorRootFor() ? { root: actorRootFor() } : {});
         store.forget(`https://${actorForgetMatch[1]}/`, actorForgetMatch[2]);
         json(response, 200, { ok: true });
@@ -903,7 +920,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       };
       const keepMatch = !anonymous && request.method === "POST" ? url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/keep$/) : null;
       if (keepMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        guardMutation(request);
         if (!visibleToOwner(keepMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
         const captureDir = capturePath(keepMatch[1], ".");
         if (!captureDir || !fs.existsSync(captureDir)) { json(response, 404, { error: "No such capture" }); return; }
@@ -937,11 +954,34 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       const forgetJourneyMatch = !anonymous && request.method === "DELETE" ? url.pathname.match(/^\/api\/journeys\/([a-z0-9-]{1,60})$/) : null;
       if (forgetJourneyMatch) {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        guardMutation(request);
         // Committed flows are the repository's; only kept journeys are forgotten from here.
         if (!account && registry.currentRoot()) { json(response, 409, { error: "That journey is committed in the repository; remove the file there." }); return; }
         journeyStore().forget(forgetJourneyMatch[1]);
         json(response, 200, { ok: true });
+        return;
+      }
+      // Agent access. A token is issued only to a person at the keyboard: an agent holding a
+      // token cannot mint itself another one, so a leaked token cannot outlive its revocation.
+      if (account && url.pathname === "/api/tokens" && request.method === "GET") {
+        json(response, 200, { tokens: accounts.listTokens(account.id) });
+        return;
+      }
+      if (account && url.pathname === "/api/tokens" && request.method === "POST") {
+        guardMutation(request);
+        if (viaToken) { json(response, 403, { error: "An agent cannot issue tokens. Create it in the Studio, signed in." }); return; }
+        const body = await readJsonBody(request);
+        const issued = accounts.issueToken(account.id, String(body.label || "coding agent"));
+        logUsage("token.issued", { account: account.id.slice(0, 8) });
+        // The only time the value leaves this process.
+        json(response, 200, issued);
+        return;
+      }
+      const revokeTokenMatch = account && request.method === "DELETE" ? url.pathname.match(/^\/api\/tokens\/([a-f0-9]{12})$/) : null;
+      if (revokeTokenMatch) {
+        guardMutation(request);
+        if (viaToken) { json(response, 403, { error: "An agent cannot revoke tokens." }); return; }
+        json(response, 200, { ok: accounts.revokeToken(account.id, revokeTokenMatch[1]) });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/session") {
@@ -949,7 +989,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "account", email: account.email, signInProvider,
+            access: "account", email: account.email, signInProvider, viaToken,
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
           });
@@ -1009,7 +1049,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       const jobInputMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/input$/);
       if (request.method === "POST" && jobInputMatch) {
         if (anonymous) { response.writeHead(401); response.end("Sign in to answer a run"); return; }
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        guardMutation(request);
         const job = jobs.get(jobInputMatch[1]);
         if (job && !jobVisible(job)) { response.writeHead(404); response.end("Not found"); return; }
         if (!job || !job.input || !job.inputResponsePath) { json(response, 409, { error: "This run is not waiting for anything" }); return; }
@@ -1056,7 +1096,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
 
       if (request.method === "POST" && url.pathname === "/api/repositories/select") {
-        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        guardMutation(request);
         const busy = lanes.running(OPERATOR_LANE);
         if (busy) throw Object.assign(new Error(`Operation '${busy.operation}' is still running`), { statusCode: 409 });
         if (liveSession?.active) throw Object.assign(new Error("End the active live session before changing repositories"), { statusCode:409 });
@@ -1067,7 +1107,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
 
       if (request.method !== "POST" || !url.pathname.startsWith("/api/operations/")) { response.writeHead(404); response.end("Not found"); return; }
-      requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+      guardMutation(request);
       const body = await readJsonBody(request);
       const operation = url.pathname.slice("/api/operations/".length);
       // "What should tapp test?" — a repository on this machine or on GitHub becomes the current

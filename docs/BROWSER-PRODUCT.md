@@ -137,3 +137,30 @@ Endpoints: `POST /api/captures/:id/keep` (`{ name, actor, replace, preview }` �
 the journey and lists its screens without keeping it), `GET /api/journeys`,
 `DELETE /api/journeys/:slug` (kept journeys only; committed flows are the repository's),
 `POST /api/operations/run-flow` (`{ name }`).
+
+## Agent access: the owner's coding agent acting as them
+
+"Make sure this always works" needs an answer that does not require a person to open a page. The
+owner creates a **personal access token** in the Studio (Runs → *Your coding agent*): it is shown
+once, stored only as a SHA-256, and revoked by name. The agent sends it as `Authorization: Bearer
+tapp_…` and is that account — same journeys, same test accounts, same evidence, same lane. It is
+deliberately *less* than the person: an agent cannot issue or revoke tokens, so a leaked token
+cannot mint its own successor, and this machine's repositories and release gate stay the
+operator's whoever is asking. CSRF does not apply to a bearer token (a browser never sends one
+ambiently) and is therefore not required on these requests.
+
+From the terminal or an MCP client:
+
+```bash
+export TAPP_STUDIO=https://app.runtapp.com
+export TAPP_TOKEN=tapp_…
+
+tapp report --journeys          # every journey and its last check; exit 1 if any is FAILING
+tapp run "coach books a session"  # replay one there; exit 0 passed, 1 failed, 2 usage/unreachable
+```
+
+`tapp report --journeys` without `$TAPP_STUDIO` lists what is here instead: a repository's
+committed Flows (subfolders and all) or this machine's kept journeys. The MCP tools are the same
+two abilities on the existing tools — `tapp_report { journeys: true }` and
+`tapp_run { journey }` — never new tools (ADR-0007). Both are implemented by
+`mcp-server/src/studio-client.js`.

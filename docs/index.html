@@ -305,13 +305,13 @@
       Real applications live behind a login, so a crawl never meets them. tapp stops at the sign-in
       and <strong>asks you</strong> in the chat. What you type is kept encrypted, used only to sign
       in, and never shown again — the next run starts inside. When a run gets somewhere, tapp offers
-      to <strong>keep it as a journey</strong>: it replays exactly that path, every day, and tells you
-      the moment it stops working.
+      to <strong>keep it as a journey</strong>: it replays exactly that path every day, and shows you
+      here the moment it stops working.
     </p>
     <div class="story-grid">
       <figure><img src="/assets/studio-ask.jpg" alt="The tapp Studio stopped at a sign-in page, asking in the chat for an email and password, with a checkbox to remember them for this site" loading="lazy"><figcaption><b>1 · It asks.</b> A sign-in it has no account for pauses the run and asks — once.</figcaption></figure>
       <figure><img src="/assets/studio-keep.jpg" alt="The tapp Studio inside the application after signing in, offering to keep the run as a journey named after where it went" loading="lazy"><figcaption><b>2 · It goes inside, then offers to keep the path.</b> Sign in → Dashboard → Orders → Settings, 13 steps, one click.</figcaption></figure>
-      <figure><img src="/assets/studio-journeys.jpg" alt="The Journeys panel listing kept journeys with a passing status and the time of the last check, next to the test accounts tapp holds" loading="lazy"><figcaption><b>3 · It keeps it working.</b> Every journey, with how its last check went. Forget a test account any time.</figcaption></figure>
+      <figure><img src="/assets/studio-journeys.jpg" alt="The Journeys panel listing kept journeys with a passing status and the time of the last check, next to the test accounts tapp holds" loading="lazy"><figcaption><b>3 · It keeps it checking.</b> Every journey, with how its last daily check went. Forget a test account any time.</figcaption></figure>
     </div>
     <div class="cta-row" style="margin-top:1.6rem">
       <a class="btn primary" href="https://app.runtapp.com/">Open the Studio</a>
@@ -467,6 +467,7 @@
         <li>Replays the journeys you've marked as important</li>
         <li>Blocks the merge on crashes, failed journeys, and new serious findings</li>
         <li>Attaches screenshots and a replay so you can see exactly what happened</li>
+        <li>Or let your coding agent ask, with a token you create: <code>tapp report --journeys</code></li>
       </ul>
       <div class="mini-comment">
         <div class="title">🟢 PASS</div>

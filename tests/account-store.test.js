@@ -83,3 +83,38 @@ test("without a mail provider the link goes to a private outbox, never a log", a
   assert.equal(createMailer({ TAPP_MAIL_RESEND_KEY: "re_x", TAPP_MAIL_FROM: "tapp <hello@runtapp.com>" }).transport, "resend");
   assert.equal(createMailer({ TAPP_MAIL_RESEND_KEY: "re_x", TAPP_MAIL_OUTBOX: outbox }).transport, "outbox", "a key without a from address is not a provider");
 });
+
+test("a personal access token acts as its account, is shown once, and is revoked by name", () => {
+  const { store } = fresh();
+  const { account } = store.redeem(store.requestLink("owner@example.test").token);
+  const other = store.redeem(store.requestLink("someone@else.test").token).account;
+
+  const issued = store.issueToken(account.id, "  Claude Code  ");
+  assert.match(issued.token, /^tapp_[A-Za-z0-9_-]{20,}$/);
+  assert.equal(issued.label, "Claude Code", "the label is trimmed, not the token");
+  assert.equal(store.tokenAccount(issued.token).id, account.id);
+  assert.equal(store.tokenAccount(`${issued.token}x`), null, "a near-miss is not a token");
+  assert.equal(store.tokenAccount("not-a-token"), null);
+  assert.equal(store.tokenAccount(""), null);
+
+  // Listing shows labels and dates; the value is never recoverable from the store.
+  const [listed] = store.listTokens(account.id);
+  assert.equal(listed.label, "Claude Code");
+  assert.equal(listed.id, issued.id);
+  assert.ok(listed.createdAt);
+  assert.deepEqual(store.listTokens(other.id), [], "one account never sees another's tokens");
+  const everything = fs.readdirSync(store.root, { recursive: true })
+    .map((entry) => path.join(store.root, String(entry)))
+    .filter((file) => fs.statSync(file).isFile())
+    .map((file) => fs.readFileSync(file, "utf8"))
+    .join("\n");
+  assert.doesNotMatch(everything, new RegExp(issued.token.slice(6, 26)), "only the hash is on disk");
+
+  // Revocation is per account: another account cannot revoke this one's token.
+  assert.equal(store.revokeToken(other.id, issued.id), false);
+  assert.equal(store.tokenAccount(issued.token).id, account.id, "still valid");
+  assert.equal(store.revokeToken(account.id, issued.id), true);
+  assert.equal(store.tokenAccount(issued.token), null, "revoked");
+  assert.deepEqual(store.listTokens(account.id), []);
+  assert.throws(() => store.issueToken("../x"), /account id/);
+});

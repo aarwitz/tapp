@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.25.0
+
+**Your coding agent can act as you.** ADR-0009 slice 4 — the last of the five pieces.
+
+- **Personal access tokens.** Runs → *Your coding agent* → a token, shown once, stored only as a
+  hash, revoked by name. The agent sends it as a bearer token and is that account: same journeys,
+  same test accounts, same evidence. It is deliberately less than the person — an agent cannot
+  issue or revoke tokens, so a leaked one cannot mint its successor — and this machine's
+  repositories and release gate are never its own.
+- **Two new abilities on existing commands** (never a new verb or tool, ADR-0007):
+  `tapp report --journeys` lists every journey and how its last check went and **exits 1 if any
+  is failing**, so it works as a health check in CI; `tapp run <journey> --studio https://…`
+  replays one there and exits on the verdict. On MCP: `tapp_report { journeys: true }` and
+  `tapp_run { journey }`. Configure with `$TAPP_STUDIO` + `$TAPP_TOKEN`.
+  Without a Studio, `--journeys` lists what is here: the repository's committed Flows (subfolders
+  and all — it used to show only the top level) or this machine's kept journeys.
+- **A way back to what you own.** An account with journeys landed on the empty prompt screen with
+  no route to them; the prompt now offers "You have N journeys — see how they are doing", and
+  `/#runs` opens them directly.
+- This is tapp's answer to notification: it sends no email, but the thing already watching your
+  project can ask.
+
 ## 0.24.2
 
 - **Fixed: a journey that signs in was being replayed from the saved session.** A journey kept

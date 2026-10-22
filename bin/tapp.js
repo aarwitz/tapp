@@ -410,7 +410,7 @@ function safeCommandUsage(verb) {
     ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]\ntapp ci baseline [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
     actor: "tapp plan actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp plan actor list [repo]",
     app: "tapp app [repo] [--no-open] [--port PORT]",
-    report: "tapp report [captureId|latest]",
+    report: "tapp report [captureId|latest]\n  --journeys: list the journeys you own and how each one's last check went (exit 1 if any is failing)\n    Add --studio https://app.runtapp.com (or $TAPP_STUDIO) with a token from the Studio's “Your coding agent” card ($TAPP_TOKEN) to ask your hosted Studio.",
     feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
     audit: "tapp explore --read-only <url> [<url>...] [--urls FILE] [--pages N] [--delay MS] [--links N] [--json [FILE]] [--no-capture] [--device NAME] [--viewport WxH]\n  Read-only: renders each page and reads it, never clicks — safe to point at production or a site you do not own.\n  Finds dead controls, broken images/assets/links, 5xx/failed requests, JS exceptions, mixed content, horizontal overflow.\n  --pages N crawls same-origin links (robots.txt honoured, --delay between pages). Writes a capture with screenshots, evidence and report.html.\n  Exit codes: 0 nothing broken · 1 defects found · 2 usage/infrastructure",
     doctor: "tapp doctor [--json] [--install]\n  --install prebuilds the iOS exploration harness (~2 min; otherwise it builds on first use)\n  Exit codes: 0 environment healthy · 1 blocked (fix ❌ items)",
@@ -442,6 +442,10 @@ if (!knownCommands.has(command)) {
   console.error("Run `npx -y @aarwitz/tapp@latest --help` for the command reference.");
   process.exit(2);
 }
+// The verb the person actually typed, before aliasing rewrites it — `run` becomes `flow`, and a
+// journey on a hosted Studio is not a file in this directory.
+const typedCommand = command;
+const typedRest = [...rest];
 {
   const helpRequested = rest.includes("--help") || rest.includes("-h");
   const resolved = resolveCommand(command, rest);
@@ -461,6 +465,75 @@ if (safeHelpRequested) {
 // Create TAPP_HOME only for commands that actually use it — never for help/version/--help.
 if (!["help", "version", "--version", "-v"].includes(command)) {
   fs.mkdirSync(tappHome, { recursive: true });
+}
+
+// Journeys, locally or on a hosted Studio. This is how the owner's coding agent asks "is
+// everything still passing?" and runs one — no new verb, just somewhere else to look (ADR-0007).
+if (typedCommand === "report" && typedRest.includes("--journeys")) {
+  const { flags } = parseVerbArgs(typedRest.filter((a) => a !== "--journeys"));
+  const { studioConfig, listStudioJourneys, formatJourneyStatus } = await import(path.join(packageRoot, "mcp-server", "src", "studio-client.js"));
+  let journeys = [];
+  let where = "";
+  try {
+    const config = studioConfig({ studio: flags.studio, token: flags.token });
+    if (config) {
+      journeys = await listStudioJourneys(config);
+      where = config.origin;
+    } else {
+      const { JourneyStore } = await import(path.join(packageRoot, "mcp-server", "src", "journeys.js"));
+      const root = process.cwd();
+      if (fs.existsSync(path.join(root, ".tapp", "flows"))) {
+        // A repository's journeys are its committed Flows, subfolders and all — the same list the
+        // Studio shows — with whatever the last Studio replay recorded beside each.
+        const { readProductProject } = await import(path.join(packageRoot, "mcp-server", "src", "product-operations.js"));
+        const store = JourneyStore.forRepository(root);
+        journeys = (readProductProject({ projectDir: root }).flows || []).map((flow) => {
+          const slug = flow.relativePath.replace(/^\.tapp\/flows\//, "").replace(/\.(?:ya?ml|json)$/i, "");
+          return { name: flow.name, slug, platform: flow.platform, steps: flow.steps, source: "repo", status: store.status(slug) };
+        });
+        where = ".tapp/flows";
+      } else {
+        journeys = JourneyStore.forMachine().list();
+        where = "this machine";
+      }
+    }
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    process.exit(2);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({ where, journeys }, null, 2));
+  } else if (!journeys.length) {
+    console.log(`No journeys yet (${where}). Explore an app — when a run gets somewhere, tapp offers to keep it.`);
+  } else {
+    console.log(`Journeys · ${where}`);
+    for (const journey of journeys) console.log(`  ${formatJourneyStatus(journey)}`);
+  }
+  // A failing journey is the whole point of asking, so it is also the exit code.
+  process.exit(journeys.some((j) => j.status && !j.status.passed) ? 1 : 0);
+}
+if (typedCommand === "run" && (typedRest.includes("--studio") || process.env.TAPP_STUDIO)) {
+  const { flags, positionals } = parseVerbArgs(typedRest);
+  const name = String(positionals[0] || "").replace(/\.ya?ml$/i, "");
+  if (!name) {
+    console.error("❌ tapp run <journey> --studio https://app.runtapp.com  (the journey's name in the Studio)");
+    process.exit(2);
+  }
+  const { studioConfig, runStudioJourney } = await import(path.join(packageRoot, "mcp-server", "src", "studio-client.js"));
+  try {
+    const config = studioConfig({ studio: flags.studio, token: flags.token });
+    console.log(`▶ ${name} · ${config.origin}`);
+    const result = await runStudioJourney(config, name, { onProgress: (line) => console.log(`  ${line}`) });
+    if (result.kind === "self-host") {
+      console.log(`ℹ️  ${result.message}`);
+      process.exit(2);
+    }
+    console.log(result.passed ? `✓ ${result.name} — ${result.executed}/${result.total} steps` : `✗ ${result.name} — ${result.executed}/${result.total} steps, ${result.failed} failed`);
+    process.exit(result.passed ? 0 : 1);
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    process.exit(2);
+  }
 }
 
 switch (command) {
