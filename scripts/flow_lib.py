@@ -37,7 +37,7 @@ def to_yaml(json_str):
     # Order keys for readability. `platform` + `url` make the same repository-native
     # Flow format portable across the XCUITest, Playwright, and Android drivers.
     ordered = {}
-    for k in ("name", "platform", "app", "url", "vars", "reset"):
+    for k in ("name", "platform", "app", "url", "actor", "vars", "reset"):
         if flow.get(k):
             ordered[k] = flow[k]
     ordered["steps"] = flow.get("steps", [])
@@ -54,6 +54,8 @@ def to_json(path):
         "platform": flow.get("platform", ""),
         "app": flow.get("app", ""),
         "url": flow.get("url", ""),
+        # Which test account a journey signs in as (ADR-0009); the Studio resolves it at replay.
+        "actor": str(flow.get("actor", "") or ""),
         "steps": flow.get("steps", []),
         "vars": flow.get("vars", {}),
         "reset": flow.get("reset", "launch"),

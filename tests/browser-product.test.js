@@ -635,3 +635,56 @@ test("without Cloudflare Access configured the path says so, and Sign in is the 
     assert.equal((await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual" })).status, 404);
   } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
 });
+
+test("an account keeps a run that got somewhere as a journey, sees its status, and can forget it", async () => {
+  // ADR-0009 slice 3. The capture is planted the way an exploration writes it; keeping it
+  // produces a Flow in the runner's vocabulary under the account's own journey store.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-journey-home-"));
+  const previous = process.env.TAPP_HOME; process.env.TAPP_HOME = home;
+  const origin = "https://app.runtapp.com";
+  const accessVerifier = { verify: async () => ({ email: "owner@example.test" }) };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-journey-ws-")), accessVerifier });
+  try {
+    const signedIn = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = signedIn.headers.get("set-cookie").split(";")[0];
+    const session = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const accountId = fs.readdirSync(path.join(home, "accounts", "accounts"))[0].replace(/\.json$/, "");
+    const call = (pathname, init = {}) => fetch(`${product.origin}${pathname}`, { ...init, headers: { cookie, origin, "x-tapp-csrf": session.csrfToken, "content-type": "application/json", ...(init.headers || {}) } });
+
+    // A capture this account owns, with a path through a sign-in.
+    const captureId = "web-20261022-150000";
+    const dir = path.join(home, "captures", captureId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "provenance.json"), JSON.stringify({ kind: "explore", platform: "web", target: "https://fitness.example.test/", createdAt: "2026-10-22T15:00:00.000Z", origin: "studio-prompt" }));
+    fs.writeFileSync(path.join(dir, "ocqa-markers.txt"), [
+      'OCQA_ACTION:{"t":1,"type":"open","target":"/","via":"/"}', 'OCQA_STATE:{"t":2,"screen":"Sign in","url":"/"}',
+      'OCQA_ACTION:{"t":3,"type":"login","target":"Sign in"}', 'OCQA_STATE:{"t":4,"screen":"Dashboard","url":"/"}',
+      'OCQA_ACTION:{"t":5,"type":"tap","target":"Bookings"}', 'OCQA_STATE:{"t":6,"screen":"Bookings","url":"/bookings"}', "",
+    ].join("\n"));
+    fs.writeFileSync(path.join(dir, ".visitor"), `acct:${accountId}\n`);
+
+    assert.deepEqual((await (await call("/api/journeys")).json()).journeys, [], "nothing kept yet");
+    const kept = await (await call(`/api/captures/${captureId}/keep`, { method: "POST", body: JSON.stringify({ name: "Coach reaches bookings" }) })).json();
+    assert.equal(kept.slug, "coach-reaches-bookings");
+    assert.equal(kept.steps, 5);
+    assert.equal(kept.signedIn, true);
+    const file = path.join(home, "accounts", "journeys", accountId, "coach-reaches-bookings.yml");
+    const yaml = fs.readFileSync(file, "utf8");
+    assert.match(yaml, /- login:\n    email: \$TEST_EMAIL\n    password: \$TEST_PASSWORD/, "the sign-in is a variable, never a value");
+    assert.match(yaml, /- assert_screen: "Bookings"/);
+    assert.equal((await call(`/api/captures/${captureId}/keep`, { method: "POST", body: JSON.stringify({ name: "Coach reaches bookings" }) })).status, 409, "a name is not overwritten by accident");
+
+    const [listed] = (await (await call("/api/journeys")).json()).journeys;
+    assert.equal(listed.name, "Coach reaches bookings");
+    assert.equal(listed.status, null, "never run");
+    assert.equal(listed.source, "kept");
+
+    // Someone else's capture cannot be kept, and another account sees no journeys.
+    fs.writeFileSync(path.join(dir, ".visitor"), "acct:" + "0".repeat(24) + "\n");
+    assert.equal((await call(`/api/captures/${captureId}/keep`, { method: "POST", body: JSON.stringify({ name: "x" }) })).status, 404);
+
+    assert.equal((await call("/api/journeys/coach-reaches-bookings", { method: "DELETE" })).status, 200);
+    assert.deepEqual((await (await call("/api/journeys")).json()).journeys, []);
+    assert.equal(fs.existsSync(file), false);
+  } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
+});

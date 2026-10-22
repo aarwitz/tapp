@@ -155,6 +155,7 @@ function applyAccessMode() {
     ? "Websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app"
     : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
+  $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
 }
 
 // The test accounts tapp holds, by application — names and what is held, never a value.
@@ -352,17 +353,27 @@ function allRuns() {
 
 // The journeys the open repository has committed under .tapp/flows/. This is the thing a
 // person owns; the engine has listed them all along and the Studio never showed them.
+// The journeys this person owns, with how the last replay went. A repository's committed flows
+// come grouped by folder; kept journeys (from a run that got somewhere) are flat. Both replay
+// the same way and both show the same status pill.
+function journeyStatus(status) {
+  if (!status) return '<span class="journey-status never">never run</span>';
+  return `<span class="journey-status ${status.passed ? "passing" : "failing"}">${status.passed ? "passing" : "failing"} · ${esc(compactDate(status.at))}</span>`;
+}
+
 function renderJourneys() {
   const node = $("#journeys-list");
   if (!node) return;
-  const flows = state.project?.flows || [];
-  setCount("#journey-count", flows.length);
-  if (!flows.length) { node.innerHTML = '<div class="empty">No journeys yet. Prove something with a session, then save it as a Flow.</div>'; return; }
-  // Group by folder: a real repository keeps dozens under sandbox/, weekly/, mobile/. The top
-  // level comes first; each group opens on demand so a hundred journeys read as a map.
+  const journeys = state.journeys || [];
+  setCount("#journey-count", journeys.length);
+  const note = $("#journeys-note");
+  if (note) note.textContent = journeys.some((j) => j.source === "repo")
+    ? "Committed under .tapp/flows/. Each replays exactly as written — no model, no key — and is what the release gate guards."
+    : "Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.";
+  if (!journeys.length) { node.innerHTML = '<div class="empty">No journeys yet. Explore a site — when a run gets somewhere, tapp offers to keep it.</div>'; return; }
   const groups = new Map();
-  for (const flow of flows) { const key = flow.group || ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(flow); }
-  const row = (flow) => `<div class="journey-row"><span class="journey-platform ${esc(flow.platform || "web")}">${esc(flow.platform || "web")}</span><span class="journey-name">${esc(flow.name)}</span><span class="journey-steps">${flow.steps || 0} steps</span><button class="quiet" data-run-journey="${esc(flow.relativePath || flow.name)}" title="Replay this journey">▶ Run</button></div>`;
+  for (const journey of journeys) { const key = journey.group || ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(journey); }
+  const row = (j) => `<div class="journey-row"><span class="journey-platform ${esc(j.platform || "web")}">${esc(j.platform || "web")}</span><span class="journey-name">${esc(j.name)}<br><small>${j.steps || 0} steps · ${journeyStatus(j.status)}</small></span><span></span><span class="journey-actions"><button class="quiet" data-run-journey="${esc(j.slug)}" title="Replay this journey">▶ Run</button>${j.source === "kept" ? `<button class="quiet" data-forget-journey="${esc(j.slug)}" title="Forget this journey">Forget</button>` : ""}</span></div>`;
   node.innerHTML = [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b))).map(([group, items]) =>
     group === ""
       ? items.map(row).join("")
@@ -370,16 +381,66 @@ function renderJourneys() {
   ).join("");
 }
 
-async function runJourney(relativePath) {
-  const name = String(relativePath).replace(/^\.tapp\/flows\//, "").replace(/\.ya?ml$/i, "");
-  showProduct(); activateView("overview"); renderChat();
-  setHeading(name, "Replaying the journey exactly as committed.", { owned: true });
+async function loadJourneys() {
+  if (!state.session || state.session.access === "anonymous") { state.journeys = []; return; }
+  state.journeys = (await api("/api/journeys").catch(() => ({ journeys: [] }))).journeys || [];
+}
+
+async function runJourney(slug) {
+  const name = String(slug).replace(/^\.tapp\/flows\//, "").replace(/\.ya?ml$/i, "");
+  const known = (state.journeys || []).find((j) => j.slug === name);
+  state.promptRun = true; state.promptPlatform = "web";
+  showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
+  document.querySelector(".device-stage")?.classList.remove("hidden");
+  setHeading(known?.name || name, "Replaying the journey exactly as kept.", { owned: true });
   const result = await runOperation("run-flow", { name }, { input: name });
   if (result?.kind === "self-host") { answerSelfHost(result); return; }
   if (result?.kind === "journey") {
     pushLine({ kind: "summary", tone: result.passed ? "ready" : "blocked", pill: result.passed ? "Passed" : "Failed", text: `${result.name}: ${result.executed}/${result.total} steps${result.failed ? `, ${result.failed} failed` : ""}.` });
     renderChat();
+    await loadJourneys(); renderJourneys();
   }
+}
+
+async function forgetJourney(slug) {
+  await api(`/api/journeys/${encodeURIComponent(slug)}`, { method:"DELETE" });
+  await loadJourneys(); renderJourneys();
+  toast("Forgot that journey.");
+}
+
+// A run that got somewhere is worth keeping: offer it in the chat, with a name to edit.
+async function offerJourney(result) {
+  const captureId = result?.capture?.id;
+  if (!captureId || !(result?.actionsPerformed > 0)) return;
+  // Ask the server what the journey would be — its name comes from where the run went.
+  let preview = null;
+  try { preview = await api(`/api/captures/${encodeURIComponent(captureId)}/keep`, { method:"POST", body:JSON.stringify({ preview: true }) }); }
+  catch { return; /* a run that only looked around is not offered */ }
+  state.pendingKeep = { captureId, suggested: preview.name, steps: preview.steps, screens: preview.screens || [], signedIn: preview.signedIn };
+  renderChat();
+}
+
+function renderKeepCard() {
+  const keep = state.pendingKeep;
+  if (!keep || state.activeJob) return "";
+  return `<form class="chat-ask chat-keep" id="chat-keep" data-capture="${esc(keep.captureId)}">
+    <div class="chat-ask-head"><span class="chat-icon">🧭</span><span>This run got somewhere${keep.signedIn ? ", signed in" : ""}: <b>${esc((keep.screens || []).join(" → "))}</b> (${keep.steps} steps). Keep it as a journey? It will replay exactly this path and tell you when it stops working.</span></div>
+    <label class="ask-field"><span>Name</span><input name="name" type="text" value="${esc(keep.suggested)}" maxlength="120"></label>
+    <div class="ask-actions"><button type="submit" class="primary">Keep</button><button type="button" class="quiet" data-keep="dismiss">Not now</button></div>
+  </form>`;
+}
+
+async function keepJourney(form) {
+  const captureId = form.dataset.capture;
+  const name = form.elements.name.value.trim();
+  try {
+    const kept = await api(`/api/captures/${encodeURIComponent(captureId)}/keep`, { method:"POST", body:JSON.stringify({ name }) });
+    state.pendingKeep = null;
+    pushLine({ kind: "step", icon: "🧭", text: `Kept as “${kept.name}” — ${kept.steps} steps${kept.signedIn ? ", signs in as your test account" : ""}. Run it any time from Journeys.` });
+    renderChat();
+    await loadJourneys(); renderJourneys();
+    toast(`Kept “${kept.name}”.`);
+  } catch (error) { toast(error.message, true); }
 }
 
 function renderRuns() {
@@ -446,6 +507,8 @@ function renderChat() {
   // engine waits, so leave the DOM alone until the ask is answered or withdrawn.
   const openAsk = node.querySelector("#chat-ask");
   if (openAsk && state.pendingInput && openAsk.dataset.request === String(state.pendingInput.requestId)) return;
+  const openKeep = node.querySelector("#chat-keep");
+  if (openKeep && state.pendingKeep && openKeep.dataset.capture === state.pendingKeep.captureId && !state.activeJob) return;
   const stickToBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
   const lines = state.transcript.map((entry) => {
     if (entry.kind === "shots") return `<div class="chat-shots">${entry.shots.map((shot) => `<a href="${esc(shot.href)}" target="_blank" rel="noreferrer" title="${esc(shot.caption)}"><img src="${esc(shot.src)}" alt="${esc(shot.caption)}"></a>`).join("")}</div>`;
@@ -454,7 +517,7 @@ function renderChat() {
     if (entry.kind === "finding") return `<div class="chat-line finding ${esc(entry.severity)}"><span class="chat-icon">${entry.icon}</span><span>${esc(entry.text)}</span></div>`;
     if (entry.kind === "progress") return "";
     return `<div class="chat-line ${esc(entry.kind || "")}"><span class="chat-icon">${entry.icon || "•"}</span><span>${esc(entry.text)}${entry.detail ? ` <em>— ${esc(entry.detail)}</em>` : ""}</span></div>`;
-  }).join("") + renderAskCard() + (state.activeJob && !state.pendingInput ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
+  }).join("") + renderAskCard() + renderKeepCard() + (state.activeJob && !state.pendingInput ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
   node.innerHTML = lines;
   if (stickToBottom) node.scrollTop = node.scrollHeight;
   const progress = [...state.transcript].reverse().find((entry) => entry.kind === "progress");
@@ -662,6 +725,7 @@ async function refresh() {
     state.audits = runs.audits || [];
     state.explores = runs.explores || [];
     state.actors = actors.apps || [];
+    await loadJourneys();
     renderProject();
     return;
   }
@@ -670,6 +734,7 @@ async function refresh() {
   state.live = live;
   state.audits = runs.audits || [];
   state.explores = runs.explores || [];
+  await loadJourneys();
   renderProject();
 }
 
@@ -774,6 +839,8 @@ async function startFromPrompt(raw) {
       }
       if (result?.kind === "self-host") { answerSelfHost(result); return; }
       state.selectedRunId = result?.capture?.id || state.selectedRunId;
+      state.pendingKeep = null;
+      await offerJourney(result);
       return;
     }
     state.promptRun = true; state.promptPlatform = "web";
@@ -844,6 +911,8 @@ document.addEventListener("submit", (event) => {
   if (ask) { event.preventDefault(); answerAsk(ask, "submit"); }
   const signin = event.target.closest("#signin-form");
   if (signin) { event.preventDefault(); requestSignInLink(signin.elements.email.value.trim()); }
+  const keep = event.target.closest("#chat-keep");
+  if (keep) { event.preventDefault(); keepJourney(keep); }
 });
 document.addEventListener("click", (event) => {
   const button = event.target.closest("#chat-ask [data-ask]");
@@ -858,6 +927,9 @@ document.addEventListener("click", (event) => {
     state.signInOpen = true; renderAccount(); showPrompt(); setTimeout(() => $("#signin-email")?.focus(), 50);
   }
   if (event.target.closest("[data-signout]")) { event.preventDefault(); signOut(); }
+  if (event.target.closest("[data-keep=dismiss]")) { event.preventDefault(); state.pendingKeep = null; renderChat(); }
+  const forgetJ = event.target.closest("[data-forget-journey]");
+  if (forgetJ) { event.preventDefault(); forgetJourney(forgetJ.dataset.forgetJourney).catch((error) => toast(error.message, true)); }
   const forget = event.target.closest("[data-forget-actor]");
   if (forget) { event.preventDefault(); forgetActor(forget.dataset.forgetHost, forget.dataset.forgetActor).catch((error) => toast(error.message, true)); }
 });

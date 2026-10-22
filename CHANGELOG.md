@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.24.0
+
+Slice 3 of ADR-0009: **a proven run becomes a journey you own.**
+
+- **Keep this as a journey?** When an exploration gets somewhere, the chat says where it went —
+  *Dashboard → Orders → Settings (11 steps)* — and offers to keep it. One click writes a Flow in
+  the deterministic runner's own vocabulary; it replays exactly that path and fails when the path
+  stops working. A run that only looked around is not offered.
+- **Where a journey lives is where you are:** the open repository's `.tapp/flows/` (committed,
+  guarded by `tapp ci`), your account's own store on app.runtapp.com, or this machine's store.
+- **Credentials never enter a journey.** A sign-in is `login: $TEST_EMAIL / $TEST_PASSWORD`,
+  resolved at replay from the encrypted actor store; a journey kept from a run that began inside
+  replays from the same saved session.
+- **Journeys with status.** The Journeys panel lists every journey — a repository's committed
+  flows grouped by folder, and kept ones — with *passing · 2h ago*, *failing* or *never run*, a
+  Run button, and Forget for kept ones. Accounts on the public Studio have it too.
+- New: `mcp-server/src/journeys.js`; `POST /api/captures/:id/keep` (with `preview`),
+  `GET /api/journeys`, `DELETE /api/journeys/:slug`; `run-flow` replays kept journeys and records
+  their status; `runWebFlow({ storageStatePath })`; the explorer marks a run that started signed in.
+
 ## 0.23.1
 
 - **Sign in through Cloudflare Access, so tapp never sends email.** With an Access application

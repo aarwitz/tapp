@@ -114,3 +114,26 @@ write-only from the UI, encrypted at rest, decrypted only inside the run that si
 
 A local trial of the public mode (`--origin http://127.0.0.1:PORT`) does not pin browser egress
 to public addresses, so it can reach a site on the same machine; a real origin always does.
+
+## Journeys: keeping a proven run
+
+A run that got somewhere is offered in the chat as a journey (`journeys.js`). Keeping it writes a
+Flow in the runner's vocabulary — `wait_for` each screen, `tap` each control and navigation link,
+`login: $TEST_EMAIL / $TEST_PASSWORD` for a sign-in, `assert_screen` on the last screen — to the
+place this person owns:
+
+| Who | Where | Replayed by |
+|---|---|---|
+| Operator with a repository open | `<repo>/.tapp/flows/<slug>.yml` | the Studio, `tapp run`, `tapp ci` |
+| Account on a public Studio | `TAPP_HOME/accounts/journeys/<id>/<slug>.yml` | the Studio |
+| Operator without a repository | `TAPP_HOME/journeys/<slug>.yml` | the Studio |
+
+The last replay's result sits beside it in `.status/<slug>.json` and shows in the Journeys panel
+as *passing · 2h ago*, *failing* or *never run*. A replay resolves `$TEST_EMAIL`/`$TEST_PASSWORD`
+from the encrypted actor store for the journey's `actor` (never from the file) and, for a journey
+kept from a run that started signed in, opens the browser from that actor's saved session.
+
+Endpoints: `POST /api/captures/:id/keep` (`{ name, actor, replace, preview }` — `preview` names
+the journey and lists its screens without keeping it), `GET /api/journeys`,
+`DELETE /api/journeys/:slug` (kept journeys only; committed flows are the repository's),
+`POST /api/operations/run-flow` (`{ name }`).

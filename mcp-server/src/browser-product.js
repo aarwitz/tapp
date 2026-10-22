@@ -21,6 +21,7 @@ import { AccountStore } from "./account-store.js";
 import { ActorStore, hostKey } from "./actor-store.js";
 import { createMailer, signInMessage } from "./mailer.js";
 import { accessConfig, createAccessVerifier } from "./access-jwt.js";
+import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -153,8 +154,11 @@ function anonymousAllows(method, pathname) {
 function accountAllows(method, pathname) {
   if (anonymousAllows(method, pathname)) return true;
   if (method === "POST" && (pathname === "/api/auth/signout" || /^\/api\/jobs\/[a-f0-9]{20}\/input$/.test(pathname))) return true;
-  if (method === "GET" && pathname === "/api/actors") return true;
+  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys")) return true;
   if (method === "DELETE" && /^\/api\/actors\/[A-Za-z0-9.:-]{1,253}\/[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(pathname)) return true;
+  // Journeys: keep a proven run, replay it, forget it (ADR-0009 slice 3).
+  if (method === "POST" && (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname) || pathname === "/api/operations/run-flow")) return true;
+  if (method === "DELETE" && /^\/api\/journeys\/[a-z0-9-]{1,60}$/.test(pathname)) return true;
   return false;
 }
 
@@ -787,6 +791,56 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         json(response, 200, { ok: true });
         return;
       }
+      // Where this person's journeys live: the open repository's .tapp/flows/ for the operator,
+      // the account's own store on a public Studio, this machine's store otherwise.
+      const journeyStore = () => {
+        if (account) return JourneyStore.forAccount(account.id);
+        const root = registry.currentRoot();
+        return root ? JourneyStore.forRepository(root) : JourneyStore.forMachine();
+      };
+      const keepMatch = !anonymous && request.method === "POST" ? url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/keep$/) : null;
+      if (keepMatch) {
+        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        if (!visibleToOwner(keepMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
+        const captureDir = capturePath(keepMatch[1], ".");
+        if (!captureDir || !fs.existsSync(captureDir)) { json(response, 404, { error: "No such capture" }); return; }
+        const body = await readJsonBody(request);
+        const journey = journeyFromCapture(captureDir, { name: String(body.name || "").slice(0, 120), actor: /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(String(body.actor || "")) ? String(body.actor) : "default" });
+        if (!journey) { json(response, 409, { error: "That run only looked around; there is no path to keep." }); return; }
+        // A preview names the journey and lists where it went without keeping anything, so the
+        // Studio can offer it with the right name instead of a guess.
+        if (body.preview === true) { json(response, 200, { name: journey.flow.name, slug: slugify(journey.flow.name), steps: journey.steps, screens: journey.screens, signedIn: journey.signedIn, preview: true }); return; }
+        let kept;
+        try { kept = journeyStore().keep(journey, { replace: body.replace === true }); }
+        catch (error) { json(response, error.statusCode || 500, { error: error.message }); return; }
+        logUsage("journey.kept", { owner: (ownerKey || "operator").slice(0, 13), steps: journey.steps, signedIn: journey.signedIn });
+        json(response, 200, { name: journey.flow.name, slug: kept.slug, steps: journey.steps, screens: journey.screens, signedIn: journey.signedIn, path: registry.currentRoot() && !account ? path.relative(registry.currentRoot(), kept.path) : null });
+        return;
+      }
+      if (!anonymous && request.method === "GET" && url.pathname === "/api/journeys") {
+        const store = journeyStore();
+        const root = !account ? registry.currentRoot() : null;
+        let journeys;
+        if (root) {
+          // The repository's committed flows, recursively, with the last Studio replay beside each.
+          const { readProductProject } = await import("./product-operations.js");
+          const flows = readProductProject({ projectDir: root }).flows || [];
+          journeys = flows.map((flow) => ({ name: flow.name, slug: flow.relativePath.replace(/^\.tapp\/flows\//, "").replace(/\.(?:ya?ml|json)$/i, ""), group: flow.group || "", platform: flow.platform, steps: flow.steps, source: "repo", status: store.status(flow.relativePath.replace(/^\.tapp\/flows\//, "").replace(/\.(?:ya?ml|json)$/i, "")) }));
+        } else {
+          journeys = store.list().map((journey) => ({ ...journey, group: "" }));
+        }
+        json(response, 200, { journeys });
+        return;
+      }
+      const forgetJourneyMatch = !anonymous && request.method === "DELETE" ? url.pathname.match(/^\/api\/journeys\/([a-z0-9-]{1,60})$/) : null;
+      if (forgetJourneyMatch) {
+        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        // Committed flows are the repository's; only kept journeys are forgotten from here.
+        if (!account && registry.currentRoot()) { json(response, 409, { error: "That journey is committed in the repository; remove the file there." }); return; }
+        journeyStore().forget(forgetJourneyMatch[1]);
+        json(response, 200, { ok: true });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/session") {
         if (account) {
           json(response, 200, {
@@ -1033,19 +1087,33 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // answered with the command to run it where that is.
       if (operation === "run-flow") {
         if (anonymous) { json(response, 401, { error: "Sign in to replay a journey" }); return; }
-        const root = registry.currentRoot();
-        if (!root) throw Object.assign(new Error("Open a repository first"), { statusCode: 409 });
+        const store = journeyStore();
+        const root = !account ? registry.currentRoot() : null;
         const name = String(body.name || "").replace(/\.ya?ml$/i, "");
         if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,120}$/.test(name) || name.includes("..")) throw Object.assign(new Error("That is not a journey name"), { statusCode: 400 });
-        const flowPath = path.join(root, ".tapp", "flows", `${name}.yml`);
-        if (!flowPath.startsWith(path.join(root, ".tapp", "flows") + path.sep) || !fs.existsSync(flowPath)) throw Object.assign(new Error(`No journey named ${name}`), { statusCode: 404 });
+        // A repository journey may sit in a subfolder; a kept one is a flat slug in its store.
+        const flowPath = root ? path.join(root, ".tapp", "flows", `${name}.yml`) : store.flowPath(name);
+        if (!flowPath.startsWith(store.root + path.sep) || !fs.existsSync(flowPath)) throw Object.assign(new Error(`No journey named ${name}`), { statusCode: 404 });
         const { loadFlowFile, inferFlowPlatform } = await import("./flow-runtime.js");
         const flow = loadFlowFile(flowPath);
         const platform = inferFlowPlatform(flow);
+        const shown = root ? path.relative(root, flowPath) : `${name}.yml`;
         if (platform !== "web") {
-          json(response, 200, { kind: "self-host", command: `npx -y @aarwitz/tapp@latest run ${path.relative(root, flowPath)}`,
-            message: `${flow.name || name} runs on ${platform === "android" ? "an Android device or emulator" : "an iOS simulator"}, which the Studio does not have. Run it where that is: npx -y @aarwitz/tapp@latest run ${path.relative(root, flowPath)}` });
+          json(response, 200, { kind: "self-host", command: `npx -y @aarwitz/tapp@latest run ${shown}`,
+            message: `${flow.name || name} runs on ${platform === "android" ? "an Android device or emulator" : "an iOS simulator"}, which the Studio does not have. Run it where that is: npx -y @aarwitz/tapp@latest run ${shown}` });
           return;
+        }
+        // A journey that signs in does so as the test account tapp was told about for that
+        // site: the values come from the encrypted actor store at replay and never from the file.
+        const variables = {};
+        let storageStatePath = "";
+        if (flow.url && (flow.actor || (flow.steps || []).some((step) => step && typeof step === "object" && "login" in step))) {
+          const actors = new ActorStore(actorRootFor() ? { root: actorRootFor() } : {});
+          const record = actors.read(flow.url, flow.actor || "default");
+          if (record?.credentials?.email) variables.TEST_EMAIL = record.credentials.email;
+          if (record?.credentials?.password) variables.TEST_PASSWORD = record.credentials.password;
+          // A journey that began inside replays from the actor's saved session, like the run did.
+          if (flow.actor) storageStatePath = actors.sessionFile(flow.url, flow.actor) || "";
         }
         const captureId = `flow-web-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
         const evidenceDir = path.join(captureRoot(), captureId);
@@ -1053,10 +1121,30 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         const job = startJob(operation, async (progress) => {
           progress({ phase: "runtime", text: `Replaying ${flow.name || name}` });
           const { runWebFlow } = await import("./web-flow.js");
-          const result = await runWebFlow({ flow, logPath: path.join(evidenceDir, "flow.log"), screenshotDir: evidenceDir, recordVideoDir: evidenceDir });
-          for (const line of result.lines || []) progress({ phase: "replay", text: typeof line === "string" ? line : (line.text || JSON.stringify(line)) });
-          return { kind: "journey", name: flow.name || name, passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, capture: { id: captureId, path: evidenceDir } };
-        }, null);
+          let result;
+          try { result = await runWebFlow({ flow, variables, storageStatePath, logPath: path.join(evidenceDir, "flow.log"), screenshotDir: evidenceDir, recordVideoDir: evidenceDir }); }
+          finally { if (storageStatePath) { try { fs.rmSync(storageStatePath, { force: true }); } catch { /* temp */ } } }
+          // The runner's log is marker lines; the chat wants one plain sentence per step.
+          for (const line of result.lines || []) {
+            const raw = typeof line === "string" ? line : (line.text || "");
+            const step = raw.match(/^OCQA_FLOW_STEP:(\{.*\})$/);
+            if (step) {
+              try {
+                const s = JSON.parse(step[1]);
+                const what = s.action === "login" ? "Signed in" : s.action === "wait_for" ? `Reached ${s.target}` : s.action === "assert_screen" ? `On ${s.target}` : s.action === "tap" ? `Tapped "${s.target}"` : `${s.action} ${s.target || ""}`.trim();
+                progress({ phase: "replay", text: s.status === "pass" ? `${what}` : `Step ${s.index}: ${what} — ${s.detail || "failed"}` });
+              } catch { progress({ phase: "replay", text: raw }); }
+              continue;
+            }
+            if (/^OCQA_(FLOW_RESULT|ISSUE):/.test(raw)) continue;
+            if (raw) progress({ phase: "replay", text: raw });
+          }
+          const status = store.recordRun(root ? name : slugify(name), { passed: result.passed, captureId, executed: result.executed, total: result.total, failed: result.failed });
+          if (ownerKey) setCaptureOwner(captureId, ownerKey);
+          logUsage("journey.run", { owner: (ownerKey || "operator").slice(0, 13), passed: result.passed });
+          return { kind: "journey", name: flow.name || name, slug: root ? name : slugify(name), passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, status, capture: { id: captureId, path: evidenceDir } };
+        }, null, { lane: ownerKey || OPERATOR_LANE });
+        job.ownerKey = ownerKey;
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }

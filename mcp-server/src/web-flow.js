@@ -290,7 +290,7 @@ export function resolveGateFlowUrl(declared, gateUrl) {
   }
 }
 
-export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVideoDir, variables = {}, strictOrigin = false, playwright, device = "", viewport = "", urlIsFallback = false }) {
+export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVideoDir, variables = {}, strictOrigin = false, playwright, device = "", viewport = "", urlIsFallback = false, storageStatePath = "" }) {
   // urlIsFallback = the caller is a gate: the Flow's own page wins, rebased onto the gate's
   // deployment (see resolveGateFlowUrl). An explicit caller url (CLI positional) still overrides.
   const declaredUrl = flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
@@ -311,6 +311,8 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
   const context = await browser.newContext({
     ...contextOptions,
     ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir, ...(contextOptions.viewport ? { size: contextOptions.viewport } : {}) } } : {}),
+    // A journey kept from a run that started signed in replays from the same saved session.
+    ...(storageStatePath ? { storageState: storageStatePath } : {}),
   });
   const page = await context.newPage();
   const timeout = Number(flow.timeoutMs ?? flow.timeout) || DEFAULT_TIMEOUT;

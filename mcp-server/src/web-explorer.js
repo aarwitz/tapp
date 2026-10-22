@@ -879,7 +879,9 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   let probeCapHit = false;
   let actions = 0;
   let screenCount = 0;
-  if (startedSignedIn) narrate("Starting signed in from the saved session");
+  // A marker as well as a line, so a journey kept from this run knows it began inside and
+  // replays from the same saved session rather than at a sign-in it never saw.
+  if (startedSignedIn) emitAction({ type: "session", target: "saved session", narrative: "Starting signed in from the saved session" });
   // Which distinct on-screen states each route has produced, so one route cannot mint states
   // without limit when something on it never settles.
   const signaturesByRoute = new Map();

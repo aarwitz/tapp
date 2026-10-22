@@ -573,3 +573,12 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .actor-row:last-child { border-bottom:0; }
 .actor-row small { color:var(--muted); }
 .actor-app { padding:8px 10px 2px; font-weight:600; font-size:12px; color:var(--muted); border-top:1px solid var(--tapp-border); }
+
+/* Journeys with status (ADR-0009 slice 3). */
+.journey-row .journey-name small { color:var(--muted); font-size:11px; }
+.journey-status { display:inline-block; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:600; letter-spacing:.02em; }
+.journey-status.passing { background:rgba(46,160,67,.18); color:#4ade80; }
+.journey-status.failing { background:rgba(220,38,38,.18); color:#f87171; }
+.journey-status.never { background:var(--control); color:var(--muted); }
+.journey-actions { display:flex; gap:6px; }
+.chat-keep .ask-field input { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--tapp-border); background:rgba(0,0,0,.25); color:var(--tapp-text); }
