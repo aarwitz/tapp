@@ -775,7 +775,7 @@ export function normalizeWebSeedTargets(seedTargets = [], limit = 5) {
   return result;
 }
 
-export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], watch = false, onProgress, device = "", viewport = "" }) {
+export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDir, testEmail = "", testPassword = "", seedRoutes = [], seedTargets = [], watch = false, onProgress, device = "", viewport = "", interactive = false, inputResponsePath = "", inputWaitSec = 120, storageStatePath = "", onSessionSaved = null }) {
   const start = new URL(url);
   if (!/^https?:$/.test(start.protocol)) throw new Error("url must be http(s)");
   fs.mkdirSync(outDir, { recursive: true });
@@ -807,7 +807,17 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   // searching the whole recording. Record where the capture begins relative to the marker
   // timebase; every STATE below carries the same `t`, so a frame is a seek.
   const recordingStartedMs = Date.now() - startedAtMs;
-  const context = await browser.newContext({ ...captureProfile, recordVideo: { dir: outDir, size: captureProfile.viewport } });
+  // A stored session means the run starts inside the application instead of at its door. The
+  // file is a temp copy written by the actor store; remove it as soon as the context has it.
+  const storageState = storageStatePath && fs.existsSync(storageStatePath) ? storageStatePath : undefined;
+  const context = await browser.newContext({ ...captureProfile, ...(storageState ? { storageState } : {}), recordVideo: { dir: outDir, size: captureProfile.viewport } });
+  const startedSignedIn = !!storageState;
+  if (storageState) { try { fs.rmSync(storageState, { force: true }); } catch { /* best effort */ } }
+  // After a sign-in works, hand the session back so it can be kept for next time.
+  const keepSession = async (why) => {
+    if (!onSessionSaved) return;
+    try { await onSessionSaved(await context.storageState(), why); } catch { /* keeping the session is never allowed to fail the run */ }
+  };
   emit("RECORDING", { file: "exploration.webm", startsAtMs: recordingStartedMs, fps: 25 });
   await installWebListenerTracking(context);
   if (watch) await installWebWatchUi(context);
@@ -869,6 +879,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   let probeCapHit = false;
   let actions = 0;
   let screenCount = 0;
+  if (startedSignedIn) narrate("Starting signed in from the saved session");
   // Which distinct on-screen states each route has produced, so one route cannot mint states
   // without limit when something on it never settles.
   const signaturesByRoute = new Map();
@@ -1057,10 +1068,52 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   // Login preamble parity with iOS: if creds were given and a password field is present,
   // fill + submit once, and flag auth_failed if we clearly bounced.
+  // The same protocol the iOS harness and the desktop app speak: emit OCQA_AWAIT_INPUT with the
+  // fields, poll the response path, honour only a response for this request, and say how it was
+  // resolved. Secure fields never carry a default over stdout. A host that never answers turns
+  // interactivity off for the rest of the run rather than freezing it.
+  let interactiveEnabled = interactive && !!inputResponsePath;
+  async function askForInput(screen, fields) {
+    if (!interactiveEnabled) return null;
+    const requestId = `in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const request = { requestId, screen, fields: fields.map((f) => ({ key: f.key, label: f.label, secure: !!f.secure, placeholder: f.placeholder || "", default: f.secure ? "" : (f.default || "") })) };
+    emit("AWAIT_INPUT", request);
+    narrate(`Waiting for ${fields.map((f) => f.label).join(" and ")}`, { screen, awaitInput: request });
+    const started = Date.now();
+    let resolved = { action: "timeout", values: {} };
+    try { fs.rmSync(inputResponsePath, { force: true }); } catch {}
+    while (Date.now() - started < inputWaitSec * 1000) {
+      await page.waitForTimeout(500);
+      let reply;
+      try { reply = JSON.parse(fs.readFileSync(inputResponsePath, "utf8")); } catch { continue; }
+      if (reply?.requestId !== requestId) { try { fs.rmSync(inputResponsePath, { force: true }); } catch {} continue; }
+      resolved = { action: String(reply.action || "defaults"), values: reply.action === "submit" && reply.values && typeof reply.values === "object" ? reply.values : {} };
+      try { fs.rmSync(inputResponsePath, { force: true }); } catch {}
+      break;
+    }
+    if (resolved.action === "timeout") interactiveEnabled = false;
+    if (resolved.action === "dont_ask") interactiveEnabled = false;
+    emit("INPUT_RESOLVED", { requestId, action: resolved.action });
+    narrate(resolved.action === "submit" ? "Received the sign-in details" : `Sign-in request ${resolved.action === "timeout" ? "went unanswered" : resolved.action.replace("_", " ")}`, { screen, inputResolved: { requestId, action: resolved.action } });
+    return resolved;
+  }
+
   async function tryLogin(screen) {
-    if (loginTried || !testPassword) return null;
+    if (loginTried) return null;
     const pw = page.locator("input[type=password]").first();
     if (!(await pw.isVisible().catch(() => false))) return null;
+    if (!testPassword) {
+      // No credentials. Ask, if someone is there to answer; otherwise this is where the run ends
+      // its view of the application, and the report says so.
+      const answer = await askForInput(screen, [
+        { key: "email", label: "Email", placeholder: "you@example.com" },
+        { key: "password", label: "Password", secure: true },
+      ]);
+      if (!answer || answer.action !== "submit") return null;
+      testEmail = String(answer.values.email || testEmail || "");
+      testPassword = String(answer.values.password || "");
+      if (!testPassword) return null;
+    }
     loginTried = true;
     const emailSel = "input[type=email], input[name*=mail i], input[name*=user i], input[id*=mail i], input[id*=user i]";
     if (testEmail) {
@@ -1095,6 +1148,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         "login form"
       );
     } else {
+      await keepSession("signed-in");
       // SPAs commonly replace the login view without changing URL. Capture the
       // authenticated state immediately so coverage does not remain stuck at 1.
       return await observe();

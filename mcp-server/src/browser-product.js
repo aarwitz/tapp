@@ -131,7 +131,9 @@ function anonymousAllows(method, pathname) {
   // A visitor may start a read-only audit, and may *ask* about the other kinds of target so the
   // Studio can say where they actually run. A bare 401 reads as "broken" to someone who typed a
   // repo into the landing page, which is how five of its six examples used to dead-end.
-  return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build"].includes(pathname);
+  // `explore` is listed so a visitor receives the honest "run this on your own machine" answer
+  // from the handler, rather than a bare 401 that reads as broken.
+  return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build", "/api/operations/explore"].includes(pathname);
 }
 
 // One visitor may start a bounded number of audits per hour. Each audit drives a real browser
@@ -217,6 +219,19 @@ function listBuildExplores(limit = 50) {
   return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
+// Mark a capture as prompt-started so the Studio lists it in Runs without a repository. The
+// report summary beside it is what the list row and detail read; the capture stays the evidence.
+function markPromptStarted(structured) {
+  try {
+    const captureDir = structured?.capture?.path;
+    if (!captureDir) return;
+    const provenancePath = path.join(captureDir, "provenance.json");
+    const provenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
+    fs.writeFileSync(provenancePath, JSON.stringify({ ...provenance, origin: "studio-prompt" }, null, 2));
+    fs.writeFileSync(path.join(captureDir, "report.json"), JSON.stringify({ headline: structured.headline, inconclusive: structured.inconclusive, screensExplored: structured.screensExplored, actionsPerformed: structured.actionsPerformed, findingCounts: structured.findingCounts, findings: structured.findings, checkedFor: structured.checkedFor, notChecked: structured.notChecked, platform: structured.platform, target: structured.target }, null, 2));
+  } catch { /* listing is a convenience; the capture is the evidence */ }
+}
+
 function openBrowser(url) {
   const invocation = process.platform === "darwin" ? ["open", [url]]
     : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
@@ -231,6 +246,8 @@ function publicJob(job, { hosted = false } = {}) {
     createdAt: job.createdAt, completedAt: job.completedAt || null, progress: job.progress.slice(-80), frame: !!job.latestFrame || !!job.liveSimulator, platform: job.platform || null,
     result: hosted ? hostedPayload(job.result) : job.result || null,
     error: job.error || null,
+    // Fields only (labels, which are secure); what the person typed never travels back out.
+    input: job.input ? { requestId: job.input.requestId, screen: job.input.screen, fields: job.input.fields, askedAt: job.input.askedAt } : null,
   };
 }
 
@@ -509,6 +526,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // The engine names the screenshot it just wrote; the Studio device panel polls it as the
       // exploration feed. Only engine-supplied paths ever land here, never client input.
       if (normalized.screenshot && path.isAbsolute(normalized.screenshot)) job.latestFrame = normalized.screenshot;
+      // A pause-and-ask from the engine (OCQA_AWAIT_INPUT): keep the request on the job so the
+      // Studio can render it, and clear it once the engine says it was resolved.
+      if (normalized.awaitInput && typeof normalized.awaitInput === "object") job.input = { ...normalized.awaitInput, askedAt: new Date().toISOString() };
+      if (normalized.inputResolved) job.input = null;
     };
     jobs.set(job.id, job);
     Promise.resolve().then(() => work(progress)).then((result) => {
@@ -692,6 +713,29 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         json(response, 200, publicJob(job, { hosted }));
         return;
       }
+      // Answering an ask. Only the operator may: an anonymous visitor is never asked (see the
+      // explore operation below), and this is the one place typed credentials pass through the
+      // server — straight to the engine's response file (0600), optionally into the encrypted
+      // actor store, and nowhere else. They are not logged and not kept on the job.
+      const jobInputMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/input$/);
+      if (request.method === "POST" && jobInputMatch) {
+        if (anonymous) { response.writeHead(401); response.end("Sign in to answer a run"); return; }
+        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        const job = jobs.get(jobInputMatch[1]);
+        if (!job || !job.input || !job.inputResponsePath) { json(response, 409, { error: "This run is not waiting for anything" }); return; }
+        const body = await readJsonBody(request);
+        const action = ["submit", "defaults", "skip", "dont_ask"].includes(body.action) ? body.action : "skip";
+        const values = action === "submit" && body.values && typeof body.values === "object"
+          ? Object.fromEntries(Object.entries(body.values).filter(([k, v]) => typeof k === "string" && typeof v === "string").map(([k, v]) => [k.slice(0, 64), v.slice(0, 512)]))
+          : {};
+        fs.writeFileSync(job.inputResponsePath, JSON.stringify({ requestId: job.input.requestId, action, values }), { mode: 0o600 });
+        if (action === "submit" && body.remember === true && job.actorTarget) {
+          const { ActorStore } = await import("./actor-store.js");
+          new ActorStore().write(job.actorTarget, job.actorName || "default", { credentials: { email: values.email || "", password: values.password || "" } });
+        }
+        json(response, 200, { ok: true, action });
+        return;
+      }
       const jobFrameMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/frame$/);
       if (request.method === "GET" && jobFrameMatch && anonymous && jobs.get(jobFrameMatch[1])?.visitorId !== visitorId) { response.writeHead(404); response.end("Not found"); return; }
       if (request.method === "GET" && jobFrameMatch) {
@@ -809,22 +853,76 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           }
           if (result?.error) throw Object.assign(new Error(result.error), { details: result.details || {} });
           const structured = result.structured;
-          // Mark the capture as prompt-started so the Studio lists it without a repository.
-          try {
-            const captureDir = structured?.capture?.path;
-            if (captureDir) {
-              const provenancePath = path.join(captureDir, "provenance.json");
-              const provenance = JSON.parse(fs.readFileSync(provenancePath, "utf8"));
-              fs.writeFileSync(provenancePath, JSON.stringify({ ...provenance, origin: "studio-prompt" }, null, 2));
-              fs.writeFileSync(path.join(captureDir, "report.json"), JSON.stringify({ headline: structured.headline, inconclusive: structured.inconclusive, screensExplored: structured.screensExplored, actionsPerformed: structured.actionsPerformed, findingCounts: structured.findingCounts, findings: structured.findings, checkedFor: structured.checkedFor, notChecked: structured.notChecked, platform: structured.platform, target: structured.target }, null, 2));
-            }
-          } catch { /* listing is a convenience; the capture is the evidence */ }
+          markPromptStarted(structured);
           return structured;
         }, null);
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }
       // A website audit needs no repository: it is read-only against a URL and writes a capture.
+      // Going inside a website: a full exploration that can stop at a sign-in and ask. Operator
+      // only — a public Studio asking a stranger for their login to another site is
+      // phishing-shaped, so a visitor is told to run this on their own machine instead.
+      if (operation === "explore") {
+        if (anonymous) {
+          json(response, 200, { kind: "self-host", command: "npx -y @aarwitz/tapp@latest app",
+            message: "Going inside a site means signing in, and that is something to do on your own machine. Start the Studio there: npx -y @aarwitz/tapp@latest app" });
+          return;
+        }
+        let target;
+        try { target = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("Explore needs a valid http(s) URL"), { statusCode: 400 }); }
+        if (!/^https?:$/.test(target.protocol)) throw Object.assign(new Error("Explore needs a valid http(s) URL"), { statusCode: 400 });
+        const actorName = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(String(body.actor || "")) ? String(body.actor) : "default";
+        const responsePath = path.join(os.tmpdir(), `tapp-input-${crypto.randomBytes(8).toString("hex")}.json`);
+        const job = startJob(operation, async (progress) => {
+          const engine = await import("./index.js");
+          const result = await engine.runQaWeb({
+            url: target.href, maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600,
+            interactive: true, inputResponsePath: responsePath, inputWaitSec: 180, actor: actorName,
+            onProgress: (entry) => progress({ phase: entry.awaitInput ? "ask" : "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || 0} actions · ${entry.states || 0} screens`, ...(entry.action ? { current: entry.action, total: entry.max } : {}), ...(entry.screen ? { screen: entry.screen } : {}), ...(entry.screenshot ? { screenshot: entry.screenshot } : {}), ...(entry.awaitInput ? { awaitInput: entry.awaitInput } : {}), ...(entry.inputResolved ? { inputResolved: entry.inputResolved } : {}) }),
+          });
+          if (result?.error) throw Object.assign(new Error(result.error), { details: result.details || {} });
+          markPromptStarted(result.structured);
+          return result.structured;
+        }, null);
+        job.inputResponsePath = responsePath;
+        job.actorTarget = target.href;
+        job.actorName = actorName;
+        json(response, 202, { job: publicJob(job, { hosted }) });
+        return;
+      }
+      // Replay a committed journey from the open project's .tapp/flows/. Web journeys run here
+      // with a recording; an iOS or Android journey needs the simulator or device, so it is
+      // answered with the command to run it where that is.
+      if (operation === "run-flow") {
+        if (anonymous) { json(response, 401, { error: "Sign in to replay a journey" }); return; }
+        const root = registry.currentRoot();
+        if (!root) throw Object.assign(new Error("Open a repository first"), { statusCode: 409 });
+        const name = String(body.name || "").replace(/\.ya?ml$/i, "");
+        if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]{0,120}$/.test(name) || name.includes("..")) throw Object.assign(new Error("That is not a journey name"), { statusCode: 400 });
+        const flowPath = path.join(root, ".tapp", "flows", `${name}.yml`);
+        if (!flowPath.startsWith(path.join(root, ".tapp", "flows") + path.sep) || !fs.existsSync(flowPath)) throw Object.assign(new Error(`No journey named ${name}`), { statusCode: 404 });
+        const { loadFlowFile, inferFlowPlatform } = await import("./flow-runtime.js");
+        const flow = loadFlowFile(flowPath);
+        const platform = inferFlowPlatform(flow);
+        if (platform !== "web") {
+          json(response, 200, { kind: "self-host", command: `npx -y @aarwitz/tapp@latest run ${path.relative(root, flowPath)}`,
+            message: `${flow.name || name} runs on ${platform === "android" ? "an Android device or emulator" : "an iOS simulator"}, which the Studio does not have. Run it where that is: npx -y @aarwitz/tapp@latest run ${path.relative(root, flowPath)}` });
+          return;
+        }
+        const captureId = `flow-web-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
+        const evidenceDir = path.join(captureRoot(), captureId);
+        fs.mkdirSync(evidenceDir, { recursive: true });
+        const job = startJob(operation, async (progress) => {
+          progress({ phase: "runtime", text: `Replaying ${flow.name || name}` });
+          const { runWebFlow } = await import("./web-flow.js");
+          const result = await runWebFlow({ flow, logPath: path.join(evidenceDir, "flow.log"), screenshotDir: evidenceDir, recordVideoDir: evidenceDir });
+          for (const line of result.lines || []) progress({ phase: "replay", text: typeof line === "string" ? line : (line.text || JSON.stringify(line)) });
+          return { kind: "journey", name: flow.name || name, passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, capture: { id: captureId, path: evidenceDir } };
+        }, null);
+        json(response, 202, { job: publicJob(job, { hosted }) });
+        return;
+      }
       if (operation === "audit") {
         let target;
         try { target = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("Audit needs a valid http(s) URL"), { statusCode: 400 }); }

@@ -1975,7 +1975,7 @@ export function formatScreen(screenTitle, elements, { full = false } = {}) {
 // `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
 // the surfaces can't drift.)
 
-export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {}, device = "", viewport = "" }) {
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {}, device = "", viewport = "", interactive = false, inputResponsePath = "", inputWaitSec = 120, actor = "" }) {
   const { storagePreflight } = await import("./environment-preflight.js");
   const storage = storagePreflight(capturesDir);
   if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
@@ -1984,6 +1984,23 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
   const id = "web-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
   const outDir = path.join(capturesDir, id);
   const provenance = writeCaptureProvenance(outDir, { kind: "explore", platform: "web", target: url.trim(), projectDir: workspaceRoot });
+  // A named actor is an identity tapp remembers for this application: credentials it was told
+  // once, and the signed-in session it built with them. With one, the run starts inside the
+  // application; without one, and with a person to ask, it asks at the door.
+  let store = null;
+  let storageStatePath = "";
+  let actorName = isNonEmptyString(actor) ? actor.trim() : "";
+  let storedEmail = "";
+  let storedPassword = "";
+  if (actorName || interactive) {
+    const { ActorStore } = await import("./actor-store.js");
+    store = new ActorStore();
+    actorName = actorName || "default";
+    const record = store.read(url.trim(), actorName);
+    storageStatePath = store.sessionFile(url.trim(), actorName) || "";
+    storedEmail = record?.credentials?.email || "";
+    storedPassword = record?.credentials?.password || "";
+  }
   let webResult;
   try {
     const { exploreWeb } = await import("./web-explorer.js");
@@ -1992,8 +2009,13 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
       maxActions: actions,
       timeoutSec,
       outDir,
-      testEmail: isNonEmptyString(testEmail) ? testEmail.trim() : "",
-      testPassword: isNonEmptyString(testPassword) ? testPassword.trim() : "",
+      testEmail: isNonEmptyString(testEmail) ? testEmail.trim() : storedEmail,
+      testPassword: isNonEmptyString(testPassword) ? testPassword.trim() : storedPassword,
+      interactive: interactive === true,
+      inputResponsePath: isNonEmptyString(inputResponsePath) ? inputResponsePath.trim() : "",
+      inputWaitSec: Math.max(10, Math.min(900, asInteger(inputWaitSec, 120))),
+      storageStatePath,
+      onSessionSaved: store ? (session) => { store.write(url.trim(), actorName, { session }); } : null,
       seedRoutes,
       seedTargets,
       watch: watch === true,

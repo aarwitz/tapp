@@ -57,7 +57,7 @@ async function fixtureSite() {
   return { server, url:`http://127.0.0.1:${server.address().port}/` };
 }
 
-test("without a repository the Studio explains how to open one and audits a website read-only", { skip:skipRealBrowser || !chromium, timeout:90_000 }, async () => {
+test("without a repository the Studio explains how to open one, goes inside a website from the prompt, and still audits read-only on request", { skip:skipRealBrowser || !chromium, timeout:150_000 }, async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-visible-audit-home-"));
   const priorHome = process.env.TAPP_HOME;
   process.env.TAPP_HOME = home;
@@ -75,21 +75,34 @@ test("without a repository the Studio explains how to open one and audits a webs
     assert.match(onboarding, /audit a website read-only/);
     assert.equal(await page.locator(".hero-device").count(), 1, "the empty state shows what tapp does");
 
+    // On your own machine a URL from the prompt is a real exploration — it can stop at a sign-in
+    // and ask (ADR-0009). This fixture has no sign-in, so it simply goes through.
     await page.locator("#prompt-input").fill(site.url);
     await page.locator("#prompt-start").click();
     await page.locator("#operation-drawer").waitFor({ state:"visible", timeout:5000 });
-    await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:60_000 });
+    await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:120_000 });
     const chat = await page.locator("#chat-transcript").innerText();
-    assert.match(chat, /read-only — nothing will be clicked/, "the chat opens with what is about to happen");
-    assert.match(chat, /1 issue found/i, "the chat ends with a summary pill");
-    assert.match(chat, /report\.html/, "the report is attached to the transcript");
+    assert.match(chat, /Opened \//, "the chat narrates the exploration from the first page");
+    assert.doesNotMatch(chat, /tapp found a sign-in/, "no sign-in on this fixture, so nothing to ask");
     assert.equal(await page.locator("#device-frame.web").count(), 1, "the stage takes the browser's aspect ratio for a website");
+
+    // The read-only audit is still one click away, on the Runs view, and still reads only.
+    await page.locator('.primary-nav [data-view="runs"]').click();
+    await page.locator("#audit-url").fill(site.url);
+    await page.locator("#audit-start").click();
+    await page.locator("#operation-drawer").waitFor({ state:"visible", timeout:5000 });
+    await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:60_000 });
+    const auditChat = await page.locator("#chat-transcript").innerText();
+    assert.match(auditChat, /read-only — nothing will be clicked/, "the audit says what it is about to do");
+    assert.match(auditChat, /1 issue found/i, "the chat ends with a summary pill");
+    assert.match(auditChat, /report\.html/, "the report is attached to the transcript");
     await page.locator('.primary-nav [data-view="runs"]').click();
     await page.locator("#runs-list .run-row").first().waitFor({ state:"visible" });
-    const row = await page.locator("#runs-list .run-row").first().innerText();
-    assert.match(row, /Audit · 127\.0\.0\.1/);
-    assert.match(row, /read-only/);
-    assert.match(row, /1 issue/i);
+    const rows = await page.locator("#runs-list").innerText();
+    assert.match(rows, /Audit · 127\.0\.0\.1/, "the audit is listed");
+    assert.match(rows, /Explore · /, "and so is the exploration");
+    const auditRow = page.locator("#runs-list .run-row", { hasText: "Audit ·" }).first();
+    await auditRow.click();
     const detail = await page.locator("#run-detail").innerText();
     assert.match(detail, /READ-ONLY AUDIT/);
     assert.match(detail, /404 asset: \/missing\.css/);

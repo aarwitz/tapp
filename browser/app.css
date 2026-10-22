@@ -529,3 +529,27 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 
 @media (max-width: 900px) { .stage { height:auto; min-height:0; } .device-stage { height:auto; } .device-frame { height:62vh; } .device-frame.web { height:auto; } .chat-float { position:static; width:100%; max-height:none; margin:12px; width:calc(100% - 24px); } }
 @media (prefers-reduced-motion: reduce) { .hero-page, .hero-cursor, .hero-log li { animation:none !important; opacity:1 !important; transform:none !important; } .hero-page-1, .hero-page-2 { display:none; } .chat-line.typing i { animation:none; } }
+
+
+/* ---- The ask: a sign-in the engine stopped at, answered in the chat --------------------------- */
+.chat-ask { margin-top:6px; padding:12px; border-radius:var(--tapp-radius-lg); background:rgba(15,26,34,.85); border:1px solid var(--tapp-accent, #4f6cf7); display:grid; gap:8px; }
+.chat-ask-head { display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:start; font-size:13px; line-height:1.45; color:var(--tapp-text); }
+.chat-ask .ask-field { display:grid; gap:4px; font-size:12px; color:var(--tapp-text-soft); }
+.chat-ask .ask-field input { font:inherit; font-size:13px; padding:8px 10px; border-radius:8px; border:1px solid var(--tapp-border); background:rgba(0,0,0,.25); color:var(--tapp-text); }
+.chat-ask .ask-remember { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--tapp-text-soft); }
+.chat-ask .ask-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.chat-ask .ask-actions button { font:inherit; font-size:12px; padding:7px 12px; border-radius:8px; cursor:pointer; }
+
+/* ---- Journeys: the list a person owns ------------------------------------------------------- */
+.journey-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--tapp-border); font-size:13px; }
+.journey-row:last-child { border-bottom:0; }
+.journey-platform { font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:999px; background:rgba(79,108,247,.14); color:var(--tapp-accent, #4f6cf7); }
+.journey-platform.ios { background:rgba(74,194,107,.14); color:var(--tapp-green, #4ac26b); }
+.journey-platform.android { background:rgba(227,179,65,.14); color:var(--tapp-amber, #e3b341); }
+.journey-name { color:var(--tapp-text); font-weight:600; }
+.journey-steps { color:var(--tapp-text-soft); font-size:12px; }
+
+.journey-group { border-top:1px solid var(--tapp-border); }
+.journey-group > summary { cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; padding:9px 10px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--tapp-text-soft); }
+.journey-group > summary::-webkit-details-marker { display:none; }
+.journey-group[open] > summary { color:var(--tapp-text); }

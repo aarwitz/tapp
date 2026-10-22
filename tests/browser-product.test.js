@@ -454,3 +454,38 @@ test("the Studio audits a website read-only without a repository and lists it wi
     if (priorHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = priorHome;
   }
 });
+
+test("a visitor is never asked for a login, and cannot answer one", async () => {
+  // Asking a stranger for their login to another site is phishing-shaped. The public Studio
+  // tells a visitor to go inside from their own machine, and the answer endpoint is closed to
+  // anyone who is not the operator.
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ask-ws-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ask-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot });
+  let cookie = "";
+  const call = async (pathname, init = {}) => {
+    const response = await fetch(`${product.origin}${pathname}`, { ...init, redirect: "manual", headers: { ...(init.headers || {}), ...(cookie ? { cookie } : {}) } });
+    const set = response.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0];
+    return response;
+  };
+  try {
+    await call("/");
+    const csrfToken = (await (await call("/api/session")).json()).csrfToken;
+    const headers = { "content-type": "application/json", "x-tapp-csrf": csrfToken, origin: "https://app.runtapp.com" };
+
+    const explore = await call("/api/operations/explore", { method: "POST", headers, body: JSON.stringify({ url: "https://example.com" }) });
+    assert.equal(explore.status, 200);
+    const answer = await explore.json();
+    assert.equal(answer.kind, "self-host", "a visitor is told to go inside from their own machine, not asked to sign in here");
+    assert.match(answer.command, /@aarwitz\/tapp@latest app/);
+
+    const reply = await call("/api/jobs/00000000000000000000/input", { method: "POST", headers, body: JSON.stringify({ action: "submit", values: { password: "x" } }) });
+    assert.equal(reply.status, 401, "a visitor cannot answer a run's sign-in prompt");
+  } finally {
+    await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+});

@@ -12,7 +12,7 @@ function apiRoute(route) {
 
 const state = {
   csrf: "", session: null, project: null, audits: [], explores: [], activeJob: null, activeView: "overview",
-  selectedTargetId: "", selectedRunId: "", live: { active:false }, transcript: [], transcriptSource: "", frameTimer: null,
+  selectedTargetId: "", selectedRunId: "", live: { active:false }, transcript: [], transcriptSource: "", frameTimer: null, pendingInput: null,
   chatCollapsed: false, shotScreens: new Set(), lastShotAt: 0,
 };
 const $ = (selector) => document.querySelector(selector);
@@ -288,7 +288,40 @@ function allRuns() {
   return [...gates, ...explores, ...audits].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 }
 
+// The journeys the open repository has committed under .tapp/flows/. This is the thing a
+// person owns; the engine has listed them all along and the Studio never showed them.
+function renderJourneys() {
+  const node = $("#journeys-list");
+  if (!node) return;
+  const flows = state.project?.flows || [];
+  setCount("#journey-count", flows.length);
+  if (!flows.length) { node.innerHTML = '<div class="empty">No journeys yet. Prove something with a session, then save it as a Flow.</div>'; return; }
+  // Group by folder: a real repository keeps dozens under sandbox/, weekly/, mobile/. The top
+  // level comes first; each group opens on demand so a hundred journeys read as a map.
+  const groups = new Map();
+  for (const flow of flows) { const key = flow.group || ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(flow); }
+  const row = (flow) => `<div class="journey-row"><span class="journey-platform ${esc(flow.platform || "web")}">${esc(flow.platform || "web")}</span><span class="journey-name">${esc(flow.name)}</span><span class="journey-steps">${flow.steps || 0} steps</span><button class="quiet" data-run-journey="${esc(flow.relativePath || flow.name)}" title="Replay this journey">▶ Run</button></div>`;
+  node.innerHTML = [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b))).map(([group, items]) =>
+    group === ""
+      ? items.map(row).join("")
+      : `<details class="journey-group"${items.length <= 8 ? " open" : ""}><summary><span class="journey-group-name">${esc(group)}/</span><span class="journey-steps">${items.length}</span></summary>${items.map(row).join("")}</details>`
+  ).join("");
+}
+
+async function runJourney(relativePath) {
+  const name = String(relativePath).replace(/^\.tapp\/flows\//, "").replace(/\.ya?ml$/i, "");
+  showProduct(); activateView("overview"); renderChat();
+  setHeading(name, "Replaying the journey exactly as committed.", { owned: true });
+  const result = await runOperation("run-flow", { name }, { input: name });
+  if (result?.kind === "self-host") { answerSelfHost(result); return; }
+  if (result?.kind === "journey") {
+    pushLine({ kind: "summary", tone: result.passed ? "ready" : "blocked", pill: result.passed ? "Passed" : "Failed", text: `${result.name}: ${result.executed}/${result.total} steps${result.failed ? `, ${result.failed} failed` : ""}.` });
+    renderChat();
+  }
+}
+
 function renderRuns() {
+  renderJourneys();
   const runs = allRuns();
   setCount("#run-count", runs.length);
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
@@ -353,11 +386,43 @@ function renderChat() {
     if (entry.kind === "finding") return `<div class="chat-line finding ${esc(entry.severity)}"><span class="chat-icon">${entry.icon}</span><span>${esc(entry.text)}</span></div>`;
     if (entry.kind === "progress") return "";
     return `<div class="chat-line ${esc(entry.kind || "")}"><span class="chat-icon">${entry.icon || "•"}</span><span>${esc(entry.text)}${entry.detail ? ` <em>— ${esc(entry.detail)}</em>` : ""}</span></div>`;
-  }).join("") + (state.activeJob ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
+  }).join("") + renderAskCard() + (state.activeJob && !state.pendingInput ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
   node.innerHTML = lines;
   if (stickToBottom) node.scrollTop = node.scrollHeight;
   const progress = [...state.transcript].reverse().find((entry) => entry.kind === "progress");
   $("#chat-status").textContent = state.activeJob ? (progress ? `${progress.current}/${progress.total} actions${progress.states != null ? ` · ${progress.states} screens` : ""}` : "working…") : state.transcript.length > 1 ? "done" : "ready";
+}
+
+// The desktop app's prompt, in the chat: Submit, Use defaults, Skip, Don't ask again. Secure
+// fields are password inputs; nothing typed here is echoed into the transcript, and "remember"
+// keeps it in the encrypted actor store so the next run starts signed in.
+function renderAskCard() {
+  const ask = state.pendingInput;
+  if (!ask) return "";
+  const fields = (ask.fields || []).map((f) => `<label class="ask-field"><span>${esc(f.label || f.key)}</span><input name="${esc(f.key)}" type="${f.secure ? "password" : "text"}" placeholder="${esc(f.placeholder || "")}" value="${esc(f.default || "")}" autocomplete="${f.secure ? "current-password" : "username"}"></label>`).join("");
+  return `<form class="chat-ask" id="chat-ask" data-request="${esc(ask.requestId)}" data-job="${esc(ask.jobId)}">
+    <div class="chat-ask-head"><span class="chat-icon">🔐</span><span>tapp found a sign-in on <b>${esc(ask.screen || "this screen")}</b>. Go in?</span></div>
+    ${fields}
+    <label class="ask-remember"><input type="checkbox" name="remember" checked> Remember for this site, so next time starts signed in</label>
+    <div class="ask-actions">
+      <button type="submit" class="primary" data-ask="submit">Submit</button>
+      <button type="button" class="quiet" data-ask="skip">Skip</button>
+      <button type="button" class="quiet" data-ask="dont_ask">Don't ask again</button>
+    </div>
+  </form>`;
+}
+
+async function answerAsk(form, action) {
+  const jobId = form.dataset.job;
+  const values = {};
+  if (action === "submit") for (const input of form.querySelectorAll("input[name]:not([type=checkbox])")) values[input.name] = input.value;
+  const remember = !!form.querySelector("input[name=remember]")?.checked;
+  try {
+    await api(`/api/jobs/${encodeURIComponent(jobId)}/input`, { method: "POST", body: JSON.stringify({ action, values, remember: action === "submit" && remember }) });
+    state.pendingInput = null;
+    pushLine({ kind: "step", icon: action === "submit" ? "🔐" : "⏭️", text: action === "submit" ? "Signing in with what you gave me" : action === "dont_ask" ? "Won't ask again this run" : "Skipped the sign-in" });
+    renderChat();
+  } catch (error) { toast(error.message, true); }
 }
 
 function setChatCollapsed(collapsed) {
@@ -493,9 +558,9 @@ function renderProject() {
     return;
   }
   showProduct();
-  $("#app-name").textContent = project.application?.name || "Unnamed product";
+  if (!state.headingOwnedByRun) $("#app-name").textContent = project.application?.name || "Unnamed product";
   const platforms = project.application?.platforms?.map(pretty).join(" · ") || "Targets not inspected";
-  $("#app-summary").textContent = `${platforms} · ${project.capabilities?.length || 0} known capabilities`;
+  if (!state.headingOwnedByRun) $("#app-summary").textContent = `${platforms} · ${project.capabilities?.length || 0} known capabilities`;
   renderTargets();
   renderRequirements();
   renderDecision();
@@ -557,6 +622,10 @@ async function runOperation(name, body = {}, { input = "" } = {}) {
       const ratio = progress?.current && progress?.total ? Math.min(92, Math.round(progress.current / progress.total * 100)) : Math.min(88, 8 + job.progress.length * 4);
       $("#operation-progress-bar").style.width = `${ratio}%`;
       syncTranscriptFromJob(name, { ...job, input });
+      // The engine has stopped at a sign-in and is waiting on a person. Show the ask in the chat
+      // until it is answered or the engine moves on.
+      if (job.input && state.pendingInput?.requestId !== job.input.requestId) { state.pendingInput = { ...job.input, jobId: job.id }; }
+      if (!job.input && state.pendingInput) state.pendingInput = null;
       if (!$("#product-shell").classList.contains("hidden")) { renderCommandState(job, name); renderChat(); }
       const screen = [...job.progress].reverse().find((entry) => entry.screen)?.screen;
       if (screen && !state.live?.active) $("#live-screen-title").textContent = screen;
@@ -616,6 +685,18 @@ async function startFromPrompt(raw) {
   const prompt = classifyPrompt(raw);
   if (prompt.kind === "empty") return;
   if (prompt.kind === "url") {
+    // On your own machine a website is explored for real — it can stop at a sign-in and ask
+    // you. A public Studio only ever reads.
+    if (state.session?.mode === "local") {
+      state.promptRun = true; state.promptPlatform = "web";
+      showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
+      document.querySelector(".device-stage")?.classList.remove("hidden");
+      setHeading("Exploring", "Going inside. If there is a sign-in, I will ask.", { owned: true });
+      const result = await runOperation("explore", { url: prompt.value }, { input: prompt.value });
+      if (result?.kind === "self-host") { answerSelfHost(result); return; }
+      state.selectedRunId = result?.capture?.id || state.selectedRunId;
+      return;
+    }
     state.promptRun = true; state.promptPlatform = "web";
     showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
     document.querySelector(".device-stage")?.classList.remove("hidden");
@@ -680,6 +761,14 @@ document.addEventListener("submit", (event) => {
   if (audit) { event.preventDefault(); auditWebsite(audit.elements.url.value).catch((error) => toast(error.message, true)); return; }
   const prompt = event.target.closest("#prompt-form");
   if (prompt) { event.preventDefault(); startFromPrompt(prompt.elements.input.value).catch((error) => toast(error.message, true)); }
+  const ask = event.target.closest("#chat-ask");
+  if (ask) { event.preventDefault(); answerAsk(ask, "submit"); }
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("#chat-ask [data-ask]");
+  if (button && button.type === "button") { event.preventDefault(); answerAsk(button.closest("#chat-ask"), button.dataset.ask); }
+  const play = event.target.closest("[data-run-journey]");
+  if (play) { event.preventDefault(); runJourney(play.dataset.runJourney).catch((error) => toast(error.message, true)); }
 });
 
 $$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showPrompt()));

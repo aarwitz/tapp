@@ -182,12 +182,19 @@ function listProductRuns(root) {
 }
 
 function listRepositoryFlows(root) {
+  // Every committed journey, including the ones in subfolders — a real repository keeps dozens
+  // under sandbox/, mobile/, weekly/, and a flat listing hid all of them. YAML steps are counted
+  // from the list items under `steps:`; before, only JSON flows ever had a step count.
   const directory = path.join(root, projectArtifactDirectory(root), "flows");
   if (!fs.existsSync(directory)) return [];
-  return fs.readdirSync(directory, { withFileTypes:true })
-    .filter((entry) => entry.isFile() && /\.(?:ya?ml|json)$/i.test(entry.name))
-    .map((entry) => {
-      const file = path.join(directory, entry.name);
+  const out = [];
+  const walk = (dir, group) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(file, group ? `${group}/${entry.name}` : entry.name); continue; }
+      if (!entry.isFile() || !/\.(?:ya?ml|json)$/i.test(entry.name)) continue;
       const relativePath = path.relative(root, file).replaceAll(path.sep, "/");
       let name = entry.name.replace(/\.(?:ya?ml|json)$/i, "");
       let platform = "ios";
@@ -205,14 +212,22 @@ function listRepositoryFlows(root) {
             return match ? match[1].replace(/^["']|["']$/g, "") : "";
           };
           name = scalar("name") || name;
-          platform = (scalar("platform") || (/^url:\s*https?:\/\//im.test(source) ? "web" : "ios")).toLowerCase();
-          const block = source.split(/^steps:\s*$/m)[1] || "";
-          steps = (block.match(/^\s{2}-\s/gm) || []).length;
+          const declared = scalar("platform").toLowerCase();
+          platform = declared || (/^https?:\/\//i.test(scalar("url") || scalar("app")) ? "web" : "ios");
+          const stepsAt = source.search(/^steps:\s*$/m);
+          if (stepsAt >= 0) {
+            const tail = source.slice(stepsAt);
+            const stop = tail.slice(7).search(/^[A-Za-z_][\w-]*:\s*/m);
+            const block = stop >= 0 ? tail.slice(0, 7 + stop) : tail;
+            steps = (block.match(/^\s*-\s/gm) || []).length;
+          }
         }
-      } catch { /* Artifact remains inspectable; deterministic replay reports invalid syntax. */ }
-      return { id:`flow_${crypto.createHash("sha256").update(relativePath).digest("hex").slice(0, 16)}`, name, path:relativePath, platform, steps, sha256:crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"), status:"committed" };
-    })
-    .sort((left, right) => left.path.localeCompare(right.path));
+      } catch { /* an unreadable flow is still listed by file name */ }
+      out.push({ name, relativePath, platform, steps, group });
+    }
+  };
+  walk(directory, "");
+  return out;
 }
 
 export function readProductProject({ projectDir, outDir = ".tapp" } = {}) {

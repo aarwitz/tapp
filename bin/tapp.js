@@ -134,6 +134,32 @@ function parseVerbArgs(argv) {
 // Is this target a finished run rather than something to launch? A capture is a directory with
 // the markers a run writes, addressed by id, by path, or as "latest". Deliberately narrow: a
 // bundle id, a URL, a repo dir and an .apk must all still mean what they meant before.
+// Ask on the terminal. Hidden input turns echo off (raw mode) so a password is never shown or
+// left in a scrollback; a plain field uses the ordinary readline path.
+async function promptOnTerminal(question, { hidden = false } = {}) {
+  const { createInterface } = await import("node:readline");
+  if (!hidden) {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    return new Promise((resolve) => rl.question(question, (answer) => { rl.close(); resolve(String(answer || "").trim()); }));
+  }
+  process.stderr.write(question);
+  return new Promise((resolve) => {
+    const chars = [];
+    const stdin = process.stdin;
+    const wasRaw = stdin.isRaw;
+    stdin.setRawMode(true); stdin.resume(); stdin.setEncoding("utf8");
+    const onData = (ch) => {
+      for (const c of ch) {
+        if (c === "\r" || c === "\n") { stdin.setRawMode(!!wasRaw); stdin.pause(); stdin.removeListener("data", onData); process.stderr.write("\n"); resolve(chars.join("")); return; }
+        if (c === "\u0003") { stdin.setRawMode(!!wasRaw); process.stderr.write("\n"); process.exit(130); }
+        if (c === "\u007f" || c === "\b") { chars.pop(); continue; }
+        chars.push(c);
+      }
+    };
+    stdin.on("data", onData);
+  });
+}
+
 function looksLikeCapture(value) {
   const raw = String(value || "").trim();
   if (!raw || raw.startsWith("-") || /^https?:\/\//i.test(raw)) return false;
@@ -365,7 +391,7 @@ async function resolveTargetOrExit(engine, input, { inspect = false } = {}) {
 function safeCommandUsage(verb) {
   const usage = {
     workflows: "tapp plan workflows [repo] [--save FILE --confirm] [--workflow ID] [--json]",
-    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default)\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
+    explore: "tapp explore [target] [--platform ios|android|web] [--actions N] [--timeout SEC] [--email VALUE] [--password VALUE] [--baseline FILE] [--json FILE]\n  Web: --interactive stops at a sign-in and asks on this terminal (--remember keeps it, encrypted, for next time); --actor NAME starts from that actor's saved session\n  --read-only <url>...: never clicks (dead controls, broken links/assets, failed requests, JS exceptions, mixed content, overflow) [--pages N] [--urls FILE] [--json [FILE]]\n  --goal \"SCREEN OR CONTROL\": source-locate a screen/control and take the shortest observed route [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]\n  Web: [--watch] opens Tapp's controlled browser and shows its actions; [--device \"iPhone 13\"] [--viewport 390x844] render at a device profile or explicit size\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default)\n  iOS launch configuration: [--launch-arg VALUE ...] [--launch-env '{\"KEY\":\"VALUE\"}']\n  Android: [--app-id ID] [--apk FILE] [--serial ID] [--keep-data]",
     focus: "tapp explore --goal \"SCREEN OR CONTROL\" [target] [--platform ios|android|web] [--project-dir REPO] [--target NAME|PATH] [--map FILE] [--out FILE]",
     init: "tapp init [repo] [--explore] [--refresh] [--platform PLATFORM] [--target NAME] [--url URL] [--watch] [--dry-run]",
     open: "tapp look [target] [--platform ios|android|web] [--out FILE] [--tap TEXT] [--wait-for TEXT]\n  --tree: accessibility tree of the current screen (--json for every element)\n  <capture>|latest: the screens of a finished run — [--at N|\"screen\"] one frame, [--frames] contact sheets for scanning, [--json] the index\n  --sim: screenshot the booted simulator only (never builds or installs)\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted)\n  Web: [--device \"iPhone 13\"] [--viewport 390x844] [--full-page]",
@@ -911,6 +937,31 @@ switch (command) {
     const progressMetric = platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached";
     const onProgress = (p) =>
       writeProgress(`🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${progressMetric}`);
+    // --interactive: when the run meets a sign-in it has no credentials for, it stops and asks
+    // here, on this terminal, the same way the desktop app asks in its chat. The answer goes to
+    // the engine through a 0600 file it polls; --remember keeps it in the encrypted actor store
+    // so the next run starts signed in. Nothing typed is echoed or logged.
+    const interactive = flags.interactive === true && process.stdin.isTTY;
+    if (flags.interactive === true && !process.stdin.isTTY) console.error("ℹ️  --interactive needs a terminal to ask on; running without it.");
+    const inputResponsePath = interactive ? path.join(os.tmpdir(), `tapp-input-${process.pid}-${Date.now().toString(36)}.json`) : "";
+    const actorName = typeof flags.actor === "string" && flags.actor ? flags.actor : (interactive ? "default" : "");
+    const askOnTerminal = async (request) => {
+      writeProgress("");
+      process.stderr.write(`\n🔐 tapp found a sign-in on "${request.screen}". Go in? (press Enter on an empty field to skip)\n`);
+      const values = {};
+      for (const field of request.fields || []) {
+        values[field.key] = await promptOnTerminal(`   ${field.label}${field.placeholder ? ` (${field.placeholder})` : ""}: `, { hidden: !!field.secure });
+      }
+      const filled = Object.values(values).some((v) => v);
+      const action = filled ? "submit" : "skip";
+      fs.writeFileSync(inputResponsePath, JSON.stringify({ requestId: request.requestId, action, values: filled ? values : {} }), { mode: 0o600 });
+      if (action === "submit" && flags.remember === true) {
+        const { ActorStore } = await import(path.join(packageRoot, "mcp-server", "src", "actor-store.js"));
+        new ActorStore().write(target, actorName || "default", { credentials: { email: values.email || "", password: values.password || "" } });
+        process.stderr.write(`   remembered for ${new URL(target).host} as actor "${actorName || "default"}"\n`);
+      }
+    };
+    const onProgressWithAsk = (p) => { if (p.awaitInput && interactive) { askOnTerminal(p.awaitInput).catch(() => {}); return; } onProgress(p); };
     const r = platform === "web"
       ? await engine.runQaWeb({
           url: target,
@@ -923,7 +974,10 @@ switch (command) {
           device: typeof flags.device === "string" ? flags.device : "",
           viewport: typeof flags.viewport === "string" ? flags.viewport : "",
           surface: "cli",
-          onProgress,
+          onProgress: onProgressWithAsk,
+          interactive,
+          inputResponsePath,
+          actor: actorName,
         })
       : platform === "android"
       ? await engine.runQaAndroid({

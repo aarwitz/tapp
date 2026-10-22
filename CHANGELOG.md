@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.22.0
+
+The unit of value is a proven journey, not a crawl — and to prove a journey tapp has to get
+inside the application. Until now it could not: every real app lives behind a sign-in, and the
+web engine could accept credentials but never ask for them. (ADR-0009.)
+
+- **tapp asks at a sign-in, and remembers.** When exploration meets a login it has no
+  credentials for, it stops and asks — in the Studio's chat, or on the terminal with
+  `tapp explore <url> --interactive`. The protocol is the one the iOS harness and the desktop app
+  already speak (`OCQA_AWAIT_INPUT`), so a run pauses the same way everywhere. After a sign-in
+  works the browser session is kept, encrypted, so the next run starts inside the application
+  and a login that needs a code or an email link only ever has to be done by a person once.
+- **An encrypted actor store.** `TAPP_HOME/actors/<host>/<actor>` holds what a person typed and
+  the signed-in session: AES-256-GCM, a 0600 key generated once, the host and actor bound into
+  the cipher so a record cannot be mistaken for another app's. Nothing in it reaches evidence,
+  markers, logs, or tool output; a secure field never carries a default over stdout. Each of
+  those is a test. `--actor NAME` starts a run from that identity's saved session;
+  `--remember` keeps what was typed.
+- **Journeys are shown.** The Studio lists every committed journey under `.tapp/flows/`,
+  recursively and grouped by folder, with real step counts and one-click replay — the engine
+  had listed them all along and the Studio never rendered them. A repository with a hundred of
+  them now reads as a map of what the app has proven. Web journeys replay in the Studio with a
+  recording; an iOS or Android journey is answered with the command to run it where the
+  simulator is.
+- **A URL from the Studio prompt goes inside on your own machine.** On a self-hosted Studio it
+  is a real exploration that can stop and ask. On the public Studio it stays read-only: a hosted
+  page asking a stranger for their login to another site is phishing-shaped, so a visitor is
+  told to go inside from their own machine, with the command.
+
 ## 0.21.2
 
 - **Usage logging counts people, not scanners.** A public host is probed constantly: in one

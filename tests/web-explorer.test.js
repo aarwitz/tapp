@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+let chromium;
+try { ({ chromium } = await import("playwright")); } catch {}
+const skipRealBrowser = process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1";
+
 import { captureElementEvidence, inspectWebPage, normalizeWebSeedRoutes, normalizeWebSeedTargets, parseWebViewport, shouldReportWebRequestFailure, submitWebLogin, webActionScreen, webAnchorStillMissing, webBrowserLaunchOptions, webContextOptions, webControlHadEffect, webControlLabel, webErrorSurfaceText, webNavigationAction, webPageAppearsBlank, webPlaceholderLinkFindings, webScreenRole, webScreenTitle, webTransitionOrigin, webUnavailableShellPhrase } from "../mcp-server/src/web-explorer.js";
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-web-explorer-unit-"));
@@ -550,5 +554,90 @@ test("an overlay is dismissed by its own way out, never by consenting", async ()
     [["✕"], "✕"],
   ]) {
     assert.equal(chooseOverlayDismissal(labels), expected, `expected ${expected} from ${JSON.stringify(labels)}`);
+  }
+});
+
+// The behaviour the desktop app has had all along, now on the web path: a run that meets a
+// sign-in it has no credentials for stops and asks, continues with what it is told, and keeps the
+// signed-in session so the next run starts inside. What it must never do is write the password
+// anywhere a report, a marker or a log could carry it.
+test("exploration stops at a sign-in, asks, continues, and keeps the session", { skip: skipRealBrowser || !chromium, timeout: 120_000 }, async () => {
+  const http = await import("node:http");
+  const server = http.createServer((req, res) => {
+    const cookie = req.headers.cookie || "";
+    if (req.method === "POST" && req.url === "/login") {
+      let body = "";
+      req.on("data", (c) => { body += c; });
+      req.on("end", () => {
+        const params = new URLSearchParams(body);
+        if (params.get("password") === "Right-Password-77") {
+          res.writeHead(302, { "set-cookie": "sid=SIGNED-IN-COOKIE; Path=/; HttpOnly", location: "/" });
+        } else {
+          res.writeHead(302, { location: "/login?failed=1" });
+        }
+        res.end();
+      });
+      return;
+    }
+    if (!/sid=SIGNED-IN-COOKIE/.test(cookie) || req.url.startsWith("/login")) {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign in</title></head><body>
+<h1>Sign in</h1>
+<form method="post" action="/login">
+  <label>Email <input type="email" name="email"></label>
+  <label>Password <input type="password" name="password"></label>
+  <button type="submit">Sign in</button>
+</form></body></html>`);
+      return;
+    }
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Dashboard</title></head><body>
+<h1>Welcome back</h1><p>You are inside the application.</p><a href="/settings">Settings</a></body></html>`);
+  });
+  const port = await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(server.address().port)));
+
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-ask-"));
+  const responsePath = path.join(outDir, "answer.json");
+  const markersPath = path.join(outDir, "ocqa-markers.txt");
+  let savedSession = null;
+
+  // Stand in for the person: watch the markers for the ask and answer it.
+  const answerWhenAsked = (async () => {
+    for (let i = 0; i < 200; i += 1) {
+      await new Promise((r) => setTimeout(r, 250));
+      let text = "";
+      try { text = fs.readFileSync(markersPath, "utf8"); } catch { continue; }
+      const line = text.split("\n").find((l) => l.startsWith("OCQA_AWAIT_INPUT:"));
+      if (!line) continue;
+      const request = JSON.parse(line.slice("OCQA_AWAIT_INPUT:".length));
+      assert.ok(request.fields.some((f) => f.secure === true), "the password field is marked secure");
+      assert.ok(request.fields.every((f) => !f.secure || f.default === ""), "a secure field never carries a default over stdout");
+      fs.writeFileSync(responsePath, JSON.stringify({ requestId: request.requestId, action: "submit", values: { email: "sam@example.test", password: "Right-Password-77" } }));
+      return request;
+    }
+    return null;
+  })();
+
+  try {
+    const { exploreWeb } = await import("../mcp-server/src/web-explorer.js");
+    const run = await exploreWeb({
+      url: `http://127.0.0.1:${port}/`, maxActions: 8, timeoutSec: 90, outDir,
+      interactive: true, inputResponsePath: responsePath, inputWaitSec: 30,
+      onSessionSaved: (state) => { savedSession = state; },
+    });
+    const asked = await answerWhenAsked;
+    assert.ok(asked, "the run must have asked");
+
+    const markers = fs.readFileSync(markersPath, "utf8");
+    assert.match(markers, /OCQA_INPUT_RESOLVED:\{"requestId":"[^"]+","action":"submit"\}/, "the ask was resolved by what was submitted");
+    assert.match(markers, /"type":"login"/, "the sign-in was attempted with the answer");
+    assert.doesNotMatch(markers, /Right-Password-77/, "the password must never reach the markers");
+    assert.doesNotMatch(markers, /sam@example\.test/, "nor the email");
+    assert.ok(run.screens >= 2, `after signing in the run should see the inside, got ${run.screens} screen(s)`);
+
+    assert.ok(savedSession, "a working sign-in hands the session back to be kept");
+    assert.ok(savedSession.cookies.some((c) => c.name === "sid" && c.value === "SIGNED-IN-COOKIE"), "the kept session is the signed-in one");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
