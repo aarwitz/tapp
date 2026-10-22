@@ -36,6 +36,9 @@ captures/
 *.mov
 *.webm
 *.mp4
+# …except the films the landing page ships: they are Pages assets, not build output, and the
+# publication guard fails without them (0.24.2: a new film was silently left out of the commit).
+!landing/assets/*.mp4
 !landing/assets/tapp-explore-ios.webm
 !landing/assets/tapp-explore-ios.mp4
 !docs/assets/tapp-explore-ios.webm

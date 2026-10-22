@@ -27,10 +27,11 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
   assert.match(index, /Point tapp at anything\./);
   assert.match(index, /Real evidence/);
-  assert.match(index, /The desktop app on a real run/);
+  assert.match(index, /The Studio on a real run: ask, go inside, keep, replay/);
   assert.match(index, /assets\/tapp-film\.mp4/);
   assert.match(index, /prefers-reduced-motion/);
-  assert.match(index, /assets\/tapp-desktop-demo\.mp4/);
+  assert.match(index, /assets\/tapp-studio-film\.mp4/);
+  assert.match(index, /assets\/tapp-studio-film-poster\.jpg/);
   assert.match(index, /assets\/tapp-film-poster\.jpg/);
   assert.match(index, /evidence\/webdemo\/report\.html/);
   // The pilot intake was retired on 2026-10-22 (owner decision: "there is no founding pilot");
@@ -52,8 +53,8 @@ test("landing proof assets ship together", () => {
     "assets/tapp-social.png",
     "assets/tapp-film.mp4",
     "assets/tapp-film-poster.jpg",
-    "assets/tapp-desktop-demo.mp4",
-    "assets/tapp-desktop-demo-poster.jpg",
+    "assets/tapp-studio-film.mp4",
+    "assets/tapp-studio-film-poster.jpg",
     "assets/studio-ask.jpg",
     "assets/studio-keep.jpg",
     "assets/studio-journeys.jpg",

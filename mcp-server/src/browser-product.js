@@ -259,6 +259,16 @@ function markPromptStarted(structured) {
   } catch { /* listing is a convenience; the capture is the evidence */ }
 }
 
+// How a journey gets inside. A journey either types the credentials (it has a `login` step, so it
+// was kept from a run that met the sign-in form and must start signed OUT) or it resumes the
+// actor's saved session (no `login` step: the run it came from already began inside). Doing both
+// breaks the first kind — the browser starts inside and the journey's own first step, waiting for
+// the sign-in screen, never matches.
+export function journeySignInPlan(flow = {}) {
+  const signsIn = (flow.steps || []).some((step) => step && typeof step === "object" && "login" in step);
+  return { signsIn, usesSession: !!flow.actor && !signsIn };
+}
+
 // Replay one web journey and record how it went. Shared by the Studio's Run button and the
 // daily check, so both leave the same status and the same evidence behind.
 async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = null, progress = () => {} }) {
@@ -266,13 +276,24 @@ async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = nul
   // values come from the encrypted actor store at replay and never from the file.
   const variables = {};
   let storageStatePath = "";
-  if (flow.url && (flow.actor || (flow.steps || []).some((step) => step && typeof step === "object" && "login" in step))) {
+  // A journey signs in one of two ways, and they are mutually exclusive:
+  //   it has a `login` step  → it was kept from a run that met the sign-in form, so it must START
+  //                            SIGNED OUT and type the credentials. Handing it a saved session
+  //                            would drop it inside the app, where its own first step ("wait for
+  //                            the sign-in screen") can never match.
+  //   it has no `login` step → it was kept from a run that already began inside, so the saved
+  //                            session is the only way back in.
+  const { signsIn, usesSession } = journeySignInPlan(flow);
+  if (flow.url && (flow.actor || signsIn)) {
     const actors = new ActorStore(actorRoot ? { root: actorRoot } : {});
     const record = actors.read(flow.url, flow.actor || "default");
     if (record?.credentials?.email) variables.TEST_EMAIL = record.credentials.email;
     if (record?.credentials?.password) variables.TEST_PASSWORD = record.credentials.password;
-    // A journey that began inside replays from the actor's saved session, like the run did.
-    if (flow.actor) storageStatePath = actors.sessionFile(flow.url, flow.actor) || "";
+    if (usesSession) {
+      storageStatePath = actors.sessionFile(flow.url, flow.actor) || "";
+      // Say why plainly, rather than letting every step time out looking for a signed-in screen.
+      if (!storageStatePath) throw new Error(`This journey starts already signed in, but tapp no longer has a session for '${flow.actor}' on this site. Explore it again and sign in, and the journey will work from the new session.`);
+    }
   }
   const captureId = `flow-web-${Date.now().toString(36)}-${crypto.randomBytes(4).toString("hex")}`;
   const evidenceDir = path.join(captureRoot(), captureId);

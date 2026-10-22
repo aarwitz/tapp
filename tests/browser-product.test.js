@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeInteractiveElements, startBrowserProduct, dueJourneys } from "../mcp-server/src/browser-product.js";
+import { normalizeInteractiveElements, startBrowserProduct, dueJourneys, journeySignInPlan } from "../mcp-server/src/browser-product.js";
 
 function cookieFrom(response) {
   return response.headers.get("set-cookie").split(";", 1)[0];
@@ -699,4 +699,21 @@ test("a kept journey is due for its daily check when its last result is older th
     { slug: "ios", platform: "ios", status: null },
   ];
   assert.deepEqual(dueJourneys(journeys, { intervalMs: day, now }).map((j) => j.slug), ["never", "stale"], "never-run and day-old journeys are due; a fresh one and a non-web one are not");
+});
+
+test("a journey that types its own credentials is never handed a saved session", () => {
+  // Found by filming the product: a journey kept from a run that met the sign-in form starts
+  // with `wait_for: Sign in`. Replaying it from the actor's saved session dropped the browser
+  // inside the application, where that first step could never match — 1 of 13 steps, "failing".
+  const typesCredentials = { actor: "coach", url: "https://app.example.test/", steps: [{ wait_for: "Sign in" }, { login: { email: "$TEST_EMAIL", password: "$TEST_PASSWORD" } }, { tap: "Orders" }] };
+  assert.deepEqual(journeySignInPlan(typesCredentials), { signsIn: true, usesSession: false });
+
+  // A journey kept from a run that already began inside has no sign-in form to type into; the
+  // saved session is the only way back in.
+  const resumesSession = { actor: "coach", url: "https://app.example.test/", steps: [{ wait_for: "Dashboard" }, { tap: "Orders" }] };
+  assert.deepEqual(journeySignInPlan(resumesSession), { signsIn: false, usesSession: true });
+
+  // Without an actor there is no session to resume, whatever the steps say.
+  assert.deepEqual(journeySignInPlan({ steps: [{ tap: "Orders" }] }), { signsIn: false, usesSession: false });
+  assert.deepEqual(journeySignInPlan({}), { signsIn: false, usesSession: false });
 });

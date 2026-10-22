@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.24.2
+
+- **Fixed: a journey that signs in was being replayed from the saved session.** A journey kept
+  from a run that met the sign-in form starts with "wait for the sign-in screen" and types the
+  credentials. Handing it the actor's saved session dropped the browser *inside* the application,
+  where that first step could never match — the replay failed at step 1 of 13 and the journey
+  showed as *failing*. The two ways in are now exclusive (`journeySignInPlan`): a journey with a
+  `login` step always starts signed out; one without it resumes the session, and says so plainly
+  if the session is gone instead of timing out step by step. Found by filming the product.
+- **runtapp.com shows the Studio doing the real thing.** The proof film is now an unedited
+  40-second recording of the hosted Studio: pointed at an app with a sign-in, it stops and asks,
+  goes inside with the test account, offers to keep the path as a journey, and replays it —
+  13 of 13 steps, passing. The old desktop-app demo footage is retired.
+
 ## 0.24.1
 
 - **Kept journeys are checked every day.** On a public Studio, every account's kept web journeys
