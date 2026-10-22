@@ -489,3 +489,106 @@ test("a visitor is never asked for a login, and cannot answer one", async () => 
     if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
   }
 });
+
+test("an account signs in by email link, may go inside a site, and sees only its own evidence and test accounts", async () => {
+  // ADR-0009 slice 2. A public Studio has three kinds of person: a visitor (audits only), an
+  // account (can explore, be asked, and have tapp remember test accounts), and the operator.
+  // The account is an email address and a link — there is no password anywhere in this flow.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-account-home-"));
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-account-ws-"));
+  const outbox = path.join(home, "outbox");
+  const previous = { home: process.env.TAPP_HOME, outbox: process.env.TAPP_MAIL_OUTBOX, key: process.env.TAPP_MAIL_RESEND_KEY };
+  process.env.TAPP_HOME = home;
+  process.env.TAPP_MAIL_OUTBOX = outbox;
+  delete process.env.TAPP_MAIL_RESEND_KEY;
+  const origin = "https://app.runtapp.com";
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot });
+  const jar = new Map();
+  const call = async (pathname, init = {}) => {
+    const response = await fetch(`${product.origin}${pathname}`, {
+      ...init, redirect: "manual",
+      headers: { ...(init.headers || {}), cookie: [...jar].map(([k, v]) => `${k}=${v}`).join("; ") },
+    });
+    for (const set of response.headers.getSetCookie?.() || [response.headers.get("set-cookie")].filter(Boolean)) {
+      const [pair, ...attrs] = set.split(";");
+      const [name, value] = pair.split("=");
+      if (attrs.some((a) => /max-age=0/i.test(a))) jar.delete(name.trim()); else jar.set(name.trim(), value);
+    }
+    return response;
+  };
+  const mutate = (pathname, body, method = "POST") => call(pathname, { method, headers: { origin, "x-tapp-csrf": csrf, "content-type": "application/json" }, body: JSON.stringify(body) });
+  let csrf = "";
+  try {
+    csrf = (await (await call("/api/session")).json()).csrfToken;
+
+    // Asking for a link says the same thing whether or not the address exists, and the link
+    // goes to the outbox — never to stdout.
+    const asked = await mutate("/api/auth/link", { email: "Owner@Example.test" });
+    assert.equal(asked.status, 200);
+    assert.deepEqual(await asked.json(), { ok: true, sent: true });
+    assert.equal((await mutate("/api/auth/link", { email: "not an address" })).status, 400);
+    const mail = fs.readdirSync(outbox).map((name) => fs.readFileSync(path.join(outbox, name), "utf8")).join("\n");
+    assert.match(mail, /To: owner@example\.test/);
+    const link = mail.match(/https:\/\/app\.runtapp\.com\/auth\/([A-Za-z0-9_-]{20,})/);
+    assert.ok(link, "the email carries the sign-in link on the public origin");
+
+    // Following it signs in; following it again does not.
+    const followed = await call(`/auth/${link[1]}`);
+    assert.equal(followed.status, 303);
+    assert.equal(followed.headers.get("location"), "/?signin=done");
+    assert.ok(jar.has("tapp_account"), "a session cookie was set");
+    assert.equal((await call(`/auth/${link[1]}`)).headers.get("location"), "/?signin=expired", "a link works once");
+
+    const session = await (await call("/api/session")).json();
+    assert.equal(session.access, "account");
+    assert.equal(session.email, "owner@example.test");
+    assert.deepEqual(session.accepts, ["url"]);
+    csrf = session.csrfToken;
+
+    // An account may do more than a visitor, but this machine is still not theirs.
+    for (const [method, pathname] of [["GET", "/api/repositories"], ["GET", "/api/project"], ["GET", "/api/live-session"], ["POST", "/api/operations/gate"]]) {
+      assert.equal((await call(pathname, { method })).status, 401, `${method} ${pathname} stays the operator's`);
+    }
+    // Going inside is accepted (a visitor gets the self-host answer instead; see the test above).
+    const explore = await mutate("/api/operations/explore", { url: "http://127.0.0.1:9/" });
+    assert.equal(explore.status, 202, "an account starts a real exploration");
+    const job = (await explore.json()).job;
+    assert.equal((await call(`/api/jobs/${job.id}`)).status, 200, "the account sees its own job");
+
+    // Test accounts are listed by name only, and forgetting one works.
+    const { ActorStore } = await import("../mcp-server/src/actor-store.js");
+    const { AccountStore } = await import("../mcp-server/src/account-store.js");
+    const accountId = fs.readdirSync(path.join(home, "accounts", "accounts"))[0].replace(/\.json$/, "");
+    new ActorStore({ root: new AccountStore().actorRoot(accountId) }).write("https://fitness.example.test/login", "coach", { credentials: { email: "coach@fitness.example.test", password: "Secret-Value-1" } });
+    const actors = await (await call("/api/actors")).json();
+    assert.equal(actors.apps[0].host, "fitness.example.test");
+    assert.equal(actors.apps[0].actors[0].actor, "coach");
+    assert.equal(actors.apps[0].actors[0].hasCredentials, true);
+    assert.doesNotMatch(JSON.stringify(actors), /Secret-Value-1|coach@fitness\.example\.test/, "values never leave the store");
+    assert.equal((await mutate("/api/actors/fitness.example.test/coach", undefined, "DELETE")).status, 200);
+    assert.deepEqual((await (await call("/api/actors")).json()).apps, []);
+
+    // A second account sees none of it.
+    jar.clear();
+    csrf = (await (await call("/api/session")).json()).csrfToken;
+    const before = new Set(fs.readdirSync(outbox));
+    await mutate("/api/auth/link", { email: "someone@else.test" });
+    const newest = fs.readdirSync(outbox).find((name) => !before.has(name));
+    const secondLink = fs.readFileSync(path.join(outbox, newest), "utf8").match(/\/auth\/([A-Za-z0-9_-]{20,})/)[1];
+    await call(`/auth/${secondLink}`);
+    assert.equal((await (await call("/api/session")).json()).email, "someone@else.test");
+    assert.equal((await call(`/api/jobs/${job.id}`)).status, 404, "another account's job is invisible");
+    assert.deepEqual((await (await call("/api/actors")).json()).apps, []);
+
+    // Signing out ends the session.
+    csrf = (await (await call("/api/session")).json()).csrfToken;
+    assert.equal((await mutate("/api/auth/signout", {})).status, 200);
+    assert.equal((await (await call("/api/session")).json()).access, "anonymous");
+
+  } finally {
+    await product.close();
+    for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_MAIL_OUTBOX", previous.outbox], ["TAPP_MAIL_RESEND_KEY", previous.key]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.23.0
+
+Slice 2 of ADR-0009: **accounts on the public Studio**, so that getting inside an application —
+asking at its sign-in, remembering the answer — works from app.runtapp.com and not only on your
+own machine.
+
+- **Sign in with an email link.** No password, nothing to create. `Sign in` on the prompt
+  screen asks for an address and mails a link that works once; after that a session cookie.
+  Only the hash of a link or session token is ever on disk. One address may ask for five links
+  per ten minutes, and the reply never reveals whether an address has an account.
+- **A signed-in account explores for real.** A URL in the prompt goes inside; when the run meets
+  a sign-in it stops and asks in the chat, exactly as a local Studio does. A visitor is still
+  never asked and still gets the read-only audit.
+- **Test accounts, per account, encrypted.** What you tell tapp is kept under your account alone
+  (`TAPP_HOME/accounts/actors/<id>/`), listed in Runs as a name plus *password set* / *signed-in
+  session* — never a value — with *Forget*. Evidence and jobs are stamped with the account, so
+  one account cannot see another's.
+- **Mail.** Resend via `TAPP_MAIL_RESEND_KEY` + `TAPP_MAIL_FROM`; without them, a private 0600
+  outbox under `TAPP_HOME/mail-outbox` (or `TAPP_MAIL_OUTBOX`). A link is never written to a log.
+- The ask card keeps what you have typed while the run polls (it was being rebuilt under your
+  fingers); a refused start no longer leaves "Exploring" over an empty stage; a local trial of
+  `--public` on a loopback origin can reach services on the same machine.
+- New: `mcp-server/src/account-store.js`, `mcp-server/src/mailer.js`; `accountAllows` in
+  `browser-product.js`; `runQaWeb({ actorRoot })`.
+
 ## 0.22.0
 
 The unit of value is a proven journey, not a crawl — and to prove a journey tapp has to get

@@ -2179,14 +2179,16 @@ switch (command) {
     const product = await startBrowserProduct({
       projectDir, port,
       launch: !publicAccess && flags.open !== false && flags["no-open"] !== true,
-      ...(publicAccess ? { publicAccess: true, publicOrigin } : {}),
+      // A loopback origin is a trial of the public Studio on your own machine; pinning its
+      // browser to public addresses would stop it reaching the very thing you are trying.
+      ...(publicAccess ? { publicAccess: true, publicOrigin, publicEgressOnly: !localOrigin } : {}),
     });
     if (publicAccess) {
       console.log(`Tapp · public Studio for ${publicOrigin}`);
       console.log(`Listening on ${product.origin} — put a TLS terminator or tunnel in front of it.`);
       console.log("Anonymous visitors may audit a public website read-only. Repositories, live");
       console.log("sessions and the release gate require an authenticated local session.");
-      console.log("Browser egress is pinned to public addresses; private ranges are refused.");
+      console.log(localOrigin ? "Local trial: browser egress is not pinned, so this can reach services on this machine." : "Browser egress is pinned to public addresses; private ranges are refused.");
     } else {
       console.log(`Tapp · ${product.root || "choose a local folder or GitHub repository in the browser"}`);
       console.log(`Open: ${product.launchUrl}`);

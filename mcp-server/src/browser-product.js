@@ -17,6 +17,9 @@ import { readCaptureProvenance } from "./capture-provenance.js";
 import { collectShots } from "./html-report.js";
 import { classifyPrompt } from "../../browser/view-model.js";
 import { JobLanes } from "./job-lanes.js";
+import { AccountStore } from "./account-store.js";
+import { ActorStore, hostKey } from "./actor-store.js";
+import { createMailer, signInMessage } from "./mailer.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -116,6 +119,9 @@ function capturePath(captureId, relative = "report.html") {
 // only ever listed or served back to them. An unstamped capture belongs to the operator.
 const VISITOR_MARKER = ".visitor";
 const VISITOR_COOKIE = "tapp_visitor";
+// A signed-in tapp account on a public Studio (ADR-0009 slice 2). The cookie is a session token
+// whose hash the account store knows; see account-store.js.
+const ACCOUNT_COOKIE = "tapp_account";
 
 // What a signed-out visitor on a public Studio may reach. Everything absent from this list is
 // refused, so a new route is private until someone deliberately opens it.
@@ -126,8 +132,12 @@ function anonymousAllows(method, pathname) {
     if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
     if (/^\/evidence\/captures\//.test(pathname)) return true;
     if (/^\/api\/jobs\/[a-f0-9]{20}(\/frame)?$/.test(pathname)) return true;
+    // Following a sign-in link from an email.
+    if (/^\/auth\/[A-Za-z0-9_-]{20,}$/.test(pathname)) return true;
     return false;
   }
+  // Asking for a sign-in link is the one thing a stranger may post besides a run.
+  if (method === "POST" && pathname === "/api/auth/link") return true;
   // A visitor may start a read-only audit, and may *ask* about the other kinds of target so the
   // Studio can say where they actually run. A bare 401 reads as "broken" to someone who typed a
   // repo into the landing page, which is how five of its six examples used to dead-end.
@@ -136,12 +146,23 @@ function anonymousAllows(method, pathname) {
   return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build", "/api/operations/explore"].includes(pathname);
 }
 
+// A signed-in account may do what a visitor may, plus: start a real exploration (which can stop
+// at a sign-in and ask), answer that ask, and see and forget the test accounts it has stored.
+// Repositories, live sessions and the gate stay the operator's — they are this machine's.
+function accountAllows(method, pathname) {
+  if (anonymousAllows(method, pathname)) return true;
+  if (method === "POST" && (pathname === "/api/auth/signout" || /^\/api\/jobs\/[a-f0-9]{20}\/input$/.test(pathname))) return true;
+  if (method === "GET" && pathname === "/api/actors") return true;
+  if (method === "DELETE" && /^\/api\/actors\/[A-Za-z0-9.:-]{1,253}\/[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(pathname)) return true;
+  return false;
+}
+
 // One visitor may start a bounded number of audits per hour. Each audit drives a real browser
 // over as many as 20 pages, so this is about the machine, not about abuse alone.
 const AUDIT_LIMIT_PER_HOUR = 10;
 const auditHistory = new Map();
 function auditRateLimit(visitorId, method, pathname) {
-  if (method !== "POST" || pathname !== "/api/operations/audit") return 0;
+  if (method !== "POST" || !["/api/operations/audit", "/api/operations/explore"].includes(pathname)) return 0;
   const now = Date.now();
   const hour = 60 * 60 * 1000;
   const recent = (auditHistory.get(visitorId) || []).filter((at) => now - at < hour);
@@ -204,12 +225,13 @@ function captureFiles(captureId) {
 
 // Explorations started from the prompt (a bundle id, an .app or .apk) have no repository to list
 // them under; they are listed from their captures like audits are.
-function listBuildExplores(limit = 50) {
+function listBuildExplores(limit = 50, owner = null) {
   const root = captureRoot();
   let names;
   try { names = fs.readdirSync(root); } catch { return []; }
   const runs = [];
   for (const name of names) {
+    if (!visibleToOwner(name, owner)) continue;
     const provenance = readCaptureProvenance(path.join(root, name));
     if (!provenance || provenance.kind !== "explore" || provenance.origin !== "studio-prompt") continue;
     let report = null;
@@ -464,6 +486,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
     process.env.TAPP_ENFORCE_PUBLIC_EGRESS = "1";
   }
   const registry = new BrowserWorkspaceRegistry({ initialProjectDir: projectDir, workspaceRoot, githubProvider });
+  // Accounts exist only on a public Studio: a local one has exactly one person, the operator.
+  const accounts = publicAccess ? new AccountStore() : null;
+  const mailer = publicAccess ? createMailer() : null;
+  const secureCookies = publicOrigins[0]?.startsWith("https:") ?? false;
   const serverStartedAt = new Date().toISOString();
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
@@ -577,7 +603,13 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // machine's project all stay behind authentication.
       let visitorId = null;
       let anonymous = false;
-      if (publicAccess && !authenticated) {
+      // A signed-in account sits between the two: more than a visitor, less than the operator.
+      const account = publicAccess && !authenticated ? accounts.sessionAccount(cookies(request)[ACCOUNT_COOKIE] || "") : null;
+      if (account && !accountAllows(request.method, url.pathname)) {
+        json(response, 401, { error: "That part of the Studio runs on your own machine: npx -y @aarwitz/tapp@latest app" });
+        return;
+      }
+      if (publicAccess && !authenticated && !account) {
         anonymous = true;
         visitorId = String(cookies(request)[VISITOR_COOKIE] || "");
         const returning = /^[a-f0-9]{32}$/.test(visitorId);
@@ -607,8 +639,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         const limited = auditRateLimit(visitorId, request.method, url.pathname);
         if (limited) { usage.refusals += 1; logUsage("refused", { visitor: visitorId.slice(0, 8), reason: "rate-limit", retryAfterSec: limited, status: 429 }); response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": String(limited) }); response.end(JSON.stringify({ error: `Too many audits from here. Try again in ${Math.ceil(limited / 60)} minute(s).` })); return; }
       }
-      // The operator sees every capture; a visitor sees only captures stamped with their id.
-      const evidenceOwner = anonymous ? visitorId : null;
+      // The operator sees every capture; a visitor sees only captures stamped with their id, an
+      // account only the ones stamped with its id. `ownerKey` is also the job lane: one person's
+      // runs queue behind each other, never behind a stranger's.
+      const ownerKey = anonymous ? visitorId : account ? `acct:${account.id}` : null;
+      const evidenceOwner = ownerKey;
+      if (account) {
+        const limited = auditRateLimit(ownerKey, request.method, url.pathname);
+        if (limited) { response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": String(limited) }); response.end(JSON.stringify({ error: `Too many runs from this account. Try again in ${Math.ceil(limited / 60)} minute(s).` })); return; }
+      }
+      // A job belongs to whoever started it; the operator sees them all.
+      const jobVisible = (job) => !!job && (ownerKey === null || job.ownerKey === ownerKey);
       if (!authenticated && directLogin) {
         if (request.method === "GET" && url.pathname === "/login") { serveLoginPage(response, { failed: url.searchParams.has("failed"), next: safeReturnPath(url.searchParams.get("next")) }); return; }
         if (request.method === "POST" && url.pathname === "/api/auth") {
@@ -649,7 +690,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           return;
         }
       }
-      if (!authenticated && !anonymous) { response.writeHead(401, { "content-type": "text/plain; charset=utf-8" }); response.end(directLogin ? "Sign in at /login to continue." : "Open Tapp from the authenticated launch URL printed by the CLI."); return; }
+      if (!authenticated && !anonymous && !account) { response.writeHead(401, { "content-type": "text/plain; charset=utf-8" }); response.end(directLogin ? "Sign in at /login to continue." : "Open Tapp from the authenticated launch URL printed by the CLI."); return; }
 
       if (request.method === "GET" && url.pathname === "/") {
         // Without a sign-in page there is nowhere to bounce an anonymous visitor to, and a
@@ -665,7 +706,73 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         serveFile(response, file);
         return;
       }
+      // Signing in: an email address gets a link; the link, used once, becomes a session cookie.
+      // The response to the request is the same whether or not the address was ever seen, so
+      // this cannot be used to find out who has an account.
+      if (publicAccess && request.method === "POST" && url.pathname === "/api/auth/link") {
+        requireMutationAuth(request, publicOrigins, csrfToken);
+        const body = await readJsonBody(request);
+        let link;
+        try { link = accounts.requestLink(body.email); }
+        catch (error) { json(response, error.statusCode || 400, { error: error.message }); return; }
+        const message = signInMessage({ to: link.email, link: `${publicOrigins[0]}/auth/${link.token}`, origin: publicOrigins[0] });
+        try {
+          const sent = await mailer.send(message);
+          logUsage("signin.link", { transport: sent.transport });
+        } catch (error) {
+          logUsage("signin.link.failed", { transport: mailer.transport, error: String(error.message || error).slice(0, 200) });
+          json(response, 502, { error: "The sign-in email could not be sent right now. Try again in a minute." });
+          return;
+        }
+        json(response, 200, { ok: true, sent: true });
+        return;
+      }
+      const authLinkMatch = publicAccess && request.method === "GET" ? url.pathname.match(/^\/auth\/([A-Za-z0-9_-]{20,})$/) : null;
+      if (authLinkMatch) {
+        const signedIn = accounts.redeem(authLinkMatch[1]);
+        if (!signedIn) { response.writeHead(303, { location: "/?signin=expired" }); response.end(); return; }
+        logUsage("signin.done", { account: signedIn.account.id.slice(0, 8) });
+        response.writeHead(303, { location: "/?signin=done", "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000` });
+        response.end();
+        return;
+      }
+      if (account && request.method === "POST" && url.pathname === "/api/auth/signout") {
+        requireMutationAuth(request, publicOrigins, csrfToken);
+        accounts.signOut(cookies(request)[ACCOUNT_COOKIE] || "");
+        response.writeHead(200, { "content-type": "application/json; charset=utf-8", "set-cookie": `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=0` });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      // The test accounts tapp has been told about, by application: names and whether a password
+      // or a signed-in session is held — never the values. An account sees its own; the operator
+      // sees this machine's.
+      const actorRootFor = () => (account ? accounts.actorRoot(account.id) : undefined);
+      if (!anonymous && request.method === "GET" && url.pathname === "/api/actors") {
+        const store = new ActorStore(actorRootFor() ? { root: actorRootFor() } : {});
+        let hosts = [];
+        try { hosts = fs.readdirSync(store.root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { /* none yet */ }
+        json(response, 200, { apps: hosts.map((host) => ({ host, actors: store.list(`https://${host}/`) })).filter((app) => app.actors.length) });
+        return;
+      }
+      const actorForgetMatch = !anonymous && request.method === "DELETE" ? url.pathname.match(/^\/api\/actors\/([A-Za-z0-9.:-]{1,253})\/([A-Za-z][A-Za-z0-9_-]{0,63})$/) : null;
+      if (actorForgetMatch) {
+        requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
+        const store = new ActorStore(actorRootFor() ? { root: actorRootFor() } : {});
+        store.forget(`https://${actorForgetMatch[1]}/`, actorForgetMatch[2]);
+        json(response, 200, { ok: true });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/session") {
+        if (account) {
+          json(response, 200, {
+            csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
+            contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
+            access: "account", email: account.email,
+            accepts: ["url"],
+            selfHostOnly: ["path", "github", "bundle", "app", "apk"],
+          });
+          return;
+        }
         if (anonymous) {
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
@@ -683,7 +790,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
-      if (request.method === "GET" && url.pathname === "/api/audits") { const audits = listAudits(50, evidenceOwner); const explores = anonymous ? [] : listBuildExplores(); json(response, 200, { audits: hosted ? hostedPayload(audits) : audits, explores: hosted ? hostedPayload(explores) : explores }); return; }
+      if (request.method === "GET" && url.pathname === "/api/audits") { const audits = listAudits(50, evidenceOwner); const explores = anonymous ? [] : listBuildExplores(50, evidenceOwner); json(response, 200, { audits: hosted ? hostedPayload(audits) : audits, explores: hosted ? hostedPayload(explores) : explores }); return; }
       const filesMatch = url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/files$/);
       if (request.method === "GET" && filesMatch) {
         if (!visibleToOwner(filesMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
@@ -708,7 +815,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       const jobMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})$/);
       if (request.method === "GET" && jobMatch) {
         const job = jobs.get(jobMatch[1]);
-        if (job && anonymous && job.visitorId !== visitorId) { response.writeHead(404); response.end("Not found"); return; }
+        if (job && !jobVisible(job)) { response.writeHead(404); response.end("Not found"); return; }
         if (!job) { json(response, 404, { error: "No such operation" }); return; }
         json(response, 200, publicJob(job, { hosted }));
         return;
@@ -722,6 +829,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (anonymous) { response.writeHead(401); response.end("Sign in to answer a run"); return; }
         requireMutationAuth(request, hosted ? publicOrigins : origin, csrfToken);
         const job = jobs.get(jobInputMatch[1]);
+        if (job && !jobVisible(job)) { response.writeHead(404); response.end("Not found"); return; }
         if (!job || !job.input || !job.inputResponsePath) { json(response, 409, { error: "This run is not waiting for anything" }); return; }
         const body = await readJsonBody(request);
         const action = ["submit", "defaults", "skip", "dont_ask"].includes(body.action) ? body.action : "skip";
@@ -730,14 +838,13 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           : {};
         fs.writeFileSync(job.inputResponsePath, JSON.stringify({ requestId: job.input.requestId, action, values }), { mode: 0o600 });
         if (action === "submit" && body.remember === true && job.actorTarget) {
-          const { ActorStore } = await import("./actor-store.js");
-          new ActorStore().write(job.actorTarget, job.actorName || "default", { credentials: { email: values.email || "", password: values.password || "" } });
+          new ActorStore(job.actorRoot ? { root: job.actorRoot } : {}).write(job.actorTarget, job.actorName || "default", { credentials: { email: values.email || "", password: values.password || "" } });
         }
         json(response, 200, { ok: true, action });
         return;
       }
       const jobFrameMatch = url.pathname.match(/^\/api\/jobs\/([a-f0-9]{20})\/frame$/);
-      if (request.method === "GET" && jobFrameMatch && anonymous && jobs.get(jobFrameMatch[1])?.visitorId !== visitorId) { response.writeHead(404); response.end("Not found"); return; }
+      if (request.method === "GET" && jobFrameMatch && jobs.get(jobFrameMatch[1]) && !jobVisible(jobs.get(jobFrameMatch[1]))) { response.writeHead(404); response.end("Not found"); return; }
       if (request.method === "GET" && jobFrameMatch) {
         const job = jobs.get(jobFrameMatch[1]);
         if (job && !job.latestFrame && job.liveSimulator && job.status === "running") {
@@ -874,20 +981,25 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         if (!/^https?:$/.test(target.protocol)) throw Object.assign(new Error("Explore needs a valid http(s) URL"), { statusCode: 400 });
         const actorName = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(String(body.actor || "")) ? String(body.actor) : "default";
         const responsePath = path.join(os.tmpdir(), `tapp-input-${crypto.randomBytes(8).toString("hex")}.json`);
+        const actorRoot = actorRootFor() || "";
         const job = startJob(operation, async (progress) => {
           const engine = await import("./index.js");
           const result = await engine.runQaWeb({
             url: target.href, maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600,
-            interactive: true, inputResponsePath: responsePath, inputWaitSec: 180, actor: actorName,
+            interactive: true, inputResponsePath: responsePath, inputWaitSec: 180, actor: actorName, actorRoot,
             onProgress: (entry) => progress({ phase: entry.awaitInput ? "ask" : "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || 0} actions · ${entry.states || 0} screens`, ...(entry.action ? { current: entry.action, total: entry.max } : {}), ...(entry.screen ? { screen: entry.screen } : {}), ...(entry.screenshot ? { screenshot: entry.screenshot } : {}), ...(entry.awaitInput ? { awaitInput: entry.awaitInput } : {}), ...(entry.inputResolved ? { inputResolved: entry.inputResolved } : {}) }),
           });
           if (result?.error) throw Object.assign(new Error(result.error), { details: result.details || {} });
           markPromptStarted(result.structured);
+          if (ownerKey && result.structured?.capture?.id) setCaptureOwner(result.structured.capture.id, ownerKey);
           return result.structured;
-        }, null);
+        }, null, { lane: ownerKey || OPERATOR_LANE });
+        if (account) logUsage("explore.start", { account: account.id.slice(0, 8), host: safeHost(target.href) });
+        job.ownerKey = ownerKey;
         job.inputResponsePath = responsePath;
         job.actorTarget = target.href;
         job.actorName = actorName;
+        job.actorRoot = actorRoot;
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }
@@ -935,9 +1047,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         // run writes anything; a capture that appeared first and was claimed afterwards would be
         // briefly readable by everyone.
         const auditCapture = `web-audit-${Date.now().toString(36)}-${crypto.randomBytes(6).toString("hex")}`;
-        if (visitorId) {
+        if (ownerKey) {
           try { fs.mkdirSync(path.join(captureRoot(), auditCapture), { recursive: true }); } catch { /* the run reports its own failure */ }
-          setCaptureOwner(auditCapture, visitorId);
+          setCaptureOwner(auditCapture, ownerKey);
         }
         const auditStartedMs = Date.now();
         usage.audits += 1;
@@ -959,8 +1071,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             seconds: Math.round((Date.now() - auditStartedMs) / 100) / 10,
           });
           return hosted ? hostedPayload(summary) : summary;
-        }, null, { lane: visitorId || OPERATOR_LANE });
-        job.visitorId = visitorId;
+        }, null, { lane: ownerKey || OPERATOR_LANE });
+        job.ownerKey = ownerKey;
         json(response, 202, { job: publicJob(job, { hosted }) });
         return;
       }

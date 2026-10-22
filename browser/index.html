@@ -25,6 +25,7 @@
     <header class="onboarding-topbar">
       <button class="brand" data-brand-home aria-label="Tapp overview">tapp<span class="brand-mark"></span><small>ship with proof</small></button>
       <span class="mode-pill" id="onboarding-mode-pill">Self-host · this machine</span>
+      <div class="account-slot hidden" id="account-slot"></div>
     </header>
 
     <section class="prompt-hero" aria-hidden="true">
@@ -61,6 +62,16 @@
         <li><button type="button" data-kind="github" data-prompt="owner/repo"><span>🐙</span><b>owner/repo</b><small>clone from GitHub into an isolated workspace, then the same</small></button></li>
         <li><button type="button" data-kind="build" data-prompt="com.company.app"><span>📱</span><b>com.company.app</b><small>explore a build already on the booted simulator (or give a .app / .apk)</small></button></li>
       </ul>
+      <!-- Signing in to a public Studio: an email address and a link, nothing else. Hidden on a
+           local Studio, where the one person at the keyboard is the operator already. -->
+      <section class="signin-card hidden" id="signin-card" aria-live="polite">
+        <form id="signin-form" autocomplete="email">
+          <p><strong>Sign in to go inside a site.</strong> tapp can stop at a sign-in and ask you for a test account, then remember it — for that it needs to know it is you.</p>
+          <div class="signin-row"><input id="signin-email" name="email" type="email" placeholder="you@company.com" required><button class="primary" type="submit" id="signin-send">Email me a link</button></div>
+          <small>No password. The link works once and expires in 15 minutes.</small>
+        </form>
+        <p class="signin-sent hidden" id="signin-sent"></p>
+      </section>
       <p class="prompt-note" id="privacy-note-detail">Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key.</p>
       <span class="sr-only" id="privacy-note-title">Your code stays on this machine.</span>
     </section>
@@ -85,6 +96,7 @@
         <div class="row" data-repo-only><span><svg><use href="#i-server"/></svg></span><span id="sidebar-runner">Runner not checked</span></div>
         <div class="row hidden" id="sidebar-app-row"><span><svg><use href="#i-app"/></svg></span><span><code id="sidebar-app-id"></code></span></div>
         <span class="mode-pill" id="mode-pill">Self-host · this machine</span>
+        <div class="account-slot hidden" id="account-slot-side"></div>
       </div>
       <div class="sidebar-footer">
         <button class="quiet" id="change-source">＋ Test something else</button>
@@ -154,13 +166,17 @@
       <section class="workspace-view" data-view-panel="runs">
         <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks, explorations and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate" data-repo-only>Run release gate</button></div>
         <section class="panel section audit-panel">
-          <div class="section-heading compact"><div><p class="eyebrow">Website</p><h2>Audit a website — read-only</h2><p>Up to six pages, nothing clicked. Safe on production or a site you do not own; no release verdict without source.</p></div></div>
+          <div class="section-heading compact"><div><p class="eyebrow">Website</p><h2>Audit a website — read-only</h2><p>Up to twenty pages, nothing clicked. Safe on production or a site you do not own; no release verdict without source.</p></div></div>
           <form class="audit-form" id="runs-audit-form">
             <label class="field"><span>Website URL</span><input id="audit-url" name="url" type="url" inputmode="url" placeholder="https://example.com" required autocomplete="off"></label>
             <button class="primary" type="submit" id="audit-start">Audit read-only</button>
           </form>
         </section>
-        <section class="panel section" id="journeys-panel">
+        <section class="panel section hidden" id="actors-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">Test accounts</p><h2>What tapp can sign in as <i id="actor-count" class="zero">0</i></h2><p>Kept encrypted. Shown here is only the name and whether a password or a signed-in session is held — never the values. Forget one and tapp will ask again next time.</p></div></div>
+          <div id="actors-list"><div class="empty">None yet. Explore a site with a sign-in and tapp will ask.</div></div>
+        </section>
+        <section class="panel section" id="journeys-panel" data-repo-only>
           <div class="section-heading compact"><div><p class="eyebrow">Journeys</p><h2>What this app has proven <i id="journey-count" class="zero">0</i></h2><p>Committed under <code>.tapp/flows/</code>. Each replays exactly as written — no model, no key — and is what the release gate guards.</p></div></div>
           <div id="journeys-list"><div class="empty">No journeys yet.</div></div>
         </section>

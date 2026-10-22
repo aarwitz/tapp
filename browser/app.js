@@ -91,9 +91,47 @@ function activateView(view) {
 // A hosted Studio has no Mac, no simulator and no access to the visitor's disk, so folders,
 // bundle ids and builds cannot work there however the prompt is worded. Offer only what this
 // deployment can actually do, and say where the rest runs, rather than failing after the ask.
+// On a public Studio a person is a visitor until they sign in, and an account after. Both slots
+// (prompt screen and sidebar) show the same thing. A local Studio has neither: the one person at
+// the keyboard is the operator.
+function renderAccount() {
+  const session = state.session || {};
+  const isPublic = session.access === "anonymous" || session.access === "account";
+  for (const slot of document.querySelectorAll("#account-slot, #account-slot-side")) {
+    slot.classList.toggle("hidden", !isPublic);
+    if (!isPublic) continue;
+    slot.innerHTML = session.access === "account"
+      ? `<span class="account-email" title="${esc(session.email || "")}">${esc(session.email || "")}</span><button type="button" data-signout>Sign out</button>`
+      : `<button type="button" class="primary" data-signin>Sign in</button>`;
+  }
+  $("#signin-card")?.classList.toggle("hidden", session.access !== "anonymous" || !state.signInOpen);
+}
+
+async function requestSignInLink(email) {
+  const button = $("#signin-send");
+  if (button) button.disabled = true;
+  try {
+    await api("/api/auth/link", { method:"POST", body:JSON.stringify({ email }) });
+    $("#signin-form")?.classList.add("hidden");
+    const sent = $("#signin-sent");
+    if (sent) { sent.textContent = `Check your email — a sign-in link is on its way to ${email}. It works once, for 15 minutes.`; sent.classList.remove("hidden"); }
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function signOut() {
+  try { await api("/api/auth/signout", { method:"POST", body:"{}" }); } catch { /* the cookie is gone either way */ }
+  location.replace("/");
+}
+
 function applyAccessMode() {
   const session = state.session || {};
-  if (session.access !== "anonymous") return;
+  renderAccount();
+  if (session.access !== "anonymous" && session.access !== "account") return;
+  const signedIn = session.access === "account";
   const accepts = new Set(session.accepts || ["url"]);
   for (const button of document.querySelectorAll("[data-kind]")) {
     const kind = button.dataset.kind;
@@ -111,9 +149,33 @@ function applyAccessMode() {
   document.querySelector(".summary-panel")?.classList.add("hidden");
   // refreshSession() runs on every poll, so this must not overwrite a heading the current run
   // already set — that is what made "Website audit" revert to "tapp" when a run finished.
-  if (!state.headingOwnedByRun) setHeading("tapp", "Give it a public website and it will audit the pages read-only.");
+  if (!state.headingOwnedByRun) setHeading("tapp", signedIn ? "Give it a website. If there is a sign-in, I will ask you for a test account and remember it." : "Give it a public website and it will audit the pages read-only.");
   const note = $("#privacy-note-detail");
-  if (note) note.textContent = "Websites are audited read-only in the cloud; nothing is clicked. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
+  if (note) note.textContent = signedIn
+    ? "Websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app"
+    : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
+  $("#actors-panel")?.classList.toggle("hidden", !signedIn);
+}
+
+// The test accounts tapp holds, by application — names and what is held, never a value.
+function renderActors() {
+  const node = $("#actors-list");
+  if (!node) return;
+  const apps = state.actors || [];
+  const total = apps.reduce((sum, app) => sum + app.actors.length, 0);
+  setCount("#actor-count", total);
+  if (!total) { node.innerHTML = '<div class="empty">None yet. Explore a site with a sign-in and tapp will ask.</div>'; return; }
+  node.innerHTML = apps.map((app) => `<div class="actor-app">${esc(app.host)}</div>${app.actors.map((actor) => {
+    const held = [actor.hasCredentials ? "password set" : "", actor.hasSession ? `signed-in session · ${compactDate(actor.sessionSavedAt)}` : ""].filter(Boolean).join(" · ") || "nothing held";
+    return `<div class="actor-row"><span><strong>${esc(actor.actor)}</strong><br><small>${esc(held)}</small></span><span></span><button class="quiet" type="button" data-forget-host="${esc(app.host)}" data-forget-actor="${esc(actor.actor)}">Forget</button></div>`;
+  }).join("")}`).join("");
+}
+
+async function forgetActor(host, actor) {
+  await api(`/api/actors/${encodeURIComponent(host)}/${encodeURIComponent(actor)}`, { method:"DELETE" });
+  state.actors = (state.actors || []).map((app) => app.host === host ? { ...app, actors: app.actors.filter((a) => a.actor !== actor) } : app).filter((app) => app.actors.length);
+  renderActors();
+  toast(`Forgot ${actor} on ${host}. tapp will ask again next time.`);
 }
 
 function showPrompt() {
@@ -322,6 +384,7 @@ async function runJourney(relativePath) {
 
 function renderRuns() {
   renderJourneys();
+  renderActors();
   const runs = allRuns();
   setCount("#run-count", runs.length);
   $("#runs-list").innerHTML = runs.length ? runs.map((run) => {
@@ -378,6 +441,11 @@ function renderRunDetail(run) {
 // ---- tapp chat: the engine's progress log, rendered as a transcript -------------------------
 function renderChat() {
   const node = $("#chat-transcript");
+  // While an ask is on screen the transcript is rebuilt on every poll, and rebuilding it throws
+  // away whatever the person has typed into the ask so far. Nothing else changes while the
+  // engine waits, so leave the DOM alone until the ask is answered or withdrawn.
+  const openAsk = node.querySelector("#chat-ask");
+  if (openAsk && state.pendingInput && openAsk.dataset.request === String(state.pendingInput.requestId)) return;
   const stickToBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
   const lines = state.transcript.map((entry) => {
     if (entry.kind === "shots") return `<div class="chat-shots">${entry.shots.map((shot) => `<a href="${esc(shot.href)}" target="_blank" rel="noreferrer" title="${esc(shot.caption)}"><img src="${esc(shot.src)}" alt="${esc(shot.caption)}"></a>`).join("")}</div>`;
@@ -584,12 +652,16 @@ async function refreshSession() {
 async function refresh() {
   // A public visitor has no project and no live session, and asking for them would only earn a
   // 401 on every poll.
-  if (state.session?.access === "anonymous") {
-    const runs = await api("/api/audits").catch(() => ({ audits: [], explores: [] }));
+  if (state.session?.access === "anonymous" || state.session?.access === "account") {
+    const [runs, actors] = await Promise.all([
+      api("/api/audits").catch(() => ({ audits: [], explores: [] })),
+      state.session.access === "account" ? api("/api/actors").catch(() => ({ apps: [] })) : Promise.resolve({ apps: [] }),
+    ]);
     state.project = { connected:false };
     state.live = { active:false };
     state.audits = runs.audits || [];
     state.explores = runs.explores || [];
+    state.actors = actors.apps || [];
     renderProject();
     return;
   }
@@ -685,14 +757,21 @@ async function startFromPrompt(raw) {
   const prompt = classifyPrompt(raw);
   if (prompt.kind === "empty") return;
   if (prompt.kind === "url") {
-    // On your own machine a website is explored for real — it can stop at a sign-in and ask
-    // you. A public Studio only ever reads.
-    if (state.session?.mode === "local") {
+    // On your own machine, or signed in to a public Studio, a website is explored for real — it
+    // can stop at a sign-in and ask you. A visitor only ever reads.
+    if (state.session?.mode === "local" || state.session?.access === "account") {
       state.promptRun = true; state.promptPlatform = "web";
       showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
       document.querySelector(".device-stage")?.classList.remove("hidden");
       setHeading("Exploring", "Going inside. If there is a sign-in, I will ask.", { owned: true });
-      const result = await runOperation("explore", { url: prompt.value }, { input: prompt.value });
+      let result;
+      try { result = await runOperation("explore", { url: prompt.value }, { input: prompt.value }); }
+      catch (error) {
+        // A refused start (your previous run is still finishing, or this Studio is busy) must not
+        // leave "Exploring" over an empty stage.
+        setHeading("Not started", error.message, { owned: true });
+        throw error;
+      }
       if (result?.kind === "self-host") { answerSelfHost(result); return; }
       state.selectedRunId = result?.capture?.id || state.selectedRunId;
       return;
@@ -763,12 +842,18 @@ document.addEventListener("submit", (event) => {
   if (prompt) { event.preventDefault(); startFromPrompt(prompt.elements.input.value).catch((error) => toast(error.message, true)); }
   const ask = event.target.closest("#chat-ask");
   if (ask) { event.preventDefault(); answerAsk(ask, "submit"); }
+  const signin = event.target.closest("#signin-form");
+  if (signin) { event.preventDefault(); requestSignInLink(signin.elements.email.value.trim()); }
 });
 document.addEventListener("click", (event) => {
   const button = event.target.closest("#chat-ask [data-ask]");
   if (button && button.type === "button") { event.preventDefault(); answerAsk(button.closest("#chat-ask"), button.dataset.ask); }
   const play = event.target.closest("[data-run-journey]");
   if (play) { event.preventDefault(); runJourney(play.dataset.runJourney).catch((error) => toast(error.message, true)); }
+  if (event.target.closest("[data-signin]")) { event.preventDefault(); state.signInOpen = true; renderAccount(); showPrompt(); setTimeout(() => $("#signin-email")?.focus(), 50); }
+  if (event.target.closest("[data-signout]")) { event.preventDefault(); signOut(); }
+  const forget = event.target.closest("[data-forget-actor]");
+  if (forget) { event.preventDefault(); forgetActor(forget.dataset.forgetHost, forget.dataset.forgetActor).catch((error) => toast(error.message, true)); }
 });
 
 $$("[data-brand-home]").forEach((button) => button.addEventListener("click", () => state.project?.connected ? (showProduct(), activateView("overview")) : showPrompt()));
@@ -794,6 +879,16 @@ $("#run-gate").addEventListener("click", () => runOperation("gate", operationPay
 // ?target=... Prefill it and start the run, so arriving here does not mean retyping what was
 // already typed on the landing page. The URL is cleaned up either way so a refresh does not
 // silently re-run it.
+// Coming back from a sign-in link: say what happened, then clean the URL.
+function signInOutcome() {
+  let outcome = "";
+  try { outcome = new URLSearchParams(window.location.search).get("signin") || ""; } catch { return; }
+  if (!outcome) return;
+  try { window.history.replaceState({}, "", window.location.pathname); } catch { /* history may be unavailable */ }
+  if (outcome === "done") toast(`Signed in${state.session?.email ? ` as ${state.session.email}` : ""}.`);
+  if (outcome === "expired") { toast("That sign-in link has expired or was already used — ask for a new one.", true); state.signInOpen = true; renderAccount(); }
+}
+
 function handoffTarget() {
   let target = "";
   try { target = new URLSearchParams(window.location.search).get("target") || ""; } catch { return ""; }
@@ -808,6 +903,7 @@ try {
   await refreshSession();
   await refresh();
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });
+  signInOutcome();
 
   const handoff = handoffTarget();
   if (handoff) {

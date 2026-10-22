@@ -553,3 +553,23 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .journey-group > summary { cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center; padding:9px 10px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--tapp-text-soft); }
 .journey-group > summary::-webkit-details-marker { display:none; }
 .journey-group[open] > summary { color:var(--tapp-text); }
+
+/* Accounts on a public Studio (ADR-0009 slice 2). */
+.account-slot { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); flex-wrap:wrap; }
+#account-slot-side { margin-top:8px; }
+#account-slot-side .account-email { max-width:100%; flex:1 1 100%; }
+#account-slot-side button { white-space:nowrap; }
+.account-slot .account-email { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-slot button { font:inherit; font-size:12px; padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:var(--control); color:inherit; cursor:pointer; }
+.account-slot button.primary { background:var(--tapp-accent, #4f6cf7); border-color:transparent; color:#fff; }
+.signin-card { max-width:560px; margin:14px auto 0; padding:14px 16px; border-radius:var(--tapp-radius-lg, 14px); border:1px solid var(--line); background:var(--control); font-size:13px; line-height:1.5; }
+.signin-card p { margin:0 0 10px; }
+.signin-card small { display:block; margin-top:8px; color:var(--tapp-text-faint); }
+.signin-row { display:flex; gap:8px; flex-wrap:wrap; }
+.signin-row input { flex:1 1 220px; font:inherit; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.15); color:inherit; }
+.signin-row button { font:inherit; padding:9px 14px; border-radius:10px; cursor:pointer; }
+.signin-sent { margin:0; }
+.actor-row { display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--tapp-border); font-size:13px; }
+.actor-row:last-child { border-bottom:0; }
+.actor-row small { color:var(--muted); }
+.actor-app { padding:8px 10px 2px; font-weight:600; font-size:12px; color:var(--muted); border-top:1px solid var(--tapp-border); }

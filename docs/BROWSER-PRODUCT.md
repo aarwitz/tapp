@@ -45,7 +45,7 @@ refuses what the mode cannot do: a hosted Studio cannot open a path or a build o
 | Overview | The **stage**: the device as large as the window allows, in its platform's aspect ratio (phone portrait for iOS and Android, browser landscape for web), showing the live frame or the newest screenshot the run wrote. The **chat** floats over its corner on a translucent ground, collapses to a pill, and narrates the engine's own progress log one emoji-led line at a time (👆 Tapped, ⌨️ Typed, 🔐 Signed in, 📍 Opened, 🧭 Reached, 📸 screenshots inline), then attaches the recording and `report.html` and ends with a pill — `✓ Ready to merge`, `× Do not merge`, `◐ Inconclusive`, or for an exploration its counts — and the headline. Nothing is generated after the fact and nothing is a score. Below the stage: the detected targets (an explicit choice when there are several), the live-session controls, and the current decision from the last gate. | `open`, `initialize` (inspect, then build + explore), `explore-build`, live session `start / act / save-flow / end`, release check |
 | Runs | Every run on this repository, every exploration started from the prompt, and every read-only website audit, newest first; each opens its evidence page. A URL field runs an audit from here. | `gate`, `audit` |
 
-A **website audit** is `explore --read-only`: up to six same-origin pages are rendered and read —
+A **website audit** is `explore --read-only`: up to twenty same-origin pages (twelve by default) are rendered and read —
 dead controls, broken images/assets/links, failed requests, JS exceptions, mixed content,
 horizontal overflow — and nothing is clicked, typed, submitted or hovered, so it is safe on
 production or a site you do not own. A website has no source revision, so it has no release
@@ -75,3 +75,33 @@ the chat's narration and summary without a browser.
 `saas/` serves the same `browser/` assets through `/api/studio` with an API base and login URL
 injected. It is frozen at its current commit (ADR-0006, owner decision) and will embed the
 simplified Studio when it is next deployed. Nothing in the Studio depends on it.
+
+## Accounts on a public Studio
+
+A public Studio (`tapp app --public`) has three kinds of person, and the boundary between them is
+an allowlist in `browser-product.js` (`anonymousAllows`, `accountAllows`):
+
+| | Visitor | Account | Operator |
+|---|---|---|---|
+| Who | Anyone who opens the page | Signed in with an email link | The machine's owner (`tapp app` launch URL) |
+| May | Audit a public website read-only; see their own audits | Everything a visitor may, plus: explore a website for real (it stops at a sign-in and **asks** in the chat), answer the ask, and see / forget the **test accounts** tapp holds for them | Everything, including repositories, live sessions and the gate |
+| Evidence | Captures stamped with their visitor cookie | Captures stamped `acct:<id>` | All captures on the machine |
+| Test accounts | None — a visitor is never asked | Encrypted, per account: `TAPP_HOME/accounts/actors/<id>/` | `TAPP_HOME/actors/` |
+
+**Signing in** is `POST /api/auth/link` with an email, then `GET /auth/<token>` from the email.
+There is no password. Links work once and expire in 15 minutes; sessions last 90 days; only the
+SHA-256 of either token is on disk (`account-store.js`). One address may ask for five links per
+ten minutes, and the reply is the same whether or not the address has an account.
+
+**Mail** is sent through Resend when `TAPP_MAIL_RESEND_KEY` and `TAPP_MAIL_FROM` are set
+(`mailer.js`). Without them, each message is written as a 0600 `.eml` into `TAPP_MAIL_OUTBOX`
+(default `TAPP_HOME/mail-outbox`) — what tests and a local trial use, and what a freshly deployed
+host does before a provider is configured. A link is never printed to a log.
+
+**What an account's test accounts look like.** The Runs view lists them by application: the
+actor's name, whether a password is held, and whether a signed-in session is held and since when.
+Never a value. *Forget* removes one; tapp asks again next time. This is the CI-secrets model —
+write-only from the UI, encrypted at rest, decrypted only inside the run that signs in with it.
+
+A local trial of the public mode (`--origin http://127.0.0.1:PORT`) does not pin browser egress
+to public addresses, so it can reach a site on the same machine; a real origin always does.

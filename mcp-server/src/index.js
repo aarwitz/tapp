@@ -1975,7 +1975,7 @@ export function formatScreen(screenTitle, elements, { full = false } = {}) {
 // `tapp` CLI verbs in bin/tapp.js — same pattern as report.js. Keep orchestration HERE so
 // the surfaces can't drift.)
 
-export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {}, device = "", viewport = "", interactive = false, inputResponsePath = "", inputWaitSec = 120, actor = "" }) {
+export async function runQaWeb({ url, maxActions, timeout, testEmail, testPassword, baselineFindings, seedRoutes = [], seedTargets = [], watch = false, surface = "mcp", onProgress = () => {}, device = "", viewport = "", interactive = false, inputResponsePath = "", inputWaitSec = 120, actor = "", actorRoot = "" }) {
   const { storagePreflight } = await import("./environment-preflight.js");
   const storage = storagePreflight(capturesDir);
   if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
@@ -1994,7 +1994,8 @@ export async function runQaWeb({ url, maxActions, timeout, testEmail, testPasswo
   let storedPassword = "";
   if (actorName || interactive) {
     const { ActorStore } = await import("./actor-store.js");
-    store = new ActorStore();
+    // A hosted Studio keeps each account's test accounts apart by giving the run its own root.
+    store = new ActorStore(isNonEmptyString(actorRoot) ? { root: actorRoot.trim() } : {});
     actorName = actorName || "default";
     const record = store.read(url.trim(), actorName);
     storageStatePath = store.sessionFile(url.trim(), actorName) || "";
