@@ -46,6 +46,11 @@ export async function listStudioJourneys(config) {
   return journeys;
 }
 
+/** Put a journey you already have on the Studio, so it is owned and checked there. */
+export async function pushStudioJourney(config, { name = "", yaml, replace = false }) {
+  return call(config, "/api/journeys", { method: "POST", body: { name, yaml, replace } });
+}
+
 /** Replay one journey and wait for the verdict. */
 export async function runStudioJourney(config, name, { onProgress = () => {}, timeoutMs = DEFAULT_TIMEOUT_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   const started = await call(config, "/api/operations/run-flow", { method: "POST", body: { name } });

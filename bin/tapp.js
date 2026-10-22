@@ -516,14 +516,23 @@ if (typedCommand === "run" && (typedRest.includes("--studio") || process.env.TAP
   const { flags, positionals } = parseVerbArgs(typedRest);
   const name = String(positionals[0] || "").replace(/\.ya?ml$/i, "");
   if (!name) {
-    console.error("❌ tapp run <journey> --studio https://app.runtapp.com  (the journey's name in the Studio)");
+    console.error("❌ tapp run <journey|flow.yml> --studio https://app.runtapp.com\n   a name replays the journey already there; a local Flow file is added as a journey and then replayed");
     process.exit(2);
   }
-  const { studioConfig, runStudioJourney } = await import(path.join(packageRoot, "mcp-server", "src", "studio-client.js"));
+  const { studioConfig, runStudioJourney, pushStudioJourney } = await import(path.join(packageRoot, "mcp-server", "src", "studio-client.js"));
   try {
     const config = studioConfig({ studio: flags.studio, token: flags.token });
-    console.log(`▶ ${name} · ${config.origin}`);
-    const result = await runStudioJourney(config, name, { onProgress: (line) => console.log(`  ${line}`) });
+    // A local Flow file means "put this journey on my Studio and run it there"; a bare name means
+    // "run the one already there". A repository's committed journey becomes a checked one this way.
+    const localFlow = path.resolve(String(positionals[0] || ""));
+    let journeyName = name;
+    if (/\.(ya?ml|json)$/i.test(localFlow) && fs.existsSync(localFlow)) {
+      const pushed = await pushStudioJourney(config, { yaml: fs.readFileSync(localFlow, "utf8"), name, replace: flags.replace === true });
+      console.log(`↑ ${pushed.name} — ${pushed.steps} steps → ${config.origin}`);
+      journeyName = pushed.slug;
+    }
+    console.log(`▶ ${journeyName} · ${config.origin}`);
+    const result = await runStudioJourney(config, journeyName, { onProgress: (line) => console.log(`  ${line}`) });
     if (result.kind === "self-host") {
       console.log(`ℹ️  ${result.message}`);
       process.exit(2);

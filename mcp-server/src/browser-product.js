@@ -160,7 +160,7 @@ function accountAllows(method, pathname) {
   if (method === "DELETE" && /^\/api\/tokens\/[a-f0-9]{12}$/.test(pathname)) return true;
   if (method === "DELETE" && /^\/api\/actors\/[A-Za-z0-9.:-]{1,253}\/[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(pathname)) return true;
   // Journeys: keep a proven run, replay it, forget it (ADR-0009 slice 3).
-  if (method === "POST" && (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname) || pathname === "/api/operations/run-flow")) return true;
+  if (method === "POST" && (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname) || pathname === "/api/operations/run-flow" || pathname === "/api/journeys")) return true;
   if (method === "DELETE" && /^\/api\/journeys\/[a-z0-9-]{1,60}$/.test(pathname)) return true;
   return false;
 }
@@ -950,6 +950,49 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           journeys = store.list().map((journey) => ({ ...journey, group: "" }));
         }
         json(response, 200, { journeys });
+        return;
+      }
+      // Bring a journey you already have. A repository's committed Flow, or one an agent wrote,
+      // becomes a journey this account owns and tapp checks daily. The Studio replays it from
+      // here, so it must be a web journey against a public address — the same rule the egress
+      // proxy enforces at runtime, said plainly at import instead of failing mid-replay.
+      if (!anonymous && request.method === "POST" && url.pathname === "/api/journeys") {
+        guardMutation(request);
+        const body = await readJsonBody(request);
+        const yaml = String(body.yaml || "");
+        if (!yaml.trim()) { json(response, 400, { error: "Send the journey's YAML as `yaml`." }); return; }
+        if (yaml.length > 64_000) { json(response, 413, { error: "That journey is too large." }); return; }
+        const store = journeyStore();
+        const { loadFlowFile, validateFlowSteps, inferFlowPlatform } = await import("./flow-runtime.js");
+        const staging = path.join(os.tmpdir(), `tapp-journey-${crypto.randomBytes(8).toString("hex")}.yml`);
+        let flow;
+        try {
+          fs.writeFileSync(staging, yaml, { mode: 0o600 });
+          flow = loadFlowFile(staging);
+        } catch (error) {
+          json(response, 400, { error: `That is not a Flow tapp can read: ${String(error.message || error).slice(0, 200)}` });
+          return;
+        } finally { try { fs.rmSync(staging, { force: true }); } catch { /* temp */ } }
+        // The file is kept verbatim — its comments, `vars:` defaults and step shape are the
+        // journey. The journey's own `name:` wins; `name` only fills one in when the file has none.
+        const name = String(flow.name || body.name || "").trim().slice(0, 120);
+        if (!name) { json(response, 400, { error: "A journey needs a name: give the Flow a `name:` or pass one." }); return; }
+        if (inferFlowPlatform(flow) !== "web") { json(response, 400, { error: "The Studio replays web journeys; an iOS or Android one runs where that device is." }); return; }
+        const errors = validateFlowSteps(flow);
+        if (errors.length) { json(response, 400, { error: `That journey has steps tapp cannot replay: ${errors.slice(0, 3).join("; ")}` }); return; }
+        let target;
+        try { target = new URL(flow.url || flow.app || ""); } catch { target = null; }
+        if (!target || !/^https?:$/.test(target.protocol)) { json(response, 400, { error: "The journey needs a `url:` the Studio can open." }); return; }
+        if (/^(localhost|127\.|0\.|10\.|192\.168\.|\[?::1)/i.test(target.hostname) || /\.local$/i.test(target.hostname)) {
+          json(response, 400, { error: `This Studio cannot reach ${target.hostname} — it only opens public addresses. Run tapp where that app is: npx -y @aarwitz/tapp@latest app` });
+          return;
+        }
+        let kept;
+        const storedYaml = /^name:/m.test(yaml) ? yaml : `name: ${JSON.stringify(name)}\n${yaml}`;
+        try { kept = store.keep({ flow: { ...flow, name }, yaml: storedYaml }, { replace: body.replace === true }); }
+        catch (error) { json(response, error.statusCode || 500, { error: error.message }); return; }
+        logUsage("journey.imported", { owner: (ownerKey || "operator").slice(0, 13), host: safeHost(target.href) });
+        json(response, 200, { name, slug: kept.slug, steps: (flow.steps || []).length, imported: true });
         return;
       }
       const forgetJourneyMatch = !anonymous && request.method === "DELETE" ? url.pathname.match(/^\/api\/journeys\/([a-z0-9-]{1,60})$/) : null;

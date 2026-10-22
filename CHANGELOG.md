@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.0
+
+- **Put a journey you already have on your Studio.** `tapp run path/to/flow.yml --studio https://…`
+  adds that Flow to your account as a journey and replays it there; a bare name still replays one
+  already there. A repository's committed journey becomes a journey the hosted Studio owns and
+  **checks daily**, which is how a real app gets a live status page without anyone opening one.
+  The file is kept verbatim — its comments and `vars:` defaults are part of the journey.
+- The Studio refuses, at import and with the reason, what it could never replay: a non-web
+  journey, one with no `url:`, one whose steps are outside the Flow vocabulary, or one pointing at
+  localhost or a private address (it only opens public addresses — run tapp where that app is).
+- New: `POST /api/journeys`; `pushStudioJourney` in the Studio client.
+
 ## 0.25.1
 
 - **`tapp run FLOW --var NAME=VALUE`** (repeatable): run the same journey against another

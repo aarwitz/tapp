@@ -772,3 +772,53 @@ test("a personal access token lets a coding agent act as its owner, and only as 
     assert.equal((await asAgent("/api/journeys")).status, 401);
   } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
 });
+
+test("a journey you already have can be put on the Studio, and only one it can actually replay", async () => {
+  // A repository's committed Flow becomes a journey this account owns and tapp checks daily.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-import-home-"));
+  const previous = process.env.TAPP_HOME; process.env.TAPP_HOME = home;
+  const origin = "https://app.runtapp.com";
+  const accessVerifier = { verify: async () => ({ email: "owner@example.test" }) };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-import-ws-")), accessVerifier });
+  try {
+    const signedIn = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = signedIn.headers.get("set-cookie").split(";")[0];
+    const { csrfToken } = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const post = (body) => fetch(`${product.origin}/api/journeys`, { method: "POST", headers: { cookie, origin, "x-tapp-csrf": csrfToken, "content-type": "application/json" }, body: JSON.stringify(body) });
+
+    const yaml = [
+      "# The homepage paints the coach grid — a comment the owner wrote.",
+      'name: web-home-coach-grid',
+      "platform: web",
+      "url: https://example.test/index.html",
+      "steps:",
+      "- wait_for: Find the right coach.",
+      "- wait_for: Top Rated Coaches",
+    ].join("\n");
+    const kept = await (await post({ yaml })).json();
+    assert.equal(kept.slug, "web-home-coach-grid");
+    assert.equal(kept.steps, 2);
+    const stored = fs.readFileSync(path.join(home, "accounts", "journeys", fs.readdirSync(path.join(home, "accounts", "journeys"))[0], "web-home-coach-grid.yml"), "utf8");
+    assert.match(stored, /a comment the owner wrote/, "the file is kept verbatim — comments and vars are the journey");
+
+    const [listed] = (await (await fetch(`${product.origin}/api/journeys`, { headers: { cookie } })).json()).journeys;
+    assert.equal(listed.name, "web-home-coach-grid");
+    assert.equal(listed.status, null, "imported, not yet checked");
+    assert.equal((await post({ yaml })).status, 409, "a name is not overwritten by accident");
+    assert.equal((await post({ yaml, replace: true })).status, 200);
+
+    // What this Studio cannot replay, it refuses at import with the reason — not mid-replay.
+    const refusals = [
+      [{ yaml: "" }, /Send the journey/],
+      [{ yaml: "name: x\nplatform: web\nsteps:\n- wait_for: Home\n" }, /needs a `url:`/],
+      [{ yaml: "name: y\nplatform: web\nurl: http://localhost:5173/\nsteps:\n- wait_for: Home\n" }, /only opens public addresses/],
+      [{ yaml: "name: z\nplatform: ios\napp: com.example.app\nsteps:\n- tap: Home\n" }, /runs where that device is/],
+      [{ yaml: "name: w\nplatform: web\nurl: https://example.test/\nsteps:\n- fly_to: Home\n" }, /cannot replay/],
+    ];
+    for (const [body, expected] of refusals) {
+      const response = await post(body);
+      assert.equal(response.status >= 400 && response.status < 500, true, `${JSON.stringify(body).slice(0, 40)} is refused`);
+      assert.match((await response.json()).error, expected);
+    }
+  } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
+});
