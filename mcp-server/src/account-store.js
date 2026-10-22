@@ -83,7 +83,13 @@ export class AccountStore {
     const link = readJson(file);
     try { fs.rmSync(file, { force: true }); } catch { /* spent either way */ }
     if (!link || Date.parse(link.expiresAt) < this.now()) return null;
-    const account = this.#ensureAccount(link.email);
+    return this.signIn(link.email);
+  }
+
+  /** Open a session for an address whose owner has already been verified (a redeemed link, or
+   *  an identity provider such as Cloudflare Access). */
+  signIn(rawEmail) {
+    const account = this.#ensureAccount(normalizeEmail(rawEmail));
     const session = token();
     writeJson(this.#file("sessions", sha(session)), { accountId: account.id, createdAt: new Date(this.now()).toISOString(), expiresAt: new Date(this.now() + SESSION_TTL_MS).toISOString() });
     return { session, account };

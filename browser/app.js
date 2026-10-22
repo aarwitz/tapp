@@ -850,7 +850,13 @@ document.addEventListener("click", (event) => {
   if (button && button.type === "button") { event.preventDefault(); answerAsk(button.closest("#chat-ask"), button.dataset.ask); }
   const play = event.target.closest("[data-run-journey]");
   if (play) { event.preventDefault(); runJourney(play.dataset.runJourney).catch((error) => toast(error.message, true)); }
-  if (event.target.closest("[data-signin]")) { event.preventDefault(); state.signInOpen = true; renderAccount(); showPrompt(); setTimeout(() => $("#signin-email")?.focus(), 50); }
+  if (event.target.closest("[data-signin]")) {
+    event.preventDefault();
+    // With Cloudflare Access in front, the sign-in page is Cloudflare's; otherwise ask for an
+    // address here and mail a link.
+    if (state.session?.signInProvider === "cloudflare") { location.href = "/auth/cloudflare"; return; }
+    state.signInOpen = true; renderAccount(); showPrompt(); setTimeout(() => $("#signin-email")?.focus(), 50);
+  }
   if (event.target.closest("[data-signout]")) { event.preventDefault(); signOut(); }
   const forget = event.target.closest("[data-forget-actor]");
   if (forget) { event.preventDefault(); forgetActor(forget.dataset.forgetHost, forget.dataset.forgetActor).catch((error) => toast(error.message, true)); }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.23.1
+
+- **Sign in through Cloudflare Access, so tapp never sends email.** With an Access application
+  on `/auth/cloudflare` and `TAPP_ACCESS_TEAM_DOMAIN` + `TAPP_ACCESS_AUD` set, *Sign in* goes to
+  Cloudflare (one-time PIN or Google), and the signed assertion it returns opens the tapp
+  session — signature, audience, issuer and expiry all checked against the team's published keys
+  (`access-jwt.js`, no dependencies). The email link remains the provider-free path; the Studio
+  offers whichever is configured (`signInProvider`).
+
 ## 0.23.0
 
 Slice 2 of ADR-0009: **accounts on the public Studio**, so that getting inside an application —

@@ -93,6 +93,15 @@ There is no password. Links work once and expire in 15 minutes; sessions last 90
 SHA-256 of either token is on disk (`account-store.js`). One address may ask for five links per
 ten minutes, and the reply is the same whether or not the address has an account.
 
+**Cloudflare Access instead of mail.** When the host is fronted by Cloudflare, put an Access
+application on exactly `app.runtapp.com/auth/cloudflare` (policy: allow everyone; login method:
+one-time PIN or Google) and set `TAPP_ACCESS_TEAM_DOMAIN` (`<team>.cloudflareaccess.com`) and
+`TAPP_ACCESS_AUD` (the application's audience tag). *Sign in* then goes to Cloudflare, which
+proves the address itself and returns with a signed assertion (`Cf-Access-Jwt-Assertion`);
+`access-jwt.js` checks the RS256 signature against the team's published keys, the audience, the
+issuer and the expiry, and opens the same session the link flow would. tapp sends no email.
+`/api/session.signInProvider` tells the Studio which of the two to offer.
+
 **Mail** is sent through Resend when `TAPP_MAIL_RESEND_KEY` and `TAPP_MAIL_FROM` are set
 (`mailer.js`). Without them, each message is written as a 0600 `.eml` into `TAPP_MAIL_OUTBOX`
 (default `TAPP_HOME/mail-outbox`) — what tests and a local trial use, and what a freshly deployed

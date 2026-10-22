@@ -20,6 +20,7 @@ import { JobLanes } from "./job-lanes.js";
 import { AccountStore } from "./account-store.js";
 import { ActorStore, hostKey } from "./actor-store.js";
 import { createMailer, signInMessage } from "./mailer.js";
+import { accessConfig, createAccessVerifier } from "./access-jwt.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -132,8 +133,8 @@ function anonymousAllows(method, pathname) {
     if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
     if (/^\/evidence\/captures\//.test(pathname)) return true;
     if (/^\/api\/jobs\/[a-f0-9]{20}(\/frame)?$/.test(pathname)) return true;
-    // Following a sign-in link from an email.
-    if (/^\/auth\/[A-Za-z0-9_-]{20,}$/.test(pathname)) return true;
+    // Following a sign-in link from an email, or arriving back from Cloudflare Access.
+    if (pathname === "/auth/cloudflare" || /^\/auth\/[A-Za-z0-9_-]{20,}$/.test(pathname)) return true;
     return false;
   }
   // Asking for a sign-in link is the one thing a stranger may post besides a run.
@@ -453,7 +454,7 @@ function serveLoginPage(response, { failed = false, next = "" } = {}) {
   response.end(html);
 }
 
-export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false } = {}) {
+export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined } = {}) {
   const hosted = !!trustedProxyToken || !!directLogin || !!publicAccess;
   // publicOrigin accepts a comma-separated allowlist; the first entry is canonical.
   const publicOrigins = String(publicOrigin || "").split(",").map((value) => value.trim().replace(/\/$/, "")).filter(Boolean);
@@ -489,6 +490,16 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   // Accounts exist only on a public Studio: a local one has exactly one person, the operator.
   const accounts = publicAccess ? new AccountStore() : null;
   const mailer = publicAccess ? createMailer() : null;
+  // With Cloudflare Access in front of /auth/cloudflare, identity comes from Cloudflare's signed
+  // assertion and tapp sends no email at all. Configured by TAPP_ACCESS_TEAM_DOMAIN + TAPP_ACCESS_AUD;
+  // tests inject a verifier. The email link stays available as the provider-free path.
+  const access = accessVerifier !== undefined ? accessVerifier : (publicAccess && accessConfig() ? createAccessVerifier(accessConfig()) : null);
+  const signInProvider = access ? "cloudflare" : "email";
+  const openAccountSession = (response, signedIn, location = "/?signin=done") => {
+    logUsage("signin.done", { account: signedIn.account.id.slice(0, 8), provider: signInProvider });
+    response.writeHead(303, { location, "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000` });
+    response.end();
+  };
   const secureCookies = publicOrigins[0]?.startsWith("https:") ?? false;
   const serverStartedAt = new Date().toISOString();
   const sessionToken = crypto.randomBytes(32).toString("base64url");
@@ -731,9 +742,23 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (authLinkMatch) {
         const signedIn = accounts.redeem(authLinkMatch[1]);
         if (!signedIn) { response.writeHead(303, { location: "/?signin=expired" }); response.end(); return; }
-        logUsage("signin.done", { account: signedIn.account.id.slice(0, 8) });
-        response.writeHead(303, { location: "/?signin=done", "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000` });
-        response.end();
+        openAccountSession(response, signedIn);
+        return;
+      }
+      // Back from Cloudflare Access: the assertion header is only ever set by Cloudflare on a
+      // request that passed its policy, and the signature proves it. Without Access configured
+      // the path says so instead of pretending.
+      if (publicAccess && request.method === "GET" && url.pathname === "/auth/cloudflare") {
+        if (!access) { response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); response.end("Cloudflare Access sign-in is not configured here; use the email link."); return; }
+        const assertion = String(request.headers["cf-access-jwt-assertion"] || cookies(request).CF_Authorization || "");
+        try {
+          const { email } = await access.verify(assertion);
+          openAccountSession(response, accounts.signIn(email));
+        } catch (error) {
+          logUsage("signin.access.refused", { reason: String(error.message || error).slice(0, 120) });
+          response.writeHead(303, { location: "/?signin=expired" });
+          response.end();
+        }
         return;
       }
       if (account && request.method === "POST" && url.pathname === "/api/auth/signout") {
@@ -767,7 +792,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "account", email: account.email,
+            access: "account", email: account.email, signInProvider,
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
           });
@@ -777,7 +802,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "anonymous",
+            access: "anonymous", signInProvider,
             // The prompt screen offers folders, bundle ids and builds. None of them can work in
             // a hosted Studio — there is no Mac, no simulator and no access to the visitor's
             // disk — so say so here rather than letting the UI offer them.

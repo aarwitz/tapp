@@ -592,3 +592,46 @@ test("an account signs in by email link, may go inside a site, and sees only its
     }
   }
 });
+
+test("with Cloudflare Access in front, a verified assertion signs in and tapp sends no email", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-access-home-"));
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-access-ws-"));
+  const outbox = path.join(home, "outbox");
+  const previous = { home: process.env.TAPP_HOME, outbox: process.env.TAPP_MAIL_OUTBOX };
+  process.env.TAPP_HOME = home;
+  process.env.TAPP_MAIL_OUTBOX = outbox;
+  // The verifier is Cloudflare's job; here it is a stand-in that accepts exactly one assertion.
+  const accessVerifier = { verify: async (token) => { if (token !== "good-assertion") throw new Error("Access token signature does not verify"); return { email: "Owner@Example.test" }; } };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot, accessVerifier });
+  try {
+    const session = await (await fetch(`${product.origin}/api/session`)).json();
+    assert.equal(session.signInProvider, "cloudflare", "the Studio knows where Sign in goes");
+
+    const refused = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "forged" } });
+    assert.equal(refused.headers.get("location"), "/?signin=expired");
+    assert.doesNotMatch(String(refused.headers.get("set-cookie")), /tapp_account=/, "a bad assertion opens nothing");
+
+    const accepted = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "good-assertion" } });
+    assert.equal(accepted.status, 303);
+    assert.equal(accepted.headers.get("location"), "/?signin=done");
+    const cookie = accepted.headers.get("set-cookie").split(";")[0];
+    assert.match(cookie, /^tapp_account=/);
+    const me = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    assert.equal(me.access, "account");
+    assert.equal(me.email, "owner@example.test");
+    assert.equal(fs.existsSync(outbox), false, "no email was sent");
+  } finally {
+    await product.close();
+    for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_MAIL_OUTBOX", previous.outbox]]) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
+});
+
+test("without Cloudflare Access configured the path says so, and Sign in is the email link", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-noaccess-home-"));
+  const previous = process.env.TAPP_HOME; process.env.TAPP_HOME = home;
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-noaccess-ws-")), accessVerifier: null });
+  try {
+    assert.equal((await (await fetch(`${product.origin}/api/session`)).json()).signInProvider, "email");
+    assert.equal((await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual" })).status, 404);
+  } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
+});
