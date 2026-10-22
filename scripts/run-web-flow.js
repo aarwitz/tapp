@@ -28,6 +28,9 @@ try {
     ...(process.env.TAPP_WORKFLOW_REPLAY === "1" ? {strictOrigin:true,variables:{
       TEST_RUN_ID:process.env.TEST_RUN_ID || "",TEST_EMAIL:process.env.OCQA_TEST_EMAIL || "",TEST_PASSWORD:process.env.OCQA_TEST_PASSWORD || "",
     }} : {}),
+    // `tapp run FLOW --var NAME=VALUE` — the same journey against another environment, coach or
+    // tenant without editing it. Merged over the Flow's own `vars:` defaults (flowVariables).
+    ...(process.env.TAPP_FLOW_VARS ? { variables: JSON.parse(process.env.TAPP_FLOW_VARS) } : {}),
     device: process.env.TAPP_WEB_DEVICE || "",
     viewport: process.env.TAPP_WEB_VIEWPORT || "",
   });

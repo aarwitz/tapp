@@ -1118,3 +1118,26 @@ test("flow run/validate accept several Flows (or a glob) and print one line per 
   assert.match(run.stdout, /unknown action 'click'/);
   assert.match(run.stdout, /1\/2 valid/);
 });
+
+test("flow run --var carries values into the journey, and rejects a malformed one", () => {
+  // A real repository's committed journeys pinned a production coach's name, so they could not
+  // replay against its sandbox coach at all. A journey should run against another environment,
+  // actor or tenant without being edited — that is what --var is for.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-var-"));
+  const env = { ...process.env, TAPP_HOME: path.join(dir, "home") };
+  fs.writeFileSync(path.join(dir, "smoke.yml"), "name: smoke\nplatform: web\nurl: http://127.0.0.1:9/\nsteps:\n  - wait_for: $COACH_NAME\n");
+
+  const malformed = spawnSync("node", [tappBin, "flow", "run", "smoke.yml", "--var", "COACH_NAME"], { cwd: dir, env, encoding: "utf8" });
+  assert.equal(malformed.status, 2);
+  assert.match(`${malformed.stderr}`, /--var expects NAME=VALUE/);
+
+  // The value reaches the step: the run fails on an unreachable port, but the failure names the
+  // substituted target rather than the literal placeholder.
+  const run = spawnSync("node", [tappBin, "flow", "run", "smoke.yml", "--var", "COACH_NAME=Casey Sandbox"], { cwd: dir, env, encoding: "utf8", timeout: 120_000 });
+  const output = `${run.stdout}${run.stderr}`;
+  assert.doesNotMatch(output, /\$COACH_NAME/, "the placeholder was substituted before the step ran");
+
+  // Usage advertises it where someone would look for it.
+  const help = spawnSync("node", [tappBin, "run", "--help"], { cwd: dir, env, encoding: "utf8" });
+  assert.match(`${help.stdout}`, /--var NAME=VALUE/);
+});

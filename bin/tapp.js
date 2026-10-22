@@ -399,7 +399,7 @@ function safeCommandUsage(verb) {
     shot: "tapp look --sim [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp run FLOW.yml [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default) [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    flow: "tapp run FLOW.yml [--var NAME=VALUE ...] [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default) [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp validate TASK.yml [--platform PLATFORM] [--map FILE]\ntapp validate TASK.yml --compile --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp run TASK.yml --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp validate FILE.contract.ts [--platform PLATFORM] [--map FILE]\ntapp validate FILE.contract.ts --compile --platform PLATFORM [--out FILE]\ntapp run FILE.contract.ts --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
     scenario: "tapp validate SCENARIO.yml [--project-dir DIR]\ntapp run SCENARIO.yml --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
@@ -1409,7 +1409,7 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
+      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--var NAME=VALUE ...] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
       process.exit(2);
     }
     // Several Flows in one command (field issue #9): the shell usually expands the glob, but a
@@ -1528,6 +1528,20 @@ switch (command) {
         env[envKey] = value;
       }
     }
+    // Repeated --var NAME=VALUE. parseVerbArgs keeps only the last value for a repeated flag, so
+    // read them off the argument list directly.
+    const flowVars = {};
+    for (let i = 0; i < rest.length - 1; i += 1) {
+      if (rest[i] !== "--var") continue;
+      const [name, ...value] = String(rest[i + 1]).split("=");
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || !value.length) {
+        console.error(`❌ --var expects NAME=VALUE (got '${rest[i + 1]}')`);
+        process.exit(2);
+      }
+      flowVars[name] = value.join("=");
+    }
+    if (Object.keys(flowVars).length) env.TAPP_FLOW_VARS = JSON.stringify(flowVars);
+
     let invocation;
     if (platform === "web") {
       const url = typeof flags.url === "string" ? flags.url : flow.url || flow.app;

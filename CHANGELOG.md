@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.25.1
+
+- **`tapp run FLOW --var NAME=VALUE`** (repeatable): run the same journey against another
+  environment, coach or tenant without editing it. Values merge over the Flow's own `vars:` and
+  substitute into every step target — the substitution already existed, but nothing could set a
+  variable from outside a scenario. Found while replaying a real customer's committed journeys
+  against their sandbox: they pinned a production coach's name, so none of the coach journeys
+  could run anywhere else.
+
 ## 0.25.0
 
 **Your coding agent can act as you.** ADR-0009 slice 4 — the last of the five pieces.
