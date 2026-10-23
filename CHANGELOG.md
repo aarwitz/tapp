@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.28.0
+
+**Pop-ups: tapp now gets past the shapes real sites use.** Measured against the six common ones,
+the old rule — written for a big centred modal — got past *one*. It missed a native `<dialog>`
+(which is `position: absolute` by default), a small bottom sheet, a short cookie bar, a corner
+toast, and any way out phrased as a sentence ("Not now, thanks"). An overlay is now recognised by
+what it *is* — a dialog by role, or anything on its own layer above the page — and the way out is
+pressed **inside** that overlay, so the same words elsewhere on the page cannot be hit by mistake.
+All six shapes now pass, pinned by `tests/web-overlay.test.js`.
+
+- It still never presses a way out that grants something: "Allow Device Location", "Accept all",
+  "Subscribe", "Turn on" are refused, and if a pop-up offers nothing else, tapp presses nothing
+  rather than agreeing on your behalf.
+- It prefers the way out that grants the least: *Reject all* over *Manage preferences*; *Not now*
+  over *Allow*.
+- A pop-up standing in front of the page is now **reported** as something worth a look — it is
+  the first thing your visitor meets too — and narrated as *Got past "Share your location?" with
+  "Not now"* instead of a bare label.
+- A sticky header is not a pop-up and is left alone.
+
 ## 0.27.1
 
 - The run report now says the polish pass ran, and says plainly what it still does not judge:

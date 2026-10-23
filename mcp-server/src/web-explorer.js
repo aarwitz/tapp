@@ -395,13 +395,17 @@ export function webStateSignature(info) {
 // someone's behalf, so "reject" beats "accept" and "Allow Device Location" is never a candidate
 // however prominent it is. Then the ordinary ways out of an intake modal. A bare "no" or "close"
 // is last because it is the most likely to mean something else on a page.
+// Ordered best-first: the way out that grants the least. Each is matched against the whole
+// label and against its opening words, because real buttons say "Not now, thanks" and
+// "Reject all cookies" as often as the bare phrase.
 const OVERLAY_DISMISSALS = [
-  /^(reject|decline)( all| cookies| non-essential)?$/i,
-  /^(necessary|essential) (cookies )?only$/i,
-  /^(manage |cookie )?(preferences|settings)$/i,
-  /^(not now|no thanks?|maybe later|later|skip|skip for now)$/i,
-  /^(dismiss|close|got it|ok|okay|continue without|don't ask again)$/i,
-  /^(×|✕|✖|x)$/i,
+  /^(reject|decline|deny|block)\b( all| cookies| non-essential)?/i,
+  /^(necessary|essential|required) (cookies )?only\b/i,
+  /^(continue without|use without|browse without|no thanks?|not now|maybe later|later|skip|dismiss)\b/i,
+  /^(don'?t ask( me)?( again)?|never|not interested)\b/i,
+  /^(manage |cookie )?(preferences|settings)\b/i,
+  /^(close|got it|okay|ok|dismiss|understood|no)\b/i,
+  /^(×|✕|✖|⨯|x)$/i,
 ];
 // Never press these to get past an overlay: each one grants something on the person's behalf.
 const OVERLAY_NEVER = /allow|accept|enable|agree|subscribe|sign ?up|turn on|share (my )?location|grant/i;
@@ -409,6 +413,8 @@ const OVERLAY_NEVER = /allow|accept|enable|agree|subscribe|sign ?up|turn on|shar
 export function chooseOverlayDismissal(labels = []) {
   const cleaned = labels.map((label) => String(label || "").replace(/\s+/g, " ").trim()).filter(Boolean);
   for (const pattern of OVERLAY_DISMISSALS) {
+    // A label that grants something is never a way out, however much it looks like one
+    // ("Accept all", "Allow Device Location") — see OVERLAY_NEVER.
     const match = cleaned.find((label) => pattern.test(label) && !OVERLAY_NEVER.test(label));
     if (match) return match;
   }
@@ -425,33 +431,65 @@ export function chooseOverlayDismissal(labels = []) {
  * overlay itself offers.
  */
 export async function dismissBlockingOverlay(page) {
-  const choice = await page.evaluate(() => {
-    const covering = [...document.querySelectorAll("div,section,aside,dialog")].filter((element) => {
+  // Overlays come in shapes, not one shape. A measured probe of the common ones found that a
+  // size-and-position rule written for a big centred modal misses a native <dialog> (absolute by
+  // default), a small bottom sheet, a short cookie bar and a corner toast — four of the five
+  // things that actually sit in front of real sites. Recognise the KIND of thing instead: a
+  // dialog by role, or anything lifted above the page on its own layer.
+  const found = await page.evaluate(() => {
+    const seen = document.querySelectorAll("[data-tapp-overlay]");
+    for (const old of seen) old.removeAttribute("data-tapp-overlay");
+    const viewport = { w: window.innerWidth, h: window.innerHeight };
+    const visible = (element) => {
       const style = window.getComputedStyle(element);
-      if (style.position !== "fixed" && style.position !== "sticky") return false;
-      if (style.display === "none" || style.visibility === "hidden") return false;
+      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
       const rect = element.getBoundingClientRect();
-      return rect.width > window.innerWidth * 0.4 && rect.height > window.innerHeight * 0.2;
+      return rect.width >= 80 && rect.height >= 40 && rect.bottom > 0 && rect.right > 0 && rect.top < viewport.h && rect.left < viewport.w;
+    };
+    const candidates = [];
+    for (const element of document.querySelectorAll('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"],div,section,aside,form')) {
+      if (!visible(element)) continue;
+      const style = window.getComputedStyle(element);
+      const dialogish = element.matches('dialog[open],[role="dialog"],[role="alertdialog"],[aria-modal="true"]');
+      // Fixed and sticky are overlay layers on their own; absolute only counts when it has been
+      // deliberately lifted, or every absolutely-placed card on the page would qualify.
+      const lifted = style.position === "fixed" || style.position === "sticky" || (style.position === "absolute" && (Number(style.zIndex) || 0) >= 5);
+      if (!dialogish && !lifted) continue;
+      // The thing that holds the page is not an overlay, however it is positioned.
+      if (element.contains(document.querySelector("main")) && !dialogish) continue;
+      const rect = element.getBoundingClientRect();
+      const buttons = [...element.querySelectorAll("button,a,[role=button],input[type=button],input[type=submit]")]
+        .map((control) => (control.innerText || control.getAttribute("aria-label") || control.value || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      if (!buttons.length) continue;
+      candidates.push({ element, dialogish, z: Number(style.zIndex) || 0, area: rect.width * rect.height, buttons: buttons.slice(0, 20) });
+    }
+    if (!candidates.length) return null;
+    // Innermost first: a backdrop and the card inside it are both candidates, and the card is the
+    // one carrying the way out. Then the highest layer, then the smallest — a toast beats the
+    // page-sized thing it sits on.
+    candidates.sort((a, b) => {
+      const nested = a.element.contains(b.element) ? 1 : b.element.contains(a.element) ? -1 : 0;
+      return nested || b.z - a.z || a.area - b.area;
     });
-    if (!covering.length) return null;
-    const topmost = covering.sort((a, b) => (Number(window.getComputedStyle(b).zIndex) || 0) - (Number(window.getComputedStyle(a).zIndex) || 0))[0];
-    return [...topmost.querySelectorAll("button,a,[role=button]")]
-      .map((element) => (element.innerText || element.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim())
-      .filter(Boolean)
-      .slice(0, 20);
+    const chosen = candidates[0];
+    chosen.element.setAttribute("data-tapp-overlay", "1");
+    const heading = (chosen.element.querySelector("h1,h2,h3,h4,p,span")?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 90);
+    return { buttons: chosen.buttons, heading };
   }, undefined, { timeout: 2_000 }).catch(() => null);
-  if (!choice || !choice.length) return null;
-  const label = chooseOverlayDismissal(choice);
+  if (!found?.buttons?.length) return null;
+  const label = chooseOverlayDismissal(found.buttons);
   if (!label) return null;
-  try {
-    await page.getByRole("button", { name: label, exact: true }).first().click({ timeout: 2500 });
-    return label;
-  } catch {
+  const overlay = page.locator('[data-tapp-overlay="1"]');
+  // Press it inside the overlay: a page-wide match can find the same words in the page behind.
+  for (const candidate of [overlay.getByRole("button", { name: label, exact: true }), overlay.getByText(label, { exact: true }), overlay.getByRole("button", { name: label })]) {
     try {
-      await page.getByText(label, { exact: true }).first().click({ timeout: 2000 });
-      return label;
-    } catch { return null; }
+      await candidate.first().click({ timeout: 2000 });
+      await page.waitForTimeout(250);
+      return { label, heading: found.heading, asked: found.buttons };
+    } catch { /* try the next way of naming it */ }
   }
+  return null;
 }
 
 export function webScreenTitle(info, fallback) {
@@ -1205,7 +1243,12 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
       // makes every control on the page unreachable and the application behind it invisible.
       const greeting = await dismissBlockingOverlay(page).catch(() => null);
       if (greeting) {
-        narrate(`Dismissed an overlay with "${greeting}"`, { screen: target });
+        narrate(`Got past ${greeting.heading ? `“${greeting.heading}”` : "an overlay"} with "${greeting.label}"`, { screen: target });
+        // A thing that stands in front of the application is worth telling the owner about: it is
+        // the first thing their visitor meets, too.
+        observation({ type: "blocking_overlay", severity: "low", category: "polish",
+          title: `A pop-up stands in front of the page${greeting.heading ? `: “${greeting.heading}”` : ""} — tapp got past it with “${greeting.label}”`,
+          target: greeting.label }, target);
         await waitForWebStability(page);
       }
       if (nav && typeof nav.status === "function" && nav.status() === 404) {
@@ -1355,7 +1398,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
           // clicks into three hundred and forty seconds.
           if (!pageRecoveryHopeless) {
             const dismissed = await dismissBlockingOverlay(page).catch(() => null);
-            if (dismissed) narrate(`Dismissed an overlay with "${dismissed}"`, { screen: ob.screen });
+            if (dismissed) narrate(`Got past ${dismissed.heading ? `“${dismissed.heading}”` : "an overlay"} with "${dismissed.label}"`, { screen: ob.screen });
             else await page.keyboard.press("Escape").catch(() => {});
             await waitForWebStability(page, { timeoutMs: 2_000 });
             // Clearing the obstruction is itself a change, so anything compared against the
