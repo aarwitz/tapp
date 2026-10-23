@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.1
+
+- The run report now says the polish pass ran, and says plainly what it still does not judge:
+  whether the words are right — spelling, tone and claims are read by a person, not by tapp.
+
 ## 0.27.0
 
 **Not just what is broken — what a person would notice and not like.** A site can be free of

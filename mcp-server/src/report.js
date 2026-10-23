@@ -411,12 +411,15 @@ export function buildQaReport(markersFilePath, { platform = "ios", target = null
         : "outbound link reachability (browser-rendered · DNS · HTTP · unavailable-shell heuristic)");
     }
     if (outbound?.mailtos && !outbound.mailtoSkipped) checkedFor.push("mailto address domains (MX/A records)");
+    // Not defects, but the first thing a visitor reacts to — see page-observations.js.
+    checkedFor.push("things a person would notice: faint or tiny text, controls too small to tap, text cut off, unfinished copy, unlabelled fields, missing alt text, slow pages");
     notChecked = [
       "app-specific business logic (cover with Flows: record or generate, then assert)",
       "content and claim accuracy (including copy versus API data)",
       "privacy or API data minimization",
       "brand and SEO consistency",
       "visual credibility or asset quality (vision review; needs an API key)",
+      "whether the words are right: spelling, tone, and claims are read by a person, not by tapp",
       "only the first few visible buttons per page are probed (web)",
       "content & reachability regressions require a baseline",
     ];
