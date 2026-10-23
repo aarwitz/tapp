@@ -94,7 +94,9 @@ test("without a repository the Studio explains how to open one, goes inside a we
     await page.locator("#operation-drawer").waitFor({ state:"hidden", timeout:60_000 });
     const auditChat = await page.locator("#chat-transcript").innerText();
     assert.match(auditChat, /read-only — nothing will be clicked/, "the audit says what it is about to do");
-    assert.match(auditChat, /1 issue found/i, "the chat ends with a summary pill");
+    // Two numbers, never merged: what is broken, and what a person would notice and not like.
+    assert.match(auditChat, /1 issue/i, "the chat ends with a summary pill");
+    assert.match(auditChat, /Worth a look|would notice/i, "and says the polish pass ran too");
     assert.match(auditChat, /report\.html/, "the report is attached to the transcript");
     await page.locator('.primary-nav [data-view="runs"]').click();
     await page.locator("#runs-list .run-row").first().waitFor({ state:"visible" });

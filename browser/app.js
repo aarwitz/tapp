@@ -499,6 +499,16 @@ async function keepJourney(form) {
   } catch (error) { toast(error.message, true); }
 }
 
+// Not defects — what a person would notice and not like. Shown apart from issues, and labelled
+// so nobody reads "nothing is broken" and "this is fine" as the same sentence.
+function renderObservations(audit) {
+  const observations = audit.observations || [];
+  if (!observations.length) return "";
+  return `<h3>Worth a look <i class="zero">${observations.length}</i></h3>
+    <p class="muted">Not broken — things a person would notice and may not like.</p>
+    <ul class="detail-list">${observations.slice(0, 40).map((o) => `<li><b>${esc(o.severity)}</b> · ${esc(o.title)}${o.pages?.length > 1 ? ` <small>(${o.pages.length} pages)</small>` : ""}</li>`).join("")}</ul>`;
+}
+
 function renderRuns() {
   renderJourneys();
   renderActors();
@@ -541,7 +551,7 @@ function renderRunDetail(run) {
     const audit = run.audit;
     const counts = audit.findingCounts || {};
     const issues = audit.issues || [];
-    $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">READ-ONLY AUDIT</p><h2>${esc(audit.url)}</h2><small><code>${esc(audit.id)}</code> · ${compactDate(audit.createdAt)} · nothing was clicked</small></div>${evidenceLink(audit.id, "Visual report")}</div><div class="run-stats"><div><strong>${audit.pagesAudited || 0}</strong><small>pages</small></div><div><strong>${issues.length}</strong><small>distinct issues</small></div><div><strong>${counts.high || 0}</strong><small>high</small></div><div><strong>${counts.medium || 0}</strong><small>medium</small></div></div><h3>Issues</h3>${issues.length ? `<ul class="detail-list">${issues.slice(0, 40).map((issue) => `<li><b>${esc(issue.severity)}</b> · ${esc(issue.title)}${issue.pages?.length > 1 ? ` <small>(${issue.pages.length} pages)</small>` : ""}</li>`).join("")}</ul>` : '<p class="muted">Nothing broken was observed. This says the pages are served without structural defects, not that the site works.</p>'}${detailLists(audit)}`;
+    $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">READ-ONLY AUDIT</p><h2>${esc(audit.url)}</h2><small><code>${esc(audit.id)}</code> · ${compactDate(audit.createdAt)} · nothing was clicked</small></div>${evidenceLink(audit.id, "Visual report")}</div><div class="run-stats"><div><strong>${audit.pagesAudited || 0}</strong><small>pages</small></div><div><strong>${issues.length}</strong><small>distinct issues</small></div><div><strong>${counts.high || 0}</strong><small>high</small></div><div><strong>${counts.medium || 0}</strong><small>medium</small></div></div><h3>Issues</h3>${issues.length ? `<ul class="detail-list">${issues.slice(0, 40).map((issue) => `<li><b>${esc(issue.severity)}</b> · ${esc(issue.title)}${issue.pages?.length > 1 ? ` <small>(${issue.pages.length} pages)</small>` : ""}</li>`).join("")}</ul>` : '<p class="muted">Nothing broken was observed. This says the pages are served without structural defects, not that the site works.</p>'}${renderObservations(audit)}${detailLists(audit)}`;
     return;
   }
   if (run.kind === "explore") {

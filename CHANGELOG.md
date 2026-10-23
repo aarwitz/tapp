@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.27.0
+
+**Not just what is broken — what a person would notice and not like.** A site can be free of
+defects and still be unpleasant, and until now tapp answered that with "0 issues". Every run now
+also makes a deterministic *observation* pass (`page-observations.js`, no model, no key):
+
+- text too faint to read (contrast, with the ratio) or too small;
+- controls too small to tap **and the page measured again at phone width**, where that question
+  has an honest answer — a 20px nav link is a nav link on a desktop and a problem on a phone;
+- pages that scroll sideways on a phone; text cut off by its own box with nothing to show it;
+- copy nobody finished — lorem ipsum, TODO, "coming soon", a stray `undefined`;
+- fields with no label, controls with no name, links that say only "click here";
+- images with no alt text, pages with no headline, tab titles that say "Document";
+- pages that take more than four seconds to load.
+
+Observations are **counted and listed apart from issues** and carry `category: "polish"`, so
+"3 issues" never quietly means "3 issues and 14 opinions". The Studio shows them under
+**Worth a look**, and the audit summary carries `observations` / `observationCount`. Both the
+read-only audit and exploration run the pass (exploration once per route, and never resizes the
+window mid-run).
+
+On a real customer's marketing site this turned "12 pages, 0 issues" into 52 things worth
+looking at — including unfinished "COMING SOON" copy, a 3.5:1 contrast on the main call to
+action, and a page that scrolls sideways on a phone.
+
 ## 0.26.0
 
 - **Put a journey you already have on your Studio.** `tapp run path/to/flow.yml --studio https://…`

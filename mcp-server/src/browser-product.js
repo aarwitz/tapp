@@ -217,6 +217,9 @@ function listAudits(limit = 50, owner = null) {
       url: summary.url, pagesAudited: summary.pagesAudited || 0, pagesWithUnverifiableWiring: summary.pagesWithUnverifiableWiring || 0,
       findingCounts: summary.findingCounts || {}, issueCount: summary.issueCount ?? (summary.issues || []).length,
       issues: (summary.issues || []).slice(0, 60), checkedFor: summary.checkedFor || [], notChecked: summary.notChecked || [],
+      // Things a person would notice and not like — carried through so the run detail can show
+      // them under "Worth a look", apart from the defect count.
+      observations: (summary.observations || []).slice(0, 60), observationCount: summary.observationCount ?? (summary.observations || []).length,
     });
   }
   return audits.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);

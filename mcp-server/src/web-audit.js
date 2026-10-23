@@ -18,6 +18,7 @@ import {
   auditFindingsFromControls, slug,
 } from "./web-explorer.js";
 import { buildQaReport } from "./report.js";
+import { collectPageObservations, observationFindings, OBSERVATION_SCOPE } from "./page-observations.js";
 import { writeHtmlReport } from "./html-report.js";
 import { buildUiMapFromMarkers, writeUiMap } from "./ui-map.js";
 import { writeCaptureProvenance } from "./capture-provenance.js";
@@ -254,8 +255,11 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
 
     const structural = auditFindingsFromControls(controls.dead).map((f, i) => ({ ...f, selector: controls.dead[i].selector }));
     const findings = [...structural, ...healthFindings(health.findings), ...loadFindings, ...links.findings];
+    // Things a person would notice and not like — counted and listed apart from defects, so the
+    // issue count never quietly includes opinions. See page-observations.js.
+    const observations = observationFindings(await collectPageObservations(page));
     const screen = target.pathname + target.search;
-    for (const f of findings) { f.screen = screen; if (!f.url) f.url = page.url(); }
+    for (const f of [...findings, ...observations]) { f.screen = screen; if (!f.url) f.url = page.url(); }
 
     // Where this page's screenshot landed, so a live viewer can show the page being audited
     // instead of an empty panel. Absolute, because that is what the progress channel forwards.
@@ -272,21 +276,22 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
       framePath = path.join(capture.dir, `frame_${capture.states}.png`);
       await page.screenshot({ path: framePath }).catch(() => { framePath = statePath; });
       capture.emit("STATE", { screen, url: page.url(), elements: controls.controlCount, role: "page", controls: controls.dead.map((d) => d.label).filter(Boolean).slice(0, 40), inputs: [], settled: true, screenshot: stateName });
-      for (const f of findings) {
+      for (const f of [...findings, ...observations]) {
         if (f.selector) {
           capture.evidence += 1;
           const name = `evidence_${capture.evidence}_${slug(f.type)}.png`;
           const shot = await captureElementEvidence(page, page.locator(f.selector), capture.dir, name);
           if (shot) f.evidence = shot;
         }
-        capture.emit("ISSUE", { type: f.type, severity: f.severity, title: f.title, screen, ...(f.target ? { target: f.target } : {}), url: f.url, ...(f.evidence ? { evidence: f.evidence } : {}) });
+        capture.emit("ISSUE", { type: f.type, severity: f.severity, ...(f.category ? { category: f.category } : {}), title: f.title, screen, ...(f.target ? { target: f.target } : {}), url: f.url, ...(f.evidence ? { evidence: f.evidence } : {}) });
       }
     }
-    for (const f of findings) delete f.selector;
+    for (const f of [...findings, ...observations]) delete f.selector;
 
     return {
       url: page.url(),
       title: controls.title,
+      observations,
       ...(observationOnly ? { visibleText: await page.locator("body").innerText({ timeout: bounded }).then(text => text.slice(0, 12000)).catch(() => ""),
         visibleTextLimit: 12000 } : {}),
       ...(page.video() ? { recording: path.basename(await page.video().path()) } : {}),
@@ -367,7 +372,7 @@ export function dedupeSiteIssues(findings = []) {
       existing.occurrences += 1;
       continue;
     }
-    byKey.set(key, { type: f.type, severity: f.severity, title: f.title, target: f.target ?? null, evidence: f.evidence || null, pages: page ? [page] : [], occurrences: 1 });
+    byKey.set(key, { type: f.type, severity: f.severity, ...(f.category ? { category: f.category } : {}), title: f.title, target: f.target ?? null, evidence: f.evidence || null, pages: page ? [page] : [], occurrences: 1 });
   }
   const rank = { critical: 0, high: 1, medium: 2, low: 3 };
   return [...byKey.values()].sort((a, b) => (rank[a.severity] ?? 4) - (rank[b.severity] ?? 4) || b.pages.length - a.pages.length);
@@ -492,6 +497,7 @@ export async function auditWebSite({
     // Closing the context finalizes page recordings before evidence is uploaded.
     await context.close();
     const findings = results.flatMap((r) => r.findings);
+    const observations = dedupeSiteIssues(results.flatMap((r) => r.observations || []));
     const issues = dedupeSiteIssues(findings);
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
     for (const f of findings) if (f.severity in bySeverity) bySeverity[f.severity] += 1;
@@ -514,6 +520,11 @@ export async function auditWebSite({
       // link that answers 404 on six pages is one thing to fix, and one line in an email.
       issues,
       issueCount: issues.length,
+      // Not defects: things a person would notice and not like, kept in their own list so the
+      // issue count stays a count of things that are broken.
+      observations,
+      observationCount: observations.length,
+      lookedForAlso: OBSERVATION_SCOPE,
       checkedFor: scope.checkedFor,
       notChecked: [...scope.notChecked, ...observationLimits, ...(skippedLinks.size ? ["Potential action/signed links and robots exclusions were not fetched; see skippedLinks."] : [])],
       pages: results,
@@ -541,6 +552,7 @@ export async function auditWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, device = "
     controlsExamined: page.controlsExamined,
     linksChecked: page.linksChecked,
     findings: page.findings,
+    observations: page.observations || [],
     checkedFor: site.checkedFor,
     notChecked: site.notChecked,
     capture: site.capture,

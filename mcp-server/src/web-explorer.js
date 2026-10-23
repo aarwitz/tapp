@@ -826,6 +826,13 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
 
   const deadline = Date.now() + timeoutSec * 1000;
   const issues = []; // emitted immediately; kept for counting only
+  // Things a person would notice and not like, asked once per route (page-observations.js). They
+  // carry category "polish" so a reader can tell them from defects.
+  const observedRoutes = new Set();
+  const observation = (o, screen) => {
+    issues.push(o.type);
+    emit("ISSUE", { t: Date.now() - startedAtMs, type: o.type, severity: o.severity, category: "polish", title: o.title, screen, ...(o.target ? { target: o.target } : {}), url: page.url() });
+  };
   const issue = (type, severity, title, screen, target, sourceUrl, evidence) => {
     issues.push(type);
     // Findings belong to the page that CARRIED the defect. Async detectors default to the
@@ -1005,6 +1012,11 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
     const evidenceKey = splitting ? `${key}::${screen}::${signature}` : `${key}::${screen}`;
     currentScreen = screen;
     emit("STATE", { t: Date.now() - startedAtMs, screen, url: key, ...(signature ? { signature } : {}), elements: info.controlCount, role: webScreenRole(screen, info.inputs), controls: info.controls, inputs: info.inputs, settled: !info.busy });
+    if (!observedRoutes.has(key) && observedRoutes.size < 8) {
+      observedRoutes.add(key);
+      const { collectPageObservations, observationFindings } = await import("./page-observations.js");
+      for (const found of observationFindings(await collectPageObservations(page, { phone: null }))) observation(found, screen);
+    }
     const completedNavigation = pendingNavigation;
     const transitionFrom = webTransitionOrigin(completedNavigation, lastScreen);
     const transitionAction = completedNavigation?.action || lastActionTarget;

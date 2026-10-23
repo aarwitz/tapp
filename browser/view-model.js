@@ -93,7 +93,11 @@ export function summarize(name, result = {}, { access = "" } = {}) {
     // A visitor only ever gets the read-only look; say what the next step is, because the
     // interesting part of any real application is behind its sign-in.
     const next = access === "anonymous" ? " Sign in and tapp will go inside — and ask you for a test account if it meets a sign-in." : "";
-    return { tone: issues ? "caution" : "ready", pill: issues ? `${issues} issue${issues === 1 ? "" : "s"} found` : "✓ Nothing broken observed", text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "This says the pages are served without structural defects, not that the site works."}${next}` };
+    // Two numbers, never merged: what is broken, and what a person would notice and not like.
+    const noticed = result.observationCount || 0;
+    const pill = issues ? `${issues} issue${issues === 1 ? "" : "s"}${noticed ? ` · ${noticed} to notice` : ""}` : noticed ? `${noticed} thing${noticed === 1 ? "" : "s"} a person would notice` : "✓ Nothing broken observed";
+    const noticedText = noticed ? ` It also found ${noticed} thing${noticed === 1 ? "" : "s"} a person would notice — faint text, controls too small to tap on a phone, copy nobody finished — listed under “Worth a look”.` : "";
+    return { tone: issues ? "caution" : noticed ? "caution" : "ready", pill, text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "Nothing is broken."}${noticedText}${next}` };
   }
   if (gateOutcome) {
     const tone = { pass: "ready", fail: "blocked", inconclusive: "caution" }[gateOutcome] || "caution";
