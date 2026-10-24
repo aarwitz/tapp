@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.1
+
+The read-only pass never presses anything — that is its promise — but it was leaving people to
+work out for themselves why a pop-up was still on screen and why nothing had been clicked.
+
+- A pop-up covering the page is now **reported** by the read-only audit: what it says, and the
+  way out it offers, without pressing it. "Not checked" names what it covered, on how many pages.
+- The run detail says plainly that this pass only looks, and what to do instead: signed out,
+  sign in and tapp goes inside; signed in, put the URL in the prompt.
+- `detectBlockingOverlay` is split from `dismissBlockingOverlay`, so finding an overlay and
+  pressing its way out are separate acts.
+
 ## 0.28.0
 
 **Pop-ups: tapp now gets past the shapes real sites use.** Measured against the six common ones,

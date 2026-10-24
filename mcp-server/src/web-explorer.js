@@ -430,7 +430,13 @@ export function chooseOverlayDismissal(labels = []) {
  * undiscovered. Escape closes a well-built dialog and nothing else, so find the dismissal the
  * overlay itself offers.
  */
-export async function dismissBlockingOverlay(page) {
+/**
+ * Find what is standing in front of the page, without touching it.
+ *
+ * The read-only audit must not press anything — that is the whole promise — but it can still say
+ * a pop-up is there, name it, and name the way out it offers. A visitor meets that pop-up too.
+ */
+export async function detectBlockingOverlay(page) {
   // Overlays come in shapes, not one shape. A measured probe of the common ones found that a
   // size-and-position rule written for a big centred modal misses a native <dialog> (absolute by
   // default), a small bottom sheet, a short cookie bar and a corner toast — four of the five
@@ -477,7 +483,13 @@ export async function dismissBlockingOverlay(page) {
     const heading = (chosen.element.querySelector("h1,h2,h3,h4,p,span")?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 90);
     return { buttons: chosen.buttons, heading };
   }, undefined, { timeout: 2_000 }).catch(() => null);
-  if (!found?.buttons?.length) return null;
+  return found?.buttons?.length ? found : null;
+}
+
+/** Find it, then press its own way out — never a way out that grants something. */
+export async function dismissBlockingOverlay(page) {
+  const found = await detectBlockingOverlay(page);
+  if (!found) return null;
   const label = chooseOverlayDismissal(found.buttons);
   if (!label) return null;
   const overlay = page.locator('[data-tapp-overlay="1"]');

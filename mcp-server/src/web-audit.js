@@ -15,7 +15,7 @@ import { createRequire } from "module";
 import {
   NAV_TIMEOUT_MS, loadPlaywright, webBrowserLaunchOptions, webContextOptions, installWebListenerTracking,
   waitForWebStability, captureElementEvidence, shouldReportWebRequestFailure, auditStructuralControls,
-  auditFindingsFromControls, slug,
+  auditFindingsFromControls, slug, detectBlockingOverlay, chooseOverlayDismissal,
 } from "./web-explorer.js";
 import { buildQaReport } from "./report.js";
 import { collectPageObservations, observationFindings, OBSERVATION_SCOPE } from "./page-observations.js";
@@ -258,6 +258,18 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
     // Things a person would notice and not like — counted and listed apart from defects, so the
     // issue count never quietly includes opinions. See page-observations.js.
     const observations = observationFindings(await collectPageObservations(page));
+    // A pop-up in front of the page is the first thing a visitor meets, and the read-only pass
+    // cannot press it — that is the promise. So say it is there, name it, and name the way out
+    // it offers, rather than quietly judging a page that was never visible.
+    const overlay = await detectBlockingOverlay(page).catch(() => null);
+    if (overlay) {
+      const wayOut = chooseOverlayDismissal(overlay.buttons);
+      observations.push({
+        category: "polish", severity: "medium", type: "blocking_overlay",
+        title: `A pop-up covers the page${overlay.heading ? `: “${overlay.heading}”` : ""} — nothing was clicked, so what it covers was not seen${wayOut ? ` (its way out is “${wayOut}”)` : ""}`,
+        target: overlay.heading || overlay.buttons[0] || "overlay",
+      });
+    }
     const screen = target.pathname + target.search;
     for (const f of [...findings, ...observations]) { f.screen = screen; if (!f.url) f.url = page.url(); }
 
@@ -300,6 +312,7 @@ async function auditOnePage(context, target, { timeoutMs, linkCheckLimit, captur
       // Why the wiring-dependent checks were skipped on this page, if they were.
       ...(controls.wiringUnverifiable ? { wiringUnverifiable: controls.wiringUnverifiable } : {}),
       findings,
+      ...(overlay ? { blockedByOverlay: true } : {}),
       ...(statePath ? { screenshot: statePath } : {}),
       ...(framePath ? { frame: framePath } : {}),
       links: allowedLinks,
@@ -498,6 +511,7 @@ export async function auditWebSite({
     await context.close();
     const findings = results.flatMap((r) => r.findings);
     const observations = dedupeSiteIssues(results.flatMap((r) => r.observations || []));
+    const coveredPages = results.filter((r) => r.blockedByOverlay).length;
     const issues = dedupeSiteIssues(findings);
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
     for (const f of findings) if (f.severity in bySeverity) bySeverity[f.severity] += 1;
@@ -526,7 +540,12 @@ export async function auditWebSite({
       observationCount: observations.length,
       lookedForAlso: OBSERVATION_SCOPE,
       checkedFor: scope.checkedFor,
-      notChecked: [...scope.notChecked, ...observationLimits, ...(skippedLinks.size ? ["Potential action/signed links and robots exclusions were not fetched; see skippedLinks."] : [])],
+      notChecked: [
+        ...scope.notChecked,
+        ...(coveredPages ? [`whatever a pop-up covered on ${coveredPages} page(s) — a read-only pass never presses anything, so it was not seen (sign in and tapp gets past it and clicks)`] : []),
+        ...observationLimits,
+        ...(skippedLinks.size ? ["Potential action/signed links and robots exclusions were not fetched; see skippedLinks."] : []),
+      ],
       pages: results,
       capture: null,
     };

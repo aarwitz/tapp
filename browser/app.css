@@ -594,3 +594,4 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .token-reveal button { font:inherit; font-size:12px; padding:7px 12px; border-radius:8px; cursor:pointer; }
 .owned-link { text-align:center; margin-top:10px; }
 .owned-link button { font:inherit; font-size:13px; padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--control); color:inherit; cursor:pointer; }
+.read-only-note { margin:6px 0 14px; font-size:12.5px; line-height:1.5; }
