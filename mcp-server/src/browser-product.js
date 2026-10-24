@@ -132,7 +132,7 @@ const OAUTH_STATE_COOKIE = "tapp_oauth_state";
 // refused, so a new route is private until someone deliberately opens it.
 function anonymousAllows(method, pathname) {
   if (method === "GET") {
-    if (pathname === "/" || pathname === "/api/version" || pathname === "/api/session" || pathname === "/api/audits") return true;
+    if (pathname === "/" || pathname === "/admin" || pathname === "/api/version" || pathname === "/api/session" || pathname === "/api/audits") return true;
     if (pathname.startsWith("/assets/")) return true;
     if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
     if (/^\/evidence\/captures\//.test(pathname)) return true;
@@ -158,7 +158,7 @@ function anonymousAllows(method, pathname) {
 function accountAllows(method, pathname) {
   if (anonymousAllows(method, pathname)) return true;
   if (method === "POST" && (pathname === "/api/auth/signout" || /^\/api\/jobs\/[a-f0-9]{20}\/input$/.test(pathname))) return true;
-  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys" || pathname === "/api/tokens")) return true;
+  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys" || pathname === "/api/tokens" || pathname === "/api/admin/overview")) return true;
   // Personal access tokens: the owner's coding agent acting as them (ADR-0009 slice 4).
   if (method === "POST" && pathname === "/api/tokens") return true;
   if (method === "DELETE" && /^\/api\/tokens\/[a-f0-9]{12}$/.test(pathname)) return true;
@@ -583,6 +583,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   // What this deployment can actually offer, in the order the sign-in card shows them. A button
   // with no client id behind it is never rendered.
   const oauth = publicAccess ? oauthProviders() : [];
+  // Who owns this deployment. An admin is an ordinary account whose address is on this list —
+  // there is no second login, no separate site, and no password anywhere.
+  const adminEmails = new Set(String(process.env.TAPP_ADMIN_EMAILS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
+  const isAdmin = (account) => !!account && adminEmails.has(String(account.email || "").toLowerCase());
   const signInProvider = oauth.length ? "oauth" : access ? "cloudflare" : "email";
   // Cloudflare Access was the stopgap before "Continue with Google" existed. Where a provider is
   // configured it stops being offered — two doors into the same account only invites the question
@@ -845,7 +849,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       if (!authenticated && !anonymous && !account) { response.writeHead(401, { "content-type": "text/plain; charset=utf-8" }); response.end(directLogin ? "Sign in at /login to continue." : "Open Tapp from the authenticated launch URL printed by the CLI."); return; }
 
-      if (request.method === "GET" && url.pathname === "/") {
+      // /admin is the owner's bookmark (admin.runtapp.com redirects here). It serves the same
+      // page; the Studio opens the Admin view, and the view only exists for an owner.
+      if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/admin")) {
         // Without a sign-in page there is nowhere to bounce an anonymous visitor to, and a
         // loginUrl would send them in a loop on their first privileged 401.
         serveBrowserIndex(response, hosted
@@ -1062,6 +1068,57 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       // Agent access. A token is issued only to a person at the keyboard: an agent holding a
       // token cannot mint itself another one, so a leaked token cannot outlive its revocation.
+      // What the owner of this deployment can see: how it is being used, who has an account, and
+      // which journeys are failing. Never a credential — they are encrypted and never decrypted
+      // for display — and never anyone's evidence.
+      if (account && isAdmin(account) && request.method === "GET" && url.pathname === "/api/admin/overview") {
+        const accountsRoot = accounts.root;
+        const listAccounts = () => {
+          let files = [];
+          try { files = fs.readdirSync(path.join(accountsRoot, "accounts")).filter((name) => name.endsWith(".json")); } catch { return []; }
+          return files.map((name) => {
+            let record = null;
+            try { record = JSON.parse(fs.readFileSync(path.join(accountsRoot, "accounts", name), "utf8")); } catch { return null; }
+            if (!record) return null;
+            const journeys = JourneyStore.forAccount(record.id).list();
+            let actors = 0;
+            try {
+              const actorRoot = accounts.actorRoot(record.id);
+              for (const host of fs.readdirSync(actorRoot, { withFileTypes: true }).filter((d) => d.isDirectory())) {
+                actors += fs.readdirSync(path.join(actorRoot, host.name)).filter((f) => f.endsWith(".json")).length;
+              }
+            } catch { /* none yet */ }
+            return {
+              email: record.email, createdAt: record.createdAt, lastSeenAt: record.lastSeenAt || null,
+              journeys: journeys.length,
+              failing: journeys.filter((j) => j.status && !j.status.passed).length,
+              neverRun: journeys.filter((j) => !j.status).length,
+              testAccounts: actors,
+              tokens: accounts.listTokens(record.id).length,
+            };
+          }).filter(Boolean).sort((a, b) => String(b.lastSeenAt || "").localeCompare(String(a.lastSeenAt || "")));
+        };
+        let captureCount = 0;
+        let auditCount = 0;
+        try {
+          for (const name of fs.readdirSync(captureRoot())) {
+            captureCount += 1;
+            if (name.startsWith("web-audit-")) auditCount += 1;
+          }
+        } catch { /* none yet */ }
+        const owners = listAccounts();
+        json(response, 200, {
+          release: process.env.TAPP_RELEASE || "dev",
+          startedAt: serverStartedAt,
+          signInProvider,
+          usage: { sinceStart: usage.startedAt, distinctVisitors: usage.visitors.size, audits: usage.audits, refusals: usage.refusals },
+          runs: { captures: captureCount, audits: auditCount, explorations: captureCount - auditCount },
+          accounts: owners,
+          journeyCheckHours: Math.max(1, Number(process.env.TAPP_JOURNEY_CHECK_HOURS) || 24),
+          admins: [...adminEmails],
+        });
+        return;
+      }
       if (account && url.pathname === "/api/tokens" && request.method === "GET") {
         json(response, 200, { tokens: accounts.listTokens(account.id) });
         return;
@@ -1088,7 +1145,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "account", email: account.email, signInProvider, signInOptions, viaToken,
+            access: "account", email: account.email, signInProvider, signInOptions, viaToken, admin: isAdmin(account),
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
           });

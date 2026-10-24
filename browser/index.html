@@ -89,6 +89,7 @@
       <nav class="primary-nav" aria-label="Product navigation">
         <button data-view="overview" class="active"><span><svg><use href="#i-grid"/></svg></span>Overview</button>
         <button data-view="runs"><span><svg><use href="#i-play"/></svg></span>Runs <i id="run-count" class="zero">0</i></button>
+        <button data-view="admin" id="admin-nav" class="hidden"><span><svg><use href="#i-grid"/></svg></span>Admin</button>
       </nav>
       <div class="sidebar-project">
         <p class="eyebrow">Project</p>
@@ -165,6 +166,10 @@
         </section>
       </section>
 
+      <section class="workspace-view" data-view-panel="admin">
+        <div class="command-bar"><div><h1>Admin</h1><p>Everything this deployment knows about itself. Never a credential — those are encrypted and are not decrypted to be looked at.</p></div></div>
+        <div id="admin-body"><div class="empty">Loading…</div></div>
+      </section>
       <section class="workspace-view" data-view-panel="runs">
         <div class="view-heading simple"><div><p class="eyebrow">Runs</p><h1>Every run, with its evidence</h1><p>Release checks, explorations and read-only website audits. Each opens the report page the engine wrote.</p></div><button class="primary" id="run-gate" data-repo-only>Run release gate</button></div>
         <section class="panel section audit-panel">

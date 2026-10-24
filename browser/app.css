@@ -604,3 +604,5 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .signin-provider.google { background:#fff; color:#1f2328; border-color:#dadce0; }
 .signin-or { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; margin:4px 0 2px; }
 .signin-or::before, .signin-or::after { content:""; flex:1; height:1px; background:var(--line); }
+.run-stats .bad strong { color:#f87171; }
+#admin-body .actor-row { grid-template-columns: 1.5fr 1fr 1fr; }

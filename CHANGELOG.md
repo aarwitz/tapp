@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.30.0
+
+**An owner's view of your own deployment**, at `/admin` (and `admin.runtapp.com`, which now
+redirects there). It is an ordinary signed-in account whose address is listed in
+`TAPP_ADMIN_EMAILS` — no second site, no second login, no password anywhere.
+
+- How tapp is being used: accounts, journeys, how many are failing, visitors, audits, runs kept,
+  the release, how often kept journeys are re-checked, and how many requests were refused.
+- Who has an account: when they joined and were last seen, how many journeys they keep and how
+  many are failing, and **counts** of their test accounts and agent tokens.
+- Never a credential. Test accounts are encrypted and are not decrypted to be looked at; the
+  overview carries numbers, not contents, and a test asserts no token or password can appear.
+- To anyone who is not an owner the page is not a door they are refused at — it is not there
+  (404), and to a signed-out visitor it is a sign-in prompt.
+
 ## 0.29.2
 
 - Where a sign-in provider is configured, Cloudflare Access is no longer offered as a second way

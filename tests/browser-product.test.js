@@ -890,3 +890,55 @@ test("“Continue with Google” signs in on our own page, and a callback cannot
     }
   }
 });
+
+test("the owner sees how their deployment is being used; nobody else sees that it exists", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-admin-home-"));
+  const previous = { home: process.env.TAPP_HOME, admins: process.env.TAPP_ADMIN_EMAILS };
+  process.env.TAPP_HOME = home;
+  process.env.TAPP_ADMIN_EMAILS = " Owner@Example.test , second@example.test ";
+  const origin = "https://app.runtapp.com";
+  let who = "owner@example.test";
+  const accessVerifier = { verify: async () => ({ email: who }) };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-admin-ws-")), accessVerifier });
+  const signIn = async () => {
+    const res = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    return res.headers.get("set-cookie").split(";")[0];
+  };
+  try {
+    const ownerCookie = await signIn();
+    const session = await (await fetch(`${product.origin}/api/session`, { headers: { cookie: ownerCookie } })).json();
+    assert.equal(session.admin, true, "the address on the list is the owner, however it was capitalised");
+
+    const overview = await (await fetch(`${product.origin}/api/admin/overview`, { headers: { cookie: ownerCookie } })).json();
+    assert.equal(overview.accounts.length, 1);
+    assert.equal(overview.accounts[0].email, "owner@example.test");
+    assert.equal(overview.accounts[0].journeys, 0);
+    assert.equal(overview.accounts[0].testAccounts, 0);
+    assert.equal(overview.signInProvider, "cloudflare");
+    assert.ok(overview.usage, "it says how the deployment is being used");
+    assert.equal(typeof overview.journeyCheckHours, "number");
+    // Counts, never contents: an overview that could show a password would be a way to read one.
+    const asText = JSON.stringify(overview);
+    assert.doesNotMatch(asText, /password|secret|credential|tapp_[A-Za-z0-9_-]{20}/i, "no credential, no token, ever");
+
+    // Somebody else's account is an ordinary account: no admin, and the route does not exist for them.
+    who = "stranger@example.test";
+    const strangerCookie = await signIn();
+    const theirs = await (await fetch(`${product.origin}/api/session`, { headers: { cookie: strangerCookie } })).json();
+    assert.equal(theirs.admin, false);
+    // Not 401 but 404: to an ordinary account the owner's page is not a door they are refused at,
+    // it is a door that is not there.
+    assert.equal((await fetch(`${product.origin}/api/admin/overview`, { headers: { cookie: strangerCookie } })).status, 404);
+    // And a signed-out visitor certainly cannot.
+    assert.equal((await fetch(`${product.origin}/api/admin/overview`)).status, 401);
+
+    // Now that a stranger exists, the owner sees both — that is the point of the page.
+    const after = await (await fetch(`${product.origin}/api/admin/overview`, { headers: { cookie: ownerCookie } })).json();
+    assert.deepEqual(after.accounts.map((a) => a.email).sort(), ["owner@example.test", "stranger@example.test"]);
+  } finally {
+    await product.close();
+    for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_ADMIN_EMAILS", previous.admins]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});

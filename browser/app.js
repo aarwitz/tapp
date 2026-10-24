@@ -174,6 +174,7 @@ function applyAccessMode() {
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
   $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
   $("#agent-panel")?.classList.toggle("hidden", !signedIn);
+  $("#admin-nav")?.classList.toggle("hidden", !state.session?.admin);
 }
 
 // The test accounts tapp holds, by application — names and what is held, never a value.
@@ -207,6 +208,42 @@ export TAPP_TOKEN=${esc(state.newToken.token)}</code>
     ? tokens.map((token) => `<div class="token-row"><span><strong>${esc(token.label)}</strong><br><small>created ${esc(compactDate(token.createdAt))}${token.lastUsedAt ? ` · last used ${esc(compactDate(token.lastUsedAt))}` : " · never used"}</small></span><button class="quiet" type="button" data-revoke-token="${esc(token.id)}">Revoke</button></div>`).join("")
     : '<div class="empty">No tokens yet.</div>';
   node.innerHTML = reveal + rows;
+}
+
+// The owner's view of their own deployment: who signed up, what is failing, how it is being used.
+async function loadAdmin() {
+  if (!state.session?.admin) { state.admin = null; return; }
+  state.admin = await api("/api/admin/overview").catch(() => null);
+}
+
+function renderAdmin() {
+  $("#admin-nav")?.classList.toggle("hidden", !state.session?.admin);
+  const node = $("#admin-body");
+  if (!node) return;
+  const data = state.admin;
+  if (!data) { node.innerHTML = '<div class="empty">Nothing to show yet.</div>'; return; }
+  const totals = data.accounts.reduce((sum, account) => ({
+    journeys: sum.journeys + account.journeys, failing: sum.failing + account.failing,
+  }), { journeys: 0, failing: 0 });
+  const stat = (value, label, tone = "") => `<div class="${esc(tone)}"><strong>${esc(String(value))}</strong><small>${esc(label)}</small></div>`;
+  const owner = (email) => (data.admins || []).includes(String(email).toLowerCase());
+  node.innerHTML = `
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">Right now</p><h2>How tapp is being used</h2><p>Since this release started. A visitor is counted only when they ask for something the Studio offers — scanners are not people.</p></div></div>
+      <div class="run-stats">
+        ${stat(data.accounts.length, "accounts")}
+        ${stat(totals.journeys, "journeys")}
+        ${stat(totals.failing, "failing", totals.failing ? "bad" : "")}
+        ${stat(data.usage.distinctVisitors, "visitors")}
+        ${stat(data.usage.audits, "audits")}
+        ${stat(data.runs.captures, "runs kept")}
+      </div>
+      <p class="muted">Release <code>${esc(data.release)}</code> · up since ${esc(compactDate(data.startedAt))} · sign-in via <b>${esc(data.signInProvider)}</b> · kept journeys re-checked every ${esc(String(data.journeyCheckHours))}h · ${esc(String(data.usage.refusals))} refused requests, mostly automated probes.</p>
+    </section>
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">People</p><h2>Accounts <i class="zero">${data.accounts.length}</i></h2><p>What each person has set up. Test accounts are counted, never shown — tapp cannot show them.</p></div></div>
+      ${data.accounts.length ? data.accounts.map((account) => `<div class="actor-row"><span><strong>${esc(account.email)}</strong>${owner(account.email) ? ' <small class="journey-status passing">owner</small>' : ""}<br><small>joined ${esc(compactDate(account.createdAt))}${account.lastSeenAt ? ` · last seen ${esc(compactDate(account.lastSeenAt))}` : ""}</small></span><span><small>${account.journeys} journey${account.journeys === 1 ? "" : "s"}${account.failing ? ` · <b class="journey-status failing">${account.failing} failing</b>` : ""}${account.neverRun ? ` · ${account.neverRun} never run` : ""}</small></span><span><small>${account.testAccounts} test account${account.testAccounts === 1 ? "" : "s"} · ${account.tokens} token${account.tokens === 1 ? "" : "s"}</small></span></div>`).join("") : '<div class="empty">Nobody has signed in yet.</div>'}
+    </section>`;
 }
 
 async function loadTokens() {
@@ -527,6 +564,7 @@ function renderObservations(audit) {
 }
 
 function renderRuns() {
+  renderAdmin();
   renderJourneys();
   renderActors();
   renderTokens();
@@ -811,7 +849,8 @@ async function refresh() {
     state.audits = runs.audits || [];
     state.explores = runs.explores || [];
     state.actors = actors.apps || [];
-    await Promise.all([loadJourneys(), loadTokens()]);
+    await Promise.all([loadJourneys(), loadTokens(), loadAdmin()]);
+    renderAdmin();
     renderProject();
     return;
   }
@@ -1082,6 +1121,12 @@ try {
   // A link to /#runs (or a bookmark) opens what you own rather than the empty prompt.
   if (window.location.hash === "#runs" && (state.journeys?.length || state.audits?.length || state.explores?.length)) {
     showProduct(); activateView("runs"); renderRuns();
+  }
+  // admin.runtapp.com redirects to /admin: open the owner's view, or say plainly why it is not here.
+  if (window.location.pathname === "/admin") {
+    if (state.session?.admin) { showProduct(); activateView("admin"); renderAdmin(); }
+    else if (state.session?.access === "anonymous") { state.signInOpen = true; renderAccount(); showPrompt(); }
+    else toast("That account is not an owner of this deployment.", true);
   }
 
   const handoff = handoffTarget();
