@@ -13,6 +13,9 @@ export const customerProductContract = Object.freeze({
   views: [
     { id: "overview", label: "Overview", capabilities: ["target-selection", "release-check", "live-feed", "progress-transcript", "live-session", "flow-recording", "latest-evidence"] },
     { id: "runs", label: "Runs", capabilities: ["run-history", "run-detail", "evidence-page", "website-audit"] },
+    // Only an owner of this deployment ever sees this one (TAPP_ADMIN_EMAILS); to anybody else
+    // the nav item is absent and the route is a 404.
+    { id: "admin", label: "Admin", capabilities: ["deployment-usage", "account-list"] },
   ],
   operations: ["initialize", "session-start", "session-act", "session-save-flow", "session-end", "gate", "audit"],
   invariants: [
@@ -21,5 +24,6 @@ export const customerProductContract = Object.freeze({
     "A website audit is read-only: nothing is clicked, typed, submitted, or hovered.",
     "Repositories are opened from the machine the Studio runs on; nothing is uploaded or cloned by the Studio.",
     "Deterministic replay and ordinary merge decisions are keyless.",
+    "The admin view reports counts about this deployment; credentials are encrypted and are never decrypted to be shown.",
   ],
 });

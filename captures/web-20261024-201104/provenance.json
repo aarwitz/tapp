@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "kind": "explore",
+  "platform": "web",
+  "target": "http://127.0.0.1:9/",
+  "project": {
+    "dir": "/tmp/tmp.7es926tuhu",
+    "name": "tmp.7es926tuhu",
+    "remote": null
+  },
+  "tool": {
+    "name": "tapp",
+    "version": "0.30.1"
+  },
+  "createdAt": "2026-10-24T20:11:04.723Z"
+}

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.30.1
+
+- Fixed: the Admin view could not be opened. `activateView` only accepts views declared in the
+  product contract and silently falls back to Overview, and Admin had not been declared — so the
+  nav item and `/admin` both landed on Overview. The contract now carries it, with the invariant
+  that the view reports counts and never decrypts a credential to show it.
+
 ## 0.30.0
 
 **An owner's view of your own deployment**, at `/admin` (and `admin.runtapp.com`, which now
