@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.29.1
+
+- runtapp.com now has a **privacy policy** and **terms of service** (`/privacy.html`, `/terms.html`),
+  linked from the footer and the sitemap. They describe what the hosted Studio actually does: the
+  email address is the account, test accounts are encrypted and used only to sign in to the site
+  you named, evidence is the product, nothing is sold, and every piece can be deleted by you.
+  Google requires both before an OAuth app can be published to anyone.
+
 ## 0.29.0
 
 **Sign in on our own page: "Continue with Google".** Cloudflare Access was a stopgap to avoid

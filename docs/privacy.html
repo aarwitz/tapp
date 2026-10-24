@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — tapp</title>
+<meta name="description" content="What tapp collects, why, where it is kept, and how to get rid of it.">
+<link rel="canonical" href="https://runtapp.com/privacy.html">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
+<style>
+  :root { --bg:#ffffff; --bg-alt:#f6f7f9; --fg:#14161a; --fg-dim:#55596a; --border:#e3e5ea; --accent:#2f6fed; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b0d12; --bg-alt:#12151c; --fg:#eef1f6; --fg-dim:#a2a9bb; --border:#232836; } }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); margin:0;
+    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 0 1.2rem; }
+  header { border-bottom:1px solid var(--border); padding:1.1rem 0; }
+  header .wrap { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-weight:800; font-size:1.15rem; color:var(--fg); text-decoration:none; letter-spacing:-0.02em; }
+  .brand span { color:var(--accent); }
+  main { padding: 2.6rem 0 3rem; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .4rem; letter-spacing:-0.02em; }
+  .updated { color:var(--fg-dim); font-size:.86rem; margin:0 0 2rem; }
+  h2 { font-size:1.12rem; margin:2rem 0 .5rem; }
+  p, li { color:var(--fg-dim); }
+  p { margin:0 0 .9rem; }
+  ul { margin:0 0 .9rem; padding-left:1.15rem; }
+  li { margin-bottom:.4rem; }
+  strong { color:var(--fg); }
+  a { color:var(--accent); }
+  .note { border:1px solid var(--border); background:var(--bg-alt); border-radius:10px; padding:1rem 1.1rem; margin:1.4rem 0; }
+  .note p:last-child { margin-bottom:0; }
+  footer { border-top:1px solid var(--border); padding:2rem 0; color:var(--fg-dim); font-size:.85rem; }
+  footer a { color:var(--fg-dim); }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="/">tapp<span>.</span></a>
+  <span><a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></span>
+</div></header>
+<main class="wrap">
+<h1>Privacy</h1>
+<p class="updated">Last updated 24 October 2026. This describes what the hosted Studio at app.runtapp.com actually does. It is written to be read, not to be survived.</p>
+
+<h2>The short version</h2>
+<div class="note">
+  <p>We keep your email address so you can sign in, the test accounts you choose to give tapp (encrypted), and the evidence of runs you start. We do not sell anything to anyone, we do not run advertising trackers, and you can delete any of it yourself.</p>
+</div>
+
+<h2>What we collect, and why</h2>
+<ul>
+  <li><strong>Your email address.</strong> That is your account. It arrives either from Google or GitHub when you press "Continue with…", or from the address you type to receive a sign-in link. We ask those providers for your email address and nothing else — no profile, no contacts, no files — and we do not keep the access token they issue.</li>
+  <li><strong>Test accounts you give tapp.</strong> When a run meets a sign-in, tapp asks you for a username and password to use. If you say yes, it is stored encrypted (AES-256-GCM, keyed per site and per actor), used only to sign in to that site, and never shown again — not in the interface, not in reports, not in logs.</li>
+  <li><strong>Signed-in sessions.</strong> After a successful sign-in, the browser session (cookies) is kept encrypted the same way, so later runs start inside without asking again.</li>
+  <li><strong>Evidence of your runs.</strong> Screenshots, recordings, the page addresses visited, and the findings. This is the product: without it a run proves nothing.</li>
+  <li><strong>Journeys you keep</strong> and whether their last check passed or failed.</li>
+  <li><strong>Operational logs.</strong> Which account started a run and against which host, so we can tell whether the service is working. We deliberately do not log IP addresses, full URLs with query strings, or any credential.</li>
+</ul>
+
+<h2>What we do not do</h2>
+<ul>
+  <li>We do not sell or rent your data, and we do not share it with advertisers.</li>
+  <li>We do not use your test accounts for anything except signing in to the site you pointed tapp at.</li>
+  <li>We do not read your source code. The hosted Studio never receives it; repositories stay on your own machine.</li>
+  <li>We do not send your data to a model provider. Exploration and replay are deterministic and use no AI service unless you supply your own key and switch it on.</li>
+</ul>
+
+<h2>Who else is involved</h2>
+<ul>
+  <li><strong>Google or GitHub</strong>, if you sign in with them — they tell us your verified email address.</li>
+  <li><strong>Cloudflare</strong>, which sits in front of the site and carries the traffic.</li>
+  <li><strong>The site you point tapp at.</strong> A run visits it from our servers, so it appears in that site's own logs, as any visitor would.</li>
+</ul>
+
+<h2>Where it is kept, and for how long</h2>
+<p>On servers we control. Credentials and sessions are encrypted at rest; the key is held separately from the data and is never part of a backup you could read. Evidence and journeys stay until you delete them or close your account.</p>
+
+<h2>Getting rid of it</h2>
+<ul>
+  <li><strong>A test account:</strong> press <em>Forget</em> next to it. It is deleted immediately and tapp will ask again next time.</li>
+  <li><strong>A journey:</strong> press <em>Forget</em> next to it.</li>
+  <li><strong>Your whole account</strong>, including every credential, session, journey and run: write to <a href="mailto:hello@runtapp.com">hello@runtapp.com</a> from the address you signed in with and it will be deleted.</li>
+</ul>
+
+<h2>Children</h2>
+<p>tapp is a tool for people running software businesses. It is not directed at children and we do not knowingly collect their data.</p>
+
+<h2>Changes</h2>
+<p>If this changes in a way that affects what we collect or who sees it, the date above changes and we will say so on the site.</p>
+
+<h2>Contact</h2>
+<p>Questions, deletions, or anything that looks wrong: <a href="mailto:hello@runtapp.com">hello@runtapp.com</a>.</p>
+</main>
+<footer><div class="wrap">
+  <span>tapp is MIT licensed. Questions: <a href="mailto:hello@runtapp.com">hello@runtapp.com</a> · <a href="https://github.com/aarwitz/tapp">GitHub</a> · <a href="/">runtapp.com</a></span>
+</div></footer>
+</body>
+</html>

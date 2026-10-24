@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms — tapp</title>
+<meta name="description" content="The terms for using the hosted tapp Studio.">
+<link rel="canonical" href="https://runtapp.com/terms.html">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
+<style>
+  :root { --bg:#ffffff; --bg-alt:#f6f7f9; --fg:#14161a; --fg-dim:#55596a; --border:#e3e5ea; --accent:#2f6fed; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b0d12; --bg-alt:#12151c; --fg:#eef1f6; --fg-dim:#a2a9bb; --border:#232836; } }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--fg); margin:0;
+    font:16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 0 1.2rem; }
+  header { border-bottom:1px solid var(--border); padding:1.1rem 0; }
+  header .wrap { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-weight:800; font-size:1.15rem; color:var(--fg); text-decoration:none; letter-spacing:-0.02em; }
+  .brand span { color:var(--accent); }
+  main { padding: 2.6rem 0 3rem; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 .4rem; letter-spacing:-0.02em; }
+  .updated { color:var(--fg-dim); font-size:.86rem; margin:0 0 2rem; }
+  h2 { font-size:1.12rem; margin:2rem 0 .5rem; }
+  p, li { color:var(--fg-dim); }
+  p { margin:0 0 .9rem; }
+  ul { margin:0 0 .9rem; padding-left:1.15rem; }
+  li { margin-bottom:.4rem; }
+  strong { color:var(--fg); }
+  a { color:var(--accent); }
+  .note { border:1px solid var(--border); background:var(--bg-alt); border-radius:10px; padding:1rem 1.1rem; margin:1.4rem 0; }
+  .note p:last-child { margin-bottom:0; }
+  footer { border-top:1px solid var(--border); padding:2rem 0; color:var(--fg-dim); font-size:.85rem; }
+  footer a { color:var(--fg-dim); }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="/">tapp<span>.</span></a>
+  <span><a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></span>
+</div></header>
+<main class="wrap">
+<h1>Terms of service</h1>
+<p class="updated">Last updated 24 October 2026.</p>
+
+<h2>What this covers</h2>
+<p>These terms cover the hosted service at app.runtapp.com. The tapp software itself is open source under the MIT licence and you may run it yourself under that licence instead; nothing here restricts that.</p>
+
+<h2>What tapp does</h2>
+<p>tapp opens web pages in a browser we run, looks at them, and reports what it finds. Signed in, it will also click, type, and sign in to applications using test accounts you give it, and replay journeys you keep.</p>
+
+<h2>Only point it at applications you are allowed to test</h2>
+<div class="note">
+  <p>This is the one rule that matters. By starting a run you confirm you own the application, or have permission from whoever does, to have an automated browser visit and interact with it.</p>
+  <p>Without an account, tapp only ever <strong>reads</strong> a site: it never presses, types or submits. Signing in is what unlocks clicking, which is why clicking requires an account.</p>
+</div>
+
+<h2>Your account</h2>
+<ul>
+  <li>One person, one account. Keep your sign-in and any access tokens you create to yourself; anything done with them is treated as done by you.</li>
+  <li>Revoke a token the moment you no longer need it.</li>
+  <li>Do not use tapp to attack, overload, or gain access to systems you have no right to, or to break any law that applies to you.</li>
+</ul>
+
+<h2>Test accounts</h2>
+<p>Give tapp test credentials, never real customer ones, and never an account with more access than the test needs. We store them encrypted and use them only to sign in to the site you named, but you remain responsible for what those accounts can reach.</p>
+
+<h2>What tapp does not promise</h2>
+<ul>
+  <li><strong>Finding every bug.</strong> tapp reports what it observed on the pages it reached. A clean run means nothing broken was observed — not that the application is correct.</li>
+  <li><strong>Being a substitute for your judgement.</strong> Whether the words, claims and design are right is read by a person, not by tapp.</li>
+  <li><strong>Uninterrupted service.</strong> This is an early product. It may be unavailable, and features may change.</li>
+</ul>
+<p>The service is provided "as is", without warranties of any kind. To the extent the law allows, we are not liable for indirect or consequential loss, and our total liability is limited to what you paid us in the three months before the claim.</p>
+
+<h2>Ending it</h2>
+<p>You can stop using tapp and ask us to delete your account at any time (<a href="mailto:hello@runtapp.com">hello@runtapp.com</a>). We may suspend an account that is using tapp against systems it has no right to touch, or in a way that damages the service for others.</p>
+
+<h2>Changes</h2>
+<p>If these terms change, the date above changes. Continuing to use the service after that means the new terms apply.</p>
+
+<h2>Contact</h2>
+<p><a href="mailto:hello@runtapp.com">hello@runtapp.com</a></p>
+</main>
+<footer><div class="wrap">
+  <span>tapp is MIT licensed. Questions: <a href="mailto:hello@runtapp.com">hello@runtapp.com</a> · <a href="https://github.com/aarwitz/tapp">GitHub</a> · <a href="/">runtapp.com</a></span>
+</div></footer>
+</body>
+</html>
