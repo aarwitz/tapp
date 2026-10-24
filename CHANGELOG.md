@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.29.2
+
+- Where a sign-in provider is configured, Cloudflare Access is no longer offered as a second way
+  in. Two doors into the same account only invite "which one did I use?". The route stays alive
+  as a way back in if a provider ever breaks, it is simply not advertised.
+
 ## 0.29.1
 
 - runtapp.com now has a **privacy policy** and **terms of service** (`/privacy.html`, `/terms.html`),

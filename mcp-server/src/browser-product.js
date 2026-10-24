@@ -584,7 +584,14 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   // with no client id behind it is never rendered.
   const oauth = publicAccess ? oauthProviders() : [];
   const signInProvider = oauth.length ? "oauth" : access ? "cloudflare" : "email";
-  const signInOptions = [...oauth.map((provider) => ({ kind: provider.name, label: `Continue with ${provider.label}` })), ...(access ? [{ kind: "cloudflare", label: "Continue with a one-time code" }] : []), { kind: "email", label: "Email me a link" }];
+  // Cloudflare Access was the stopgap before "Continue with Google" existed. Where a provider is
+  // configured it stops being offered — two doors into the same account only invites the question
+  // "which one did I use?" — though the route stays alive as a way back in if a provider breaks.
+  const signInOptions = [
+    ...oauth.map((provider) => ({ kind: provider.name, label: `Continue with ${provider.label}` })),
+    ...(access && !oauth.length ? [{ kind: "cloudflare", label: "Continue with a one-time code" }] : []),
+    { kind: "email", label: "Email me a link" },
+  ];
   const openAccountSession = (response, signedIn, location = "/?signin=done") => {
     logUsage("signin.done", { account: signedIn.account.id.slice(0, 8), provider: signInProvider });
     response.writeHead(303, { location, "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000` });
