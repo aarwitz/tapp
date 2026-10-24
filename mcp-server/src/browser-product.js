@@ -618,11 +618,29 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   // durable handle for one. Off unless the Studio is public; a local Studio logging its owner's
   // own use is noise.
   const usage = { visitors: new Set(), audits: 0, refusals: 0, startedAt: new Date().toISOString() };
+  // The same line goes to stdout (systemd keeps it) and to a file the Studio can read back, so
+  // the owner's page can answer "what has been happening?" after a restart — the in-memory
+  // counters start again at zero every deploy, which made them nearly useless for that question.
+  // Same discipline either way: no IP address, no full URL, no credential, and only the first
+  // eight characters of a visitor id — enough to tell two people apart in a day, not a handle.
+  const usageLogPath = path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "usage.jsonl");
+  const USAGE_LOG_MAX_BYTES = 2_000_000;
   const logUsage = (event, fields = {}) => {
     if (!publicAccess) return;
+    const line = JSON.stringify({ at: new Date().toISOString(), event, ...fields });
+    try { console.log(`tapp-usage ${line}`); } catch { /* logging must never break a run */ }
     try {
-      console.log(`tapp-usage ${JSON.stringify({ at: new Date().toISOString(), event, ...fields })}`);
-    } catch { /* logging must never break a run */ }
+      fs.appendFileSync(usageLogPath, `${line}\n`, { mode: 0o600 });
+      // Keep the tail rather than growing without limit; this is a record of activity, not an archive.
+      if (fs.statSync(usageLogPath).size > USAGE_LOG_MAX_BYTES) {
+        const kept = fs.readFileSync(usageLogPath, "utf8").split("\n").filter(Boolean).slice(-4000);
+        fs.writeFileSync(usageLogPath, `${kept.join("\n")}\n`, { mode: 0o600 });
+      }
+    } catch { /* a full disk must not fail a run either */ }
+  };
+  const readUsageLog = (limit = 4000) => {
+    try { return fs.readFileSync(usageLogPath, "utf8").split("\n").filter(Boolean).slice(-limit).map((line) => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean); }
+    catch { return []; }
   };
   // Where a visitor pointed us, without what they may have put in the query string.
   const safeHost = (value) => { try { return new URL(value).host; } catch { return "unparsed"; } };
@@ -1107,6 +1125,42 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           }
         } catch { /* none yet */ }
         const owners = listAccounts();
+
+        // What has actually happened here, from the durable log. The in-memory counters only
+        // cover the current process; this survives a deploy.
+        const events = readUsageLog();
+        const since = (hours) => Date.now() - hours * 3600_000;
+        const within = (hours) => events.filter((e) => Date.parse(e.at) >= since(hours));
+        const tally = (list) => list.reduce((counts, e) => ({ ...counts, [e.event]: (counts[e.event] || 0) + 1 }), {});
+
+        // "Three visitors" is not an answer. Who were they, when, and what did they do?
+        const people = new Map();
+        for (const entry of events) {
+          const id = entry.account ? `account:${entry.account}` : entry.visitor ? `visitor:${entry.visitor}` : null;
+          if (!id) continue;
+          const seen = people.get(id) || { id, kind: entry.account ? "account" : "visitor", first: entry.at, last: entry.at, events: {}, hosts: [] };
+          seen.last = entry.at;
+          if (entry.at < seen.first) seen.first = entry.at;
+          seen.events[entry.event] = (seen.events[entry.event] || 0) + 1;
+          if (entry.host && !seen.hosts.includes(entry.host) && seen.hosts.length < 8) seen.hosts.push(entry.host);
+          people.set(id, seen);
+        }
+
+        // Every run still on disk, which predates the log and outlives it.
+        const runs = [];
+        try {
+          for (const name of fs.readdirSync(captureRoot())) {
+            const dir = path.join(captureRoot(), name);
+            const provenance = readCaptureProvenance(dir);
+            if (!provenance) continue;
+            let target = provenance.target || "";
+            try { target = new URL(target).host; } catch { /* a bundle id or a path */ }
+            runs.push({ id: name, kind: provenance.kind || (name.startsWith("web-audit-") ? "audit" : name.startsWith("flow-") ? "journey" : "explore"),
+              target: String(target).slice(0, 60), at: provenance.createdAt || null, owner: captureOwner(name) || "operator" });
+          }
+        } catch { /* none yet */ }
+        runs.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+
         json(response, 200, {
           release: process.env.TAPP_RELEASE || "dev",
           startedAt: serverStartedAt,
@@ -1116,6 +1170,16 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           accounts: owners,
           journeyCheckHours: Math.max(1, Number(process.env.TAPP_JOURNEY_CHECK_HOURS) || 24),
           admins: [...adminEmails],
+          activity: {
+            logged: events.length,
+            since: events[0]?.at || null,
+            today: tally(within(24)),
+            week: tally(within(24 * 7)),
+            recent: events.slice(-60).reverse(),
+            people: [...people.values()].sort((a, b) => String(b.last).localeCompare(String(a.last))).slice(0, 50),
+          },
+          recentRuns: runs.slice(0, 40),
+          totalRuns: runs.length,
         });
         return;
       }

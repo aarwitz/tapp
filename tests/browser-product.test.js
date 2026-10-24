@@ -944,3 +944,53 @@ test("the owner sees how their deployment is being used; nobody else sees that i
     }
   }
 });
+
+test("the owner's page answers “what has been happening?” across restarts", async () => {
+  // "3 visitors" is not an answer. The counters live in memory and start again at zero on every
+  // deploy, so activity is also written to a file the Studio can read back.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-activity-home-"));
+  const previous = { home: process.env.TAPP_HOME, admins: process.env.TAPP_ADMIN_EMAILS };
+  process.env.TAPP_HOME = home;
+  process.env.TAPP_ADMIN_EMAILS = "owner@example.test";
+  const origin = "https://app.runtapp.com";
+  const accessVerifier = { verify: async () => ({ email: "owner@example.test" }) };
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-activity-ws-"));
+  const open = () => startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot, accessVerifier });
+
+  let product = await open();
+  try {
+    // A visitor arrives and is refused something private; both are recorded.
+    await fetch(`${product.origin}/`);
+    await fetch(`${product.origin}/api/project`);
+    const signedIn = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = signedIn.headers.get("set-cookie").split(";")[0];
+    assert.ok(fs.existsSync(path.join(home, "usage.jsonl")), "activity is written somewhere it survives a restart");
+  } finally { await product.close(); }
+
+  // The deploy that loses the counters must not lose the history.
+  product = await open();
+  try {
+    const signedIn = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = signedIn.headers.get("set-cookie").split(";")[0];
+    const overview = await (await fetch(`${product.origin}/api/admin/overview`, { headers: { cookie } })).json();
+
+    assert.ok(overview.activity.logged > 0, "the log from before the restart is still there");
+    assert.ok(overview.activity.recent.length > 0, "and can be read back");
+    assert.equal(overview.activity.recent[0].at >= overview.activity.recent.at(-1).at, true, "newest first");
+    assert.ok(overview.activity.today["signin.done"] >= 1, "today is counted from the log, not from memory");
+
+    // Who was here: a visitor the owner can tell apart from the next one, and never an IP.
+    const visitor = overview.activity.people.find((person) => person.kind === "visitor");
+    assert.ok(visitor, "an anonymous visitor appears as a person, not just a number");
+    assert.match(visitor.id, /^visitor:[a-f0-9]{8}$/, "eight characters of their cookie, no more");
+    assert.ok(visitor.events["visitor.new"] >= 1, "with what they did");
+    const asText = JSON.stringify(overview);
+    assert.doesNotMatch(asText, /\b\d{1,3}(\.\d{1,3}){3}\b/, "no IP address is ever kept");
+    assert.doesNotMatch(asText, /password|secret|tapp_[A-Za-z0-9_-]{20}/i, "and no credential");
+  } finally {
+    await product.close();
+    for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_ADMIN_EMAILS", previous.admins]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});

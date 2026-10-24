@@ -227,22 +227,62 @@ function renderAdmin() {
   }), { journeys: 0, failing: 0 });
   const stat = (value, label, tone = "") => `<div class="${esc(tone)}"><strong>${esc(String(value))}</strong><small>${esc(label)}</small></div>`;
   const owner = (email) => (data.admins || []).includes(String(email).toLowerCase());
+  const activity = data.activity || { today: {}, week: {}, recent: [], people: [] };
+  const count = (bucket, ...names) => names.reduce((sum, name) => sum + (bucket[name] || 0), 0);
+
+  // The log says what happened; these are the few verbs worth counting.
+  const period = (bucket) => [
+    stat(count(bucket, "signin.done"), "sign-ins"),
+    stat(count(bucket, "audit.start"), "audits"),
+    stat(count(bucket, "explore.start"), "explorations"),
+    stat(count(bucket, "journey.kept"), "journeys kept"),
+    stat(count(bucket, "journey.run", "journey.checked"), "journey runs"),
+    stat(count(bucket, "visitor.new"), "new visitors"),
+  ].join("");
+
+  const whatHappened = (entry) => {
+    const host = entry.host ? ` · ${esc(entry.host)}` : "";
+    const map = {
+      "visitor.new": "arrived", "signin.done": `signed in${entry.provider ? ` with ${esc(entry.provider)}` : ""}`,
+      "signin.link": "asked for a sign-in link", "signin.oauth.refused": `sign-in refused (${esc(entry.reason || "")})`,
+      "signin.access.refused": "sign-in refused", "audit.start": "started a read-only audit", "audit.done": "finished an audit",
+      "explore.start": "went inside a site", "journey.kept": "kept a journey", "journey.run": "ran a journey",
+      "journey.checked": "daily check", "journey.imported": "added a journey", "token.issued": "created an agent token",
+      "refused": `refused: ${esc(entry.reason || "")}`, "scanned": "automated probes refused", "rollup": "hourly rollup",
+    };
+    const what = map[entry.event] || esc(entry.event);
+    const extra = entry.event === "audit.done" ? ` — ${esc(String(entry.findings ?? "?"))} finding(s) over ${esc(String(entry.pagesAudited ?? "?"))} page(s)`
+      : entry.event === "journey.run" || entry.event === "journey.checked" ? ` — ${entry.passed ? "passed" : "FAILED"}` : "";
+    return `${what}${host}${extra}`;
+  };
+
   node.innerHTML = `
     <section class="panel section">
-      <div class="section-heading compact"><div><p class="eyebrow">Right now</p><h2>How tapp is being used</h2><p>Since this release started. A visitor is counted only when they ask for something the Studio offers — scanners are not people.</p></div></div>
-      <div class="run-stats">
-        ${stat(data.accounts.length, "accounts")}
-        ${stat(totals.journeys, "journeys")}
-        ${stat(totals.failing, "failing", totals.failing ? "bad" : "")}
-        ${stat(data.usage.distinctVisitors, "visitors")}
-        ${stat(data.usage.audits, "audits")}
-        ${stat(data.runs.captures, "runs kept")}
-      </div>
-      <p class="muted">Release <code>${esc(data.release)}</code> · up since ${esc(compactDate(data.startedAt))} · sign-in via <b>${esc(data.signInProvider)}</b> · kept journeys re-checked every ${esc(String(data.journeyCheckHours))}h · ${esc(String(data.usage.refusals))} refused requests, mostly automated probes.</p>
+      <div class="section-heading compact"><div><p class="eyebrow">Last 24 hours</p><h2>What happened today</h2></div></div>
+      <div class="run-stats">${period(activity.today)}</div>
+      <div class="section-heading compact" style="margin-top:14px"><div><p class="eyebrow">Last 7 days</p><h2>And this week</h2></div></div>
+      <div class="run-stats">${period(activity.week)}</div>
+      <p class="muted">Release <code>${esc(data.release)}</code> · up since ${esc(compactDate(data.startedAt))} · sign-in via <b>${esc(data.signInProvider)}</b> · kept journeys re-checked every ${esc(String(data.journeyCheckHours))}h · ${esc(String(data.totalRuns))} runs on disk · ${esc(String(activity.logged))} logged events${activity.since ? ` since ${esc(compactDate(activity.since))}` : ""}.</p>
     </section>
+
     <section class="panel section">
-      <div class="section-heading compact"><div><p class="eyebrow">People</p><h2>Accounts <i class="zero">${data.accounts.length}</i></h2><p>What each person has set up. Test accounts are counted, never shown — tapp cannot show them.</p></div></div>
+      <div class="section-heading compact"><div><p class="eyebrow">People</p><h2>Who has been here <i class="zero">${activity.people.length}</i></h2><p>Signed-in accounts, and anonymous visitors by the first eight characters of their cookie — enough to tell two people apart, not enough to be a handle. No IP addresses are kept.</p></div></div>
+      ${activity.people.length ? activity.people.map((p) => `<div class="actor-row"><span><strong>${p.kind === "account" ? "account" : "visitor"} ${esc(p.id.split(":")[1])}</strong><br><small>first seen ${esc(compactDate(p.first))} · last ${esc(compactDate(p.last))}</small></span><span><small>${esc(Object.entries(p.events).map(([k, v]) => `${k.replace(/\./g, " ")} ×${v}`).join(" · ").slice(0, 90) || "—")}</small></span><span><small>${esc(p.hosts.join(", ") || "—")}</small></span></div>`).join("") : '<div class="empty">Nobody yet. Activity is recorded from the release that introduced this log.</div>'}
+    </section>
+
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">Accounts</p><h2>People with a tapp account <i class="zero">${data.accounts.length}</i></h2><p>Test accounts are counted, never shown — tapp cannot show them.</p></div></div>
       ${data.accounts.length ? data.accounts.map((account) => `<div class="actor-row"><span><strong>${esc(account.email)}</strong>${owner(account.email) ? ' <small class="journey-status passing">owner</small>' : ""}<br><small>joined ${esc(compactDate(account.createdAt))}${account.lastSeenAt ? ` · last seen ${esc(compactDate(account.lastSeenAt))}` : ""}</small></span><span><small>${account.journeys} journey${account.journeys === 1 ? "" : "s"}${account.failing ? ` · <b class="journey-status failing">${account.failing} failing</b>` : ""}${account.neverRun ? ` · ${account.neverRun} never run` : ""}</small></span><span><small>${account.testAccounts} test account${account.testAccounts === 1 ? "" : "s"} · ${account.tokens} token${account.tokens === 1 ? "" : "s"}</small></span></div>`).join("") : '<div class="empty">Nobody has signed in yet.</div>'}
+    </section>
+
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">Runs</p><h2>Every run still on disk <i class="zero">${data.totalRuns}</i></h2><p>Newest first. Evidence belongs to whoever started the run; this is the ledger, not their screenshots.</p></div></div>
+      ${(data.recentRuns || []).length ? (data.recentRuns).map((run) => `<div class="actor-row"><span><strong>${esc(run.kind)}</strong> · ${esc(run.target || "—")}<br><small><code>${esc(run.id)}</code></small></span><span><small>${run.at ? esc(compactDate(run.at)) : "—"}</small></span><span><small>${esc(String(run.owner).slice(0, 20))}</small></span></div>`).join("") : '<div class="empty">No runs yet.</div>'}
+    </section>
+
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">Log</p><h2>Recent activity</h2><p>The last ${(activity.recent || []).length} things that happened, newest first.</p></div></div>
+      ${(activity.recent || []).length ? `<ul class="detail-list">${activity.recent.map((entry) => `<li><small>${esc(compactDate(entry.at))}</small> · ${entry.account ? `account ${esc(entry.account)}` : entry.visitor ? `visitor ${esc(entry.visitor)}` : "—"} · ${whatHappened(entry)}</li>`).join("")}</ul>` : '<div class="empty">Nothing logged yet on this release.</div>'}
     </section>`;
 }
 

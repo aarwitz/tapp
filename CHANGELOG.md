@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.31.0
+
+**The owner's page now answers "what has been happening?"** — "3 visitors" with no detail was not
+an answer, and the counters behind it lived in memory and started again at zero on every deploy.
+
+- Activity is now written to `TAPP_HOME/usage.jsonl` as well as stdout, so it **survives a
+  restart**. Same discipline as before: no IP address, no full URL, no credential, and only the
+  first eight characters of a visitor's cookie — enough to tell two people apart in a day, not
+  enough to be a durable handle. The file keeps its tail rather than growing without limit.
+- **Who has been here**: every signed-in account and every anonymous visitor, with first and last
+  seen, what they did, and which hosts they pointed tapp at.
+- **What happened today / this week**: sign-ins, audits, explorations, journeys kept, journey
+  runs, new visitors.
+- **Every run still on disk**, newest first, with its kind, target, time and owner — this
+  predates the log and outlives it.
+- **Recent activity** in plain words: "went inside a site · example.com", "daily check —
+  FAILED", "refused: rate-limit".
+
 ## 0.30.1
 
 - Fixed: the Admin view could not be opened. `activateView` only accepts views declared in the
