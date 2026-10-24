@@ -93,6 +93,23 @@ There is no password. Links work once and expire in 15 minutes; sessions last 90
 SHA-256 of either token is on disk (`account-store.js`). One address may ask for five links per
 ten minutes, and the reply is the same whether or not the address has an account.
 
+**Signing in with Google or GitHub (preferred).** Set a client id and secret and the sign-in card
+grows a button; set neither and it does not, so the card never offers a way in that cannot work:
+
+```
+TAPP_OAUTH_GOOGLE_CLIENT_ID=…      TAPP_OAUTH_GOOGLE_CLIENT_SECRET=…
+TAPP_OAUTH_GITHUB_CLIENT_ID=…      TAPP_OAUTH_GITHUB_CLIENT_SECRET=…
+```
+
+Register the redirect URI as `<origin>/auth/<provider>/callback`. The flow is a plain
+authorization code exchange (`oauth.js`): `/auth/google` sends the person to the provider with a
+one-time `state` kept in an `HttpOnly` cookie scoped to `/auth`, and `/auth/google/callback`
+refuses anything whose state does not match the cookie it was started with — so a callback URL
+sent to somebody else signs nobody in. The scope is `openid email` (or `user:email`), the address
+must be **verified** by the provider, and the access token is used once and never stored: a tapp
+account is an email address and nothing else. The page is ours; only the provider's own consent
+screen is theirs.
+
 **Cloudflare Access instead of mail.** When the host is fronted by Cloudflare, put an Access
 application on exactly `app.runtapp.com/auth/cloudflare` (policy: allow everyone; login method:
 one-time PIN or Google) and set `TAPP_ACCESS_TEAM_DOMAIN` (`<team>.cloudflareaccess.com`) and

@@ -822,3 +822,71 @@ test("a journey you already have can be put on the Studio, and only one it can a
     }
   } finally { await product.close(); if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous; }
 });
+
+test("“Continue with Google” signs in on our own page, and a callback cannot be replayed into someone else's browser", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-oauth-home-"));
+  const previous = { home: process.env.TAPP_HOME, id: process.env.TAPP_OAUTH_GOOGLE_CLIENT_ID, secret: process.env.TAPP_OAUTH_GOOGLE_CLIENT_SECRET };
+  process.env.TAPP_HOME = home;
+  process.env.TAPP_OAUTH_GOOGLE_CLIENT_ID = "google-id";
+  process.env.TAPP_OAUTH_GOOGLE_CLIENT_SECRET = "google-secret";
+  const origin = "https://app.runtapp.com";
+  // The provider is Google's job; here it is a stand-in that accepts exactly one code.
+  const oauthExchange = async ({ provider, code }) => {
+    if (provider !== "google" || code !== "good-code") throw new Error("Google refused the sign-in");
+    return "Owner@Example.test";
+  };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-oauth-ws-")), oauthExchange });
+  try {
+    // The Studio offers the button only because a client id is configured.
+    const session = await (await fetch(`${product.origin}/api/session`)).json();
+    assert.equal(session.signInProvider, "oauth");
+    assert.deepEqual(session.signInOptions.map((o) => o.kind), ["google", "email"], "a provider button, with the emailed link underneath");
+
+    // Leg one: off to Google, with a one-time state kept in a cookie scoped to /auth.
+    const start = await fetch(`${product.origin}/auth/google`, { redirect: "manual" });
+    assert.equal(start.status, 303);
+    const authorize = new URL(start.headers.get("location"));
+    assert.equal(authorize.host, "accounts.google.com");
+    assert.equal(authorize.searchParams.get("redirect_uri"), "https://app.runtapp.com/auth/google/callback");
+    const stateCookie = start.headers.get("set-cookie");
+    assert.match(stateCookie, /tapp_oauth_state=/);
+    assert.match(stateCookie, /HttpOnly/);
+    assert.match(stateCookie, /Path=\/auth/);
+    const state = authorize.searchParams.get("state");
+    assert.equal(stateCookie.includes(state), true, "the state in the link is the state in the cookie");
+
+    // A callback with no cookie — the shape of a link sent to someone else — signs nobody in.
+    const replayed = await fetch(`${product.origin}/auth/google/callback?code=good-code&state=${state}`, { redirect: "manual" });
+    assert.equal(replayed.headers.get("location"), "/?signin=failed");
+    assert.doesNotMatch(String(replayed.headers.get("set-cookie")), /tapp_account=/, "no session without the browser that started it");
+
+    const cookie = `tapp_oauth_state=${state}`;
+    // A callback whose state does not match the cookie is refused too.
+    const tampered = await fetch(`${product.origin}/auth/google/callback?code=good-code&state=somethingelse`, { redirect: "manual", headers: { cookie } });
+    assert.equal(tampered.headers.get("location"), "/?signin=failed");
+
+    // A code the provider rejects fails closed, and says so without leaking why to the URL.
+    const refused = await fetch(`${product.origin}/auth/google/callback?code=wrong-code&state=${state}`, { redirect: "manual", headers: { cookie } });
+    assert.equal(refused.headers.get("location"), "/?signin=failed");
+
+    // The real thing: signed in, as an account, on our own origin.
+    const done = await fetch(`${product.origin}/auth/google/callback?code=good-code&state=${state}`, { redirect: "manual", headers: { cookie } });
+    assert.equal(done.status, 303);
+    assert.equal(done.headers.get("location"), "/?signin=done");
+    const account = (done.headers.getSetCookie?.() || []).find((value) => value.startsWith("tapp_account="));
+    assert.ok(account, "a session cookie was set");
+    const me = await (await fetch(`${product.origin}/api/session`, { headers: { cookie: account.split(";")[0] } })).json();
+    assert.equal(me.access, "account");
+    assert.equal(me.email, "owner@example.test", "the address is normalised into one account");
+
+    // An unknown provider is not a sign-in route at all — not a redirect to one.
+    const unknown = await fetch(`${product.origin}/auth/facebook`, { redirect: "manual" });
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.headers.get("location"), null);
+  } finally {
+    await product.close();
+    for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_OAUTH_GOOGLE_CLIENT_ID", previous.id], ["TAPP_OAUTH_GOOGLE_CLIENT_SECRET", previous.secret]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});

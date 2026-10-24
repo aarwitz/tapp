@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.29.0
+
+**Sign in on our own page: "Continue with Google".** Cloudflare Access was a stopgap to avoid
+needing a mail provider, and it put a third-party page in the middle of signing up for a product.
+It is now the fallback, not the front door.
+
+- `/auth/google` and `/auth/github`: a plain authorization-code exchange (`oauth.js`) that asks
+  for one thing, a **verified** email address — scope `openid email` / `user:email`, nothing else.
+  The access token is used once and never stored, because a tapp account is an address and
+  nothing more.
+- A one-time `state` travels in an `HttpOnly` cookie scoped to `/auth`; a callback whose state
+  does not match the browser that started it signs nobody in, so a callback URL sent to someone
+  else is inert.
+- The sign-in card shows a button per provider that is actually configured, with "Email me a
+  link" underneath — it can never offer a way in that this deployment cannot complete.
+- Configure with `TAPP_OAUTH_{GOOGLE,GITHUB}_CLIENT_{ID,SECRET}`; register the redirect URI as
+  `<origin>/auth/<provider>/callback`.
+
 ## 0.28.1
 
 The read-only pass never presses anything — that is its promise — but it was leaving people to

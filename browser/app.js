@@ -105,6 +105,23 @@ function renderAccount() {
       : `<button type="button" class="primary" data-signin>Sign in</button>`;
   }
   $("#signin-card")?.classList.toggle("hidden", session.access !== "anonymous" || !state.signInOpen);
+  renderSignInOptions();
+}
+
+// The ways in this deployment actually offers. A button with nothing configured behind it is
+// never shown, so the card can never promise a sign-in that cannot happen.
+function renderSignInOptions() {
+  const slot = $("#signin-providers");
+  if (!slot) return;
+  const providers = (state.session?.signInOptions || []).filter((option) => option.kind !== "email");
+  slot.innerHTML = providers.map((option) => `<a class="signin-provider ${esc(option.kind)}" href="/auth/${esc(option.kind)}">${providerMark(option.kind)}<span>${esc(option.label)}</span></a>`).join("")
+    + (providers.length ? '<div class="signin-or"><span>or</span></div>' : "");
+}
+
+function providerMark(kind) {
+  if (kind === "google") return '<svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true"><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.8H9v3.4h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2a5.4 5.4 0 0 1-8.1-2.8H1v2.3A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.9 10.7a5.4 5.4 0 0 1 0-3.4V5H1a9 9 0 0 0 0 8l2.9-2.3z"/><path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3L15 2.3A9 9 0 0 0 1 5l2.9 2.3A5.4 5.4 0 0 1 9 3.6z"/></svg>';
+  if (kind === "github") return '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.5 15.6c.4.1.5-.2.5-.4v-1.4C3.8 14.2 3.3 13 3.3 13c-.4-1-.9-1.2-.9-1.2-.8-.5 0-.5 0-.5.8.1 1.3.9 1.3.9.7 1.2 1.9.9 2.4.7 0-.6.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-3.9 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.6 7.6 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.5 1.1.2 1.9.1 2.1.5.5.8 1.2.8 2.1 0 3-1.8 3.7-3.6 3.9.3.3.5.8.5 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 0z"/></svg>';
+  return "";
 }
 
 async function requestSignInLink(email) {
@@ -1044,6 +1061,7 @@ function signInOutcome() {
   try { window.history.replaceState({}, "", window.location.pathname); } catch { /* history may be unavailable */ }
   if (outcome === "done") toast(`Signed in${state.session?.email ? ` as ${state.session.email}` : ""}.`);
   if (outcome === "expired") { toast("That sign-in link has expired or was already used — ask for a new one.", true); state.signInOpen = true; renderAccount(); }
+  if (outcome === "failed") { toast("That sign-in did not complete. Try again, or ask for a link by email.", true); state.signInOpen = true; renderAccount(); }
 }
 
 function handoffTarget() {

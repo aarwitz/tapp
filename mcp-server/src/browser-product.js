@@ -21,6 +21,7 @@ import { AccountStore } from "./account-store.js";
 import { ActorStore, hostKey } from "./actor-store.js";
 import { createMailer, signInMessage } from "./mailer.js";
 import { accessConfig, createAccessVerifier } from "./access-jwt.js";
+import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider } from "./oauth.js";
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -124,6 +125,8 @@ const VISITOR_COOKIE = "tapp_visitor";
 // A signed-in tapp account on a public Studio (ADR-0009 slice 2). The cookie is a session token
 // whose hash the account store knows; see account-store.js.
 const ACCOUNT_COOKIE = "tapp_account";
+// One-time value tying an OAuth callback to the browser that started it.
+const OAUTH_STATE_COOKIE = "tapp_oauth_state";
 
 // What a signed-out visitor on a public Studio may reach. Everything absent from this list is
 // refused, so a new route is private until someone deliberately opens it.
@@ -134,8 +137,9 @@ function anonymousAllows(method, pathname) {
     if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
     if (/^\/evidence\/captures\//.test(pathname)) return true;
     if (/^\/api\/jobs\/[a-f0-9]{20}(\/frame)?$/.test(pathname)) return true;
-    // Following a sign-in link from an email, or arriving back from Cloudflare Access.
-    if (pathname === "/auth/cloudflare" || /^\/auth\/[A-Za-z0-9_-]{20,}$/.test(pathname)) return true;
+    // Following a sign-in link from an email, arriving back from Cloudflare Access, or either
+    // leg of "Continue with Google".
+    if (pathname === "/auth/cloudflare" || /^\/auth\/[a-z]{2,20}(\/callback)?$/.test(pathname) || /^\/auth\/[A-Za-z0-9_-]{20,}$/.test(pathname)) return true;
     return false;
   }
   // Asking for a sign-in link is the one thing a stranger may post besides a run.
@@ -536,7 +540,7 @@ function serveLoginPage(response, { failed = false, next = "" } = {}) {
   response.end(html);
 }
 
-export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined } = {}) {
+export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined, oauthExchange = null } = {}) {
   const hosted = !!trustedProxyToken || !!directLogin || !!publicAccess;
   // publicOrigin accepts a comma-separated allowlist; the first entry is canonical.
   const publicOrigins = String(publicOrigin || "").split(",").map((value) => value.trim().replace(/\/$/, "")).filter(Boolean);
@@ -576,7 +580,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   // assertion and tapp sends no email at all. Configured by TAPP_ACCESS_TEAM_DOMAIN + TAPP_ACCESS_AUD;
   // tests inject a verifier. The email link stays available as the provider-free path.
   const access = accessVerifier !== undefined ? accessVerifier : (publicAccess && accessConfig() ? createAccessVerifier(accessConfig()) : null);
-  const signInProvider = access ? "cloudflare" : "email";
+  // What this deployment can actually offer, in the order the sign-in card shows them. A button
+  // with no client id behind it is never rendered.
+  const oauth = publicAccess ? oauthProviders() : [];
+  const signInProvider = oauth.length ? "oauth" : access ? "cloudflare" : "email";
+  const signInOptions = [...oauth.map((provider) => ({ kind: provider.name, label: `Continue with ${provider.label}` })), ...(access ? [{ kind: "cloudflare", label: "Continue with a one-time code" }] : []), { kind: "email", label: "Email me a link" }];
   const openAccountSession = (response, signedIn, location = "/?signin=done") => {
     logUsage("signin.done", { account: signedIn.account.id.slice(0, 8), provider: signInProvider });
     response.writeHead(303, { location, "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000` });
@@ -865,6 +873,44 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         json(response, 200, { ok: true, sent: true });
         return;
       }
+      // "Continue with Google" — leg one: send them to the provider with a one-time state that
+      // comes back in a cookie, so a callback can only land in the browser that started it.
+      const oauthStartMatch = publicAccess && request.method === "GET" ? url.pathname.match(/^\/auth\/([a-z]{2,20})$/) : null;
+      if (oauthStartMatch && isOauthProvider(oauthStartMatch[1])) {
+        const provider = oauthStartMatch[1];
+        let authorize;
+        const state = crypto.randomBytes(16).toString("hex");
+        try { authorize = oauthAuthorizeUrl({ provider, origin: publicOrigins[0], state }); }
+        catch (error) { response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); response.end(error.message); return; }
+        response.writeHead(303, { location: authorize, "set-cookie": `${OAUTH_STATE_COOKIE}=${state}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/auth; Max-Age=600` });
+        response.end();
+        return;
+      }
+      // Leg two: the provider sends them back. Trade the code for a verified address, open the
+      // session, and drop the token.
+      const oauthBackMatch = publicAccess && request.method === "GET" ? url.pathname.match(/^\/auth\/([a-z]{2,20})\/callback$/) : null;
+      if (oauthBackMatch && isOauthProvider(oauthBackMatch[1])) {
+        const provider = oauthBackMatch[1];
+        const expected = cookies(request)[OAUTH_STATE_COOKIE] || "";
+        const clear = `${OAUTH_STATE_COOKIE}=; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/auth; Max-Age=0`;
+        const refuse = (why) => {
+          logUsage("signin.oauth.refused", { provider, reason: why });
+          response.writeHead(303, { location: "/?signin=failed", "set-cookie": clear });
+          response.end();
+        };
+        if (!url.searchParams.get("code") || !expected || url.searchParams.get("state") !== expected) { refuse("state"); return; }
+        try {
+          const email = await (oauthExchange || oauthEmailFromCode)({ provider, origin: publicOrigins[0], code: url.searchParams.get("code") });
+          const signedIn = accounts.signIn(email);
+          logUsage("signin.done", { account: signedIn.account.id.slice(0, 8), provider });
+          response.writeHead(303, {
+            location: "/?signin=done",
+            "set-cookie": [clear, `${ACCOUNT_COOKIE}=${encodeURIComponent(signedIn.session)}; HttpOnly; SameSite=Lax;${secureCookies ? " Secure;" : ""} Path=/; Max-Age=7776000`],
+          });
+          response.end();
+        } catch (error) { refuse(String(error.message || error).slice(0, 80)); }
+        return;
+      }
       const authLinkMatch = publicAccess && request.method === "GET" ? url.pathname.match(/^\/auth\/([A-Za-z0-9_-]{20,})$/) : null;
       if (authLinkMatch) {
         const signedIn = accounts.redeem(authLinkMatch[1]);
@@ -1035,7 +1081,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "account", email: account.email, signInProvider, viaToken,
+            access: "account", email: account.email, signInProvider, signInOptions, viaToken,
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
           });
@@ -1045,7 +1091,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, {
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
-            access: "anonymous", signInProvider,
+            access: "anonymous", signInProvider, signInOptions,
             // The prompt screen offers folders, bundle ids and builds. None of them can work in
             // a hosted Studio — there is no Mac, no simulator and no access to the visitor's
             // disk — so say so here rather than letting the UI offer them.

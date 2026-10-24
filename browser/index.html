@@ -65,8 +65,9 @@
       <!-- Signing in to a public Studio: an email address and a link, nothing else. Hidden on a
            local Studio, where the one person at the keyboard is the operator already. -->
       <section class="signin-card hidden" id="signin-card" aria-live="polite">
+        <p class="signin-lead"><strong>Sign in to go inside a site.</strong> tapp can stop at a sign-in and ask you for a test account, then remember it — for that it needs to know it is you.</p>
+        <div id="signin-providers"></div>
         <form id="signin-form" autocomplete="email">
-          <p><strong>Sign in to go inside a site.</strong> tapp can stop at a sign-in and ask you for a test account, then remember it — for that it needs to know it is you.</p>
           <div class="signin-row"><input id="signin-email" name="email" type="email" placeholder="you@company.com" required><button class="primary" type="submit" id="signin-send">Email me a link</button></div>
           <small>No password. The link works once and expires in 15 minutes.</small>
         </form>
