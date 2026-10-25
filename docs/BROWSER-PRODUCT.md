@@ -181,3 +181,22 @@ committed Flows (subfolders and all) or this machine's kept journeys. The MCP to
 two abilities on the existing tools — `tapp_report { journeys: true }` and
 `tapp_run { journey }` — never new tools (ADR-0007). Both are implemented by
 `mcp-server/src/studio-client.js`.
+
+## Alerts
+
+A kept journey that goes red is only news if someone hears about it. `alerts.js` posts to a
+webhook the owner pastes in (`POST /api/alerts`, `GET` returns a summary, `POST /api/alerts/test`
+sends one on demand) — Slack and Discord both accept the body, which carries `text` and `content`
+plus the journey, state and step counts.
+
+Rules that keep it worth reading:
+
+- **Only on a change.** `alertForChange` compares the previous result with the new one; a journey
+  that has been failing for a week does not produce a message every day, and a first run produces
+  none at all because nothing has changed yet.
+- **Proved before promised.** Saving a webhook posts a message to it; if that fails the webhook is
+  not saved and the error says why.
+- **Write-only.** The stored URL never leaves the store: the summary gives the host and the last
+  delivery. Anyone holding the URL can post into that channel.
+- **Public https only.** The post comes from the server, so a webhook on localhost or a private
+  range is refused, the same rule the egress proxy enforces for exploration.

@@ -23,6 +23,7 @@ import { createMailer, signInMessage } from "./mailer.js";
 import { accessConfig, createAccessVerifier } from "./access-jwt.js";
 import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider } from "./oauth.js";
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
+import { AlertStore, alertForChange, alertMessage, deliverAlert } from "./alerts.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -158,7 +159,9 @@ function anonymousAllows(method, pathname) {
 function accountAllows(method, pathname) {
   if (anonymousAllows(method, pathname)) return true;
   if (method === "POST" && (pathname === "/api/auth/signout" || /^\/api\/jobs\/[a-f0-9]{20}\/input$/.test(pathname))) return true;
-  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys" || pathname === "/api/tokens" || pathname === "/api/admin/overview")) return true;
+  if (method === "GET" && (pathname === "/api/actors" || pathname === "/api/journeys" || pathname === "/api/tokens" || pathname === "/api/admin/overview" || pathname === "/api/alerts")) return true;
+  // Where to be told that a journey stopped working.
+  if (method === "POST" && (pathname === "/api/alerts" || pathname === "/api/alerts/test")) return true;
   // Personal access tokens: the owner's coding agent acting as them (ADR-0009 slice 4).
   if (method === "POST" && pathname === "/api/tokens") return true;
   if (method === "DELETE" && /^\/api\/tokens\/[a-f0-9]{12}$/.test(pathname)) return true;
@@ -281,7 +284,7 @@ export function journeySignInPlan(flow = {}) {
 
 // Replay one web journey and record how it went. Shared by the Studio's Run button and the
 // daily check, so both leave the same status and the same evidence behind.
-async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = null, progress = () => {} }) {
+async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = null, progress = () => {}, alerts = null, origin = "" }) {
   // A journey that signs in does so as the test account tapp was told about for that site: the
   // values come from the encrypted actor store at replay and never from the file.
   const variables = {};
@@ -329,8 +332,19 @@ async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = nul
     if (/^OCQA_(FLOW_RESULT|ISSUE):/.test(raw)) continue;
     if (raw) progress({ phase: "replay", text: raw });
   }
+  // Read the old result before writing the new one: the news is the change, not the state.
+  const previous = store.status(slug);
   const status = store.recordRun(slug, { passed: result.passed, captureId, executed: result.executed, total: result.total, failed: result.failed });
-  return { kind: "journey", name: flow.name || slug, slug, passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, status, capture: { id: captureId, path: evidenceDir } };
+  const change = alertForChange({ previous, current: status });
+  let alert = null;
+  if (change && alerts) {
+    const settings = alerts.read();
+    if (settings.webhook) {
+      alert = await deliverAlert({ webhook: settings.webhook, message: alertMessage({ kind: change, journey: flow.name || slug, status, origin }) });
+      alerts.write({ lastDelivery: { at: new Date().toISOString(), journey: flow.name || slug, change, ...alert } });
+    }
+  }
+  return { kind: "journey", name: flow.name || slug, slug, passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, status, change, ...(alert ? { alert } : {}), capture: { id: captureId, path: evidenceDir } };
 }
 
 // "Make sure this always works": kept journeys on a public Studio are replayed on a schedule,
@@ -719,7 +733,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         try { const { loadFlowFile } = await import("./flow-runtime.js"); flow = loadFlowFile(flowPath); } catch { continue; }
         let job;
         try {
-          job = startJob("check-journey", (progress) => replayJourney({ store, slug: journey.slug, flow, actorRoot: accounts.actorRoot(accountId), ownerKey, progress }), null, { lane: ownerKey });
+          job = startJob("check-journey", (progress) => replayJourney({ store, slug: journey.slug, flow, actorRoot: accounts.actorRoot(accountId), ownerKey, progress, alerts: AlertStore.forAccount(accounts.root, accountId), origin: publicOrigins[0] || "" }), null, { lane: ownerKey });
         } catch { continue; /* the owner is busy; next tick */ }
         job.ownerKey = ownerKey;
         // One at a time per owner: wait for this check before starting the next.
@@ -1183,6 +1197,34 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         });
         return;
       }
+      // Where to be told when something breaks. The URL is write-only here: the summary says
+      // which host it points at and when it last delivered, never the URL itself, because anyone
+      // holding it can post into that channel.
+      if (account && url.pathname === "/api/alerts") {
+        const alerts = AlertStore.forAccount(accounts.root, account.id);
+        if (request.method === "GET") { json(response, 200, alerts.summary()); return; }
+        guardMutation(request);
+        const body = await readJsonBody(request);
+        const webhook = String(body.webhook || "").trim();
+        if (webhook) {
+          const probe = await deliverAlert({ webhook, message: alertMessage({ kind: "recovered", journey: "tapp alerts", status: { at: new Date().toISOString(), executed: 0, total: 0 }, origin: publicOrigins[0] || "" }) });
+          if (!probe.delivered) { json(response, 400, { error: `tapp could not post there — ${probe.reason}.` }); return; }
+        }
+        alerts.write({ webhook });
+        logUsage("alerts.set", { account: account.id.slice(0, 8), configured: !!webhook });
+        json(response, 200, alerts.summary());
+        return;
+      }
+      if (account && url.pathname === "/api/alerts/test" && request.method === "POST") {
+        guardMutation(request);
+        const alerts = AlertStore.forAccount(accounts.root, account.id);
+        const settings = alerts.read();
+        if (!settings.webhook) { json(response, 400, { error: "There is nowhere to send it yet." }); return; }
+        const sent = await deliverAlert({ webhook: settings.webhook, message: alertMessage({ kind: "broke", journey: "a test from tapp", status: { at: new Date().toISOString(), executed: 3, total: 7 }, origin: publicOrigins[0] || "" }) });
+        alerts.write({ lastDelivery: { at: new Date().toISOString(), journey: "a test from tapp", change: "test", ...sent } });
+        json(response, sent.delivered ? 200 : 400, sent.delivered ? alerts.summary() : { error: `tapp could not post there — ${sent.reason}.` });
+        return;
+      }
       if (account && url.pathname === "/api/tokens" && request.method === "GET") {
         json(response, 200, { tokens: accounts.listTokens(account.id) });
         return;
@@ -1468,7 +1510,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         }
         const slug = root ? name : slugify(name);
         const job = startJob(operation, async (progress) => {
-          const result = await replayJourney({ store, slug, flow, actorRoot: actorRootFor() || "", ownerKey, progress });
+          const result = await replayJourney({ store, slug, flow, actorRoot: actorRootFor() || "", ownerKey, progress, alerts: account ? AlertStore.forAccount(accounts.root, account.id) : null, origin: publicOrigins[0] || "" });
           logUsage("journey.run", { owner: (ownerKey || "operator").slice(0, 13), passed: result.passed });
           return result;
         }, null, { lane: ownerKey || OPERATOR_LANE });

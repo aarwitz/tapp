@@ -994,3 +994,52 @@ test("the owner's page answers “what has been happening?” across restarts", 
     }
   }
 });
+
+test("an account is told where to be told, and tapp proves it can post before promising to", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-alertapi-home-"));
+  const previous = process.env.TAPP_HOME; process.env.TAPP_HOME = home;
+  const origin = "https://app.runtapp.com";
+  const accessVerifier = { verify: async () => ({ email: "owner@example.test" }) };
+  const posted = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    // Only the webhook is stubbed; the test's own calls to the Studio go through.
+    if (target.startsWith("https://hooks.example.test/")) { posted.push(JSON.parse(options.body)); return new Response("ok", { status: 200 }); }
+    if (target.startsWith("https://broken.example.test/")) return new Response("nope", { status: 500 });
+    return realFetch(url, options);
+  };
+  const product = await startBrowserProduct({ port: 0, publicOrigin: origin, publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-alertapi-ws-")), accessVerifier });
+  try {
+    const signedIn = await fetch(`${product.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } });
+    const cookie = signedIn.headers.get("set-cookie").split(";")[0];
+    const { csrfToken } = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const call = (p, init = {}) => fetch(`${product.origin}${p}`, { ...init, headers: { cookie, origin, "x-tapp-csrf": csrfToken, "content-type": "application/json", ...(init.headers || {}) } });
+
+    assert.equal((await (await call("/api/alerts")).json()).configured, false);
+
+    // A webhook that cannot be posted to is not saved — the promise is kept at the moment it is made.
+    const bad = await call("/api/alerts", { method: "POST", body: JSON.stringify({ webhook: "https://broken.example.test/hook" }) });
+    assert.equal(bad.status, 400);
+    assert.match((await bad.json()).error, /could not post there/);
+    assert.equal((await (await call("/api/alerts")).json()).configured, false, "nothing was saved");
+
+    // A good one is saved, and proves itself by posting there and then.
+    const saved = await (await call("/api/alerts", { method: "POST", body: JSON.stringify({ webhook: "https://hooks.example.test/T/B/secret" }) })).json();
+    assert.equal(saved.configured, true);
+    assert.equal(saved.host, "hooks.example.test");
+    assert.doesNotMatch(JSON.stringify(saved), /secret/, "the URL is never handed back");
+    assert.equal(posted.length, 1, "saving posts a message so you know it works before anything breaks");
+
+    assert.equal((await call("/api/alerts/test", { method: "POST", body: "{}" })).status, 200);
+    assert.equal(posted.length, 2);
+    assert.match(posted[1].text, /stopped working/);
+
+    // And it can be turned off.
+    assert.equal((await (await call("/api/alerts", { method: "POST", body: JSON.stringify({ webhook: "" }) })).json()).configured, false);
+  } finally {
+    globalThis.fetch = realFetch;
+    await product.close();
+    if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous;
+  }
+});

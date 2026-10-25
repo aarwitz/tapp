@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.32.0
+
+**Alerts: tapp tells you when a journey stops working.** Until now a kept journey could go red
+and nothing would say so — you had to open the page, or have your agent ask. That was the hole in
+the middle of "make sure this always works".
+
+- Paste a **webhook** (Slack, Discord, or anything that accepts a POST) under *When something
+  breaks*. No mail provider: tapp still sends no email.
+- tapp posts on a **change of state only** — "stopped working", and later "working again". A
+  journey that has been failing for a week does not earn a message every day.
+- The URL proves itself: saving posts a test message there and then, and a webhook that cannot be
+  posted to is **not saved** — the promise is kept at the moment it is made.
+- Write-only: afterwards the Studio shows which host it points at and when it last delivered,
+  never the URL, because anyone holding it can post into that channel. https only, and never a
+  private or loopback address — a webhook is posted from the server.
+- Both the daily check and a manual Run raise it.
+
 ## 0.31.0
 
 **The owner's page now answers "what has been happening?"** — "3 visitors" with no detail was not

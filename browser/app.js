@@ -174,6 +174,7 @@ function applyAccessMode() {
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
   $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
   $("#agent-panel")?.classList.toggle("hidden", !signedIn);
+  $("#alerts-panel")?.classList.toggle("hidden", !signedIn);
   $("#admin-nav")?.classList.toggle("hidden", !state.session?.admin);
 }
 
@@ -284,6 +285,43 @@ function renderAdmin() {
       <div class="section-heading compact"><div><p class="eyebrow">Log</p><h2>Recent activity</h2><p>The last ${(activity.recent || []).length} things that happened, newest first.</p></div></div>
       ${(activity.recent || []).length ? `<ul class="detail-list">${activity.recent.map((entry) => `<li><small>${esc(compactDate(entry.at))}</small> · ${entry.account ? `account ${esc(entry.account)}` : entry.visitor ? `visitor ${esc(entry.visitor)}` : "—"} · ${whatHappened(entry)}</li>`).join("")}</ul>` : '<div class="empty">Nothing logged yet on this release.</div>'}
     </section>`;
+}
+
+// Being told, rather than having to look. The URL is write-only: once set, the Studio shows
+// which host it points at and when it last delivered, never the URL — anyone holding it can post
+// into that channel.
+async function loadAlerts() {
+  if (state.session?.access !== "account") { state.alerts = null; return; }
+  state.alerts = await api("/api/alerts").catch(() => null);
+}
+
+function renderAlerts() {
+  const node = $("#alerts-body");
+  if (!node) return;
+  const alerts = state.alerts;
+  const delivery = alerts?.lastDelivery;
+  const last = delivery
+    ? `<p class="muted">Last post: ${esc(compactDate(delivery.at))} · ${esc(delivery.journey || "")} · ${delivery.delivered ? "delivered" : `not delivered — ${esc(delivery.reason || "")}`}</p>`
+    : "";
+  node.innerHTML = alerts?.configured
+    ? `<div class="actor-row"><span><strong>Posting to ${esc(alerts.host)}</strong><br><small>set ${esc(compactDate(alerts.updatedAt))}</small></span><span></span><span class="journey-actions"><button class="quiet" type="button" data-alert-test>Send a test</button><button class="quiet" type="button" data-alert-clear>Stop</button></span></div>${last}`
+    : `<form id="alerts-form" class="signin-row"><input id="alert-webhook" type="url" placeholder="https://hooks.slack.com/services/…" required><button class="primary" type="submit">Save</button></form><p class="muted">tapp posts a test message when you save, so you know it works before anything breaks.</p>${last}`;
+}
+
+async function saveAlerts(webhook) {
+  try {
+    state.alerts = await api("/api/alerts", { method: "POST", body: JSON.stringify({ webhook }) });
+    renderAlerts();
+    toast(webhook ? "Saved — check the channel for the test message." : "Stopped posting.");
+  } catch (error) { toast(error.message, true); }
+}
+
+async function testAlerts() {
+  try {
+    state.alerts = await api("/api/alerts/test", { method: "POST", body: "{}" });
+    renderAlerts();
+    toast("Posted. Check the channel.");
+  } catch (error) { toast(error.message, true); }
 }
 
 async function loadTokens() {
@@ -605,6 +643,7 @@ function renderObservations(audit) {
 
 function renderRuns() {
   renderAdmin();
+  renderAlerts();
   renderJourneys();
   renderActors();
   renderTokens();
@@ -889,7 +928,7 @@ async function refresh() {
     state.audits = runs.audits || [];
     state.explores = runs.explores || [];
     state.actors = actors.apps || [];
-    await Promise.all([loadJourneys(), loadTokens(), loadAdmin()]);
+    await Promise.all([loadJourneys(), loadTokens(), loadAdmin(), loadAlerts()]);
     renderAdmin();
     renderProject();
     return;
@@ -1074,6 +1113,8 @@ document.addEventListener("submit", (event) => {
   if (prompt) { event.preventDefault(); startFromPrompt(prompt.elements.input.value).catch((error) => toast(error.message, true)); }
   const ask = event.target.closest("#chat-ask");
   if (ask) { event.preventDefault(); answerAsk(ask, "submit"); }
+  const alertsForm = event.target.closest("#alerts-form");
+  if (alertsForm) { event.preventDefault(); saveAlerts(alertsForm.elements.webhook?.value || $("#alert-webhook")?.value || ""); }
   const signin = event.target.closest("#signin-form");
   if (signin) { event.preventDefault(); requestSignInLink(signin.elements.email.value.trim()); }
   const keep = event.target.closest("#chat-keep");
@@ -1096,6 +1137,8 @@ document.addEventListener("click", (event) => {
   const forgetJ = event.target.closest("[data-forget-journey]");
   if (forgetJ) { event.preventDefault(); forgetJourney(forgetJ.dataset.forgetJourney).catch((error) => toast(error.message, true)); }
   if (event.target.closest("[data-open-owned]")) { event.preventDefault(); showProduct(); activateView("runs"); renderRuns(); }
+  if (event.target.closest("[data-alert-test]")) { event.preventDefault(); testAlerts(); }
+  if (event.target.closest("[data-alert-clear]")) { event.preventDefault(); saveAlerts(""); }
   if (event.target.closest("#create-token")) { event.preventDefault(); createToken(); }
   const revoke = event.target.closest("[data-revoke-token]");
   if (revoke) { event.preventDefault(); revokeToken(revoke.dataset.revokeToken).catch((error) => toast(error.message, true)); }

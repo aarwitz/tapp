@@ -183,6 +183,10 @@
           <div class="section-heading compact"><div><p class="eyebrow">Test accounts</p><h2>What tapp can sign in as <i id="actor-count" class="zero">0</i></h2><p>Kept encrypted. Shown here is only the name and whether a password or a signed-in session is held — never the values. Forget one and tapp will ask again next time.</p></div></div>
           <div id="actors-list"><div class="empty">None yet. Explore a site with a sign-in and tapp will ask.</div></div>
         </section>
+        <section class="panel section hidden" id="alerts-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">When something breaks</p><h2>Tell me, don't make me look</h2><p>Paste a Slack or Discord webhook (anything that accepts a POST works). tapp posts when a journey <b>stops working</b>, and again when it <b>works again</b> — never on every check.</p></div></div>
+          <div id="alerts-body"></div>
+        </section>
         <section class="panel section hidden" id="agent-panel">
           <div class="section-heading compact">
             <div><p class="eyebrow">Your coding agent</p><h2>Let your agent check these journeys <i id="token-count" class="zero">0</i></h2><p>A token lets your coding agent ask “is everything still passing?” and replay a journey — as you, without a browser. It is shown once and can be revoked at any time.</p></div>
