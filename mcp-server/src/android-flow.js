@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { AndroidDriver, findAndroidElement, isAndroidAppSnapshot } from "./android-driver.js";
 import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue } from "./flow-runtime.js";
+import { chooseSignInSubmit } from "./sign-in.js";
 
 const DEFAULT_TIMEOUT = 6000;
 
@@ -56,7 +57,18 @@ export async function runAndroidFlow({ flow, appId, apkPath, serial, logPath, sc
         const passwordResult = await d.type(passwordField.id || passwordField.label, passwordValue, snap);
         if (passwordResult.status !== "ok") throw new Error(passwordResult.detail || "could not fill the password field");
         snap = await d.settle();
-        const submit = snap.elements.find((element) => element.clickable && /sign in|log in|login|continue|submit/i.test(`${element.text} ${element.label} ${element.id}`));
+        // Same rule as the web runner: rule out "Forgot password" and "Continue with Google" by
+        // name, prefer a sign-in name, and otherwise take the first clickable control after the
+        // password field — Android apps name that button after the product too.
+        const passwordIndex = snap.elements.indexOf(passwordField);
+        const choice = chooseSignInSubmit(snap.elements.map((element, index) => ({
+          index,
+          name: `${element.text || ""} ${element.label || ""}`.replace(/\s+/g, " ").trim() || String(element.id || ""),
+          visible: Boolean(element.clickable),
+          disabled: element.enabled === false,
+          after: index > passwordIndex,
+        })));
+        const submit = choice ? snap.elements[choice.index] : null;
         if (!submit) throw new Error("could not identify a sign-in control");
         const submitResult = await d.tap(submit.id || submit.description || submit.text, snap);
         if (submitResult.status !== "ok") throw new Error(submitResult.detail || "could not submit the login form");

@@ -35,7 +35,13 @@ function readMarkers(captureDir) {
 }
 
 // tapp names a revisited screen "Orders (refreshed)"; the page itself still says "Orders".
-const pageName = (screen) => String(screen || "").replace(/\s*\((?:refreshed|again|\d+)\)\s*$/i, "").trim();
+// A screen name is one line. A headline that wraps in the page's source arrives with its
+// newlines and indentation attached, and a journey step that pins that string can never match
+// again — the browser reports the heading with its whitespace collapsed.
+/** A route, not something a person pressed: "/", "/orders", "https://…", "#pricing". */
+const isAddress = (via) => /^([/#]|https?:)/i.test(String(via || "").trim());
+
+const pageName = (screen) => String(screen || "").replace(/\s*\((?:refreshed|again|\d+)\)\s*$/i, "").replace(/\s+/g, " ").trim();
 
 /**
  * Build a Flow from an exploration capture. Returns null when the run did nothing worth
@@ -59,13 +65,19 @@ export function journeyFromCapture(captureDir, { name = "", actor = "default" } 
   };
   let acted = false;
   let signedIn = false;
-  for (let i = 0; i < markers.length && steps.length < MAX_STEPS; i += 1) {
+  let stop = false;
+  for (let i = 0; i < markers.length && steps.length < MAX_STEPS && !stop; i += 1) {
     const marker = markers[i];
     if (marker.kind === "OCQA_STATE") { waitFor(marker.screen); continue; }
     switch (marker.type) {
       case "open":
-        // The first open is the journey's URL; a later one came through a navigation link.
-        if (marker.via && marker.via !== marker.target && marker.via !== "/") { steps.push({ tap: marker.via }); acted = true; }
+        // The first open is the journey's URL. A later one is either a link somebody pressed —
+        // which a person can repeat — or the crawler jumping to a route by address, which nobody
+        // can. A journey is the path a user could walk, so it ends at the first jump rather than
+        // pretending the previous tap led there. (Found by filming: a kept journey had "tap Area"
+        // followed by the marketing home page, and the replay rightly refused to believe it.)
+        if (!marker.via || marker.via === marker.target || isAddress(marker.via)) { if (acted) stop = true; break; }
+        steps.push({ tap: marker.via }); acted = true;
         break;
       case "login":
         steps.push({ login: { email: "$TEST_EMAIL", password: "$TEST_PASSWORD" } });

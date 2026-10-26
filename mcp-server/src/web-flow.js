@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue } from "./flow-runtime.js";
 import { loadPlaywright, webContextOptions } from "./web-explorer.js";
+import { findSignInSubmit } from "./sign-in.js";
 
 const DEFAULT_TIMEOUT = 6000;
 
@@ -91,12 +92,19 @@ async function screenCandidates(page) {
     const url = new URL(page.url());
     values.push(url.pathname, url.pathname.split("/").filter(Boolean).at(-1) || "Home");
   } catch {}
-  return values.map((v) => String(v || "").trim()).filter(Boolean);
+  return values.map(normalizeScreenName).filter(Boolean);
+}
+
+// Compare screen names with their whitespace collapsed on both sides: a journey kept before
+// tapp normalized headings holds "Find the right coach.\n        Any goal." where the browser
+// now reports "Find the right coach. Any goal." Those are the same screen.
+export function normalizeScreenName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 async function waitForScreen(page, target, timeout) {
   const deadline = Date.now() + timeout;
-  const wanted = target.toLowerCase();
+  const wanted = normalizeScreenName(target).toLowerCase();
   while (Date.now() < deadline) {
     if ((await screenCandidates(page)).some((v) => v.toLowerCase() === wanted)) return true;
     const el = await locateWebElement(page, target);
@@ -108,7 +116,7 @@ async function waitForScreen(page, target, timeout) {
 
 async function waitForExactScreen(page, target, timeout) {
   const deadline = Date.now() + timeout;
-  const wanted = target.toLowerCase();
+  const wanted = normalizeScreenName(target).toLowerCase();
   while (Date.now() < deadline) {
     if ((await screenCandidates(page)).some((v) => v.toLowerCase() === wanted)) return true;
     await page.waitForTimeout(150);
@@ -223,9 +231,9 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
       if (!email || !password) throw new Error("could not identify email and password fields");
       await email.fill(emailValue);
       await password.fill(passwordValue);
-      const submit = await firstVisible([page.getByRole("button", { name:/sign in|log in|login|continue|submit/i })]);
+      const submit = await findSignInSubmit(page);
       if (!submit) throw new Error("could not identify a sign-in control");
-      await submit.click();
+      await submit.locator.click();
       await page.waitForTimeout(400);
       if (await password.isVisible().catch(() => false)) throw new Error("submit left the app on the login screen");
     } else if (action === "swipe") {

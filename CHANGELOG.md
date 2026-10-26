@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.33.0
+
+**tapp can sign in to your app.** This release came out of filming the whole flow against a real
+customer's application, which is the first time anyone had watched tapp do it end to end. It could
+not get in, and the journey it kept could not be replayed. Four defects, all ours.
+
+- **The sign-in button.** The rule for finding it was a word list — *sign in, log in, continue,
+  submit* — plus a selector looking for `button[type=submit]` or a button inside a `<form>`. The
+  page in question has no `<form>`, no `type` attribute on its buttons, and calls the button **Open
+  My Profile**, because products name buttons after what the product does. tapp now rules out the
+  controls that must never be pressed (*Forgot password?*, and *Continue with Google*, which would
+  hand a third-party identity provider a session on your behalf), prefers a sign-in name, and
+  otherwise takes the first control after the password field. One implementation, shared by the
+  explorer, the flow runner, the MCP login command and the Android runner. Measured against six
+  real sign-in shapes; the rule it replaces pressed the right button on one of them.
+- **Screen names are one line.** A headline that wraps in the page source was recorded with its
+  newlines and indentation, so a step pinned a name the browser can never report. Journeys kept
+  before this keep working: both sides now compare with whitespace collapsed.
+- **A journey is the path a person could walk.** The explorer seeds routes by address once it has
+  exhausted a screen; that arrived in the journey as a tap followed by the page it jumped to, which
+  nobody can reproduce. A journey now ends at the first jump rather than claiming what came after
+  was proven.
+- **One definition of what screen this is.** The explorer named a screen after the first `h1` in
+  the DOM; the runner checks the first `h1` a person can see. A sign-in headline the app left
+  hidden went on naming every later screen. Both now use the visible heading.
+
+The run that produced a 40-step journey failing at step 6 now produces an 8-step one that passes.
+
 ## 0.32.0
 
 **Alerts: tapp tells you when a journey stops working.** Until now a kept journey could go red

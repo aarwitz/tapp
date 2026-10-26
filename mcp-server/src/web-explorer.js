@@ -19,6 +19,7 @@ import fs from "fs";
 import path from "path";
 import { createRequire } from "module";
 import { execFileSync } from "child_process";
+import { submitSignIn } from "./sign-in.js";
 
 const CLICK_SETTLE_MS = 700;
 export const NAV_TIMEOUT_MS = 15_000;
@@ -194,7 +195,18 @@ async function captureWebControlState(page, locator) {
       .sort();
     return {
       title: document.title,
-      heading: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || "",
+      heading: (() => {
+        // The same definition the flow runner uses when it checks a screen: the first h1 a
+        // person can actually see. A sign-in headline left hidden in the DOM used to go on
+        // naming every later screen, and the replay could never agree.
+        const shown = (el) => {
+          if (!el.getClientRects().length) return false;
+          const style = getComputedStyle(el);
+          return style.visibility !== "hidden" && style.display !== "none";
+        };
+        const h1 = Array.from(document.querySelectorAll("h1")).find(shown);
+        return (h1 ? h1.innerText || h1.textContent || "" : "").replace(/\s+/g, " ").trim();
+      })(),
       dialogs: JSON.stringify(dialogs),
     };
   }).catch(() => ({ title: "", heading: "", dialogs: "" }));
@@ -333,18 +345,10 @@ export async function loadPlaywright() {
 }
 
 export async function submitWebLogin(page, beforeClick = null) {
-  const candidates = [
-    page.locator("button[type=submit], input[type=submit], form button").first(),
-    page.getByRole("button", { name: /sign ?in|log ?in|continue/i }).first(),
-  ];
-  for (const candidate of candidates) {
-    if (await candidate.isVisible().catch(() => false)) {
-      if (beforeClick) await beforeClick(candidate);
-      await candidate.click({ timeout: 3000 });
-      return true;
-    }
-  }
-  return false;
+  // One implementation, shared with the flow runner and the MCP login command, so a page that can
+  // be signed into by one of them can be signed into by all three. See mcp-server/src/sign-in.js
+  // for why a name-only rule was not enough.
+  return Boolean(await submitSignIn(page, beforeClick).catch(() => null));
 }
 
 // How many distinct in-page states one URL may contribute before we stop splitting it. A
@@ -751,7 +755,18 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
         })
         .filter((control) => control.label || control.identifier);
       return {
-        heading: document.querySelector("h1")?.textContent?.trim() || "",
+        heading: (() => {
+        // The same definition the flow runner uses when it checks a screen: the first h1 a
+        // person can actually see. A sign-in headline left hidden in the DOM used to go on
+        // naming every later screen, and the replay could never agree.
+        const shown = (el) => {
+          if (!el.getClientRects().length) return false;
+          const style = getComputedStyle(el);
+          return style.visibility !== "hidden" && style.display !== "none";
+        };
+        const h1 = Array.from(document.querySelectorAll("h1")).find(shown);
+        return (h1 ? h1.innerText || h1.textContent || "" : "").replace(/\s+/g, " ").trim();
+      })(),
         title: document.title.trim(),
         controls,
       };
@@ -986,7 +1001,18 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
         })
         .filter((control) => control.label || control.id || control.testId);
       return {
-        heading: document.querySelector("h1")?.textContent?.trim() || "",
+        heading: (() => {
+        // The same definition the flow runner uses when it checks a screen: the first h1 a
+        // person can actually see. A sign-in headline left hidden in the DOM used to go on
+        // naming every later screen, and the replay could never agree.
+        const shown = (el) => {
+          if (!el.getClientRects().length) return false;
+          const style = getComputedStyle(el);
+          return style.visibility !== "hidden" && style.display !== "none";
+        };
+        const h1 = Array.from(document.querySelectorAll("h1")).find(shown);
+        return (h1 ? h1.innerText || h1.textContent || "" : "").replace(/\s+/g, " ").trim();
+      })(),
         title: document.title.trim(),
         controlCount: document.querySelectorAll("a[href], button, [role=button], input, select, textarea").length,
         textLen: (document.body?.innerText || "").trim().length,

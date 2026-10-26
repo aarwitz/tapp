@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { journeyFromCapture, flowToYaml, JourneyStore, slugify } from "../mcp-server/src/journeys.js";
 import { loadFlowFile, validateFlowSteps, inferFlowPlatform } from "../mcp-server/src/flow-runtime.js";
+import { normalizeScreenName } from "../mcp-server/src/web-flow.js";
 
 // A capture the way web-explorer writes one: the run opened the site, met a sign-in, was given
 // a test account, went inside, tapped around, and followed a navigation link.
@@ -92,4 +93,60 @@ test("names become safe file names; the per-owner roots are kept apart", () => {
   assert.equal(JourneyStore.forMachine(env).root, "/tmp/tapp-home/journeys");
   assert.equal(JourneyStore.forRepository("/repo").root, "/repo/.tapp/flows");
   assert.match(flowToYaml({ name: "x", steps: [{ type: { field: "Search", value: "shoes" } }] }), /- type:\n    field: "Search"\n    value: "shoes"/);
+});
+
+test("a headline that wraps in the page source does not become an unmatchable screen name", () => {
+  // Found by filming the product against a real customer app: the kept journey pinned
+  // "Find the right coach.\n        Any goal. Any style. Anytime." and the replay failed on that
+  // step, because a browser reports the same heading on one line.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-journey-wrapped-"));
+  fs.writeFileSync(path.join(dir, "provenance.json"), JSON.stringify({ kind: "explore", platform: "web", target: "https://example.com/" }));
+  fs.writeFileSync(path.join(dir, "ocqa-markers.txt"), [
+    `OCQA_STATE:${JSON.stringify({ t: 1, screen: "Find the right coach.\n        Any goal. Any style. Anytime.", url: "/" })}`,
+    `OCQA_ACTION:${JSON.stringify({ t: 2, type: "tap", target: "Become a Coach", screen: "Find the right coach." })}`,
+    `OCQA_STATE:${JSON.stringify({ t: 3, screen: "Pricing", url: "/pricing" })}`,
+  ].join("\n") + "\n");
+  const journey = journeyFromCapture(dir, { name: "Browse coaches" });
+  assert.ok(journey);
+  assert.equal(journey.flow.steps[0].wait_for, "Find the right coach. Any goal. Any style. Anytime.");
+  assert.doesNotMatch(journey.yaml, /\n\s{4,}/, "no step carries the page source's indentation");
+});
+
+test("replay compares screen names with whitespace collapsed on both sides", () => {
+  // Journeys kept before this was fixed still hold the wrapped name; they must keep working.
+  assert.equal(normalizeScreenName("Find the right coach.\n        Any goal."), "Find the right coach. Any goal.");
+  assert.equal(normalizeScreenName("  Orders  "), "Orders");
+  assert.equal(normalizeScreenName(null), "");
+});
+
+test("a journey is the path a person could walk, so it ends where the crawler teleported", () => {
+  // The explorer seeds routes by address once it has exhausted a screen. Replaying a tap and then
+  // expecting the page the crawler jumped to is a step nobody can reproduce, and the runner was
+  // right to fail it. Keep what was demonstrated by pressing things; drop the rest.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-journey-jump-"));
+  fs.writeFileSync(path.join(dir, "provenance.json"), JSON.stringify({ kind: "explore", platform: "web", target: "https://example.com/app" }));
+  fs.writeFileSync(path.join(dir, "ocqa-markers.txt"), [
+    `OCQA_ACTION:${JSON.stringify({ t: 1, type: "open", target: "/app", via: "https://example.com/app" })}`,
+    `OCQA_STATE:${JSON.stringify({ t: 2, screen: "Sign in" })}`,
+    `OCQA_ACTION:${JSON.stringify({ t: 3, type: "login", target: "Sign in" })}`,
+    `OCQA_STATE:${JSON.stringify({ t: 4, screen: "Set up your profile" })}`,
+    `OCQA_ACTION:${JSON.stringify({ t: 5, type: "tap", target: "Area" })}`,
+    // A link somebody pressed is still part of the path.
+    `OCQA_ACTION:${JSON.stringify({ t: 6, type: "open", target: "/app/hours", via: "Hours" })}`,
+    `OCQA_STATE:${JSON.stringify({ t: 7, screen: "When do you coach?" })}`,
+    // The crawler jumping to a route by address is not.
+    `OCQA_ACTION:${JSON.stringify({ t: 8, type: "open", target: "/", via: "/" })}`,
+    `OCQA_STATE:${JSON.stringify({ t: 9, screen: "Marketing home" })}`,
+    `OCQA_ACTION:${JSON.stringify({ t: 10, type: "tap", target: "Pricing" })}`,
+  ].join("\n") + "\n");
+  const journey = journeyFromCapture(dir, { name: "Coach sets up a profile" });
+  assert.deepEqual(journey.flow.steps, [
+    { wait_for: "Sign in" },
+    { login: { email: "$TEST_EMAIL", password: "$TEST_PASSWORD" } },
+    { wait_for: "Set up your profile" },
+    { tap: "Area" },
+    { tap: "Hours" },
+    { assert_screen: "When do you coach?" },
+  ]);
+  assert.doesNotMatch(journey.yaml, /Marketing home|Pricing/, "nothing after the jump is claimed as proven");
 });

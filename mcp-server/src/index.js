@@ -30,6 +30,7 @@ const workspaceRoot = (() => {
 })();
 const scriptsDir = path.join(repoRoot, "scripts");
 import { writeCaptureProvenance, readCaptureProvenance, captureBelongsToProject, provenanceLabel } from "./capture-provenance.js";
+import { findSignInSubmit } from "./sign-in.js";
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
 // The old alias remains a read-only fallback; unset repository development stays local.
 const tappHome = (process.env.TAPP_HOME || "").trim();
@@ -1145,10 +1146,10 @@ async function sessionAct(cmd) {
           } else {
             await email.fill(emailValue);
             await password.fill(passwordValue);
-            const submit = session.page.getByRole("button", { name:/sign in|log in|login|continue|submit/i }).first();
-            if (!(await submit.isVisible().catch(() => false))) { status = "not_found"; detail = "Could not identify a sign-in control"; }
+            const submit = await findSignInSubmit(session.page);
+            if (!submit) { status = "not_found"; detail = "Could not identify a sign-in control"; }
             else {
-              await submit.click();
+              await submit.locator.click();
               await session.page.waitForTimeout(500);
               if (await password.isVisible().catch(() => false)) { status = "still_on_login"; detail = "Submit left the app on the login screen"; }
             }

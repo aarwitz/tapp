@@ -169,29 +169,23 @@ test("a terse or visual web page is not mislabeled as blank", () => {
   assert.equal(webPageAppearsBlank({ textLen: 0, controlCount: 0, visualContentCount: 0 }), true);
 });
 
-test("web login submits a semantic SPA button even when it is outside a form", async () => {
+test("web login presses the shared sign-in control, and previews it when watching", async () => {
+  // The rule itself lives in mcp-server/src/sign-in.js and is measured against real page shapes
+  // in tests/sign-in.test.js; what this pins is that the explorer goes through it.
   let clicked = false;
   let previewed = false;
-  const hidden = { first() { return this; }, async isVisible() { return false; } };
-  const semantic = {
-    first() { return this; },
-    async isVisible() { return true; },
-    async click() { clicked = true; },
-  };
+  const button = { async click() { clicked = true; } };
   const page = {
-    locator() { return hidden; },
-    getByRole(role, options) {
-      assert.equal(role, "button");
-      assert.match("Sign in", options.name);
-      return semantic;
+    async evaluate() {
+      return [{ index: 0, name: "Forgot password?", visible: true, disabled: false, after: true },
+        { index: 1, name: "Open My Profile", visible: true, disabled: false, after: true }];
     },
+    locator() { return { nth(index) { assert.equal(index, 1, "the product-named button, not the recovery one"); return button; } }; },
   };
-  assert.equal(await submitWebLogin(page, async (locator) => {
-    assert.equal(locator, semantic);
-    previewed = true;
-  }), true);
+  assert.equal(await submitWebLogin(page, async (locator) => { assert.equal(locator, button); previewed = true; }), true);
   assert.equal(previewed, true);
   assert.equal(clicked, true);
+  assert.equal(await submitWebLogin({ async evaluate() { return []; }, locator() { throw new Error("nothing to press"); } }), false);
 });
 
 test("SPA screen identity prefers the visible h1 over a static document title", () => {
@@ -640,4 +634,29 @@ test("exploration stops at a sign-in, asks, continues, and keeps the session", {
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("a screen is named by the heading a person can see, the way the flow runner checks it", { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 90_000 }, async (t) => {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); } catch { return t.skip("playwright not installed"); }
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    // A wizard that keeps its sign-in headline in the DOM and hides it. The explorer used to go
+    // on calling every later screen "Build your profile in minutes", so every kept journey ended
+    // on an assertion the runner could never confirm. Found by filming the product.
+    await page.setContent(`<!doctype html><title>Coach Profile Setup</title>
+      <h1 style="display:none">Build your profile in minutes</h1><h1>Where do you coach?</h1>`, { waitUntil: "domcontentloaded" });
+    const seen = await page.evaluate(() => {
+      const shown = (el) => {
+        if (!el.getClientRects().length) return false;
+        const style = getComputedStyle(el);
+        return style.visibility !== "hidden" && style.display !== "none";
+      };
+      const h1 = Array.from(document.querySelectorAll("h1")).find(shown);
+      return (h1 ? h1.innerText || h1.textContent || "" : "").replace(/\s+/g, " ").trim();
+    });
+    assert.equal(seen, "Where do you coach?");
+    assert.equal(webScreenTitle({ heading: seen, title: "Coach Profile Setup" }, "/"), "Where do you coach?");
+  } finally { await browser.close(); }
 });
