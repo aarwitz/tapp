@@ -56,6 +56,7 @@
         <label class="prompt-field"><span class="sr-only">Website, repository, folder, or build</span><input id="prompt-input" name="input" placeholder="A website URL, a GitHub repo, a folder on this Mac, a bundle id, an .app or .apk…" spellcheck="false" required></label>
         <button class="primary prompt-go" type="submit" id="prompt-start" aria-label="Start">→</button>
       </form>
+      <div class="platform-strip" id="platform-strip" hidden></div>
       <ul class="prompt-suggestions" aria-label="Examples">
         <li><button type="button" data-kind="url" data-prompt="https://example.com"><span>⌁</span><b>https://example.com</b><small>audit a website read-only — safe on production, nothing is clicked</small></button></li>
         <li><button type="button" data-kind="path" data-prompt="~/code/my-app"><span>⌘</span><b>~/code/my-app</b><small>open a repo folder on this Mac — detects iOS, Android and web targets, builds locally</small></button></li>
@@ -89,6 +90,7 @@
       <nav class="primary-nav" aria-label="Product navigation">
         <button data-view="overview" class="active"><span><svg><use href="#i-grid"/></svg></span>Overview</button>
         <button data-view="runs"><span><svg><use href="#i-play"/></svg></span>Runs <i id="run-count" class="zero">0</i></button>
+        <button data-view="platforms"><span><svg><use href="#i-grid"/></svg></span>Platforms</button>
         <button data-view="admin" id="admin-nav" class="hidden"><span><svg><use href="#i-grid"/></svg></span>Admin</button>
       </nav>
       <div class="sidebar-project">
@@ -166,6 +168,10 @@
         </section>
       </section>
 
+      <section class="workspace-view" data-view-panel="platforms">
+        <div class="view-heading simple"><div><p class="eyebrow">Platforms</p><h1>What tapp can drive</h1><p>tapp is one engine with a driver per platform. This page says what this Studio can start right now, and where the rest runs.</p></div></div>
+        <div id="platform-list"><div class="empty">Checking this machine…</div></div>
+      </section>
       <section class="workspace-view" data-view-panel="admin">
         <div class="command-bar"><div><h1>Admin</h1><p>Everything this deployment knows about itself. Never a credential — those are encrypted and are not decrypted to be looked at.</p></div></div>
         <div id="admin-body"><div class="empty">Loading…</div></div>

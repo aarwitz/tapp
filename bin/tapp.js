@@ -262,6 +262,28 @@ function repeatedFlagValues(argv, name) {
   return values;
 }
 
+// `--platform windows` used to be indistinguishable from `--platform wbe`: both got
+// "must be ios|android|web", which tells someone who read runtapp.com's Windows card that they
+// typed it wrong. They did not — tapp has no driver for it yet. Say which of the two it is.
+const DRIVEN_PLATFORMS = ["ios", "android", "web"];
+const DECLARED_WITHOUT_DRIVER = {
+  windows: "Windows desktop applications (WPF, WinForms, WinUI)",
+  macos: "macOS desktop applications",
+  mac: "macOS desktop applications",
+  desktop: "desktop applications",
+};
+function refusePlatform(platform) {
+  const described = DECLARED_WITHOUT_DRIVER[String(platform || "").toLowerCase()];
+  if (described) {
+    console.error(`❌ tapp has no driver for ${described} yet, so there is nothing to run here.`);
+    console.error("   Early runs are set up with us while the driver lands: hello@runtapp.com");
+    console.error("   Today tapp drives: web (anywhere), iOS (macOS + Xcode), Android (adb).");
+  } else {
+    console.error("❌ --platform must be ios|android|web");
+  }
+  process.exit(2);
+}
+
 function iosLaunchOptions(flags, argv) {
   const appLaunchArgs = repeatedFlagValues(argv, "launch-arg");
   let appLaunchEnv;
@@ -835,7 +857,7 @@ switch (command) {
         process.exit(2);
       }
     }
-    if (!["ios", "android", "web"].includes(platform)) { console.error("❌ --platform must be ios|android|web"); process.exit(2); }
+    if (!DRIVEN_PLATFORMS.includes(platform)) refusePlatform(platform);
     const engine = await engineImport();
     let started = null;
     try {
@@ -997,10 +1019,7 @@ switch (command) {
       }
     }
     const platform = requestedPlatform(flags, target);
-    if (!["ios", "android", "web"].includes(platform)) {
-      console.error("❌ --platform must be ios|android|web");
-      process.exit(2);
-    }
+    if (!DRIVEN_PLATFORMS.includes(platform)) refusePlatform(platform);
     if (platform === "ios") requireMacFor("iOS testing");
     if (flags.watch === true && platform !== "web") {
       console.error("❌ --watch is currently available for web exploration only");
@@ -1341,7 +1360,7 @@ switch (command) {
     catch (error) { console.error(`❌ ${error.message}`); process.exit(2); }
     const platform = typeof flags.platform === "string" ? flags.platform.toLowerCase()
       : verb === "run" ? (typeof flags.url === "string" ? "web" : typeof flags["app-id"] === "string" || typeof flags.apk === "string" ? "android" : "ios") : "";
-    if (platform && !["ios", "android", "web"].includes(platform)) { console.error("❌ --platform must be ios|android|web"); process.exit(2); }
+    if (platform && !DRIVEN_PLATFORMS.includes(platform)) refusePlatform(platform);
     let grounding = { errors: [], warnings: [] };
     let groundingMap = null;
     let groundingMapPath = null;
@@ -1588,7 +1607,7 @@ switch (command) {
     try { contract = await loadReleaseContractFile(contractPath); }
     catch (error) { console.error(`❌ ${error.message}`); process.exit(2); }
     const platform = String(flags.platform || (contract.platforms.length === 1 ? contract.platforms[0] : "")).toLowerCase();
-    if (platform && !["ios", "android", "web"].includes(platform)) { console.error("❌ --platform must be ios|android|web"); process.exit(2); }
+    if (platform && !DRIVEN_PLATFORMS.includes(platform)) refusePlatform(platform);
     let grounding = { errors: [], warnings: [] };
     let groundingMap = null;
     let groundingMapPath = "";
@@ -1753,7 +1772,7 @@ switch (command) {
       }
       const platform = String(flags.platform || "ios").toLowerCase();
       if (!["ios", "android", "web"].includes(platform)) {
-        console.error("❌ --platform must be ios|android|web");
+        refusePlatform(platform);
         process.exit(2);
       }
       const out = path.resolve(typeof flags.out === "string" ? flags.out : path.join(".tapp", "ui-map.json"));

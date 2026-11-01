@@ -3206,7 +3206,11 @@ async function handleTool(name, args = {}) {
       : { code: 1, stdout: "", stderr: "Xcode not found" };
     const bootedLine = (simctl.stdout || "").split("\n").find((l) => /\(Booted\)/.test(l));
     const bootedName = bootedLine ? bootedLine.trim().replace(/\s*\(.*$/, "") : null;
-    const adb = await runCommand("adb", ["devices"]);
+    // The SDK is commonly an unlinked Homebrew cask with ANDROID_HOME unset, so a bare `adb`
+    // reports "not found" on machines where `tapp explore --platform android` works. Use the
+    // driver's own resolver, which is what the run will use (resolveAdbPath).
+    const { resolveAdbPath } = await import("./android-driver.js");
+    const adb = await runCommand(resolveAdbPath() || "adb", ["devices"]);
     const androidDevice = adb.code === 0
       ? (adb.stdout || "").split("\n").find((line) => /\tdevice\s*$/.test(line))
       : null;

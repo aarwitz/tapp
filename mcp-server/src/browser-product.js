@@ -24,6 +24,7 @@ import { accessConfig, createAccessVerifier } from "./access-jwt.js";
 import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider } from "./oauth.js";
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 import { AlertStore, alertForChange, alertMessage, deliverAlert } from "./alerts.js";
+import { platformStates, selfHostAnswer, PLATFORM_TARGETS, hostToolchain } from "./platforms.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -134,6 +135,7 @@ const OAUTH_STATE_COOKIE = "tapp_oauth_state";
 function anonymousAllows(method, pathname) {
   if (method === "GET") {
     if (pathname === "/" || pathname === "/admin" || pathname === "/api/version" || pathname === "/api/session" || pathname === "/api/audits") return true;
+    if (pathname === "/api/platforms") return true;
     if (pathname.startsWith("/assets/")) return true;
     if (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/files$/.test(pathname)) return true;
     if (/^\/evidence\/captures\//.test(pathname)) return true;
@@ -150,6 +152,9 @@ function anonymousAllows(method, pathname) {
   // repo into the landing page, which is how five of its six examples used to dead-end.
   // `explore` is listed so a visitor receives the honest "run this on your own machine" answer
   // from the handler, rather than a bare 401 that reads as broken.
+  // Saying "I would use this for Android" is the one piece of demand a stranger can give us,
+  // and the reason to ask is strongest exactly when the answer was "not from here".
+  if (method === "POST" && pathname === "/api/platforms/interest") return true;
   return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build", "/api/operations/explore"].includes(pathname);
 }
 
@@ -461,9 +466,9 @@ function runnerSummary({ hosted = false } = {}) {
     { id:"managed-android", platform:"android", label:"Managed Android runner", status:"unavailable", remediation:"The hosted customer adapter is not yet connected to a lease-backed Android runner." },
     { id:"hosted-web", platform:"web", label:"Hosted Chromium", status:"needs-check", remediation:"Tapp verifies the isolated Chromium runtime when the selected web target starts." },
   ];
-  const executable = (name) => String(process.env.PATH || "").split(path.delimiter).some((dir) => dir && fs.existsSync(path.join(dir, name)));
-  const ios = process.platform === "darwin" && (fs.existsSync("/usr/bin/xcodebuild") || executable("xcodebuild"));
-  const android = executable(process.platform === "win32" ? "adb.exe" : "adb") || !!process.env.ANDROID_SDK_ROOT || !!process.env.ANDROID_HOME;
+  // One probe for the whole product, so the runner list and the platform surface can never
+  // disagree about whether this machine has Xcode or adb (mcp-server/src/platforms.js).
+  const { ios, android } = hostToolchain();
   return [
     { id: "local-ios", platform: "ios", label: "Local Xcode simulator", status: ios ? "available" : "unavailable", remediation: ios ? "" : "Use a macOS runner with Xcode for iOS." },
     { id: "local-android", platform: "android", label: "Local Android runtime", status: android ? "available" : "needs-check", remediation: android ? "Start or connect an emulator/device." : "Install Android SDK platform-tools or connect a managed Android runner." },
@@ -1194,6 +1199,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           },
           recentRuns: runs.slice(0, 40),
           totalRuns: runs.length,
+          // What people wanted that this deployment could not do. "Asked for" is someone
+          // pressing "tell me when tapp can run this"; "turned away" is someone who actually
+          // pointed tapp at a target it could not start here. The second is the stronger
+          // signal, because they tried.
+          demand: PLATFORM_TARGETS.map((target) => ({
+            id: target.id,
+            label: target.label,
+            state: platformStates({ hosted }).find((entry) => entry.id === target.id)?.state || "unknown",
+            askedFor: events.filter((entry) => entry.event === "platform.asked" && entry.platform === target.id).length,
+            turnedAway: events.filter((entry) => entry.event === "self-host.answered" && entry.platform === target.id).length,
+          })),
         });
         return;
       }
@@ -1246,6 +1262,28 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         json(response, 200, { ok: accounts.revokeToken(account.id, revokeTokenMatch[1]) });
         return;
       }
+      // What tapp drives, and what this particular Studio can start. Public, because the honest
+      // answer to "does this do iOS?" is yes-but-not-from-here, and a visitor who cannot see
+      // that concludes tapp is a website checker (ADR-0010).
+      if (request.method === "GET" && url.pathname === "/api/platforms") {
+        json(response, 200, { hosted, platforms: platformStates({ hosted }) });
+        return;
+      }
+      // "I would use this for Android." The only demand signal a stranger can give us, and it
+      // matters most at the moment the answer was "not from here". No contact details are taken:
+      // this is a counter, not a lead form, and the usage journal keeps no handle.
+      if (request.method === "POST" && url.pathname === "/api/platforms/interest") {
+        guardMutation(request);
+        const asked = await readJsonBody(request);
+        const wanted = String(asked?.platform || "");
+        if (!PLATFORM_TARGETS.some((target) => target.id === wanted)) {
+          json(response, 400, { error: `Unknown platform '${wanted}'` });
+          return;
+        }
+        logUsage("platform.asked", { platform: wanted, ...(account ? { account: account.id.slice(0, 8) } : { visitor: String(visitorId || "").slice(0, 8) }) });
+        json(response, 200, { ok: true, platform: wanted });
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/api/session") {
         if (account) {
           json(response, 200, {
@@ -1254,6 +1292,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             access: "account", email: account.email, signInProvider, signInOptions, viaToken, admin: isAdmin(account),
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
+            // What tapp drives, and what THIS machine can start. The Studio shows all of it:
+            // hiding iOS and Android is what made a cross-platform product look like a website
+            // checker (ADR-0010).
+            platforms: platformStates({ hosted: true }),
           });
           return;
         }
@@ -1262,15 +1304,18 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
             access: "anonymous", signInProvider, signInOptions,
-            // The prompt screen offers folders, bundle ids and builds. None of them can work in
-            // a hosted Studio — there is no Mac, no simulator and no access to the visitor's
-            // disk — so say so here rather than letting the UI offer them.
+            // The prompt screen offers folders, bundle ids and builds. None of them can be
+            // STARTED in a hosted Studio — there is no Mac, no simulator and no access to the
+            // visitor's disk. `accepts` says what can start here; `platforms` says what tapp
+            // drives and where, because a visitor deserves to know the product does phones
+            // even when this deployment cannot (ADR-0010).
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
+            platforms: platformStates({ hosted: true }),
           });
           return;
         }
-        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }) });
+        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }), platforms: platformStates({ hosted }) });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
@@ -1413,13 +1458,21 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (operation === "explore-build") {
         if (anonymous) {
           const asked = classifyPrompt(body.input);
-          logUsage("self-host.answered", { visitor: visitorId.slice(0, 8), kind: asked.kind });
-          const where = asked.kind === "apk" ? "an Android device or emulator" : "a Mac with an iOS simulator";
-          json(response, 200, { kind: "self-host", target: asked.value, command: "npx -y @aarwitz/tapp@latest app",
-            message: `Running ${asked.value || "a build"} needs ${where}, which the cloud does not have. Start the Studio on that machine: npx -y @aarwitz/tapp@latest app` });
+          const wanted = asked.kind === "apk" ? "android" : "ios";
+          logUsage("self-host.answered", { visitor: visitorId.slice(0, 8), kind: asked.kind, platform: wanted });
+          json(response, 200, selfHostAnswer(wanted, asked.value, { hosted: true }));
           return;
         }
-        if (hosted) throw Object.assign(new Error("Builds are explored on the machine that has the simulator; run the Studio locally"), { statusCode: 400 });
+        if (hosted) {
+          // A signed-in account used to get a bare 400 here, which reads as "tapp is broken"
+          // rather than "tapp does this, just not on a machine without a simulator". Give the
+          // same structured answer a visitor gets: where it runs, and the command to get there.
+          const asked = classifyPrompt(body.input);
+          const wanted = asked.kind === "apk" ? "android" : "ios";
+          logUsage("self-host.answered", { account: account?.id?.slice(0, 8), kind: asked.kind, platform: wanted });
+          json(response, 200, selfHostAnswer(wanted, asked.value, { hosted: true }));
+          return;
+        }
         const prompt = classifyPrompt(body.input);
         if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a simulator .app, or an .apk"), { statusCode: 400 });
         const job = startJob(operation, async (progress) => {

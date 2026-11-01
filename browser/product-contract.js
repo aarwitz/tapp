@@ -6,6 +6,9 @@ export const customerProductContract = Object.freeze({
   schemaVersion: 2,
   product: "Tapp",
   interface: "customer-browser",
+  // What tapp has a driver for. macOS and Windows desktop applications are shown in the
+  // Studio's Platforms view as having no driver yet — declared honestly, never counted here,
+  // because this list is what the engine can actually drive (ADR-0010).
   targetPlatforms: ["ios", "android", "web"],
   // A repository is opened by path (`tapp app /path/to/repo`); a website by URL in the Studio.
   repositorySources: ["local-path", "github"],
@@ -15,7 +18,9 @@ export const customerProductContract = Object.freeze({
     { id: "runs", label: "Runs", capabilities: ["run-history", "run-detail", "evidence-page", "website-audit"] },
     // Only an owner of this deployment ever sees this one (TAPP_ADMIN_EMAILS); to anybody else
     // the nav item is absent and the route is a 404.
-    { id: "admin", label: "Admin", capabilities: ["deployment-usage", "account-list"] },
+    // Says what tapp drives, what THIS Studio can start, and what to do about the difference.
+    { id: "platforms", label: "Platforms", capabilities: ["platform-matrix", "self-host-command", "platform-interest"] },
+    { id: "admin", label: "Admin", capabilities: ["deployment-usage", "account-list", "platform-demand"] },
   ],
   operations: ["initialize", "session-start", "session-act", "session-save-flow", "session-end", "gate", "audit"],
   invariants: [
@@ -25,5 +30,6 @@ export const customerProductContract = Object.freeze({
     "Repositories are opened from the machine the Studio runs on; nothing is uploaded or cloned by the Studio.",
     "Deterministic replay and ordinary merge decisions are keyless.",
     "The admin view reports counts about this deployment; credentials are encrypted and are never decrypted to be shown.",
+    "The Platforms view states what this machine can start, computed from the machine; a platform with no driver says so in those words and is never described as needing different hardware.",
   ],
 });

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.34.0
+
+**Every platform tapp drives, said out loud.** The hosted Studio read as a website checker
+because it was written that way: it deleted every prompt suggestion it could not start, rewrote
+the box to "A website URL…", and answered a signed-in account's bundle id with a bare HTTP 400.
+tapp drives web, iOS and Android from one engine, and the Studio is the same program on a laptop
+— where iOS runs today — as on a server with no phones attached to it.
+
+- A **Platforms** view, and a strip of platform chips under "What should tapp test?", in every
+  mode. Each platform is in one of three states, computed from the machine the Studio is on:
+  **ready here**, **needs your machine** (with the command that opens the same Studio on one that
+  will), or **no driver yet**.
+- **A platform with no driver never reads as a hardware problem.** macOS and Windows desktop
+  applications have no driver, and tapp says so in those words, with no command — because no
+  command would help. Buying a Windows laptop does not make `--platform windows` work.
+- **The deployment has a say, not just the disk.** A public Studio on a Mac has Xcode under it
+  but only starts website runs, so it reports iOS as needing your machine rather than promising a
+  run it will then refuse.
+- Every "this cannot start here" answer is now the same structured one — which platform, which
+  machine, which command — for visitors and signed-in accounts alike.
+- `tapp explore --platform windows` now says there is no driver yet, instead of
+  `--platform must be ios|android|web`, which told anyone who read the Windows card on
+  runtapp.com that they had made a typo.
+- Wanting a platform is counted, per platform, in the owner's admin view, alongside how many
+  people were actually turned away. No contact details are taken: a counter, not a lead form.
+- The MCP `tapp_doctor` uses the driver's own `adb` resolver, so it no longer reports Android
+  unavailable on machines where a run finds it.
+
+See `docs/decisions/ADR-0010-every-platform-in-one-studio.md`.
+
 ## 0.33.0
 
 **tapp can sign in to your app.** This release came out of filming the whole flow against a real

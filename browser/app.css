@@ -606,3 +606,28 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .signin-or::before, .signin-or::after { content:""; flex:1; height:1px; background:var(--line); }
 .run-stats .bad strong { color:#f87171; }
 #admin-body .actor-row { grid-template-columns: 1.5fr 1fr 1fr; }
+
+/* Platforms — what tapp drives, and what this machine can start (ADR-0010).
+   Three states, and the "no driver yet" one must never look like a configuration problem the
+   reader could fix by installing something. */
+.platform-strip { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:14px 0 0; justify-content:center; }
+.platform-chip { display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px; font-size:12px;
+  border:1px solid var(--tapp-border); color:var(--tapp-text-soft); background:var(--tapp-panel); }
+.platform-chip i { width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+.platform-chip.ready { color:var(--tapp-green); border-color:rgba(63,185,80,.38); }
+.platform-chip.needs-machine { color:var(--tapp-amber-soft); border-color:rgba(210,153,34,.38); }
+.platform-chip.pilot { color:var(--tapp-text-faint); }
+.platform-more { font-size:12px; }
+
+#platform-list { display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); }
+.platform-card .platform-summary { margin:0 0 6px; }
+.platform-card .platform-how { margin:0 0 10px; color:var(--tapp-text-soft); font-size:13px; }
+.platform-command { margin:0 0 10px; padding:9px 11px; border-radius:8px; background:var(--tapp-panel-2);
+  border:1px solid var(--tapp-border); overflow-x:auto; font-size:12.5px; }
+.platform-state { font-size:11px; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--tapp-border); color:var(--tapp-text-soft); white-space:nowrap; }
+.platform-state.ready { color:var(--tapp-green); border-color:rgba(63,185,80,.38); }
+.platform-state.needs-machine { color:var(--tapp-amber-soft); border-color:rgba(210,153,34,.38); }
+
+/* A suggestion this Studio cannot start is dimmed, not deleted: pressing it still answers. */
+.prompt-suggestions [data-kind].elsewhere { opacity:.62; }

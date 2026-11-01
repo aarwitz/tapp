@@ -71,3 +71,26 @@ test("shipped native fixtures use Tapp labels and identifiers", () => {
   assert.match(demo, /io\.github\.aarwitz\.tapp\.demoapp/);
   assert.match(harness, /io\.github\.aarwitz\.tapp\.harness/);
 });
+
+test("every test file is either run by `npm test` or deliberately excluded", () => {
+  // `npm test` is an explicit file list, so a new test file runs only if someone remembers to
+  // add it. Two did not: tests/sign-in.test.js shipped in 0.33.0 and never ran in CI. A test
+  // nobody runs is worse than no test, because it reads as cover. Name the exclusions instead.
+  const EXCLUDED = {
+    "tests/ios-inspection-e2e.test.js": "needs a booted iOS simulator",
+    "tests/browser-journey.test.js": "drives a real browser end to end; run it directly",
+    "tests/browser-native-journey.test.js": "drives a real browser end to end; run it directly",
+    "tests/web-explorer-evidence.test.js": "drives a real browser end to end; run it directly",
+    "tests/business-check.test.js": "not in the suite (pre-existing)",
+    "tests/business-observation.test.js": "not in the suite (pre-existing)",
+    "tests/feedback.test.js": "not in the suite (pre-existing)",
+    "tests/feedback-triage-0917.test.js": "superseded by tests/feedback-triage-0919.test.js",
+    "tests/mcp-surface.test.js": "not in the suite (pre-existing)",
+  };
+  const listed = new Set(pkg.scripts.test.match(/tests\/[A-Za-z0-9.-]+\.test\.js/g) || []);
+  const onDisk = fs.readdirSync(new URL("../tests", import.meta.url)).filter((name) => name.endsWith(".test.js")).map((name) => `tests/${name}`);
+  const unaccounted = onDisk.filter((file) => !listed.has(file) && !(file in EXCLUDED));
+  assert.deepEqual(unaccounted, [], "add these to the `test` script, or to EXCLUDED above with the reason");
+  const staleExclusions = Object.keys(EXCLUDED).filter((file) => !onDisk.includes(file) || listed.has(file));
+  assert.deepEqual(staleExclusions, [], "these are excluded but are run or no longer exist");
+});

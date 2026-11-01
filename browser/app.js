@@ -79,6 +79,61 @@ function operationPayload(extra = {}) {
   };
 }
 
+// ——— Platforms ————————————————————————————————————————————————————————————————————————
+// tapp drives websites, iOS simulators and Android devices, and the Studio is the same program
+// wherever it runs. A hosted Studio on a Linux box cannot start an iOS run, which is a fact
+// about that machine, not about the product — so say both, and give the command that fixes it.
+// The states come from the server, computed from the machine it is on (mcp-server/src/platforms.js).
+const PLATFORM_STATE_LABEL = { ready: "Ready here", "needs-machine": "Needs your machine", pilot: "No driver yet" };
+
+function platformsFromSession() {
+  return Array.isArray(state.session?.platforms) ? state.session.platforms : [];
+}
+
+// A compact answer to "what does this thing drive?", on the first screen anyone sees.
+function renderPlatformStrip() {
+  const strip = $("#platform-strip");
+  if (!strip) return;
+  const platforms = platformsFromSession();
+  strip.hidden = platforms.length === 0;
+  if (!platforms.length) return;
+  strip.innerHTML = `${platforms.map((platform) => `
+    <span class="platform-chip ${esc(platform.state)}" title="${esc(platform.summary)}">
+      <i></i>${esc(platform.label)}
+    </span>`).join("")}
+    <button type="button" class="quiet platform-more" data-platforms-open>What tapp can drive →</button>`;
+}
+
+function renderPlatforms() {
+  const node = $("#platform-list");
+  if (!node) return;
+  const platforms = platformsFromSession();
+  if (!platforms.length) { node.innerHTML = `<div class="empty">Checking this machine…</div>`; return; }
+  node.innerHTML = platforms.map((platform) => `
+    <article class="panel platform-card ${esc(platform.state)}">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">${esc(platform.give)}</p><h2>${esc(platform.label)}</h2></div>
+        <span class="platform-state ${esc(platform.state)}">${esc(PLATFORM_STATE_LABEL[platform.state] || platform.state)}</span>
+      </div>
+      <p class="platform-summary">${esc(platform.summary)}</p>
+      <p class="platform-how">${esc(platform.how)}</p>
+      ${platform.command ? `<pre class="platform-command"><code>${esc(platform.command)}</code></pre>` : ""}
+      ${platform.state === "ready" ? ""
+        : platform.state === "pilot"
+          // No driver: the ask is "we would like one", and the honest reply is a conversation.
+          ? `<button type="button" class="quiet" data-platform-interest="${esc(platform.id)}">Tell us about your ${esc(platform.label.replace(/ app$/, ""))} app</button>`
+          // A driver exists; what is missing is a machine. The ask is "run it for me".
+          : `<button type="button" class="quiet" data-platform-interest="${esc(platform.id)}">I want tapp to run this for me</button>`}
+    </article>`).join("");
+}
+
+async function registerPlatformInterest(id) {
+  try {
+    await api("/api/platforms/interest", { method:"POST", body: JSON.stringify({ platform: id }) });
+    toast("Noted. That is the signal we use to decide what to build next.");
+  } catch (error) { toast(error.message, true); }
+}
+
 function activateView(view) {
   if (!customerProductContract.views.some((item) => item.id === view)) view = "overview";
   state.activeView = view;
@@ -147,16 +202,25 @@ async function signOut() {
 function applyAccessMode() {
   const session = state.session || {};
   renderAccount();
+  // Before the early return below: a local Studio has a platform surface too, and it is the
+  // one where most of it says "ready".
+  renderPlatformStrip();
+  renderPlatforms();
   if (session.access !== "anonymous" && session.access !== "account") return;
   const signedIn = session.access === "account";
   const accepts = new Set(session.accepts || ["url"]);
+  // A target this Studio cannot START is still a thing tapp does. It used to be deleted from
+  // the screen, which is how a cross-platform product came to look like a website checker: the
+  // hosted Studio erased every mention of iOS, Android and folders. Keep them, mark them, and
+  // let the answer be "here is where that runs" (ADR-0010).
   for (const button of document.querySelectorAll("[data-kind]")) {
     const kind = button.dataset.kind;
     const usable = kind === "url" ? accepts.has("url") : accepts.has(kind);
-    button.closest("li")?.classList.toggle("hidden", !usable);
+    button.closest("li")?.classList.remove("hidden");
+    button.classList.toggle("elsewhere", !usable);
   }
   const input = $("#prompt-input");
-  if (input) input.placeholder = "A website URL…";
+  if (input) input.placeholder = accepts.has("path") ? input.placeholder : "A website URL — or an .app, .apk or repo to be told where it runs…";
   // Everything that only means something against a source repository: a target to build, a
   // runner, a release gate, a decision. A hosted visitor auditing a URL has none of them, and
   // showing the empty frames makes a working run look like a broken one.
@@ -169,8 +233,8 @@ function applyAccessMode() {
   if (!state.headingOwnedByRun) setHeading("tapp", signedIn ? "Give it a website. If there is a sign-in, I will ask you for a test account and remember it." : "Give it a public website and it will audit the pages read-only.");
   const note = $("#privacy-note-detail");
   if (note) note.textContent = signedIn
-    ? "Websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app"
-    : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine need tapp there: npx -y @aarwitz/tapp@latest app";
+    ? "Websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again. iOS, Android and folders on your own machine run the same Studio there: npx -y @aarwitz/tapp@latest app"
+    : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine run the same Studio there: npx -y @aarwitz/tapp@latest app";
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
   $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
   $("#agent-panel")?.classList.toggle("hidden", !signedIn);
@@ -269,6 +333,11 @@ function renderAdmin() {
     <section class="panel section">
       <div class="section-heading compact"><div><p class="eyebrow">People</p><h2>Who has been here <i class="zero">${activity.people.length}</i></h2><p>Signed-in accounts, and anonymous visitors by the first eight characters of their cookie — enough to tell two people apart, not enough to be a handle. No IP addresses are kept.</p></div></div>
       ${activity.people.length ? activity.people.map((p) => `<div class="actor-row"><span><strong>${p.kind === "account" ? "account" : "visitor"} ${esc(p.id.split(":")[1])}</strong><br><small>first seen ${esc(compactDate(p.first))} · last ${esc(compactDate(p.last))}</small></span><span><small>${esc(Object.entries(p.events).map(([k, v]) => `${k.replace(/\./g, " ")} ×${v}`).join(" · ").slice(0, 90) || "—")}</small></span><span><small>${esc(p.hosts.join(", ") || "—")}</small></span></div>`).join("") : '<div class="empty">Nobody yet. Activity is recorded from the release that introduced this log.</div>'}
+    </section>
+
+    <section class="panel section">
+      <div class="section-heading compact"><div><p class="eyebrow">Demand</p><h2>What people wanted that this Studio could not do</h2><p>“Turned away” is somebody who actually pointed tapp at a target it could not start here — the stronger signal, because they tried. “Asked for” is somebody pressing the button on the Platforms page.</p></div></div>
+      ${(data.demand || []).length ? (data.demand).map((platform) => `<div class="actor-row"><span><strong>${esc(platform.label)}</strong><br><small>${esc(PLATFORM_STATE_LABEL[platform.state] || platform.state)}</small></span><span><small>${esc(String(platform.turnedAway))} turned away</small></span><span><small>${esc(String(platform.askedFor))} asked for</small></span></div>`).join("") : '<div class="empty">Nothing recorded yet.</div>'}
     </section>
 
     <section class="panel section">
@@ -1086,6 +1155,10 @@ async function auditWebsite(url) {
 document.addEventListener("click", (event) => {
   const viewButton = event.target.closest("[data-view]");
   if (viewButton && $("#product-shell").contains(viewButton)) activateView(viewButton.dataset.view);
+  // "What tapp can drive" is reachable from the first screen, before there is any project.
+  if (event.target.closest("[data-platforms-open]")) { showProduct(); activateView("platforms"); renderPlatforms(); }
+  const interest = event.target.closest("[data-platform-interest]");
+  if (interest) registerPlatformInterest(interest.dataset.platformInterest);
   const targetButton = event.target.closest("[data-target-id]");
   if (targetButton) {
     state.selectedTargetId = targetButton.dataset.targetId;

@@ -48,7 +48,7 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     assert.deepEqual(session.contract.repositorySources, ["local-path", "github"]);
     // Admin is declared so it can be opened at all (activateView refuses anything undeclared),
     // but it is shown only to an address listed in TAPP_ADMIN_EMAILS.
-    assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs", "admin"]);
+    assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs", "platforms", "admin"]);
     assert.equal(session.contract.operations.includes("audit"), true);
     assert.equal(session.contract.operations.includes("ci-install"), false);
     const rejected = await fetch(`${product.origin}/api/operations/initialize`, { method: "POST", headers: { cookie, origin: product.origin, "content-type": "application/json" }, body: "{}" });
@@ -1042,4 +1042,64 @@ test("an account is told where to be told, and tapp proves it can post before pr
     await product.close();
     if (previous === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous;
   }
+});
+
+test("a hosted Studio tells a visitor what tapp drives, and where the rest runs", async () => {
+  // The hosted Studio used to delete every mention of iOS, Android and local folders from the
+  // page, so the product read as a website checker. It can still only START web runs; what
+  // changed is that it now says so instead of pretending the rest does not exist (ADR-0010).
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-platforms-public-"));
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot });
+  let cookie = "";
+  const call = async (pathname, init = {}) => {
+    const response = await fetch(`${product.origin}${pathname}`, {
+      ...init, redirect: "manual",
+      headers: { ...(init.headers || {}), ...(cookie ? { cookie } : {}) },
+    });
+    const set = response.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0];
+    return response;
+  };
+  try {
+    assert.equal((await call("/")).status, 200);
+
+    // A stranger may read the matrix: it is the answer to "does this do iOS?".
+    const listed = await (await call("/api/platforms")).json();
+    assert.equal(listed.hosted, true);
+    assert.deepEqual(listed.platforms.map((entry) => entry.id), ["web", "ios", "android", "macos", "windows"]);
+    const byId = Object.fromEntries(listed.platforms.map((entry) => [entry.id, entry]));
+    assert.equal(byId.web.state, "ready");
+    assert.equal(byId.windows.state, "pilot");
+    assert.equal(byId.windows.command, "", "no command would make a missing driver work");
+
+    // The session carries the same matrix, so the first screen can show it without a second call.
+    const session = await (await call("/api/session")).json();
+    assert.deepEqual(session.accepts, ["url"], "what can START here is unchanged");
+    assert.deepEqual(session.platforms.map((entry) => entry.id), listed.platforms.map((entry) => entry.id));
+
+    // Saying "I would use this for Android" needs no account; it is the only demand signal a
+    // visitor can give, and it is worth most exactly when the answer was "not from here".
+    const csrf = session.csrfToken;
+    const interested = await call("/api/platforms/interest", {
+      method: "POST", headers: { "content-type": "application/json", "x-tapp-csrf": csrf, origin: "https://app.runtapp.com" },
+      body: JSON.stringify({ platform: "android" }),
+    });
+    assert.equal(interested.status, 200);
+    const refused = await call("/api/platforms/interest", {
+      method: "POST", headers: { "content-type": "application/json", "x-tapp-csrf": csrf, origin: "https://app.runtapp.com" },
+      body: JSON.stringify({ platform: "toaster" }),
+    });
+    assert.equal(refused.status, 400);
+
+    // A build is answered with where it runs, never with a bare failure.
+    const build = await call("/api/operations/explore-build", {
+      method: "POST", headers: { "content-type": "application/json", "x-tapp-csrf": csrf, origin: "https://app.runtapp.com" },
+      body: JSON.stringify({ input: "com.company.app" }),
+    });
+    assert.equal(build.status, 200);
+    const answer = await build.json();
+    assert.equal(answer.kind, "self-host");
+    assert.equal(answer.platform, "ios");
+    assert.match(answer.command, /npx -y @aarwitz\/tapp@latest app/);
+  } finally { await product.close(); }
 });
