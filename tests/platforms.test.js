@@ -5,13 +5,13 @@ import { PLATFORM_TARGETS, PLATFORM_STATES, SELF_HOST_COMMAND, hostToolchain, pl
 import { customerProductContract } from "../browser/product-contract.js";
 
 // A Linux box in a data centre: no Xcode, no adb. This is app.runtapp.com.
-const CLOUD = { hosted: true, platform: "linux", toolchain: { web: true, ios: false, android: false } };
+const CLOUD = { hosted: true, platform: "linux", toolchain: { web: true, ios: false, android: false, macos: false } };
 // A developer's Mac with the lot installed.
-const LAPTOP = { hosted: false, platform: "darwin", toolchain: { web: true, ios: true, android: true } };
+const LAPTOP = { hosted: false, platform: "darwin", toolchain: { web: true, ios: true, android: true, macos: true } };
 
 test("the hosted Studio says what tapp drives, not only what it can start", () => {
   const states = Object.fromEntries(platformStates(CLOUD).map((entry) => [entry.id, entry.state]));
-  assert.deepEqual(states, { web: "ready", ios: "needs-machine", android: "needs-machine", macos: "pilot", windows: "pilot" });
+  assert.deepEqual(states, { web: "ready", ios: "needs-machine", android: "needs-machine", macos: "needs-machine", windows: "pilot" });
   assert.deepEqual(readyPlatforms(CLOUD), ["web"], "only web can actually start there");
   // The whole point: iOS is present and described, not deleted. Erasing it is what made a
   // cross-platform product read as a website checker.
@@ -22,15 +22,15 @@ test("the hosted Studio says what tapp drives, not only what it can start", () =
 
 test("a laptop runs almost all of it, and says so", () => {
   const states = Object.fromEntries(platformStates(LAPTOP).map((entry) => [entry.id, entry.state]));
-  assert.deepEqual(states, { web: "ready", ios: "ready", android: "ready", macos: "pilot", windows: "pilot" });
-  assert.deepEqual(readyPlatforms(LAPTOP), ["web", "ios", "android"]);
+  assert.deepEqual(states, { web: "ready", ios: "ready", android: "ready", macos: "ready", windows: "pilot" });
+  assert.deepEqual(readyPlatforms(LAPTOP), ["web", "ios", "android", "macos"]);
   assert.equal(platformState("ios", LAPTOP).command, "", "nothing to go and do");
 });
 
 test("a platform with no driver never reads as a hardware problem the reader could fix", () => {
   // Buying a Windows machine would not help: there is no driver. Saying "needs your machine"
   // here would be a lie that costs somebody a laptop.
-  for (const id of ["windows", "macos"]) {
+  for (const id of ["windows"]) {
     const entry = platformState(id, LAPTOP);
     assert.equal(entry.state, "pilot");
     assert.match(entry.summary, /no .* driver yet/i);
@@ -38,7 +38,7 @@ test("a platform with no driver never reads as a hardware problem the reader cou
     assert.doesNotMatch(`${entry.summary} ${entry.how}`, /install|needs a Mac|needs a machine with/i);
   }
   // And it stays "pilot" on a Mac and on Windows alike, because the host is not the problem.
-  assert.equal(platformState("windows", { hosted: false, platform: "win32", toolchain: { web: true, ios: false, android: true } }).state, "pilot");
+  assert.equal(platformState("windows", { hosted: false, platform: "win32", toolchain: { web: true, ios: false, android: true, macos: false } }).state, "pilot");
 });
 
 test("every platform tapp has a driver for is one the contract declares, and vice versa", () => {
@@ -76,12 +76,12 @@ test("a public Studio never promises a run its own rules will refuse", () => {
   // A public Studio on a Mac has Xcode under it, but ADR-0008 lets a visitor start website
   // runs and nothing else. Reporting iOS as "ready" there would promise a run the server
   // answers with "run this on your machine" — the UI and the handler must agree.
-  const publicMac = { hosted: true, platform: "darwin", toolchain: { web: true, ios: true, android: true } };
+  const publicMac = { hosted: true, platform: "darwin", toolchain: { web: true, ios: true, android: true, macos: true } };
   const ios = platformState("ios", publicMac);
   assert.equal(ios.state, "needs-machine");
   assert.equal(ios.because, "not-exposed", "and it says the honest reason, not 'no Xcode here'");
   assert.match(ios.summary, /this machine could/);
   assert.deepEqual(readyPlatforms(publicMac), ["web"]);
   // The same machine, run as somebody's own Studio, starts all three.
-  assert.deepEqual(readyPlatforms({ ...publicMac, hosted: false }), ["web", "ios", "android"]);
+  assert.deepEqual(readyPlatforms({ ...publicMac, hosted: false }), ["web", "ios", "android", "macos"]);
 });

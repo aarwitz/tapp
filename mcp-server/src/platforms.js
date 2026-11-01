@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { resolveAdbPath } from "./android-driver.js";
+import { macAccessibilityTrusted } from "./macos-driver.js";
 
 /**
  * The states a platform can be in, worst-named-first so nobody mistakes one for another:
@@ -47,7 +48,7 @@ export const PLATFORM_TARGETS = Object.freeze([
   },
   {
     id: "macos", label: "macOS app", give: "A .app on your Mac",
-    driver: null, needs: "macOS",
+    driver: "accessibility", needs: "macOS, and the Accessibility permission",
     machine: "a Mac",
   },
   {
@@ -73,6 +74,10 @@ export function hostToolchain({ env = process.env, platform = process.platform }
     // cask with ANDROID_HOME unset, and the Studio must not say "no Android" about a machine
     // where `tapp explore` would happily find adb.
     android: platform === "linux" || platform === "darwin" || platform === "win32" ? Boolean(resolveAdbPath(env)) : false,
+    // Driven through the Accessibility API, which needs a permission nothing can grant for
+    // itself. A Mac without it is not ready, and saying otherwise would promise a run that
+    // fails on its first action.
+    macos: platform === "darwin" && macAccessibilityTrusted(),
     // Chromium is fetched on demand, so web is reachable from any host; whether this particular
     // one has it unpacked is checked when the run starts, which is where the error belongs.
     web: true,
@@ -91,14 +96,15 @@ export const SELF_HOST_COMMAND = "npx -y @aarwitz/tapp@latest app";
 export function platformStates({ hosted = false, env = process.env, platform = process.platform, toolchain = null } = {}) {
   const has = toolchain || hostToolchain({ env, platform });
   return PLATFORM_TARGETS.map((target) => {
-    // No driver is no driver, on any host. This must never read as "you need a different machine",
-    // because buying the machine would not help.
+    // No driver is no driver, on any host — so this must not read as "buy a Mac and it works".
+    // But the machine still matters: when the driver lands, running it locally will need one,
+    // and somebody deciding today should know which. State both, and the way round it.
     if (!target.driver) {
       return {
         ...target,
-        state: "pilot",
-        summary: `tapp has no ${target.label} driver yet.`,
-        how: `Early ${target.label} work is done with us while the driver lands. Tell us about yours and we will run it with you.`,
+        state: "pilot", because: "no-driver",
+        summary: `tapp has no ${target.label} driver yet — it is being built.`,
+        how: `Running ${lower(target.label)}s locally will need ${target.machine}. Until the driver lands we do these runs with you: tell us about your app, or have tapp run it for you.`,
         command: "",
       };
     }
@@ -122,9 +128,9 @@ export function platformStates({ hosted = false, env = process.env, platform = p
       summary: because === "not-exposed"
         ? `tapp drives ${target.label}, and this machine could — but a public Studio only starts website runs.`
         : `tapp drives ${target.label}, but this Studio is not on ${target.machine}.`,
-      // Self-host is the same product without the hosting, so the answer is a command, not an
-      // apology (ADR-0006).
-      how: `Run this Studio on ${target.machine} and give it ${lower(target.give)} there:`,
+      // Two ways out, always both: self-host is the same product without the hosting (ADR-0006),
+      // and not everyone has the machine or wants to keep it awake.
+      how: `Run this Studio on ${target.machine} and give it ${lower(target.give)} there — or have tapp run it for you.`,
       command: SELF_HOST_COMMAND,
     };
   });

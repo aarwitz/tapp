@@ -30,6 +30,7 @@ Supported targets:
 | iOS | Simulator on macOS with Xcode; driven through XCUITest and accessibility |
 | Android | Connected emulator or device with `adb`; driven through UIAutomator |
 | Web | Owned browser app in Playwright Chromium |
+| macOS desktop | Any `.app` on a Mac, driven through the Accessibility API; needs the Accessibility permission (`tapp doctor` says how) |
 | Windows desktop | WPF, WinForms, and WinUI apps through Windows UI Automation — early runs are set up through the pilot |
 
 Windows hosts Android and web testing when their prerequisites are installed, and is the home of

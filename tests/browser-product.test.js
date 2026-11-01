@@ -44,7 +44,7 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     const sessionResponse = await fetch(`${product.origin}/api/session`, { headers: { cookie } });
     const session = await sessionResponse.json();
     assert.equal(session.root, fs.realpathSync(root));
-    assert.deepEqual(session.contract.targetPlatforms, ["ios", "android", "web"]);
+    assert.deepEqual(session.contract.targetPlatforms, ["ios", "android", "web", "macos"]);
     assert.deepEqual(session.contract.repositorySources, ["local-path", "github"]);
     // Admin is declared so it can be opened at all (activateView refuses anything undeclared),
     // but it is shown only to an address listed in TAPP_ADMIN_EMAILS.

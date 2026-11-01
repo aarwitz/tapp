@@ -265,11 +265,9 @@ function repeatedFlagValues(argv, name) {
 // `--platform windows` used to be indistinguishable from `--platform wbe`: both got
 // "must be ios|android|web", which tells someone who read runtapp.com's Windows card that they
 // typed it wrong. They did not — tapp has no driver for it yet. Say which of the two it is.
-const DRIVEN_PLATFORMS = ["ios", "android", "web"];
+const DRIVEN_PLATFORMS = ["ios", "android", "web", "macos"];
 const DECLARED_WITHOUT_DRIVER = {
   windows: "Windows desktop applications (WPF, WinForms, WinUI)",
-  macos: "macOS desktop applications",
-  mac: "macOS desktop applications",
   desktop: "desktop applications",
 };
 function refusePlatform(platform) {
@@ -277,9 +275,9 @@ function refusePlatform(platform) {
   if (described) {
     console.error(`❌ tapp has no driver for ${described} yet, so there is nothing to run here.`);
     console.error("   Early runs are set up with us while the driver lands: hello@runtapp.com");
-    console.error("   Today tapp drives: web (anywhere), iOS (macOS + Xcode), Android (adb).");
+    console.error("   Today tapp drives: web (anywhere), iOS and macOS apps (on a Mac), Android (adb).");
   } else {
-    console.error("❌ --platform must be ios|android|web");
+    console.error("❌ --platform must be ios|android|web|macos");
   }
   process.exit(2);
 }
@@ -313,10 +311,19 @@ function requireMacFor(what) {
   process.exit(1);
 }
 
+// A macOS application bundle and an iOS simulator build are both directories called
+// Something.app. The difference is where the executable lives: a Mac bundle keeps it in
+// Contents/MacOS, a simulator build keeps it at the top level.
+function looksLikeMacosBundle(target) {
+  try { return /\.app\/?$/.test(target) && fs.existsSync(path.join(target, "Contents", "MacOS")); }
+  catch { return false; }
+}
+
 function requestedPlatform(flags, target = "") {
   if (typeof flags.platform === "string") return flags.platform.toLowerCase();
   if (/^https?:\/\//i.test(target)) return "web";
   if (/\.apk$/i.test(target)) return "android";
+  if (looksLikeMacosBundle(target)) return "macos";
   return "ios";
 }
 
@@ -1021,6 +1028,10 @@ switch (command) {
     const platform = requestedPlatform(flags, target);
     if (!DRIVEN_PLATFORMS.includes(platform)) refusePlatform(platform);
     if (platform === "ios") requireMacFor("iOS testing");
+    if (platform === "macos") {
+      requireMacFor("macOS application testing");
+      if (!target) { console.error("❌ macOS exploration needs an application: tapp explore /Applications/Yours.app"); process.exit(2); }
+    }
     if (flags.watch === true && platform !== "web") {
       console.error("❌ --watch is currently available for web exploration only");
       process.exit(2);
@@ -1035,7 +1046,7 @@ switch (command) {
     }
     const bundleId = platform === "ios" ? await resolveTargetOrExit(engine, target) : null;
     const android = platform === "android" ? androidTarget(flags, target) : null;
-    const progressMetric = platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : "screens reached";
+    const progressMetric = platform === "web" ? "pages reached" : platform === "ios" ? "structural states observed" : platform === "macos" ? "window states observed" : "screens reached";
     const onProgress = (p) =>
       writeProgress(`🔍 Exploring… ${p.action}/${p.max || flags.actions || 60} actions · ${p.states} ${progressMetric}`);
     // --interactive: when the run meets a sign-in it has no credentials for, it stops and asks
@@ -1089,6 +1100,17 @@ switch (command) {
           testPassword: flags.password,
           baselineFindings,
           clearData: flags["keep-data"] !== true,
+          surface: "cli",
+          onProgress,
+        })
+      : platform === "macos"
+      ? await engine.runQaMacos({
+          appPath: target,
+          maxActions: flags.actions,
+          timeout: flags.timeout,
+          testEmail: flags.email,
+          testPassword: flags.password,
+          baselineFindings,
           surface: "cli",
           onProgress,
         })
@@ -1495,7 +1517,7 @@ switch (command) {
       process.exit(2);
     }
     const platform = String(flags.platform || flow.platform || (flow.url || /^https?:\/\//i.test(flow.app || "") ? "web" : "ios")).toLowerCase();
-    if (!["ios", "android", "web"].includes(platform)) {
+    if (!DRIVEN_PLATFORMS.includes(platform)) {
       console.error(`❌ Unsupported Flow platform: ${platform}`);
       process.exit(2);
     }
@@ -1578,6 +1600,11 @@ switch (command) {
     } else if (platform === "android") {
       const target = androidTarget(flags, typeof flags["app-id"] === "string" ? flags["app-id"] : flow.app || "");
       invocation = [process.execPath, [path.join(packageRoot, "scripts", "run-android-flow.js"), absolute, target.appId, target.apkPath || "", target.serial || ""]];
+    } else if (platform === "macos") {
+      requireMacFor("macOS Flow replay");
+      const app = typeof flags.app === "string" ? flags.app : flow.app || "";
+      if (!app) { console.error("❌ A macOS Flow needs `app:` with the path to the application, or --app"); process.exit(2); }
+      invocation = [process.execPath, [path.join(packageRoot, "scripts", "run-macos-flow.js"), absolute, app]];
     } else {
       requireMacFor("iOS Flow replay");
       invocation = ["bash", [path.join(packageRoot, "scripts", "run-flow.sh"), absolute, typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : flow.app || ""]];
@@ -1897,7 +1924,7 @@ switch (command) {
     const { flags: doctorFlags } = parseVerbArgs(rest);
     const jsonMode = doctorFlags.json === true;
     const report = { version: pkg.version, healthy: true, node: {}, python3: {}, disk: {},
-      platforms: { ios: {}, android: {}, web: {} }, home: tappHome };
+      platforms: { ios: {}, macos: {}, android: {}, web: {} }, home: tappHome };
     const say = (line) => { if (!jsonMode) console.log(line); };
     const sayOk = (label, detail = "") => { if (!jsonMode) ok(label, detail); };
     const sayBad = (label, detail = "") => { if (!jsonMode) bad(label, detail); };
@@ -1946,6 +1973,24 @@ switch (command) {
     } else {
       report.platforms.ios = { available: false, reason: `requires macOS (this host: ${process.platform})` };
       say(`  ⬜ iOS — requires macOS (this host: ${process.platform})`);
+    }
+
+    // macOS desktop applications. The driver is the Accessibility API, which needs a one-time
+    // permission nothing can grant for you — so report the permission, not just the platform.
+    if (process.platform === "darwin") {
+      try {
+        const { macAccessibilityTrusted, ACCESSIBILITY_REMEDIATION } = await import(path.join(packageRoot, "mcp-server", "src", "macos-driver.js"));
+        const trusted = macAccessibilityTrusted({ home: tappHome });
+        report.platforms.macos = { available: trusted, accessibility: trusted, ...(trusted ? {} : { reason: "Accessibility permission not granted" }) };
+        if (trusted) sayOk("macOS apps", "Accessibility permission granted");
+        else say(`  ⬜ macOS apps — ${ACCESSIBILITY_REMEDIATION}`);
+      } catch (error) {
+        report.platforms.macos = { available: false, reason: String(error.message || error).slice(0, 160) };
+        say(`  ⬜ macOS apps — ${String(error.message || error).slice(0, 120)}`);
+      }
+    } else {
+      report.platforms.macos = { available: false, reason: `requires macOS (this host: ${process.platform})` };
+      say(`  ⬜ macOS apps — requires macOS (this host: ${process.platform})`);
     }
 
     const { resolveAdbPath, resolveAndroidSdkRoot } = await import(path.join(packageRoot, "mcp-server", "src", "android-driver.js"));

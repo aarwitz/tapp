@@ -31,6 +31,7 @@ test("npm package ships only the runtime script allowlist", () => {
       "scripts/pr-plan.js",
       "scripts/quick-capture.sh",
       "scripts/run-android-flow.js",
+      "scripts/run-macos-flow.js",
       "scripts/run-flow.sh",
       "scripts/run-web-flow.js",
       "scripts/run-web-scenario.js",

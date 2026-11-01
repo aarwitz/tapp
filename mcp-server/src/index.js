@@ -2094,6 +2094,60 @@ export async function runQaAndroid({ appId, apkPath, serial, maxActions, timeout
   return { structured, text };
 }
 
+/**
+ * Explore a macOS desktop application. The shape mirrors runQaAndroid exactly, because the
+ * marker contract is the same and everything downstream — report.js, the UI Map, the HTML
+ * report, journeys, the gate — is platform-agnostic by design.
+ */
+export async function runQaMacos({ appPath, maxActions, timeout, testEmail, testPassword, baselineFindings, surface = "mcp", onProgress = () => {} }) {
+  if (process.platform !== "darwin") {
+    return { error: "macOS applications can only be driven on macOS. Use a Mac, or have tapp run it for you." };
+  }
+  const { storagePreflight } = await import("./environment-preflight.js");
+  const storage = storagePreflight(capturesDir);
+  if (!storage.ok) return { error: storage.message, details: { environment: "storage", storage } };
+  const resolved = path.resolve(String(appPath || "").trim());
+  if (!fs.existsSync(resolved)) return { error: `No application at ${resolved}` };
+  const label = path.basename(resolved, ".app");
+  const actions = Math.max(1, Math.min(1000, asInteger(maxActions, 40)));
+  const timeoutSec = Math.max(30, Math.min(3600, asInteger(timeout, 600)));
+  const id = "macos-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/^(\d{8})/, "$1-");
+  const outDir = path.join(capturesDir, id);
+  const provenance = writeCaptureProvenance(outDir, { kind: "explore", platform: "macos", target: resolved, projectDir: workspaceRoot });
+  let macResult;
+  try {
+    const { exploreMacos } = await import("./macos-explorer.js");
+    macResult = await exploreMacos({
+      appPath: resolved,
+      maxActions: actions,
+      timeoutSec,
+      outDir,
+      testEmail: isNonEmptyString(testEmail) ? testEmail.trim() : "",
+      testPassword: isNonEmptyString(testPassword) ? testPassword : "",
+      onProgress,
+    });
+  } catch (error) {
+    return { error: error.message || String(error), details: { capture: { id, path: outDir } } };
+  }
+  const report = buildQaReport(macResult.markersPath, { platform: "macos", target: resolved });
+  if (!report) return { error: "macOS exploration produced no markers", details: { capture: { id, path: outDir } } };
+  const backend = remoteAiOptedIn() ? resolveModelBackend() : null;
+  if (backend && report.findings.length) {
+    const { enrichFindings } = await import("./enrich.js");
+    await enrichFindings(report.findings, { backend, callModel, screens: report.screens, appLabel: label });
+  }
+  const regression = computeRegression(report.findings, baselineFindings);
+  const uiMap = await writeRunUiMap({ markersPath: macResult.markersPath, platform: "macos", target: resolved, runId: id, outDir });
+  let reportHtml = null;
+  try {
+    const { writeHtmlReport } = await import("./html-report.js");
+    reportHtml = writeHtmlReport(outDir, { report, label });
+  } catch {}
+  const structured = { ...report, regression, platform: "macos", uiMap, reportHtml, capture: { id, path: outDir, relativePath: path.relative(repoRoot, outDir), provenance } };
+  const text = formatQaReport(report, { regression, bundleId: label, aiConfigured: !!backend, reportHtml, uiMap: uiMap.error ? null : uiMap, surface });
+  return { structured, text };
+}
+
 export async function runQaIos({ bundleId, maxActions, timeout, args = {}, device = "", surface = "mcp", onProgress = () => {} }) {
   const { storagePreflight } = await import("./environment-preflight.js");
   const storage = storagePreflight(capturesDir);

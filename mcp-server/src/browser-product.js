@@ -25,6 +25,7 @@ import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider 
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 import { AlertStore, alertForChange, alertMessage, deliverAlert } from "./alerts.js";
 import { platformStates, selfHostAnswer, PLATFORM_TARGETS, hostToolchain } from "./platforms.js";
+import { isMacosAppBundle } from "./macos-driver.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -1474,14 +1475,20 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           return;
         }
         const prompt = classifyPrompt(body.input);
-        if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a simulator .app, or an .apk"), { statusCode: 400 });
+        if (!["bundle", "app", "apk"].includes(prompt.kind)) throw Object.assign(new Error("Give a bundle id (com.company.app), a .app (macOS or simulator), or an .apk"), { statusCode: 400 });
         const job = startJob(operation, async (progress) => {
           const engine = await import("./index.js");
-          job.platform = prompt.kind === "apk" ? "android" : "ios";
+          // A .app is either a macOS application or an iOS simulator build; the difference is
+          // whether its executable lives in Contents/MacOS (mcp-server/src/macos-driver.js).
+          const macosBundle = prompt.kind === "app" && isMacosAppBundle(prompt.value);
+          job.platform = prompt.kind === "apk" ? "android" : macosBundle ? "macos" : "ios";
           job.liveSimulator = job.platform === "ios";
           const forward = (entry) => progress({ phase: "explore", text: entry.narrative || `${entry.action || 0}/${entry.max || 0} actions · ${entry.states || 0} states`, ...(entry.action ? { current: entry.action, total: entry.max } : {}), ...(entry.screen ? { screen: entry.screen } : {}), ...(entry.screenshot ? { screenshot: entry.screenshot } : {}) });
           let result;
-          if (prompt.kind === "apk") {
+          if (macosBundle) {
+            progress({ phase: "runtime", text: `Launching ${path.basename(prompt.value)}` });
+            result = await engine.runQaMacos({ appPath: prompt.value, maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600, onProgress: forward });
+          } else if (prompt.kind === "apk") {
             progress({ phase: "runtime", text: `Installing ${path.basename(prompt.value)} on the connected Android device` });
             result = await engine.runQaAndroid({ apkPath: prompt.value, appId: String(body.appId || ""), maxActions: Number(body.maxActions) || 40, timeout: Number(body.timeout) || 600, onProgress: forward });
           } else {

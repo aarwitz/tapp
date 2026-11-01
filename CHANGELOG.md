@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.35.0
+
+**tapp drives macOS desktop applications.** Point it at any `.app` on a Mac the way you point it
+at an `.apk`. The driver is the Accessibility API through a small Swift helper that compiles on
+first use — no test bundle, no rebuild or re-signing of the application under test.
+
+```
+tapp explore /Applications/Yours.app
+tapp run your-journey.yml
+```
+
+Everything downstream already worked, because the marker contract is shared: findings, the UI
+Map, the HTML report, kept journeys, deterministic replay, the Studio and the daily check all
+treat a macOS run as an ordinary run.
+
+Two rules exist because this runs on your own machine rather than a simulator:
+
+- **Destructive controls are refused by the driver**, not merely avoided by whatever picks
+  targets. "Shut Down…", "Log Out", "Move to Trash", "Quit" and their kin are never pressed, so a
+  bug in exploration cannot end your session.
+- **Menu items are inventoried, not pressed.** A desktop menu holds Quit, Delete and file pickers
+  a crawler cannot close. The run says what the menus contain and says plainly that nothing in
+  them was exercised.
+
+It needs the Accessibility permission, which nothing can grant to itself — `tapp doctor` reports
+it and macOS is not shown as ready without it.
+
+**Every platform now names the machine it needs, and the alternative.** A platform tapp cannot
+start here says which host would run it locally *and* offers to have tapp run it for you. That
+includes the one platform still without a driver: Windows desktop says there is no driver yet,
+says a Windows machine is what it will need, and offers both ways round it — rather than leaving
+somebody deciding today with nothing to go on.
+
+See `docs/decisions/ADR-0010-every-platform-in-one-studio.md`.
+
 ## 0.34.0
 
 **Every platform tapp drives, said out loud.** The hosted Studio read as a website checker

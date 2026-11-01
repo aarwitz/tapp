@@ -6,10 +6,10 @@ export const customerProductContract = Object.freeze({
   schemaVersion: 2,
   product: "Tapp",
   interface: "customer-browser",
-  // What tapp has a driver for. macOS and Windows desktop applications are shown in the
-  // Studio's Platforms view as having no driver yet — declared honestly, never counted here,
-  // because this list is what the engine can actually drive (ADR-0010).
-  targetPlatforms: ["ios", "android", "web"],
+  // What tapp has a driver for. Windows desktop applications are shown in the Studio's
+  // Platforms view as having no driver yet — declared honestly, never counted here, because
+  // this list is what the engine can actually drive (ADR-0010).
+  targetPlatforms: ["ios", "android", "web", "macos"],
   // A repository is opened by path (`tapp app /path/to/repo`); a website by URL in the Studio.
   repositorySources: ["local-path", "github"],
   entryLayers: ["repository", "website"],
