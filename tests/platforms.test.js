@@ -16,7 +16,9 @@ test("the hosted Studio says what tapp drives, not only what it can start", () =
   // The whole point: iOS is present and described, not deleted. Erasing it is what made a
   // cross-platform product read as a website checker.
   const ios = platformState("ios", CLOUD);
-  assert.match(ios.summary, /tapp drives iOS/);
+  assert.match(ios.summary, /tapp drives iOS apps/);
+  // Each platform names itself as a thing, not as a label: "macOS apps", never "macOS app".
+  for (const entry of platformStates(CLOUD)) assert.ok(entry.subject, `${entry.id} needs a subject`);
   assert.equal(ios.command, SELF_HOST_COMMAND, "and the answer is a command, not an apology");
 });
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.35.1
+
+Each platform now names itself as a thing rather than as a label, so the Studio says "tapp drives
+macOS apps" instead of "tapp drives macOS app".
+
 ## 0.35.0
 
 **tapp drives macOS desktop applications.** Point it at any `.app` on a Mac the way you point it

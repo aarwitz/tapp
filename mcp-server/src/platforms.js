@@ -32,27 +32,27 @@ export const PLATFORM_STATES = Object.freeze(["ready", "needs-machine", "pilot"]
 /** What tapp aims at, in the order a person should see them. */
 export const PLATFORM_TARGETS = Object.freeze([
   {
-    id: "web", label: "Web", give: "A website URL",
+    id: "web", label: "Web", subject: "websites", give: "A website URL",
     driver: "playwright", needs: "Playwright and Chromium, which tapp installs",
     machine: "any machine",
   },
   {
-    id: "ios", label: "iOS", give: "A simulator .app or a bundle id",
+    id: "ios", label: "iOS", subject: "iOS apps", give: "A simulator .app or a bundle id",
     driver: "xcuitest", needs: "macOS with Xcode",
     machine: "a Mac with Xcode",
   },
   {
-    id: "android", label: "Android", give: "An .apk or a connected device",
+    id: "android", label: "Android", subject: "Android apps", give: "An .apk or a connected device",
     driver: "adb", needs: "the Android SDK and adb",
     machine: "a machine with the Android SDK",
   },
   {
-    id: "macos", label: "macOS app", give: "A .app on your Mac",
+    id: "macos", label: "macOS app", subject: "macOS apps", give: "A .app",
     driver: "accessibility", needs: "macOS, and the Accessibility permission",
     machine: "a Mac",
   },
   {
-    id: "windows", label: "Windows app", give: "A WPF, WinForms or WinUI app",
+    id: "windows", label: "Windows app", subject: "Windows apps", give: "A WPF, WinForms or WinUI app",
     driver: null, needs: "Windows",
     machine: "a Windows machine",
   },
@@ -104,7 +104,7 @@ export function platformStates({ hosted = false, env = process.env, platform = p
         ...target,
         state: "pilot", because: "no-driver",
         summary: `tapp has no ${target.label} driver yet — it is being built.`,
-        how: `Running ${lower(target.label)}s locally will need ${target.machine}. Until the driver lands we do these runs with you: tell us about your app, or have tapp run it for you.`,
+        how: `Running ${target.subject} locally will need ${target.machine}. Until the driver lands we do these runs with you: tell us about your app, or have tapp run it for you.`,
         command: "",
       };
     }
@@ -126,8 +126,8 @@ export function platformStates({ hosted = false, env = process.env, platform = p
       ...target,
       state: "needs-machine", because,
       summary: because === "not-exposed"
-        ? `tapp drives ${target.label}, and this machine could — but a public Studio only starts website runs.`
-        : `tapp drives ${target.label}, but this Studio is not on ${target.machine}.`,
+        ? `tapp drives ${target.subject}, and this machine could — but a public Studio only starts website runs.`
+        : `tapp drives ${target.subject}, but this Studio is not on ${target.machine}.`,
       // Two ways out, always both: self-host is the same product without the hosting (ADR-0006),
       // and not everyone has the machine or wants to keep it awake.
       how: `Run this Studio on ${target.machine} and give it ${lower(target.give)} there — or have tapp run it for you.`,
