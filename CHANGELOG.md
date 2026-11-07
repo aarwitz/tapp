@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.35.2
+## 0.35.3
+
+_(0.35.2 was tagged but never reached npm: Sigstore's transparency log was returning 500s, and
+once it recovered the entry for that exact tarball already existed, so it could never be signed.
+Same contents, new version.)_
 
 **`tapp run --var NAME=VALUE` now reaches every platform.** It was read by the web runner alone.
 On iOS, Android and macOS the flag was accepted, nothing was printed, and the step ran with the
