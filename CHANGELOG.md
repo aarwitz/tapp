@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.35.2
+
+**`tapp run --var NAME=VALUE` now reaches every platform.** It was read by the web runner alone.
+On iOS, Android and macOS the flag was accepted, nothing was printed, and the step ran with the
+placeholder unresolved — so the same Flow file behaved differently depending on where it was
+replayed, silently. On iOS the harness had read `OCQA_FLOW_VARS` all along; nothing ever set it.
+Reported from the field (#35, found inside #34).
+
+Feedback filed with `tapp feedback` is now labelled on arrival. Setting labels needs triage
+rights on the repository, which nobody using tapp has, so reports from outside landed unlabelled
+and `gh issue list --label feedback` could not see them. The repository applies the labels
+itself, and the CLI and MCP tool now say which happened instead of leaving it to be noticed.
+
 ## 0.35.1
 
 Each platform now names itself as a thing rather than as a label, so the Studio says "tapp drives

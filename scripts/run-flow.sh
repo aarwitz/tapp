@@ -56,6 +56,13 @@ d = {
   "OCQA_TEST_EMAIL": os.environ.get("OCQA_TEST_EMAIL", "test@example.com"),
   "OCQA_TEST_PASSWORD": os.environ.get("OCQA_TEST_PASSWORD", "TestPass123!"),
 }
+# `tapp run FLOW --var NAME=VALUE`. The harness has read OCQA_FLOW_VARS since Flows gained
+# variables; nothing ever set it, so on iOS every --var silently resolved to nothing while the
+# same Flow worked on web (field issue #35). Both ends existed; this is the wire between them.
+flow_vars = os.environ.get("TAPP_FLOW_VARS", "").strip()
+if flow_vars:
+    json.loads(flow_vars)  # refuse malformed input here rather than inside the harness
+    d["OCQA_FLOW_VARS"] = flow_vars
 launch_args = os.environ.get("OCQA_APP_LAUNCH_ARGS_JSON", "")
 if launch_args:
     value = json.loads(launch_args)

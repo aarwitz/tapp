@@ -2485,7 +2485,7 @@ switch (command) {
       issue = fb.composeFeedback({ title, body, type, version: pkg.version, doctor, captureId, filedBy: flags.as === "human" ? "human" : "agent" });
     } catch (error) { console.error(`❌ ${error.message}\n${usage}`); process.exit(2); }
     const url = fb.feedbackIssueUrl(issue);
-    let submitted = false, issueUrl = null;
+    let submitted = false, issueUrl = null, labelsApplied = false;
     if (flags.submit === true) {
       const status = fb.ghStatus();
       if (!status.available) {
@@ -2499,13 +2499,20 @@ switch (command) {
         else console.error(`❌ gh issue create failed: ${result.detail}\n   Prefilled issue link: ${url}`);
         process.exit(1);
       }
-      submitted = true; issueUrl = result.url;
+      submitted = true; issueUrl = result.url; labelsApplied = result.labelsApplied;
     }
     if (flags.json === true) {
-      console.log(JSON.stringify({ ...issue, url, submitted, issueUrl }, null, 2));
+      console.log(JSON.stringify({ ...issue, url, submitted, issueUrl, labelsApplied }, null, 2));
       break;
     }
-    if (submitted) { ok("Filed feedback", issueUrl); break; }
+    if (submitted) {
+      ok("Filed feedback", issueUrl);
+      // Setting labels needs triage rights on the repository, which almost nobody filing has.
+      // Say what happened rather than leaving it to be noticed: the repository labels it on
+      // arrival (.github/workflows/label-feedback.yml).
+      if (!labelsApplied) console.log(`   Filed without labels — that needs triage rights. The repository adds ${issue.labels.join(", ")} on arrival.`);
+      break;
+    }
     console.log(`📝 Feedback draft (not filed — issues on ${fb.FEEDBACK_REPO} are public; confirm with the user first):\n`);
     console.log(`Title:  ${issue.title}\nLabels: ${issue.labels.join(", ")}\n\n${issue.body}`);
     console.log(`File it:  tapp feedback ${JSON.stringify(issue.title)} … --submit   (uses your authenticated gh)\nOr open:  ${url}`);

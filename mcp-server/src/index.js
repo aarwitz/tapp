@@ -3229,7 +3229,10 @@ async function handleTool(name, args = {}) {
       if (!status.available) return errorResult("The GitHub CLI is not authenticated on this machine, so nothing was filed. Give the user the prefilled link instead.", { url, ...issue, submitted: false });
       const result = fb.submitFeedbackViaGh(issue);
       if (!result.ok) return errorResult(`gh issue create failed: ${result.detail}`, { url, ...issue, submitted: false });
-      return richResult(`✅ Filed feedback: ${result.url}`, { submitted: true, issueUrl: result.url, ...issue });
+      // Labels need triage rights, which almost no filer has; the repository applies them on
+      // arrival instead (.github/workflows/label-feedback.yml). Say which happened.
+      const labelNote = result.labelsApplied ? "" : `\nFiled without labels — that needs triage rights. The repository adds ${issue.labels.join(", ")} on arrival.`;
+      return richResult(`✅ Filed feedback: ${result.url}${labelNote}`, { submitted: true, issueUrl: result.url, labelsApplied: result.labelsApplied, ...issue });
     }
     return richResult(
       `📝 Feedback drafted, not filed. Issues on ${fb.FEEDBACK_REPO} are public — confirm with the user, then call tapp_feedback again with submit: true, or give them this prefilled link:\n${url}\n\nTitle: ${issue.title}\nLabels: ${issue.labels.join(", ")}\n\n${issue.body}`,

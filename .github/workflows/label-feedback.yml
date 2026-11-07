@@ -1,0 +1,75 @@
+# Label the feedback that arrives from `tapp feedback`.
+#
+# The CLI asks for labels when it files an issue, but only accounts with triage rights on this
+# repository may set them — which is nobody who actually uses tapp. The CLI notices the refusal
+# and files the issue anyway, unlabelled, which is the right call: an unlabelled report beats a
+# refused one. The cost was that `gh issue list --label feedback` could not see exactly the
+# reports that came from outside, so three real ones sat unseen until someone happened to scroll
+# past them.
+#
+# This closes that loop from the repository's side, where the permission actually exists. It
+# reads the footer the CLI writes and nothing else: no code from the issue is executed, and the
+# body is only ever matched against fixed patterns.
+name: Label tapp feedback
+
+on:
+  issues:
+    types: [opened]
+  # So the rule can be proven on a real issue instead of assumed, and so reports filed before
+  # this existed can be back-filled one at a time.
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number to label
+        required: true
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            let issue = context.payload.issue;
+            if (!issue) {
+              const number = Number(context.payload.inputs.issue);
+              if (!Number.isInteger(number)) { core.setFailed("issue must be a number"); return; }
+              issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: number })).data;
+            }
+            const body = issue.body || "";
+            // The footer composeFeedback() writes:
+            //   _Filed with `tapp feedback` (idea, filed by a coding agent on the user's behalf). …_
+            const footer = /Filed with `tapp feedback` \(([a-z]+)([^)]*)\)/.exec(body);
+            if (!footer) {
+              core.info("Not a tapp feedback report; leaving labels alone.");
+              return;
+            }
+            const KINDS = new Set(["bug", "idea", "question"]);
+            const labels = ["feedback"];
+            if (KINDS.has(footer[1])) labels.push(footer[1]);
+            if (/filed by a coding agent/i.test(footer[2])) labels.push("agent-filed");
+
+            const existing = new Set((issue.labels || []).map((label) => label.name || label));
+            const wanted = labels.filter((label) => !existing.has(label));
+            if (!wanted.length) {
+              core.info("Already labelled.");
+              return;
+            }
+            const add = (names) => github.rest.issues.addLabels({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: issue.number, labels: names,
+            });
+            try {
+              await add(wanted);
+            } catch (error) {
+              // A label that does not exist in this repository fails the whole call. Apply the
+              // rest rather than losing them all, and say which one was missing.
+              core.warning(`Applying ${wanted.join(", ")} together failed: ${error.message}`);
+              for (const name of wanted) {
+                try { await add([name]); } catch (one) { core.warning(`Could not apply '${name}': ${one.message}`); }
+              }
+            }
+            core.info(`Labelled #${issue.number}: ${wanted.join(", ")}`);

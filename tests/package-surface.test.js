@@ -84,7 +84,6 @@ test("every test file is either run by `npm test` or deliberately excluded", () 
     "tests/web-explorer-evidence.test.js": "drives a real browser end to end; run it directly",
     "tests/business-check.test.js": "not in the suite (pre-existing)",
     "tests/business-observation.test.js": "not in the suite (pre-existing)",
-    "tests/feedback.test.js": "not in the suite (pre-existing)",
     "tests/feedback-triage-0917.test.js": "superseded by tests/feedback-triage-0919.test.js",
     "tests/mcp-surface.test.js": "not in the suite (pre-existing)",
   };

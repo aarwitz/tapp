@@ -72,3 +72,30 @@ test("tapp feedback exits 2 on usage errors", () => {
   const badType = spawnSync("node", [tappBin, "feedback", "t", "--type", "rant"], { cwd: root, encoding: "utf8" });
   assert.equal(badType.status, 2);
 });
+
+test("feedback that arrives without labels is still findable, and the filer is told", () => {
+  // Only accounts with triage rights may set labels, which is nobody who actually uses tapp.
+  // Three real reports sat unlabelled and therefore invisible to `gh issue list --label
+  // feedback`. The repository now labels them on arrival; what this pins is that the footer
+  // the CLI writes is the thing the workflow matches, so the two cannot drift apart.
+  const workflow = fs.readFileSync(new URL("../.github/workflows/label-feedback.yml", import.meta.url), "utf8");
+  const pattern = /Filed with `tapp feedback` \\\(\(\[a-z\]\+\)\(\[\^\)\]\*\)\\\)/;
+  assert.match(workflow, pattern, "the workflow matches composeFeedback's footer");
+  assert.match(workflow, /issues: write/, "and has exactly the permission it needs");
+  assert.doesNotMatch(workflow, /pull_request_target/, "never a trigger that would run on a fork's code");
+
+  for (const type of ["bug", "idea", "question"]) {
+    const issue = composeFeedback({ title: "x", body: "y", type, filedBy: "agent", version: "0.0.0" });
+    const footer = /Filed with `tapp feedback` \(([a-z]+)([^)]*)\)/.exec(issue.body);
+    assert.ok(footer, `${type}: the footer the workflow reads must be present`);
+    assert.equal(footer[1], type, "and must carry the kind the labels are derived from");
+    assert.match(footer[2], /filed by a coding agent/, "and say when an agent filed it");
+    // What the workflow would apply, derived exactly as the workflow derives it.
+    const derived = ["feedback", footer[1], ...(/filed by a coding agent/i.test(footer[2]) ? ["agent-filed"] : [])];
+    assert.deepEqual(derived.sort(), [...issue.labels].sort(), "the workflow reconstructs the same labels the CLI asked for");
+  }
+  // A person filing for themselves is not marked as an agent.
+  const byHand = composeFeedback({ title: "x", body: "y", type: "bug", filedBy: "user", version: "0.0.0" });
+  assert.doesNotMatch(byHand.body, /filed by a coding agent/);
+  assert.deepEqual(byHand.labels, ["feedback", "bug"]);
+});

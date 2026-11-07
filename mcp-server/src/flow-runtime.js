@@ -90,11 +90,24 @@ export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
   return errors;
 }
 
+/**
+ * The variables a Flow's `$NAME` placeholders resolve against, weakest source first:
+ * built-in credentials, the Flow's own `vars:` defaults, `tapp run --var NAME=VALUE`, and
+ * finally whatever the caller passes explicitly.
+ *
+ * `--var` arrives as TAPP_FLOW_VARS. It used to be read by the web runner alone, so the same
+ * Flow substituted on web and silently did not on iOS, Android or macOS — the flag was accepted,
+ * nothing was printed, and the step ran with an unresolved placeholder (field issue #35).
+ */
 export function flowVariables(flow, overrides = {}) {
+  let fromCommandLine = {};
+  try { fromCommandLine = process.env.TAPP_FLOW_VARS ? JSON.parse(process.env.TAPP_FLOW_VARS) : {}; }
+  catch { fromCommandLine = {}; }
   return {
     TEST_EMAIL: process.env.OCQA_TEST_EMAIL || "test@example.com",
     TEST_PASSWORD: process.env.OCQA_TEST_PASSWORD || "TestPass123!",
     ...(flow?.vars || {}),
+    ...fromCommandLine,
     ...overrides,
   };
 }
