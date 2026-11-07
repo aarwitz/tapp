@@ -77,3 +77,25 @@ test("regression identity migration: legacy target-less baselines match coarsely
   assert.deepEqual(r.counts, { new: 0, persisting: 1, resolved: 0 });
   assert.equal(r.newFindings.length, 0, "coarse match on upgrade → no false new findings for the gate");
 });
+
+test("a screen reached under a different in-page signature is not called unreachable", () => {
+  // Screens are recorded as "Name::signature" so two states of one screen count separately for
+  // coverage. The signature comes from page content, so it differs between runs. Comparing the
+  // joined strings matched nothing: every baseline screen looked unreached and the gate raised a
+  // high finding for each. The public CI went red on 24 October — the first release after
+  // signatures were introduced — and stayed red for twelve runs (TM-527).
+  const baseline = { screens: ["Sign in::zzz", "Feed::yyy", "Messages::xxx"], actionsPerformed: 5 };
+  const current = { screens: ["Sign in::aaa", "Feed::bbb", "Messages::ccc", "Messages::ddd"], actionsPerformed: 5 };
+  assert.deepEqual(computeReachabilityLoss(current, baseline), [], "same screens, new signatures: nothing lost");
+
+  // A real loss is still a loss, and is reported once per screen rather than once per state.
+  const lost = { screens: ["Sign in::aaa"], actionsPerformed: 5 };
+  assert.deepEqual(computeReachabilityLoss(lost, baseline).map((f) => f.screen), ["Feed", "Messages"]);
+
+  // Two states of one baseline screen must not count twice toward the coverage floor.
+  const twoStates = { screens: ["Home::a", "Home::b", "Detail::c"], actionsPerformed: 5 };
+  assert.deepEqual(computeReachabilityLoss({ screens: ["Home::z"], actionsPerformed: 5 }, twoStates).map((f) => f.screen), ["Detail"]);
+
+  // Unsuffixed names, as older baselines hold them, still compare.
+  assert.deepEqual(computeReachabilityLoss(current, { screens: ["Sign in", "Feed", "Messages"], actionsPerformed: 5 }), []);
+});

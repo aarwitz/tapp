@@ -581,10 +581,17 @@ export function computeReachabilityLoss(current, baseline) {
   if (!current?.screens || !baseline?.screens || !baseline.screens.length) return [];
   const baseActions = baseline.actionsPerformed || 0;
   if (baseActions > 0 && (current.actionsPerformed || 0) < baseActions * 0.6) return [];
-  const reached = new Set(current.screens);
-  const reachedBaseline = baseline.screens.filter((s) => reached.has(s)).length;
-  if (reachedBaseline >= baseline.screens.length * 0.6) return [];
-  return baseline.screens
+  // A screen is recorded as "Name::signature" so two in-page states of one screen count
+  // separately for coverage. That signature is derived from the page's content and so differs
+  // between runs, which made this comparison match nothing: every baseline screen looked
+  // unreached and the gate raised a high finding for each. The public CI went red on 24 October,
+  // the first release after signatures were added, and stayed red. Compare names (TM-527).
+  const bareName = (screen) => String(screen).split("::")[0];
+  const reached = new Set((current.screens || []).map(bareName));
+  const baselineNames = [...new Set(baseline.screens.map(bareName))];
+  const reachedBaseline = baselineNames.filter((s) => reached.has(s)).length;
+  if (reachedBaseline >= baselineNames.length * 0.6) return [];
+  return baselineNames
     .filter((s) => !reached.has(s))
     .map((screen) => ({
       type: "screen_unreachable",

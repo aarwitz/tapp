@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.35.5
+
+**The release check no longer reports screens it reached as unreachable.** A run records each
+screen with a fingerprint of that screen's contents, so two states of one screen count
+separately towards coverage. The comparison against a baseline matched name and fingerprint
+together, and the fingerprint changes between runs — so every baseline screen looked unreached
+and each produced a high finding. On tapp's own fixture it raised three. A genuine loss of
+coverage is still reported, once per screen.
+
+**The production dependency advisories are cleared.** Six known weaknesses, two high, all
+reaching the package indirectly through the Model Context Protocol SDK. Seven transitive
+packages moved; no direct dependency changed.
+
+Together these are why the public repository's own test run had failed on every release since
+24 October. The generated status page now prints that run's result, alongside every place tapp
+is published, so the next gap is read rather than discovered.
+
 ## 0.35.4
 
 **Typing into a field that only has a placeholder.** A flow step can name a field by its

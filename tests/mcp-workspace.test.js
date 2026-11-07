@@ -83,7 +83,14 @@ http.createServer((request, response) => {
 
     send({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "tapp_doctor", arguments: {} } });
     const health = await waitFor(2);
+    // Say what came back. This failed on a Linux runner with a bare TypeError, which told
+    // nobody anything: whether the tool errored, timed out, or simply answered without the
+    // check. The payload is the diagnosis (TM-527).
+    assert.ok(health.result, `tapp_doctor returned no result: ${JSON.stringify(health).slice(0, 400)}`);
+    assert.notEqual(health.result.isError, true, `tapp_doctor failed: ${health.result.content?.[0]?.text || JSON.stringify(health.result).slice(0, 400)}`);
+    assert.ok(health.result.structuredContent, `tapp_doctor answered without structuredContent: ${JSON.stringify(health.result).slice(0, 400)}`);
     const workspaceCheck = health.result.structuredContent.checks.find((check) => check.check === "workspace");
+    assert.ok(workspaceCheck, `tapp_doctor reported no workspace check; it reported: ${health.result.structuredContent.checks.map((c) => c.check).join(", ")}`);
     assert.equal(workspaceCheck.ok, true);
     assert.equal(workspaceCheck.value, fs.realpathSync(workspace));
 
