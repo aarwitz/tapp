@@ -222,3 +222,104 @@ struct QueuedTasksView: View {
         .navigationTitle("Queued Tasks")
     }
 }
+
+/// Two shapes that cost real recording takes, kept here so the harness can be measured against
+/// them without building somebody's product (TM-496).
+///
+/// 1. A field whose ONLY text is its placeholder: no accessibility identifier, no label. This is
+///    the ordinary SwiftUI `TextField("…", text:)` that most screens are made of, and a flow has
+///    to be able to type into one without the app being changed to suit the test.
+/// 2. A field with a drawer pulled over it. Tapping it does nothing, focus never arrives, and the
+///    useful error is not "it never took focus" but what is sitting on top of it.
+struct PlaceholderFieldsView: View {
+    @State private var ask = ""
+    @State private var note = ""
+    @State private var drawerOpen = false
+    @State private var sheetOpen = false
+    @State private var longer = ""
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Form {
+                Section("No identifier, no label") {
+                    // Deliberately bare: the placeholder is the only way to name this field.
+                    TextField("Ask anything…", text: $ask)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Asked: \(ask)")
+                        .accessibilityIdentifier("ask-echo")
+                }
+                Section("Growing field, no identifier") {
+                    // `axis: .vertical` is the shape a chat composer actually uses, and XCUITest
+                    // exposes it as a TEXT VIEW rather than a text field — a different element
+                    // type with its own placeholder behaviour. The horizontal case above does
+                    // not stand in for it.
+                    TextField("Say something longer…", text: $longer, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Said: \(longer)")
+                        .accessibilityIdentifier("longer-echo")
+                }
+                Section("Covered by a drawer") {
+                    TextField("Write a note…", text: $note)
+                        .textFieldStyle(.roundedBorder)
+                    Text("Noted: \(note)")
+                        .accessibilityIdentifier("note-echo")
+                    Button(drawerOpen ? "Close history" : "Open history") { drawerOpen.toggle() }
+                        .accessibilityIdentifier("toggle-history")
+                    // A real sheet, which unlike a material drawer DOES have accessibility
+                    // identity — the case a focus failure can actually name.
+                    Button("Open details") { sheetOpen = true }
+                        .accessibilityIdentifier("toggle-sheet")
+                }
+            }
+            if drawerOpen {
+                // An opaque panel over the form, the way a chat history drawer sits over its
+                // composer. Nothing underneath is hittable while it is up.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent history").font(.headline)
+                    ForEach(["Yesterday", "Last week", "Last month"], id: \.self) { entry in
+                        Text(entry).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding()
+                .background(.regularMaterial)
+                .accessibilityIdentifier("history-drawer")
+            }
+        }
+        .navigationTitle("Placeholder Fields")
+        .sheet(isPresented: $sheetOpen) {
+            VStack(spacing: 12) {
+                Text("Delivery details").font(.headline)
+                Text("This sheet sits over the note field.")
+                Button("Close") { sheetOpen = false }
+            }
+            .padding()
+        }
+    }
+}
+
+
+/// Two fields that answer to the same name in different ways, on a screen short enough that
+/// neither needs scrolling to reach. The one earlier on screen carries it as its LABEL; the one
+/// after carries it as its IDENTIFIER, and the identifier must win (TM-496).
+struct NamePrecedenceView: View {
+    @State private var byLabel = ""
+    @State private var byIdentifier = ""
+
+    var body: some View {
+        Form {
+            TextField("Label box", text: $byLabel)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Reference")
+            Text("Label box got: \(byLabel)")
+                .accessibilityIdentifier("label-box-echo")
+            TextField("Identifier box", text: $byIdentifier)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityIdentifier("Reference")
+            Text("Identifier box got: \(byIdentifier)")
+                .accessibilityIdentifier("identifier-box-echo")
+        }
+        .navigationTitle("Name Precedence")
+    }
+}

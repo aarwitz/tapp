@@ -428,7 +428,7 @@ function safeCommandUsage(verb) {
     shot: "tapp look --sim [--out FILE]",
     apps: "tapp apps",
     build: "tapp build [repo] [--scheme NAME] [--configuration NAME]",
-    flow: "tapp run FLOW.yml [--var NAME=VALUE ...] [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844]\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default) [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
+    flow: "tapp run FLOW.yml [--var NAME=VALUE ...] [--actor NAME] [--email VALUE] [--password VALUE] [--device \"iPhone 13\"] [--viewport 390x844] [--no-relaunch]\n  --no-relaunch continues from the screen the app is on instead of restarting it (iOS)\n  iOS: [--device \"iPhone 16\"|UDID] chooses the simulator (required when more than one is booted; TAPP_UDID is the default) [--launch-arg ARG] [--launch-env JSON]\ntapp validate FLOW.yml [--platform PLATFORM] [--map FILE]\ntapp validate --example    print a complete starter Flow YAML\n  Exit codes: 0 replay passed · 1 replay failed · 2 infrastructure/usage error",
     task: "tapp validate TASK.yml [--platform PLATFORM] [--map FILE]\ntapp validate TASK.yml --compile --platform PLATFORM [--inputs JSON] [--out FILE]\ntapp run TASK.yml --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID] [--inputs JSON]",
     contract: "tapp validate FILE.contract.ts [--platform PLATFORM] [--map FILE]\ntapp validate FILE.contract.ts --compile --platform PLATFORM [--out FILE]\ntapp run FILE.contract.ts --platform PLATFORM [--url URL|--bundle-id ID|--app-id ID]\n  Exit codes: 0 contract held · 1 contract failed · 2 infrastructure/usage error",
     scenario: "tapp validate SCENARIO.yml [--project-dir DIR]\ntapp run SCENARIO.yml --platform web --url URL [--project-dir DIR]\n  Exit codes: 0 scenario passed · 1 scenario failed · 2 infrastructure/usage error",
@@ -1591,6 +1591,16 @@ switch (command) {
       flowVars[name] = value.join("=");
     }
     if (Object.keys(flowVars).length) env.TAPP_FLOW_VARS = JSON.stringify(flowVars);
+    // Continue from the screen the app is already on. A demo told in several takes should not
+    // restart and sign in again between them (TM-498). iOS today: the other drivers each have
+    // their own notion of a session and are a separate decision.
+    if (flags["no-relaunch"] === true) {
+      if (platform !== "ios") {
+        console.error(`❌ --no-relaunch applies to iOS flows today (this one is ${platform})`);
+        process.exit(2);
+      }
+      env.TAPP_FLOW_CONTINUE = "1";
+    }
 
     let invocation;
     if (platform === "web") {

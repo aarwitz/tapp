@@ -52,6 +52,12 @@ struct SettingsView: View {
                     NavigationLink("Queued Tasks") {
                         QueuedTasksView()
                     }
+                    NavigationLink("Placeholder Fields") {
+                        PlaceholderFieldsView()
+                    }
+                    NavigationLink("Name Precedence") {
+                        NamePrecedenceView()
+                    }
                     NavigationLink("Changelog") {
                         ChangelogView()
                     }

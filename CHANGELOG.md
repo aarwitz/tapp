@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.35.4
+
+**Typing into a field that only has a placeholder.** A flow step can name a field by its
+placeholder text, with nothing added to the application under test — including the growing
+fields that chat composers use, where it previously stopped the whole run rather than failing a
+single step. Reported from the field and reproduced against a real application.
+
+**A field that will not take typing now says what is in front of it.** When an alert, sheet or
+panel is drawn over a field, the failure names it instead of only reporting that focus never
+arrived. A translucent overlay built with no accessibility identity still cannot be named, and
+tapp says nothing rather than guessing.
+
+**Reading a screen that is still moving no longer aborts a run.** Every element property read
+resolves against the live interface, so scanning a list of fields just after a scroll could end
+an entire run with a snapshot error. Those reads now go through the throwing snapshot API and
+cost one lookup instead.
+
+**`tapp run FLOW.yml --no-relaunch`** continues from the screen the app is already on instead of
+restarting it. A demo told in several takes no longer replays its sign-in, and loses the opening
+seconds of home screen and loading, between every take. A flow file can also carry
+`continue: true`. iOS today.
+
 ## 0.35.3
 
 _(0.35.2 was tagged but never reached npm: Sigstore's transparency log was returning 500s, and

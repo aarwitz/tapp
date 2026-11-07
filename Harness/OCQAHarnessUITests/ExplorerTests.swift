@@ -542,14 +542,32 @@ class ExplorerTests: XCTestCase {
         guard !h.isEmpty else { return nil }
         // textViews included deliberately: chat composers / notes / comment boxes are
         // TextViews, not TextFields — without them "Write a message…" is untypeable.
+        // Let a scroll finish before enumerating: the set of fields is read element by element,
+        // and a list still gliding changes under the read.
+        waitForAnimationsToSettle()
         let fields = app.textFields.allElementsBoundByIndex + app.secureTextFields.allElementsBoundByIndex + app.textViews.allElementsBoundByIndex
-        let existing = fields.filter { $0.exists }
-        if let exact = existing.first(where: {
-            $0.identifier.lowercased() == h || $0.label.lowercased() == h || ($0.placeholderValue ?? "").lowercased() == h
-        }) { return exact }
-        if let contains = existing.first(where: {
-            ($0.identifier + " " + $0.label + " " + ($0.placeholderValue ?? "")).lowercased().contains(h)
-        }) { return contains }
+        // Read each field's three names ONCE, through the THROWING snapshot API. A bare
+        // `element.identifier` re-resolves against the live tree and fails the entire run with
+        // "No matches found for Element at index N" if that element has since moved or gone;
+        // `try? snapshot()` hands back nil for the same case, so one shifted row no longer
+        // takes the run down (TM-496).
+        let described: [(element: XCUIElement, identifier: String, label: String, placeholder: String)] =
+            fields.compactMap { element in
+                guard let snapshot = try? element.snapshot() else { return nil }
+                return (element,
+                        snapshot.identifier.lowercased(),
+                        snapshot.label.lowercased(),
+                        ((snapshot.placeholderValue as String?) ?? "").lowercased())
+            }
+
+        // Rank by WHAT matched before where it sits. A single OR pass returns whichever field is
+        // highest on screen, so a field whose label happens to equal the hint would beat the
+        // field actually named that — precedence the identifier subscripts used to provide, and
+        // which was lost when this resolver moved in front of them (caught in review, TM-496).
+        if let match = described.first(where: { $0.identifier == h }) { return match.element }
+        if let match = described.first(where: { $0.label == h }) { return match.element }
+        if let match = described.first(where: { $0.placeholder == h }) { return match.element }
+        if let match = described.first(where: { "\($0.identifier) \($0.label) \($0.placeholder)".contains(h) }) { return match.element }
         if h.contains("password") {
             let secure = app.secureTextFields.firstMatch
             if secure.exists { return secure }
@@ -568,7 +586,7 @@ class ExplorerTests: XCTestCase {
             return !l.isEmpty && (l == h || l.contains(h) || h.contains(l))
         }) {
             let zone = overlay.frame.insetBy(dx: -24, dy: -24)
-            if let field = existing.first(where: { $0.frame.intersects(zone) }) {
+            if let field = described.first(where: { (try? $0.element.snapshot().frame.intersects(zone)) == true })?.element {
                 return field
             }
         }
@@ -651,11 +669,18 @@ class ExplorerTests: XCTestCase {
         // submits, and append-on-retry turns "Lemonade" into "LemonadeLemonade" — a malformed
         // credential the server rejects with no visible cause.
         if let id = id, !id.isEmpty {
-            for field in [app.textFields[id], app.secureTextFields[id], app.textViews[id]] where field.exists {
+            // Enumerate before subscripting. `app.textFields[hint]` builds a query against
+            // IDENTIFIERS, and resolving one of those against a SwiftUI `TextField(axis:
+            // .vertical)` raises "Failed to get matching snapshot … Automation type mismatch:
+            // computed TextField from legacy attrib", which aborts the whole run instead of
+            // failing one step (TM-496). resolveFieldByHint walks allElementsBoundByIndex,
+            // which does not, and it already prefers an exact identifier match — so this
+            // ordering keeps the same precedence and stops the crash.
+            if let field = resolveFieldByHint(id) {
                 guard replaceText(on: field, with: text) else { return false }
                 lastTypedInto = fieldDesc(field); return true
             }
-            if let field = resolveFieldByHint(id) {
+            for field in [app.textFields[id], app.secureTextFields[id], app.textViews[id]] where field.exists {
                 guard replaceText(on: field, with: text) else { return false }
                 lastTypedInto = fieldDesc(field); return true
             }
@@ -1022,7 +1047,18 @@ class ExplorerTests: XCTestCase {
             return out
         }
 
-        if !targetBundleId.isEmpty { app.launch() } else { app.launch() }
+        // Continue from the screen the app is on, rather than restarting it. A demo is one
+        // story told in several takes, and relaunching between them throws away the first ten
+        // seconds of every recording (home screen, loading, sign-in) and makes each flow sign
+        // in again (TM-498). `activate()` foregrounds a running app; `launch()` always restarts
+        // one. setUp already activates when no launch arguments are configured, so this is the
+        // line that was forcing the restart.
+        let continueFromCurrentScreen = (flow["continue"] as? Bool ?? false) || resolve("OCQA_FLOW_CONTINUE") == "1"
+        if continueFromCurrentScreen && app.state == .runningForeground {
+            app.activate()
+        } else {
+            app.launch()
+        }
         waitForUIStability(timeout: 3.0)
         let contractStart = contractName.isEmpty ? "" : " contract=\(escapeJSON(contractName))"
         print("OCQA_FLOW_RESULT:started total=\(steps.count) name=\(escapeJSON(flow["name"] as? String ?? "flow")) kind=\(evidenceKind)\(contractStart)")
@@ -5148,6 +5184,85 @@ class ExplorerTests: XCTestCase {
         return false
     }
 
+    /// What is sitting in front of a field, in the words a person would use.
+    ///
+    /// "It never took keyboard focus" is true and useless: it sends whoever reads it hunting
+    /// through screenshots for the reason. Nine times out of ten the reason is something drawn
+    /// over the field — a sheet, a drawer, an alert, a popover — and naming it turns the fix
+    /// into one step (TM-496). Alerts first because they also block everything else, then the
+    /// frontmost container whose frame covers the field's centre.
+    private func whatCovers(_ element: XCUIElement) -> String? {
+        let target = element.frame
+        guard target.width > 0, target.height > 0 else { return nil }
+        let centre = CGPoint(x: target.midX, y: target.midY)
+
+        // Everything below reads through `try? snapshot()`. This runs at the moment a step has
+        // already failed, over every sheet, popover and container on screen — exactly when the
+        // tree is most likely to be mid-change — and a live property read on a row that has
+        // moved fails the whole run instead of this one lookup (TM-496).
+        func firstWords(_ snapshot: XCUIElementSnapshot) -> String {
+            let own = snapshot.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !own.isEmpty { return own }
+            let texts = snapshot.children
+                .filter { $0.elementType == .staticText }
+                .prefix(3)
+                .map { $0.label.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            // Enough to recognise it on the screen, not the whole panel read aloud.
+            let joined = texts.joined(separator: " · ")
+            return joined.count > 60 ? String(joined.prefix(57)) + "…" : joined
+        }
+
+        for alert in app.alerts.allElementsBoundByIndex {
+            guard let snapshot = try? alert.snapshot() else { continue }
+            let what = firstWords(snapshot)
+            return what.isEmpty ? "an alert" : "the alert ‘\(what)’"
+        }
+        // Sheets, popovers and dialogs are unambiguous: if one covers the field, it is the
+        // thing in the way. A plain container is not — every ancestor of the field also
+        // "covers" it — so among those, only consider ones the app gave an accessibility
+        // identifier, which is what authors do to drawers and overlays and not to layout
+        // boxes. When nothing qualifies we say nothing rather than guess at an ancestor.
+        let screen = app.frame.width * app.frame.height
+        var best: (area: CGFloat, text: String)? = nil
+        func holdsAField(_ snapshot: XCUIElementSnapshot) -> Bool {
+            if snapshot.elementType == .textField || snapshot.elementType == .secureTextField || snapshot.elementType == .textView { return true }
+            return snapshot.children.contains(where: holdsAField)
+        }
+        func consider(_ candidate: XCUIElement, _ noun: String, mustNotHoldTheField: Bool) {
+            guard let snapshot = try? candidate.snapshot() else { return }
+            let frame = snapshot.frame
+            guard frame.contains(centre), frame.width > 0, frame.height > 0 else { return }
+            guard screen == 0 || frame.width * frame.height < screen * 0.98 else { return }
+            // Every ancestor of the field also "covers" it. Measured discriminator: an ancestor
+            // contains the text fields of the screen, an overlay drawn on top contains none.
+            if mustNotHoldTheField && holdsAField(snapshot) { return }
+            let what = firstWords(snapshot)
+            guard !what.isEmpty else { return }
+            let area = frame.width * frame.height
+            // The smallest covering thing is the one actually in front, not its container.
+            if best == nil || area < best!.area { best = (area, "the \(noun) ‘\(what)’") }
+        }
+        for candidate in app.sheets.allElementsBoundByIndex { consider(candidate, "sheet", mustNotHoldTheField: false) }
+        for candidate in app.popovers.allElementsBoundByIndex { consider(candidate, "popover", mustNotHoldTheField: false) }
+        for candidate in app.otherElements.allElementsBoundByIndex { consider(candidate, "panel", mustNotHoldTheField: true) }
+        if let best { return best.text }
+        if app.keyboards.firstMatch.exists, app.keyboards.firstMatch.frame.intersects(target) { return "the keyboard" }
+        // Measured on a SwiftUI drawer (a VStack with a .regularMaterial background over the
+        // form): NOTHING in the accessibility tree corresponds to it. An identifier put on such
+        // a container is pushed down onto its child texts, which sit elsewhere on the screen,
+        // and the material itself is not an element at all — every candidate covering the field
+        // was an unnamed full-screen ancestor. So the overlay cannot be named, and claiming
+        // otherwise would be a guess.
+        //
+        // What is still true and still saves the search: the field is on screen and not
+        // hittable, which only happens when something is drawn over it.
+        if !element.isHittable {
+            return "something with no accessibility identity (a drawer or a material overlay shows this way)"
+        }
+        return nil
+    }
+
     // Replace existing field contents to avoid repeatedly appending test text. Returns false
     // (and records `lastTypeFailure`) instead of letting XCTest abort the run when the field
     // cannot be focused.
@@ -5156,7 +5271,11 @@ class ExplorerTests: XCTestCase {
         lastTypeFailure = ""
         guard focusForTyping(element) else {
             let f = element.frame
+            // Say what is in the way before saying what did not happen: the covering element is
+            // the actionable half of this message (TM-496).
+            let covering = whatCovers(element)
             lastTypeFailure = "‘\(fieldDesc(element))’ was found (frame \(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))) but never took keyboard focus, including after dismissing the keyboard and scrolling it into view"
+                + (covering.map { " — \($0) is in front of it" } ?? "")
                 + (app.keyboards.count == 0 ? " — no keyboard appeared" : "")
                 + (focusedField().map { " — focus is on ‘\(fieldDesc($0))’" } ?? "")
             print("OCQA_STATE:type_focus_failed detail=\(escapeJSON(lastTypeFailure))")
