@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapp report — http://127.0.0.1:9/</title>
+<style>
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1f2328; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  .meta { color: #57606a; margin-bottom: 1.2rem; }
+  .headline { background: #f6f8fa; border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1rem 0; }
+  .warning { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 8px; padding: 0.75rem 1rem; }
+  .scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.8rem 1.5rem; }
+  .scope h2 { font-size: 1.05rem; margin-bottom: 0.35rem; }
+  .scope ul { margin-top: 0; padding-left: 1.2rem; }
+  .sev { color: #fff; border-radius: 4px; padding: 0.05rem 0.45rem; font-size: 0.78rem; font-weight: 600; margin-right: 0.4rem; }
+  ul.findings { padding-left: 1.1rem; } ul.findings li { margin-bottom: 0.6rem; }
+  table.trace { border-collapse: collapse; font-size: 0.88rem; width: 100%; }
+  table.trace th, table.trace td { text-align: left; padding: 0.25rem 0.7rem 0.25rem 0; border-bottom: 1px solid #eceef1; }
+  table.trace th { color: #57606a; font-weight: 600; }
+  .ai { color: #57606a; font-size: 0.88rem; margin: 0.15rem 0 0 0.2rem; }
+  a.evidence { display: block; margin: 0.4rem 0 0 0.2rem; max-width: 360px; }
+  a.evidence img { width: 100%; border: 1px solid #d0d7de; border-radius: 6px; }
+  .dim { color: #57606a; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.8rem; }
+  figure { margin: 0; } figure img { width: 100%; border: 1px solid #d0d7de; border-radius: 6px; }
+  figcaption { font-size: 0.8rem; color: #57606a; text-align: center; padding-top: 0.2rem; }
+  footer { margin: 2.5rem 0 1rem; color: #57606a; font-size: 0.85rem; border-top: 1px solid #d0d7de; padding-top: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>🟡 INCONCLUSIVE (exploration) <span class="dim">· 0 screens · 1 actions · 2 finding(s) · observation only</span></h1>
+<div class="meta">http://127.0.0.1:9/ · evidence page (observation, not a release decision)</div>
+<div class="meta">Deterministic basis: 2 deterministic finding(s); 0 sampled probe finding(s) are advisory.</div>
+<div class="meta">Captured at 1280×900 @1x — every screenshot on this page shares these conditions.</div>
+<div class="headline">Inconclusive — only 0 screen(s) / 1 action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.</div>
+
+<section class="scope">
+<div><h2>Checked this run</h2><ul><li>page errors (uncaught exceptions)</li>
+<li>failed/5xx requests</li>
+<li>broken links (404, same-origin crawl)</li>
+<li>placeholder links and anchors with no destination</li>
+<li>sampled dead-button probes (advisory)</li>
+<li>error text on pages</li>
+<li>load timeouts</li>
+<li>things a person would notice: faint or tiny text, controls too small to tap, text cut off, unfinished copy, unlabelled fields, missing alt text, slow pages</li></ul></div>
+<div><h2>Not checked this run</h2><ul><li>app-specific business logic (cover with Flows: record or generate, then assert)</li>
+<li>content and claim accuracy (including copy versus API data)</li>
+<li>privacy or API data minimization</li>
+<li>brand and SEO consistency</li>
+<li>visual credibility or asset quality (vision review; needs an API key)</li>
+<li>whether the words are right: spelling, tone, and claims are read by a person, not by tapp</li>
+<li>only the first few visible buttons per page are probed (web)</li>
+<li>content &amp; reachability regressions require a baseline</li></ul></div>
+<div><h2>Conditions not reached</h2><ul><li>outbound links (none encountered this run)</li>
+<li>sign-in (no login form encountered this run)</li></ul></div>
+</section>
+<h2>Findings</h2>
+<ul class="findings">
+<li>
+  <span class="sev" style="background:#bc4c00">high</span>
+  Could not load /: page.goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:9/
+Call log:
+[2m  - navigat <span class="dim">— on /</span>
+  
+  
+  
+  
+  
+</li>
+<li>
+  <span class="sev" style="background:#9a6700">medium</span>
+  Request failed: / (net::ERR_UNSAFE_PORT)
+  
+  
+  
+  
+  
+</li>
+</ul>
+<h2>Action trace — what was done, in order</h2>
+<table class="trace"><thead><tr><th>t</th><th>action</th><th>target</th><th>screen</th></tr></thead><tbody>
+<tr><td>6.9s</td><td>open</td><td>/</td><td></td></tr>
+</tbody></table>
+<h2>Evidence — every screen explored</h2>
+<div class="grid">
+<p class='dim'>No screenshots captured.</p>
+</div>
+<h2>Recording — the full exploration</h2>
+<video controls preload="metadata" style="width:100%;border:1px solid #d0d7de;border-radius:8px" src="exploration.webm"></video>
+<footer>Generated by <a href="https://github.com/aarwitz/tapp">Tapp</a> — deterministic automated checks with explicit coverage limits. Review unchecked product risks before release.</footer>
+</body>
+</html>

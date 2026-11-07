@@ -1,5 +1,9 @@
 # Changelog
 
+## VS Code 0.3.11 — 2026-11-07
+
+- Update the bundled bridge to engine `@aarwitz/tapp@0.35.5` and refresh the canonical Tapp skill. The published extension had remained on the October engine while the package advanced.
+
 ## 0.35.5
 
 **The release check no longer reports screens it reached as unreachable.** A run records each

@@ -4,13 +4,14 @@
   "platform": "web",
   "target": "http://127.0.0.1:9/",
   "project": {
-    "dir": "/tmp/tmp.6wY7r2YELs",
-    "name": "tmp.6wY7r2YELs",
+    "dir": "/private/var/folders/jp/18xdqhwx4c1_61wrz70vpksc0000gn/T/tmp.YAmzowMMRE",
+    "name": "tmp.YAmzowMMRE",
     "remote": null
   },
   "tool": {
     "name": "tapp",
     "version": "0.35.5"
   },
-  "createdAt": "2026-11-07T22:44:58.326Z"
+  "createdAt": "2026-11-07T23:14:31.917Z",
+  "origin": "studio-prompt"
 }

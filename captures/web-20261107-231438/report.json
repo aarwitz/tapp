@@ -1,0 +1,63 @@
+{
+  "headline": "Inconclusive — only 0 screen(s) / 1 action(s) explored. The app may have crashed on launch, be stuck behind a sign-in wall, or otherwise prevent exploration. Absence of issues is NOT a pass.",
+  "inconclusive": true,
+  "screensExplored": 0,
+  "actionsPerformed": 1,
+  "findingCounts": {
+    "critical": 0,
+    "high": 1,
+    "medium": 1,
+    "low": 0,
+    "total": 2
+  },
+  "findings": [
+    {
+      "type": "network_error",
+      "severity": "high",
+      "title": "Could not load /: page.goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:9/\nCall log:\n\u001b[2m  - navigat",
+      "screen": "/",
+      "target": null,
+      "url": null,
+      "step": null,
+      "evidence": null,
+      "category": "network_error",
+      "authority": "deterministic",
+      "evaluationTier": "deterministic"
+    },
+    {
+      "type": "network_error",
+      "severity": "medium",
+      "title": "Request failed: / (net::ERR_UNSAFE_PORT)",
+      "screen": null,
+      "target": "/",
+      "url": null,
+      "step": null,
+      "evidence": null,
+      "category": "network_error",
+      "authority": "deterministic",
+      "evaluationTier": "deterministic"
+    }
+  ],
+  "checkedFor": [
+    "page errors (uncaught exceptions)",
+    "failed/5xx requests",
+    "broken links (404, same-origin crawl)",
+    "placeholder links and anchors with no destination",
+    "sampled dead-button probes (advisory)",
+    "error text on pages",
+    "load timeouts",
+    "things a person would notice: faint or tiny text, controls too small to tap, text cut off, unfinished copy, unlabelled fields, missing alt text, slow pages"
+  ],
+  "notChecked": [
+    "app-specific business logic (cover with Flows: record or generate, then assert)",
+    "content and claim accuracy (including copy versus API data)",
+    "privacy or API data minimization",
+    "brand and SEO consistency",
+    "visual credibility or asset quality (vision review; needs an API key)",
+    "whether the words are right: spelling, tone, and claims are read by a person, not by tapp",
+    "only the first few visible buttons per page are probed (web)",
+    "content & reachability regressions require a baseline"
+  ],
+  "platform": "web",
+  "target": "http://127.0.0.1:9/"
+}

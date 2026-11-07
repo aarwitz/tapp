@@ -1,0 +1,7 @@
+OCQA_CONTEXT:{"viewport":{"width":1280,"height":900},"deviceScaleFactor":1}
+OCQA_RECORDING:{"file":"exploration.webm","startsAtMs":2052,"fps":25}
+OCQA_ACTION:{"t":6869,"type":"open","target":"/","via":"/","narrative":"Opened /"}
+OCQA_ISSUE:{"t":6890,"type":"network_error","severity":"medium","title":"Request failed: / (net::ERR_UNSAFE_PORT)","screen":"/","target":"/"}
+OCQA_ISSUE:{"t":6891,"type":"network_error","severity":"high","title":"Could not load /: page.goto: net::ERR_UNSAFE_PORT at http://127.0.0.1:9/\nCall log:\n\u001b[2m  - navigat","screen":"/"}
+OCQA_PROGRESS:{"action":1,"max":40,"states":0}
+OCQA_COMPLETE:{"actions":1,"screens":0,"credentialsProvided":false,"credentialsUsed":false,"timedOut":false,"stop":"frontier-drained","outbound":{"total":0,"checked":0,"mailtos":0}}
