@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { FlowLog, flowVariables, inferFlowPlatform, loadFlowFile, normalizeFlowStep, substituteFlowValue } from "../mcp-server/src/flow-runtime.js";
+import { FlowLog, flowVariables, inferFlowPlatform, loadFlowFile, normalizeFlowStep, substituteFlowValue, isOptionalStep, validateFlowSteps } from "../mcp-server/src/flow-runtime.js";
 
 test("Flow normalization is shared by native and browser drivers", () => {
   assert.deepEqual(normalizeFlowStep({ tap: "Continue" }), { action: "tap", target: "Continue", value: "Continue", params: {} });
@@ -66,4 +66,23 @@ test("FlowLog identifies compiled release-contract evidence and every attributed
   assert.equal(result.contract, "checkoutCompletes");
   assert.match(result.lines[1], /"contract":"checkoutCompletes"/);
   assert.match(result.lines[1], /"task":"completeCheckout"/);
+});
+
+test("a step can be optional, so a screen that only sometimes appears does not decide the run", () => {
+  // The iOS "Save Password?" sheet appears after a sign-in on some runs and not others, same
+  // account, same flow. A flow that taps it fails on the runs without it; a flow that ignores
+  // it fails on the runs with it. There was no way to write one that passed both times, which
+  // meant the journey could not be kept and re-checked at all (TM-497, public issue 33).
+  assert.equal(isOptionalStep(normalizeFlowStep({ tap: { target: "Not Now", optional: true } })), true);
+  assert.equal(isOptionalStep(normalizeFlowStep({ tap: { target: "Not Now", optional: "true" } })), true);
+  assert.equal(isOptionalStep(normalizeFlowStep({ tap: { target: "Not Now" } })), false);
+  assert.equal(isOptionalStep(normalizeFlowStep({ tap: "Not Now" })), false, "a bare target is never optional");
+  assert.equal(isOptionalStep(normalizeFlowStep({ action: "tap", target: "Not Now", optional: true })), true);
+  assert.equal(isOptionalStep(undefined), false);
+
+  // It stays a normal step otherwise: same action, same target, and the validator accepts it.
+  const step = normalizeFlowStep({ tap: { target: "Not Now", optional: true } });
+  assert.equal(step.action, "tap");
+  assert.equal(step.target, "Not Now");
+  assert.deepEqual(validateFlowSteps({ platform: "ios", steps: [{ tap: { target: "Not Now", optional: true } }] }), []);
 });

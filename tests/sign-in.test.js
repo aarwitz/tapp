@@ -90,3 +90,51 @@ test("a machine never signs in through somebody else's identity provider", () =>
   assert.match("Sign in", SIGN_IN_NAME);
   assert.doesNotMatch("Open My Profile", SIGN_IN_NAME);
 });
+
+// TM-618: iOS signs in from the Swift harness, which cannot import this module, so its exclusion
+// list is a copy. A copy maintained by hope drifts, and the thing it protects is serious: pressing
+// "Continue with Google" hands a third-party identity provider a session on someone's behalf, and
+// the hand-off makes the app's own form vanish so the harness's form-gone check reads it as
+// success. This pins the two together by behaviour, on the names that matter.
+test("the iOS harness's exclusion list agrees with NOT_SIGN_IN", async () => {
+  const fs = await import("node:fs");
+  const swift = fs.readFileSync(new URL("../Harness/OCQAHarnessUITests/ExplorerTests.swift", import.meta.url), "utf8");
+
+  const block = swift.match(/let neverSignIn = \[([\s\S]*?)\]/);
+  assert.ok(block, "the harness must still declare neverSignIn — if it was renamed, update this test with it");
+  const swiftList = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(swiftList.length >= 20, `expected the full mirrored list, found ${swiftList.length}`);
+  const swiftForbids = (name) => swiftList.some((needle) => name.toLowerCase().includes(needle));
+
+  // Both sides must reach the same verdict on every one of these. The third-party providers are
+  // the cases that must never regress.
+  const MUST_REFUSE = [
+    "Continue with Google", "Continue with Apple", "Continue with Facebook", "Continue with GitHub",
+    "Continue with Microsoft", "Sign in with Google", "Forgot password?", "Reset my password",
+    "Create an account", "Sign up", "Register", "Privacy policy", "Terms of service",
+    "Single sign-on", "Skip", "Cancel", "Dismiss", "Close", "Need help", "Show password",
+  ];
+  const MUST_ALLOW = ["Sign in", "Log in", "Continue", "Submit", "Next", "Get started", "Start training", "Open My Profile"];
+
+  for (const name of MUST_REFUSE) {
+    assert.ok(NOT_SIGN_IN.test(name), `shared rule should refuse ${name}`);
+    assert.ok(swiftForbids(name), `the iOS harness list should refuse ${name} — it has drifted from NOT_SIGN_IN`);
+  }
+  for (const name of MUST_ALLOW) {
+    assert.ok(!NOT_SIGN_IN.test(name), `shared rule should allow ${name}`);
+    assert.ok(!swiftForbids(name), `the iOS harness list should allow ${name} — it has drifted from NOT_SIGN_IN`);
+  }
+});
+
+// The harness must refuse to sign in rather than press a provider button when that is all there is.
+test("the iOS harness rules the dangerous buttons out before preferring a name", async () => {
+  const fs = await import("node:fs");
+  const swift = fs.readFileSync(new URL("../Harness/OCQAHarnessUITests/ExplorerTests.swift", import.meta.url), "utf8");
+  const fn = swift.match(/func submitButton\(\) -> XCUIElement\? \{[\s\S]*?\n        \}/);
+  assert.ok(fn, "submitButton() must still exist");
+  const body = fn[0];
+  assert.match(body, /isNeverSignIn/, "submitButton() must consult the exclusion list");
+  // The filter has to come before the keyword preference, or a provider button still wins.
+  assert.ok(body.indexOf("isNeverSignIn") < body.indexOf("keywords.contains"),
+    "the exclusion must be applied before the keyword preference");
+});

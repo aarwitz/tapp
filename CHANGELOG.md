@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.35.6
+
+**A sign-in step no longer presses "Continue with Google".** Pressing a provider button hands a
+third-party identity provider a session on someone's behalf, which the sign-in rule has forbidden
+by name since it was written — but only the web runner followed it. On iOS the harness matched any
+button whose name contained "continue", with nothing ruled out, and took the first one; worse, the
+hand-off makes the app's own form disappear, so its form-gone check read that as a successful
+sign-in. The macOS runner never checked anything after pressing, so a dead button passed. The
+Android interactive session had its own word list and judged success by whether the screen title
+changed, which an app whose two screens share a title defeats. All four now use the one rule, and
+a sign-in step passes only once the password field has gone.
+
+**An Android login step passes only when it really signed in.** The password field was looked up
+in a snapshot taken before typing, so after typing it was not found and every control counted as
+"after the password" — a submit named for the product rather than the verb then lost to the first
+clickable thing on screen, usually the email field. Tapping a text field succeeds, so the step
+passed with the form still up. The field is found again by id, a text field is never offered as
+the thing that signs you in, and the keyboard is dismissed only when one is actually up: pressing
+Back without one leaves the screen, and the form disappearing that way is not signing in either.
+
+**Run evidence is cleared out instead of growing for ever.** Nothing ever removed a capture; on the
+machine that prompted this it was 853 runs and 3.4 GB going back three months, while `tapp doctor`
+reported the free disk without mentioning that Tapp held the missing space. Evidence older than
+`TAPP_KEEP_EVIDENCE_DAYS` (14 by default, `off` to disable) goes when a run finishes, a saved
+report marks its own run to keep, and `doctor` says how much is held, in how many runs, and how old
+the oldest is.
+
+**A run's record says which build of Tapp produced it.** It carried a version number taken from the
+package file, which reads the same in the published package and in a working copy for the whole
+time that version is in development — so evidence from an unreleased build was indistinguishable
+from the real thing. It now says whether the run came from the published package or a source
+checkout, and for a checkout, which commit.
+
+**The bundled instructions follow a project's pinned version.** They told every agent to run the
+newest published Tapp, which contradicts a project that pins an exact one and refuses to run on
+anything else. They now say to use `.tapp/version` where it exists.
+
+**A flow records when each step happened, and a step can be optional.** Step timings are written in
+the run's own time, so a recording can be cut by step; `optional: true` lets a step that finds
+nothing report what it did not find and carry on, for the system prompts that appear on some runs
+and not others.
+
 ## VS Code 0.3.11 — 2026-11-07
 
 - Update the bundled bridge to engine `@aarwitz/tapp@0.35.5` and refresh the canonical Tapp skill. The published extension had remained on the October engine while the package advanced.

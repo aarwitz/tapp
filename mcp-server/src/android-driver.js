@@ -365,6 +365,17 @@ export class AndroidDriver {
 
   async back() { await this.adb(["shell", "input", "keyevent", "KEYCODE_BACK"]); return { status: "ok" }; }
 
+  /**
+   * Is the soft keyboard on screen? Back means "close the keyboard" while it is, and "leave this
+   * screen" once it is not — so anything that presses Back to uncover a control has to ask first
+   * (TM-554).
+   */
+  async imeShowing() {
+    const r = await this.adb(["shell", "dumpsys", "input_method"]);
+    if (r.code !== 0) return false;
+    return /\bmInputShown=true\b/.test(String(r.stdout || ""));
+  }
+
   async swipe(direction = "up") {
     const points = {
       up: [540, 1500, 540, 500], down: [540, 500, 540, 1500],

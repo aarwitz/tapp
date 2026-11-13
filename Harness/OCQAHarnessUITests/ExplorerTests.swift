@@ -773,10 +773,32 @@ class ExplorerTests: XCTestCase {
         passF.typeText("\n")
         if formGone(within: 4) { return ("ok", "") }
 
+        // TM-618: this used to match any button whose name contained one of the keywords, with
+        // nothing ruled out. "Continue with Google" contains "continue", so a sign-in step could
+        // press it — handing a third-party identity provider a session, which a machine must never
+        // do on someone's behalf. Worse, the hand-off makes the app's own form disappear, so the
+        // formGone() check above read it as a successful sign-in.
+        //
+        // MIRROR: these two lists are the Swift copy of NOT_SIGN_IN and SIGN_IN_NAME in
+        // mcp-server/src/sign-in.js. tests/sign-in.test.js fails if they drift apart — change both
+        // together or the test will tell you.
+        let neverSignIn = [
+            "forgot", "reset", "recover", "remember", "show password", "hide password", "cancel",
+            "go back", "back to", "sign up", "signup", "create account", "create an account",
+            "create your account", "register", "get started free", "privacy", "terms", "need help",
+            "help?", "continue with", "with google", "with apple", "with facebook", "with github",
+            "with microsoft", "single sign", "sso", "close", "dismiss", "skip",
+        ]
+        func isNeverSignIn(_ name: String) -> Bool {
+            neverSignIn.contains { name.contains($0) }
+        }
         func submitButton() -> XCUIElement? {
             let keywords = ["log in", "login", "sign in", "signin", "continue", "submit", "next", "get started"]
             let buttons = app.buttons.allElementsBoundByIndex.filter { $0.exists }
-            return buttons.first { b in
+            // Rule out the dangerous ones first, then prefer a sign-in name — the same order as
+            // the shared rule. A product-named button is handled by the Return key above.
+            let usable = buttons.filter { !isNeverSignIn(($0.label + " " + $0.identifier).lowercased()) }
+            return usable.first { b in
                 let t = (b.label + " " + b.identifier).lowercased()
                 return keywords.contains { t.contains($0) }
             }

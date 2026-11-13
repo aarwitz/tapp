@@ -26,6 +26,33 @@ import { existingProjectArtifactPath, isProjectArtifactDirectory } from "../mcp-
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
+
+// After a run has written its own evidence, remove evidence that is past the retention window
+// (TM-630). Doing it in teardown needs no new command, and a tidy-up problem must never turn a
+// good run bad — hence the swallow.
+// Saving a report means the author is relying on that run, so it is marked to survive the
+// retention window (TM-630). Honouring the mark was useless while nothing wrote it.
+async function keepThisRun(structured, reason) {
+  try {
+    const { keepRunFor } = await import(path.join(packageRoot, "mcp-server", "src", "evidence-retention.js"));
+    const kept = keepRunFor(structured, reason);
+    if (kept.kept) console.log(`   This run is marked to keep, so clearing out old evidence will not remove it.`);
+  } catch { /* marking is a courtesy, never a reason to fail a run */ }
+}
+
+async function pruneEvidenceQuietly() {
+  try {
+    const { pruneEvidence } = await import(path.join(packageRoot, "mcp-server", "src", "evidence-retention.js"));
+    const pruned = pruneEvidence();
+    if (pruned.removed.length) {
+      const { formatStorage } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
+      console.log(`Tidied up: removed ${pruned.removed.length} run${pruned.removed.length === 1 ? "" : "s"} older than ${pruned.keepDays} days, freeing ${formatStorage(pruned.freedBytes)}.`);
+      // Tapp cannot know that a path was quoted in a note somewhere else, so say how to keep one.
+      console.log(`   Keep a run for ever by putting a .tapp-keep file in it; saved reports are marked already.`);
+    }
+  } catch { /* never fail a run over housekeeping */ }
+}
+
 const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
 
 // Redirect all writable output away from the (possibly read-only) package dir. TAPP_HOME and
@@ -1021,6 +1048,7 @@ switch (command) {
         if (flags.json && typeof flags.json === "string") {
           fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
           console.log(`\n📄 Full report JSON: ${flags.json} (pass as --baseline next run to diff regressions)`);
+          await keepThisRun(r.structured, `saved as ${flags.json}`);
         }
         break;
       }
@@ -1133,6 +1161,7 @@ switch (command) {
     if (flags.json && typeof flags.json === "string") {
       fs.writeFileSync(flags.json, JSON.stringify(r.structured, null, 2));
       console.log(`\n📄 Full report JSON: ${flags.json} (pass as --baseline next run to diff regressions)`);
+      await keepThisRun(r.structured, `saved as ${flags.json}`);
     }
     break;
   }
@@ -1623,6 +1652,7 @@ switch (command) {
     const evidenceWritten = fs.existsSync(evidenceDir) && fs.readdirSync(evidenceDir).length > 0;
     if (evidenceWritten) console.log(`\nEvidence: ${evidenceDir}`);
     else console.error("\n⚠️ Evidence unavailable — the platform runner did not write any artifacts for this Flow run.");
+    await pruneEvidenceQuietly();
     process.exit(result.status ?? 1);
   }
 
@@ -1794,6 +1824,7 @@ switch (command) {
     const result = spawnSync(process.execPath, [path.join(packageRoot, "scripts", "run-web-scenario.js"), absolute, url], { stdio: "inherit", env });
     if (fs.existsSync(flowLog)) spawnSync("python3", [path.join(packageRoot, "scripts", "flow_lib.py"), "report", flowLog], { stdio: "inherit" });
     console.log(`\nEvidence: ${evidenceDir}`);
+    await pruneEvidenceQuietly();
     process.exit(result.status ?? 1);
   }
 
@@ -1956,13 +1987,29 @@ switch (command) {
       pyyaml.code === 0 ? sayOk("PyYAML", "importable (YAML Flow replay)") : sayBad("PyYAML", "missing — `python3 -m pip install pyyaml` (YAML Flow replay needs it; JSON Flows work without)");
     }
 
-    const { storagePreflight } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
+    const { storagePreflight, formatStorage } = await import(path.join(packageRoot, "mcp-server", "src", "environment-preflight.js"));
     const storage = storagePreflight(tappHome);
     report.disk = { level: storage.level, message: storage.message || null };
     if (storage.level === "blocked") { sayBad("Disk space", storage.message); healthy = false; }
     else if (storage.level === "warning") say(`  ⚠️  Disk space — ${storage.message}`);
     else if (storage.level === "ok") sayOk("Disk space", storage.message);
     else say(`  ⬜ Disk space — ${storage.message || "could not be checked"}`);
+
+    // What Tapp itself is holding, next to the machine's free space (TM-630): the disk line alone
+    // let 3.4 GB of our own run evidence go unmentioned for three months.
+    const { evidenceUsage, keepDays, DEFAULT_KEEP_DAYS, formatAge } =
+      await import(path.join(packageRoot, "mcp-server", "src", "evidence-retention.js"));
+    const usage = evidenceUsage();
+    const days = keepDays();
+    report.evidence = { runs: usage.runs, bytes: usage.bytes, keepDays: days };
+    if (!usage.runs) sayOk("Evidence", `none kept yet (${days ? `removed after ${days} days` : "kept for ever"})`);
+    else {
+      const window = days
+        ? `removed after ${days} days`
+        : "kept for ever — TAPP_KEEP_EVIDENCE_DAYS is off";
+      say(`  ${days ? "✅" : "⚠️ "} Evidence — ${formatStorage(usage.bytes)} in ${usage.runs} run${usage.runs === 1 ? "" : "s"}`
+        + `${usage.oldestMs ? `, oldest ${formatAge(Date.now() - usage.oldestMs)}` : ""} · ${window}`);
+    }
 
     say("\n  Platforms:");
     if (process.platform === "darwin") {

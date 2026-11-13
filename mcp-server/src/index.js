@@ -30,7 +30,7 @@ const workspaceRoot = (() => {
 })();
 const scriptsDir = path.join(repoRoot, "scripts");
 import { writeCaptureProvenance, readCaptureProvenance, captureBelongsToProject, provenanceLabel } from "./capture-provenance.js";
-import { findSignInSubmit } from "./sign-in.js";
+import { chooseSignInSubmit, findSignInSubmit } from "./sign-in.js";
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
 // The old alias remains a read-only fallback; unset repository development stays local.
 const tappHome = (process.env.TAPP_HOME || "").trim();
@@ -1212,14 +1212,32 @@ async function sessionAct(cmd) {
           s.latestTree = await s.driver.settle(2200, s.latestTree);
           const pr = await s.driver.type(passwordField.id || passwordField.label, cmd.password || s.creds.password || "", s.latestTree);
           s.latestTree = await s.driver.settle(2200, s.latestTree);
-          const submit = s.latestTree.elements.find((e) => e.clickable && /sign in|log in|login|continue/i.test(`${e.text} ${e.label} ${e.id}`));
+          // One rule for choosing the control that signs you in (TM-618). This used to be its own
+          // `/sign in|log in|login|continue/i` with no exclusion list, so "Continue with Google"
+          // matched — handing a third-party identity provider a session, which a machine must
+          // never do on someone's behalf — and it took whichever such button came first in the
+          // tree. chooseSignInSubmit is the same rule the flow runners use.
+          const passwordNow = s.latestTree.elements.find((e) => (e.id && passwordField.id && e.id === passwordField.id)
+            || (e.label && passwordField.label && e.label === passwordField.label)) || passwordField;
+          const passwordIndex = s.latestTree.elements.indexOf(passwordNow);
+          const choice = chooseSignInSubmit(s.latestTree.elements.map((e, index) => ({
+            index,
+            name: `${e.text || ""} ${e.label || ""}`.replace(/\s+/g, " ").trim() || String(e.id || ""),
+            visible: Boolean(e.clickable) && !/EditText/i.test(e.type || ""),
+            disabled: e.enabled === false,
+            after: passwordIndex >= 0 && index > passwordIndex,
+          })));
+          const submit = choice ? s.latestTree.elements[choice.index] : null;
           if (er.status !== "ok" || pr.status !== "ok" || !submit) {
             status = "not_found"; detail = "Could not fill or submit the login form";
           } else {
-            const before = s.latestTree.screenTitle;
             await s.driver.tap(submit.id || submit.description || submit.text, s.latestTree);
             s.latestTree = await s.driver.settle(2200, s.latestTree);
-            if (s.latestTree.screenTitle === before) { status = "still_on_login"; detail = "Submit left the app on the login screen"; }
+            // Judge by the form, not the title: an app whose sign-in and landing screens share a
+            // title reported a sign-in that never happened (TM-618).
+            const stillOnForm = s.latestTree.elements.some((e) => (e.id && passwordNow.id && e.id === passwordNow.id)
+              || (e.secure && /EditText/i.test(e.type || "")));
+            if (stillOnForm) { status = "still_on_login"; detail = "Submit left the app on the login screen"; }
           }
         }
       }

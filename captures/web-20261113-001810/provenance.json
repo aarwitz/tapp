@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "explore",
+  "platform": "web",
+  "target": "http://127.0.0.1:9/",
+  "project": {
+    "dir": "/tmp/tmp.NuNEE4547D",
+    "name": "tmp.NuNEE4547D",
+    "remote": null
+  },
+  "tool": {
+    "name": "tapp",
+    "version": "0.35.6",
+    "build": "package"
+  },
+  "createdAt": "2026-11-13T00:18:10.513Z"
+}

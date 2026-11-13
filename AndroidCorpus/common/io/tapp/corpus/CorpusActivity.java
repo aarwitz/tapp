@@ -18,7 +18,8 @@ public final class CorpusActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         String app = getPackageName();
-        if (app.endsWith("login")) showLogin();
+        if (app.endsWith("productlogin")) showProductLogin();
+        else if (app.endsWith("login")) showLogin();
         else if (app.endsWith("shop")) showShopHome();
         else showGetStarted();
     }
@@ -115,6 +116,25 @@ public final class CorpusActivity extends Activity {
             if (email.getText().length() == 0 || password.getText().length() == 0) error.setText("Email and password are required");
             else showLoginDashboard(email.getText().toString());
         });
+    }
+
+    // A sign-in screen named the way real products name theirs: the button says what the product
+    // does, not "Sign In", and the decoys ("Forgot password?", "Continue with Google") sit around
+    // it. tapp cannot match this button by name, so it must find it by position — the path that
+    // silently tapped the email field before TM-554.
+    private void showProductLogin() {
+        screen("Sign In");
+        text("Use any non-empty corpus credentials.");
+        EditText email = field("Email", "email_field", false);
+        EditText password = field("Password", "password_field", true);
+        TextView error = text("");
+        error.setContentDescription("login_error");
+        button("Forgot password?", "forgot_button", v -> error.setText("Check your email"));
+        button("Start training", "start_training_button", v -> {
+            if (email.getText().length() == 0 || password.getText().length() == 0) error.setText("Email and password are required");
+            else showLoginDashboard(email.getText().toString());
+        });
+        button("Continue with Google", "google_button", v -> error.setText("Not this one"));
     }
 
     private void showLoginDashboard(String email) {

@@ -2,7 +2,7 @@
 // driver; Tapp owns the shared Flow semantics and OCQA evidence protocol.
 import fs from "node:fs";
 import path from "node:path";
-import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue } from "./flow-runtime.js";
+import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue, isOptionalStep } from "./flow-runtime.js";
 import { loadPlaywright, webContextOptions } from "./web-explorer.js";
 import { findSignInSubmit } from "./sign-in.js";
 
@@ -274,8 +274,14 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
     }
     await settle(page);
   } catch (error) {
-    status = "fail";
-    detail = distillPlaywrightFailure(error.message || String(error));
+    // A step the author marked optional reports what it did not find, and the run carries on.
+    if (isOptionalStep(raw)) {
+      status = "skip";
+      detail = `optional — ${distillPlaywrightFailure(error.message || String(error))}`;
+    } else {
+      status = "fail";
+      detail = distillPlaywrightFailure(error.message || String(error));
+    }
   }
   return { action, target: action === "login" ? "sign-in form" : target || value, status, detail, task: raw.task };
 }

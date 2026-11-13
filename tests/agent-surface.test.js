@@ -111,6 +111,26 @@ test("the public staging surface includes every agent exposure", { skip: !hasPri
   }
 });
 
+// TM-670: the guard stages from HEAD, which is right — it must judge what would ship, not a
+// working copy full of scratch. The trap is that running it before committing then validates the
+// PREVIOUS commit and prints PASSED. A forbidden client string reached two shipped test files
+// twice that way, each time with a green guard run that was answering about code not yet written.
+// So it now refuses when the publication surface is dirty. A warning would not do: output gets
+// tailed, and a warning scrolls past.
+test("the guard refuses to judge an uncommitted publication surface", { skip: !hasPrivatePublicationTool }, () => {
+  const sync = read("tools/sync-public.sh");
+  const dirtyCheck = sync.indexOf("git -C \"$PRIVATE_ROOT\" status --porcelain");
+  const stage = sync.indexOf("git -C \"$PRIVATE_ROOT\" archive HEAD");
+  assert.ok(dirtyCheck > -1, "the guard must look for uncommitted changes to the shipped paths");
+  assert.ok(stage > -1, "the guard still stages from HEAD");
+  assert.ok(dirtyCheck < stage, "it must refuse before staging, not after a misleading pass");
+  assert.match(sync, /exit 1/, "a dirty surface stops the run");
+  // Scoped to what actually ships: a dirty CLAUDE.local.md or scratch file must not block anyone.
+  assert.match(sync, /status --porcelain -- "\$\{INCLUDE\[@\]\}"/,
+    "the check is scoped to the publication surface, not the whole tree");
+  assert.match(sync, /TAPP_GUARD_ALLOW_DIRTY/, "there is a stated way to run it anyway while exploring");
+});
+
 // The publish workflow ships in the public mirror, where it runs. `next` is the prerelease
 // channel the 0.17.0 RC campaign used: candidates on `next` while `latest` held the last stable.
 // An unconditional `npm publish` would make the first RC `latest` for every user, and leaves
@@ -135,4 +155,21 @@ test("publishing routes prereleases to next and never leaves next behind latest"
     "a stable release moves next forward");
   assert.match(workflow, /continue-on-error: true/,
     "a dist-tag failure must not turn an already-published release red");
+});
+
+// TM-666: tapp's own instructions told every agent to run `@latest`, which contradicts a project
+// that pins an exact engine: a project can pin one and refuse to run on anything else. The
+// puts it plainly: "never global/latest/source-by-accident". The shipped guidance has to defer to
+// a project's pin, or tapp argues with itself across machines.
+test("the shipped skill tells agents to honour a project's pinned tapp version", () => {
+  const skill = fs.readFileSync(new URL("../skills/tapp/SKILL.md", import.meta.url), "utf8");
+  assert.match(skill, /\.tapp\/version/,
+    "SKILL.md must tell an agent to use the version a project pins in .tapp/version");
+  assert.match(skill, /cat \.tapp\/version/,
+    "SKILL.md must show how to resolve the pin, not merely mention it");
+  // The pin has to be presented before the commands, or an agent follows @latest and never reads on.
+  const pinAt = skill.indexOf(".tapp/version");
+  const firstLatest = skill.indexOf("@aarwitz/tapp@latest");
+  assert.ok(pinAt !== -1 && pinAt < firstLatest,
+    "the pinned-version guidance must come before the first @latest example");
 });

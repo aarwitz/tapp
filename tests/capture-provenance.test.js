@@ -58,3 +58,35 @@ test("a capture that predates provenance belongs to nobody and says so", () => {
   assert.match(provenanceLabel(null), /predates/);
   assert.match(provenanceLabel({ kind: "audit", platform: "web", target: "https://x.test", project: { remote: "git@github.com:a/b.git" } }), /audit · web · https:\/\/x\.test · from git@github\.com:a\/b\.git/);
 });
+
+// TM-670: the version string alone cannot say which tapp produced a run. package.json reads the
+// same number in the published package and in this repository for the whole time that version is
+// being developed, so evidence from an unreleased working tree claimed a released version and no
+// checker could tell them apart — which is what stops a project refusing a wrong engine.
+test("a run's record says which build of tapp produced it", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-prov-build-"));
+  writeCaptureProvenance(dir, { kind: "explore", platform: "web", target: "x", projectDir: process.cwd() });
+  const record = JSON.parse(fs.readFileSync(path.join(dir, "provenance.json"), "utf8"));
+
+  assert.ok(record.tool.version, "the version is still recorded");
+  assert.ok(["source", "package"].includes(record.tool.build),
+    `the record must say which build produced the run, got ${JSON.stringify(record.tool)}`);
+
+  // The discriminator is whether the package root is a checkout, so assert whichever side this
+  // run is actually on. This suite runs in both: from the repository, and again from the staged
+  // public tree the publication guard builds, which has no .git and is therefore a package.
+  // Hardcoding "source" passed here and failed there — exactly the confusion the field exists
+  // to remove.
+  const root = new URL("../", import.meta.url).pathname;
+  const isCheckout = fs.existsSync(path.join(root, ".git"));
+  assert.equal(record.tool.build, isCheckout ? "source" : "package",
+    `a run from ${isCheckout ? "a checkout" : "an installed package"} must say so`);
+  if (isCheckout) {
+    assert.match(String(record.tool.commit || ""), /^[0-9a-f]{7,40}$/,
+      "a source build records the commit, so evidence can be traced to exact code");
+    assert.equal(typeof record.tool.dirty, "boolean",
+      "a source build says whether there were uncommitted changes");
+  } else {
+    assert.equal(record.tool.commit, undefined, "a package build has no commit to record");
+  }
+});

@@ -13,6 +13,32 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const VERSION = (() => { try { return require("../../package.json").version; } catch { return "0.0.0"; } })();
 
+// Which tapp actually produced this run (TM-670).
+//
+// The version string alone cannot answer that. package.json reads 0.35.5 both in the published
+// package and in this repository for the whole time 0.35.5 is being developed, so evidence from an
+// unreleased working tree — eleven commits past the release when this was written — claimed a
+// released version and no checker could tell. Contract v6 asks each job to carry "exact tapp
+// version plus verified package integrity"; a number everyone shares is neither.
+//
+// An installed package has no `.git`; a source checkout does. That is the whole discriminator.
+// Resolved once per process, like VERSION: a run must never pay for this twice, and must never
+// fail because of it.
+const BUILD = (() => {
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+  const git = (args) => execFileSync("git", ["-C", root, ...args], {
+    encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2000,
+  }).trim();
+  try {
+    if (!fs.existsSync(path.join(root, ".git"))) return { build: "package" };
+    return { build: "source", commit: git(["rev-parse", "--short", "HEAD"]), dirty: git(["status", "--porcelain"]).length > 0 };
+  } catch {
+    // A checkout we cannot interrogate is still not a published package, and saying so is more
+    // honest than implying one.
+    return { build: "source" };
+  }
+})();
+
 export const PROVENANCE_FILE = "provenance.json";
 
 function realpath(dir) {
@@ -42,7 +68,7 @@ export function writeCaptureProvenance(captureDir, { kind, platform, target = ""
     platform: String(platform || ""),
     target: String(target || ""),
     project: describeProject(projectDir),
-    tool: { name: "tapp", version: VERSION },
+    tool: { name: "tapp", version: VERSION, ...BUILD },
     createdAt: new Date().toISOString(),
     ...extra,
   };

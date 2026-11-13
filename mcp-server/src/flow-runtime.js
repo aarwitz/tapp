@@ -59,6 +59,22 @@ const ALIASES = { click: "tap", press: "tap", fill: "type", input: "type", sleep
 
 // Static checks a Flow must pass before any runtime is launched. Returns human-readable errors;
 // an empty array means every step is in the vocabulary and shaped so a driver can execute it.
+/**
+ * A step marked `optional: true` passes whether or not its target is there.
+ *
+ * Some screens only appear sometimes. The iOS "Save Password?" sheet shows up after a sign-in on
+ * some runs and not others, with the same account and the same flow, so a flow that taps it
+ * fails on the runs without it and a flow that ignores it fails on the runs with it. There was
+ * no way to write one that passed both times, which means the journey could not be kept and
+ * re-checked at all (TM-497, public issue 33).
+ *
+ * An optional step that fails is reported as skipped, with the reason, rather than passing
+ * silently — a run should still say what it did not find.
+ */
+export function isOptionalStep(step) {
+  return Boolean(step?.params?.optional === true || step?.params?.optional === "true");
+}
+
 export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
   const errors = [];
   const steps = Array.isArray(flow?.steps) ? flow.steps : [];
@@ -149,12 +165,19 @@ export function loadFlowFile(flowPath, options = {}) {
 }
 
 export class FlowLog {
-  constructor({ logPath, flow }) {
+  constructor({ logPath, flow, now = () => Date.now() }) {
     this.logPath = logPath;
     this.flow = flow;
     this.lines = [];
     this.failed = 0;
     this.executed = 0;
+    // When each step happened, so a recording of the run can be cut by step name instead of by
+    // eye. A step is reported once it has finished, so its start is the moment the previous one
+    // ended — which is what you want for cutting: the segment carries the step's own settling
+    // and waiting, not just the instant it acted (TM-497).
+    this.now = now;
+    this.startedAtMs = now();
+    this.cursorMs = this.startedAtMs;
     this.contract = flow.releaseContract?.name || "";
     this.criticality = flow.releaseContract?.criticality || "";
     this.kind = this.contract ? "release-contract" : flow.kind || "flow";
@@ -172,7 +195,10 @@ export class FlowLog {
   step({ index, action, target, status, detail = "", actor = "", task = "" }) {
     this.executed += 1;
     if (status === "fail") this.failed += 1;
-    this.emit(`OCQA_FLOW_STEP:${JSON.stringify({ index, action, target, assert: action.startsWith("assert_"), status, detail, ...(actor ? { actor } : {}), ...(task ? { task } : {}), ...(this.contract ? { contract: this.contract } : {}) })}`);
+    const startMs = this.cursorMs - this.startedAtMs;
+    const endMs = this.now() - this.startedAtMs;
+    this.cursorMs = this.startedAtMs + endMs;
+    this.emit(`OCQA_FLOW_STEP:${JSON.stringify({ index, action, target, assert: action.startsWith("assert_"), status, detail, startMs, endMs, ...(actor ? { actor } : {}), ...(task ? { task } : {}), ...(this.contract ? { contract: this.contract } : {}) })}`);
     if (status === "fail") {
       this.emit(`OCQA_ISSUE:${JSON.stringify({
         type: "flow_assertion_failed",
@@ -187,6 +213,7 @@ export class FlowLog {
 
   finish(extra = {}) {
     const passed = this.failed === 0 && this.executed > 0;
+    extra = { startedAt: new Date(this.startedAtMs).toISOString(), durationMs: this.now() - this.startedAtMs, ...extra };
     // Keep `passed` first for marker consumers that stream-match the payload. `extra` carries
     // run context worth diagnosing from the log alone (e.g. the URL the flow actually opened —
     // field issue #15 was six flows silently replayed against the wrong page).

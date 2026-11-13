@@ -23,8 +23,12 @@ screen or journey works from source inspection alone.
 | Decide whether a merge passes policy | `ci`; exploration never decides this |
 
 Prefer connected `tapp_*` MCP tools when available: they keep interactive sessions alive and return
-screenshots inline. Otherwise run `npx -y @aarwitz/tapp@latest` from the app repository. Do not require MCP,
-an account, an API key, or a global install for the core workflow.
+screenshots inline. Otherwise run Tapp from the app repository. Do not require MCP, an account, an
+API key, or a global install for the core workflow.
+
+**Use the version the project pins.** Where `.tapp/version` exists it is this project's engine, may
+be enforced, and a result from any other engine is not evidence about it — substitute it everywhere:
+`npx -y @aarwitz/tapp@$(cat .tapp/version)`. `@latest` below applies only when nothing is pinned.
 
 ## Start source-connected
 

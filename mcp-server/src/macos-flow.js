@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { MacosDriver } from "./macos-driver.js";
-import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue } from "./flow-runtime.js";
+import { FlowLog, flowVariables, normalizeFlowStep, substituteFlowValue, isOptionalStep } from "./flow-runtime.js";
 import { chooseSignInSubmit } from "./sign-in.js";
 
 const DEFAULT_TIMEOUT = 6000;
@@ -83,6 +83,16 @@ export async function runMacosFlow({ flow, appPath, logPath, screenshotDir, driv
         if (!submit) throw new Error("could not identify a sign-in control");
         const pressed = d.tap(submit.label || submit.id, snap);
         if (pressed.status !== "ok") throw new Error(pressed.detail || "could not submit the sign-in form");
+        // A sign-in step may only pass once the password field has gone (TM-618). Pressing a
+        // control always "succeeds"; without this, a dead or mis-chosen button is indistinguishable
+        // from signing in — the same lie TM-554 removed from Android. There is no keyboard to
+        // dismiss on macOS, so this needs no retry, only the truth.
+        snap = d.settle();
+        const stillSecure = snap.elements.find((element) => element.secure
+          || /password|passcode/i.test(`${element.id} ${element.label}`));
+        if (stillSecure) {
+          throw new Error(`sign-in did not leave the form: ‘${submit.label || submit.id}’ was pressed but the password field is still on screen`);
+        }
       } else if (action === "back") {
         d.key("escape");
       } else if (action === "wait_for") {
@@ -126,9 +136,15 @@ export async function runMacosFlow({ flow, appPath, logPath, screenshotDir, driv
         snap = d.settle();
       }
     } catch (error) {
-      status = "fail";
-      detail = error.message || String(error);
-      if (screenshotDir) d.screenshot(path.join(screenshotDir, `flow-failure-${index + 1}.png`), snap);
+      // A step the author marked optional reports what it did not find, and the run carries on.
+      if (isOptionalStep(raw)) {
+        status = "skip";
+        detail = `optional — ${error.message || String(error)}`;
+      } else {
+        status = "fail";
+        detail = error.message || String(error);
+        if (screenshotDir) d.screenshot(path.join(screenshotDir, `flow-failure-${index + 1}.png`), snap);
+      }
     }
     log.step({ index: index + 1, action, target: action === "login" ? "sign-in form" : stepTarget || value, status, detail, task: raw.task });
     if (status === "fail" && !flow.continueOnFailure) break;
