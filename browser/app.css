@@ -631,3 +631,80 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 
 /* A suggestion this Studio cannot start is dimmed, not deleted: pressing it still answers. */
 .prompt-suggestions [data-kind].elsewhere { opacity:.62; }
+
+/* ---- Findings and Coverage (TM-794) -------------------------------------------------------
+   Findings reads as a short list of kinds a person can scan, each opening onto the individual
+   places. Coverage reads left to right, one column per step away from the screen the run
+   started on, the way the run actually went. */
+
+.run-picker { min-width:240px; max-width:340px; padding:7px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--control); color:var(--ink); font-size:11px; }
+
+.findings-tally { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px; }
+.findings-tally .button-link { margin-top:0; margin-left:auto; }
+.sev-tally { border:1px solid var(--line); border-radius:999px; padding:4px 11px; font-size:11px; font-weight:600; color:var(--muted); background:var(--control); }
+.sev-tally.critical,.sev-tally.high { color:var(--tapp-red); border-color:rgba(248,81,73,.45); background:var(--tapp-red-bg); }
+.sev-tally.medium { color:var(--tapp-amber-soft); border-color:rgba(210,153,34,.45); background:var(--tapp-amber-bg); }
+
+.finding-group { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); margin-bottom:8px; }
+.finding-group>summary { display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; list-style:none; }
+.finding-group>summary::-webkit-details-marker { display:none; }
+.finding-group>summary::after { content:"▾"; width:14px; text-align:center; color:var(--muted); font-size:11px; line-height:1; transition:transform .12s ease; }
+.finding-group.single { display:flex; align-items:center; gap:10px; padding:12px 14px; }
+.finding-group.single .group-count { color:var(--faint); }
+.finding-group[open]>summary::after { transform:rotate(180deg); }
+.finding-group>summary:hover { background:var(--wash); border-radius:var(--radius); }
+.group-label { flex:1; font-weight:600; font-size:13px; }
+.group-count { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.sev-dot { width:8px; height:8px; border-radius:50%; background:var(--faint); flex:none; }
+.sev-dot.critical,.sev-dot.high { background:var(--tapp-red); }
+.sev-dot.medium { background:var(--tapp-amber); }
+.sev-dot.low { background:var(--tapp-text-faint); }
+.finding-group .detail-list { padding:0 18px 14px 34px; }
+.finding-group .detail-list li { margin-bottom:5px; }
+.finding-group .detail-list b { text-transform:uppercase; font-size:9px; letter-spacing:.06em; }
+.detail-list b.sev-critical,.detail-list b.sev-high { color:var(--tapp-red); }
+.detail-list b.sev-medium { color:var(--tapp-amber-soft); }
+
+.coverage-counts { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:16px; }
+.coverage-counts span { border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-size:11px; color:var(--muted); background:var(--control); }
+.coverage-counts span b { color:var(--ink); font-size:13px; margin-right:4px; font-variant-numeric:tabular-nums; }
+.coverage-counts .button-link { margin-top:0; margin-left:auto; }
+
+.coverage-map { display:flex; gap:22px; align-items:flex-start; overflow-x:auto; padding-bottom:10px; }
+.coverage-column { display:flex; flex-direction:column; gap:14px; flex:none; width:210px; }
+.coverage-column-head { margin:0 0 2px; color:var(--faint); font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+
+.screen-card { border:1px solid var(--line); border-radius:var(--radius-lg); background:var(--paper); padding:10px; }
+.screen-card.orphan { border-style:dashed; }
+.screen-card strong { display:block; margin-top:9px; font-size:12px; line-height:1.3; }
+.screen-card>small { display:block; margin-top:3px; color:var(--faint); font-size:10px; }
+/* The card is the shape of the thing it is a picture of. A web still forced into a phone's
+   portrait box loses its left edge to `cover`, taking the screen's own name with it. */
+.screen-shot { position:relative; aspect-ratio:3/4; border-radius:var(--radius); overflow:hidden; background:var(--wash); display:flex; align-items:center; justify-content:center; }
+.coverage-map[data-platform="web"] .screen-shot,
+.coverage-map[data-platform="macos"] .screen-shot { aspect-ratio:16/10; }
+.coverage-map[data-platform="web"] .coverage-column,
+.coverage-map[data-platform="macos"] .coverage-column { width:260px; }
+.screen-shot img { width:100%; height:100%; object-fit:cover; object-position:top center; }
+.screen-shot-none { color:var(--faint); font-size:10px; }
+.screen-note { position:absolute; left:6px; right:6px; bottom:6px; padding:3px 6px; border-radius:4px; background:rgba(9,12,17,.82); color:var(--tapp-amber-soft); font-size:9px; text-align:center; }
+.screen-exits { margin:9px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+.screen-exits li { color:var(--muted); font-size:10px; line-height:1.35; }
+.screen-exits li span { color:var(--faint); }
+.screen-exits-none { margin:9px 0 0; color:var(--faint); font-size:10px; }
+.coverage-note { margin-top:14px; font-size:11px; }
+
+@media (max-width:860px) {
+  .coverage-column { width:168px; }
+  .run-picker { min-width:0; width:100%; max-width:none; }
+}
+
+.findings-section { margin-bottom:26px; }
+.findings-section h2 { font-size:14px; margin-bottom:4px; }
+.findings-section h2 i { color:var(--muted); font-style:normal; font-size:12px; font-variant-numeric:tabular-nums; }
+.findings-section>.muted { font-size:11px; margin-bottom:10px; }
+
+/* A run with no recorded transitions has no path to lay out, so its screens are a plain grid. */
+.coverage-map.flat { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:16px; overflow-x:visible; }
+.coverage-map.flat[data-platform="web"] { grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); }
+.coverage-map.flat .screen-card { width:auto; }

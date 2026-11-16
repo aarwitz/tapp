@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.35.7
+
+**A run can be read: Findings and Coverage are back in the Studio.** A finding's identity is
+`type|screen|target`, so two dead buttons on one screen stay two findings and fixing one while
+breaking the other still reads as a change. That is right for regressions and wrong for reading:
+one site-wide contrast problem arrives as thirty-four lines and buries the two things worth
+fixing. Findings groups by kind for reading only — every finding is inside exactly one group,
+nothing is dropped, and a group is named in the engine's own words. A read-only audit's two kinds
+stay apart as the engine draws them: *Broken*, and *Worth a look*, so faint text never reads as a
+defect. Coverage draws `ui-map.json`, which every capture has carried all along and nothing ever
+showed: screens in columns by distance from the one the run started on, each with the still it
+wrote and the actions that led on from it. Only recorded transitions are drawn — a screen reached
+with no recorded way in gets its own column and says so, and a run with no transitions at all (a
+read-only audit clicks nothing) is a plain grid of what it opened, with the reason stated. Neither
+view computes or judges anything; only the gate decides.
+
+**tapp records the take, and the step map points at the right picture.** `simctl io recordVideo`
+records changes, not frames, so a take over a motionless screen is a handful of frames and the
+file ends at the last visual change — which is why a demo's final screen was one frame long, and
+why a hold cannot be made by keeping the recorder running. The tail is added to the file
+afterwards. The recorder's start lag is not a constant (1.4s, 2.0s and 3.9s across takes), so tapp
+marks the recording with two status-bar changes at a known instant and reads where they landed:
+0.085–0.143s accurate over six takes. iOS steps had no times at all, because the timing half runs
+in the JavaScript log while iOS flows run through the Swift harness; both runners now report when
+the steps really began. A held tail is declared rather than hidden (`45.8s — 36.9s captured, 9.0s
+holding the last screen`), and a clock an author set for screenshots survives a take. Every screen
+change falls inside its own step window, about 1.0s after it opens — locating the control happens
+inside the step — so the map points at the right picture, but not to within a third of a second.
+
+**A one-time system alert no longer stops a journey, and the run says what it did.** A system
+alert belongs to SpringBoard, not to the app, so the app's own tree has no such button and a
+flow's `tap: OK` could not reach it. `tap:` now reaches a system alert's button by its exact
+label, and a step that fails with an alert up names the buttons it is offering. `alerts:
+allow|dismiss` at the top of an iOS Flow clears whichever alert appears and **records which button
+it pressed** — the harness has cleared some alerts silently for a long time, so a run never said
+it had diverged from its script. Exact-label matching also stops `Allow` from pressing `Allow
+Once` on an alert that has no `Allow` button, and labels are compared so either apostrophe matches
+iOS's typographic `Don't Allow`.
+
+**A web journey can drag, press a key, scroll a drawer, and say when.** A bare `press: ArrowRight`
+presses the key instead of hunting the page for a control named after it.
+
 ## 0.35.6
 
 **A sign-in step no longer presses "Continue with Google".** Pressing a provider button hands a

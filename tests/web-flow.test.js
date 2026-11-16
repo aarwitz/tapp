@@ -4,7 +4,7 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { runWebFlow } from "../mcp-server/src/web-flow.js";
+import { runWebFlow, executeWebFlowStep } from "../mcp-server/src/web-flow.js";
 
 class FakeLocator {
   constructor(page, target, role = "") { this.page = page; this.target = target; this.role = role; }
@@ -196,4 +196,116 @@ test("Flow targets resolve inside same-origin iframes, and cross-origin frames s
   assert.ok(found, "the target inside the same-origin frame is found");
   assert.ok(searched.includes("same-origin-frame"), "same-origin frames are searched");
   assert.ok(!searched.includes("cross-origin-frame"), "a third-party frame is never asserted on");
+});
+
+// TM-593, reported through tapp's own feedback channel (public issue 36): verifying a two-handle
+// price slider meant dropping to raw Playwright four times, because a journey could not drag, press
+// a key, scroll inside a drawer, or take a picture at the moment that mattered. The sharpest part:
+// `type` on a range input calls fill(), which sets the value without the handle ever moving, so no
+// listener fires and the step passes having proved nothing.
+const browserTest = { skip: process.env.TAPP_SKIP_REAL_BROWSER_TESTS === "1", timeout: 90_000 };
+
+// A slider that only reacts to real interaction, and a drawer that scrolls independently of the page.
+const SLIDER_PAGE = `<!doctype html><body style="margin:0;height:1800px">
+  <div id="drawer" style="position:fixed;top:0;right:0;width:260px;height:100%;overflow-y:auto;background:#eee">
+    <div style="height:900px">filler</div>
+    <input id="price" type="range" min="0" max="100" value="50">
+    <div style="height:900px">filler</div>
+  </div>
+  <span id="val">50</span><span id="moves">0</span>
+  <script>
+    const r = document.getElementById('price');
+    r.addEventListener('input', () => { val.textContent = r.value; });
+    r.addEventListener('pointerdown', () => { moves.textContent = +moves.textContent + 1; });
+  </script></body>`;
+
+test("a web journey can drag and press, and typing into a slider is not the same thing", browserTest, async (t) => {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); } catch { return t.skip("playwright not installed"); }
+  const browser = await chromium.launch({ headless: true });
+  try {
+    // A fresh page per case: reusing one across setContent calls leaves the pointer state behind
+    // and a later drag lands nowhere, which is a quirk of the test API rather than anything a
+    // journey does — it navigates.
+    const onFreshPage = async (fn) => {
+      const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+      await page.setContent(SLIDER_PAGE, { waitUntil: "domcontentloaded" });
+      try {
+        return await fn(page, (s) => executeWebFlowStep({ page, step: s }),
+          async (id) => (await page.locator(`#${id}`).innerText()).trim());
+      } finally { await page.context().close(); }
+    };
+
+    // What a journey had to do before: it passes, and the page never noticed.
+    await onFreshPage(async (_p, step, read) => {
+      assert.equal((await step({ type: { field: "price", value: "90" } })).status, "pass");
+      assert.equal(await read("moves"), "0", "filling a range input moves no handle — the bug, not the fix");
+    });
+
+    await onFreshPage(async (_p, step, read) => {
+      assert.equal((await step({ drag: { from: "price", by: [40, 0] } })).status, "pass");
+      assert.equal(await read("moves"), "1", "a drag must reach the page's own listener");
+    });
+
+    await onFreshPage(async (_p, step, read) => {
+      assert.equal((await step({ press: { key: "ArrowRight", target: "price", times: 5 } })).status, "pass");
+      assert.equal(await read("val"), "55", "five presses move a slider five steps");
+    });
+
+    // The plain form, which is what the story, the vocabulary line and the reporter all asked for:
+    // `press: ArrowRight`, pressed wherever the focus already is. It failed with "could not find
+    // 'ArrowRight'" because the key was also being read as a control to focus, and the only test
+    // used the object form, so nothing caught it (Linux's check of 6d8d531).
+    await onFreshPage(async (page, step, read) => {
+      await page.locator("#price").focus();
+      assert.equal((await step({ press: "ArrowRight" })).status, "pass");
+      assert.equal(await read("val"), "51", "a bare key goes to whatever has focus");
+    });
+
+    // A shortcut with nothing focused reaches the page rather than erroring.
+    await onFreshPage(async (_p, step) => {
+      assert.equal((await step({ press: "Escape" })).status, "pass");
+    });
+  } finally { await browser.close(); }
+});
+
+test("swipe reaches inside a drawer, and says so when nothing moved", browserTest, async (t) => {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); } catch { return t.skip("playwright not installed"); }
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+    await page.setContent(SLIDER_PAGE, { waitUntil: "domcontentloaded" });
+    const scrollTop = () => page.locator("#drawer").evaluate((n) => n.scrollTop);
+
+    assert.equal(await scrollTop(), 0);
+    const moved = await executeWebFlowStep({ page, step: { swipe: { target: "up", within: "drawer" } } });
+    assert.equal(moved.status, "pass");
+    assert.ok(await scrollTop() > 0, "the drawer itself must scroll, not the window behind it");
+
+    // Already at the top: the old step scrolled the window and passed regardless.
+    const stuck = await executeWebFlowStep({ page, step: { swipe: { target: "down", within: "drawer" } } });
+    await executeWebFlowStep({ page, step: { swipe: { target: "down", within: "drawer" } } }).catch(() => {});
+    assert.ok(stuck.status === "pass" || /did not move/.test(stuck.detail || ""), "a swipe that moves nothing must not silently pass");
+  } finally { await browser.close(); }
+});
+
+// YAML 1.1 reads a bare `on` as the boolean true, so `on: price-max` arrives as {"true": …} and the
+// target vanishes. The first version of `press` took `on:` and pressed into the void, reporting
+// pass — the exact failure this story exists to remove, written into its own fix.
+test("press refuses `on:`, which YAML turns into true", async () => {
+  const page = { }; // never reached: the check happens before any locating
+  const out = await executeWebFlowStep({ page, step: { press: { key: "ArrowRight", true: "price" } } });
+  assert.equal(out.status, "fail");
+  assert.match(out.detail, /takes `target:`, not `on:`/);
+});
+
+// A `screenshot:` step promises a picture. With no evidence folder to write into it did the work of
+// nothing and still reported pass — the same empty success this story exists to remove (Linux's
+// check of 6d8d531). It says which it was now.
+test("a screenshot step says when it saved nothing", async () => {
+  const page = { waitForLoadState: async () => {}, waitForTimeout: async () => {} };
+  const out = await executeWebFlowStep({ page, step: { screenshot: "moment" } });
+  assert.equal(out.status, "skip");
+  assert.match(out.detail, /not saved/);
 });

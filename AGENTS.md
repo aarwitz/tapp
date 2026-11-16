@@ -58,7 +58,19 @@ Tapp's current action and pointer; the overlay is omitted from evidence screensh
 drive the person's existing/default browser profile.
 
 The interactive session/record loop is MCP-only (it needs a long-lived process). Flow replay is
-also available in the CLI. The rest of this playbook assumes the `tapp_*` MCP tools are connected. With
+also available in the CLI.
+
+To film an iOS Flow, `tapp run <flow.yml> --record take.mp4 [--hold 3s]` records the simulator and
+writes `take.steps.json` beside it: every step in the video's own seconds, so a cut can be made by
+step name instead of off a contact sheet. `--hold` keeps the last screen on screen for that long —
+it has to be added to the file afterwards, because the simulator records changes rather than
+frames and a motionless screen records nothing. Needs ffmpeg on the machine.
+
+A one-time system alert ("Allow notifications", "You have changed the icon") belongs to iOS rather
+than to the app, so a Flow's own `tap:` reaches it only by its exact button label. `alerts: allow`
+or `alerts: dismiss` at the top of an iOS Flow clears whichever one appears and records which
+button was pressed, which is what keeps a journey replayable when the alert shows up on some runs
+and not others. The rest of this playbook assumes the `tapp_*` MCP tools are connected. With
 MCP, the no-bundle-id path is: `tapp_build {projectDir}` (auto-detects + builds +
 installs, returns the bundle id) → `tapp_explore {appBundleId}`.
 

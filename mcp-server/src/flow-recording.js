@@ -26,6 +26,24 @@ export function parseFlowSteps(logText) {
 }
 
 /**
+ * When the flow's steps actually began, on the wall clock, or null.
+ *
+ * The CLI cannot use its own "now": on iOS it spawns xcodebuild, which builds and launches the
+ * harness before a single step runs — most of a minute in which the recorder is already rolling.
+ * The runner says when it really started, and this reads it back.
+ */
+export function flowStartedAtEpochMs(logText) {
+  for (const line of String(logText || "").split("\n")) {
+    if (!line.startsWith("OCQA_FLOW_CLOCK:")) continue;
+    try {
+      const value = Number(JSON.parse(line.slice("OCQA_FLOW_CLOCK:".length)).startedAtEpochMs);
+      if (Number.isFinite(value) && value > 0) return value;
+    } catch { /* a truncated line */ }
+  }
+  return null;
+}
+
+/**
  * The same steps expressed in the recording's seconds.
  *
  * `recordingStartedAtMs` is when the recorder's first frame was captured, on the same clock the
@@ -55,13 +73,19 @@ export function sidecarPath(videoPath) {
   return path.join(parsed.dir, `${parsed.name}.steps.json`);
 }
 
-export function writeStepsSidecar(videoPath, steps, { flowStartedAtMs, recordingStartedAtMs, holdMs = 0, name = "" } = {}) {
+export function writeStepsSidecar(videoPath, steps, { flowStartedAtMs, recordingStartedAtMs, holdMs = 0, name = "", videoDurationMs = null } = {}) {
   const inVideoTime = stepsInVideoTime(steps, { flowStartedAtMs, recordingStartedAtMs });
+  // What a cut must not run past. Prefer the finished file's own duration: the tail is produced by
+  // re-encoding, which lands within about a second of what was asked for, and a sidecar that
+  // claims more than the file holds sends an editor past the end.
+  const computedEnd = inVideoTime.length ? inVideoTime[inVideoTime.length - 1].end + holdMs / 1000 : 0;
+  const endsAt = Number.isFinite(videoDurationMs) && videoDurationMs > 0
+    ? Math.min(computedEnd, videoDurationMs / 1000)
+    : computedEnd;
   const out = {
     video: path.basename(String(videoPath)),
     name,
-    // What a cut should not run past: the last step's end plus whatever hold was asked for.
-    endsAt: inVideoTime.length ? Number((inVideoTime[inVideoTime.length - 1].end + holdMs / 1000).toFixed(3)) : 0,
+    endsAt: Number(endsAt.toFixed(3)),
     holdSeconds: holdMs / 1000,
     steps: inVideoTime,
   };

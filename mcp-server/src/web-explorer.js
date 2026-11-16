@@ -317,7 +317,19 @@ async function tapWebText(page, text, timeoutMs) {
       return true;
     } catch {}
   }
-  throw new Error(`Could not tap visible text “${requested}”`);
+  // TM-593: a journey's `tap` takes an id, so `tapp look --tap open-filters` failed on a target a
+  // flow presses happily — two ways to name the same control, one of which only looked at visible
+  // text. Fall back to the flow's own matcher, which also knows ids, test ids, labels and
+  // same-origin frames. Imported lazily because web-flow.js imports this module.
+  try {
+    const { locateWebElement } = await import("./web-flow.js");
+    const el = await locateWebElement(page, requested);
+    if (el) {
+      await el.click({ timeout: Math.min(timeoutMs, 5_000) });
+      return true;
+    }
+  } catch { /* fall through to the honest error below */ }
+  throw new Error(`Could not tap “${requested}”: no visible text, id or label matched`);
 }
 
 // npx installs Tapp into its own cache, so a plain import("playwright") only resolves

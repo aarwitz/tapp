@@ -44,7 +44,10 @@ export const FLOW_ACTIONS = Object.freeze([
   { action: "tap", target: "a visible label / accessibility id", passes: "the control was found and tapped; coordinates are not accepted — use the session's tap-by-point to learn the label" },
   { action: "type", target: "{field, value}", passes: "the field was found and now holds the value ($TEST_EMAIL/$TEST_PASSWORD substitute)" },
   { action: "login", target: "{email, password} (defaults to $TEST_EMAIL/$TEST_PASSWORD)", passes: "credentials were entered and submitted and the login form went away" },
-  { action: "swipe", target: "up | down | left | right", passes: "the gesture was performed" },
+  { action: "swipe", target: "up | down | left | right (web: + {within} to scroll a drawer or modal)", passes: "the gesture was performed, and on web the thing actually moved" },
+  { action: "press", target: "a key (`press: ArrowRight`), or {key, target} to focus a control first (+ {times}); not `on:`, which YAML reads as true", passes: "the key was pressed; web only — this is what drives a slider or a shortcut" },
+  { action: "drag", target: "{from, by: [dx, dy]} or {from, to}", passes: "the control was dragged in steps, so listeners watching movement fire; web only — typing into a range input sets its value without the handle moving. This says the gesture was made, not that the page reacted: assert after it" },
+  { action: "screenshot", target: "a name for the picture", passes: "a viewport-sized picture was saved beside the run's evidence; web only" },
   { action: "back", target: "(none)", passes: "the platform back navigation was performed" },
   { action: "wait", target: "milliseconds (fixed pause; prefer wait_for)", passes: "always" },
   { action: "wait_for", target: "label / text (+ per-step timeoutMs/timeout; flow-level timeoutMs sets the default)", passes: "the element appeared before the timeout" },
@@ -75,8 +78,18 @@ export function isOptionalStep(step) {
   return Boolean(step?.params?.optional === true || step?.params?.optional === "true");
 }
 
+/** What `alerts:` may say. Anything else is a typo that would silently do nothing (TM-497). */
+export const ALERT_MODES = Object.freeze(["allow", "dismiss"]);
+
 export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
   const errors = [];
+  const alerts = String(flow?.alerts ?? "").trim();
+  if (alerts && !ALERT_MODES.includes(alerts.toLowerCase())) {
+    errors.push(`alerts: '${alerts}' is not a setting — use ${ALERT_MODES.map((m) => `alerts: ${m}`).join(" or ")}`);
+  }
+  if (alerts && platform !== "ios") {
+    errors.push(`alerts: applies to iOS flows, where a system alert belongs to the operating system rather than the app (this flow is ${platform})`);
+  }
   const steps = Array.isArray(flow?.steps) ? flow.steps : [];
   steps.forEach((raw, i) => {
     const step = normalizeFlowStep(raw);
@@ -182,6 +195,10 @@ export class FlowLog {
     this.criticality = flow.releaseContract?.criticality || "";
     this.kind = this.contract ? "release-contract" : flow.kind || "flow";
     this.emit(`OCQA_FLOW_RESULT:started total=${flow.steps.length} name=${flow.name || "flow"} kind=${this.kind}${this.contract ? ` contract=${this.contract}` : ""}`);
+    // When the steps actually began, on the wall clock (TM-497). Step times are relative to this,
+    // and a recorder started by the CLI knows nothing else about it: on iOS the CLI's own "now" is
+    // most of a minute earlier, because building and launching the harness happens in between.
+    this.emit(`OCQA_FLOW_CLOCK:${JSON.stringify({ startedAtEpochMs: Date.now() })}`);
   }
 
   emit(line) {

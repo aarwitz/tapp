@@ -63,7 +63,10 @@ def to_json(path):
     }
     # Multi-actor Scenarios deliberately reuse the Flow step language and marker
     # protocol, while preserving actor/session and lifecycle orchestration.
-    for key in ("actors", "setup", "teardown", "timeoutMs", "taskPlan", "releaseContract"):
+    # `alerts: allow|dismiss` says what to do with a one-time system alert (TM-497). It is a
+    # flow-level setting rather than a step because the alerts it covers appear on some runs and
+    # not others, so there is no step to attach it to.
+    for key in ("actors", "setup", "teardown", "timeoutMs", "taskPlan", "releaseContract", "alerts"):
         if key in flow:
             out[key] = flow[key]
     print(json.dumps(out))

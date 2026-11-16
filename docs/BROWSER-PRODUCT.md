@@ -1,6 +1,7 @@
 # Browser Studio
 
-Status: current product contract as of 2026-10-19 (ADR-0006, owner decision, amended). Supersedes
+Status: current product contract as of 2026-11-15 (ADR-0006, owner decision, amended twice:
+2026-10-19, and TM-794 on 2026-11-15 bringing Findings and Coverage back). Supersedes
 the "desktop-parity Command Center" framing of 2026-10-14.
 
 The Studio in `browser/` is the one browser surface. It is a **run viewer**: point Tapp at a
@@ -44,6 +45,8 @@ refuses what the mode cannot do: a hosted Studio cannot open a path or a build o
 |---|---|---|
 | Overview | The **stage**: the device as large as the window allows, in its platform's aspect ratio (phone portrait for iOS and Android, browser landscape for web), showing the live frame or the newest screenshot the run wrote. The **chat** floats over its corner on a translucent ground, collapses to a pill, and narrates the engine's own progress log one emoji-led line at a time (👆 Tapped, ⌨️ Typed, 🔐 Signed in, 📍 Opened, 🧭 Reached, 📸 screenshots inline), then attaches the recording and `report.html` and ends with a pill — `✓ Ready to merge`, `× Do not merge`, `◐ Inconclusive`, or for an exploration its counts — and the headline. Nothing is generated after the fact and nothing is a score. Below the stage: the detected targets (an explicit choice when there are several), the live-session controls, and the current decision from the last gate. | `open`, `initialize` (inspect, then build + explore), `explore-build`, live session `start / act / save-flow / end`, release check |
 | Runs | Every run on this repository, every exploration started from the prompt, and every read-only website audit, newest first; each opens its evidence page. A URL field runs an audit from here. | `gate`, `audit` |
+| Findings | What the selected run reported, **grouped by kind** and worst first: one row per kind with the count of places it covers (`Hard to read · 34 · 4 screens`), opening onto every individual place. The engine's identity for a finding is `type|screen|target`, so one site-wide problem arrives as dozens of lines and buries the two worth fixing; grouping is a reading aid in the view and drops nothing — every finding is inside exactly one group. A read-only audit's two kinds stay apart, as the engine draws them: **Broken** (structural defects) and **Worth a look** (not broken; what a person would notice). Never a verdict. | — |
+| Coverage | The screens the selected run reached, in columns by distance from the screen it started on, each a card with the still the run wrote and the actions that led on from it (`tap "Pricing" → Pricing`). Built from the `ui-map.json` the engine writes into every capture: `nodes` are screens, `edges` the recorded transitions. Only recorded transitions are drawn — a screen reached with no recorded way in gets its own column and says so, and a run with no transitions at all (a read-only audit clicks nothing) is a plain grid of what it opened, with the reason stated. | — |
 
 A **website audit** is `explore --read-only`: up to twenty same-origin pages (twelve by default) are rendered and read —
 dead controls, broken images/assets/links, failed requests, JS exceptions, mixed content,
@@ -54,12 +57,20 @@ real small-business sites in October 2026; the remaining findings were verified 
 
 ## What was removed, and where it lives instead
 
-The Contracts, Coverage and Settings views, the six-step journey stepper, and the folder-upload,
+The Contracts and Settings views, the six-step journey stepper, and the folder-upload,
 GitHub-clone and remote-runner onboarding were removed on 2026-10-15. Reviewing and promoting
-contracts is `tapp plan` / `tapp validate` in the repository; coverage is on every run's
-`report.html`; actors and credentials live in `.tapp/project.json`; CI installation is `tapp ci`.
-The Studio keeps only what a browser does better than a terminal: watching a real device while a
-run happens, driving it by hand, and reading evidence.
+contracts is `tapp plan` / `tapp validate` in the repository; actors and credentials live in
+`.tapp/project.json`; CI installation is `tapp ci`. The Studio keeps only what a browser does
+better than a terminal: watching a real device while a run happens, driving it by hand, and
+reading evidence.
+
+**Findings and Coverage came back on 2026-11-15** (TM-794, owner decision). They were removed in
+the same pass on the argument that `report.html` already carried them. It carries the findings —
+as the same flat list, which is the problem — and it never carried the map at all: the engine has
+written `ui-map.json` into every capture throughout, and nothing drew it. Reading a run is a thing
+a browser does better than a terminal, so it belongs to the same rule as the rest of the Studio.
+Neither view computes anything: Findings groups what the engine reported, Coverage arranges the
+map it wrote. Neither judges — only the gate does.
 
 ## Verified reference journey
 
@@ -68,7 +79,9 @@ target choice, exploration, a live session that records a Flow, the gate, and th
 `tests/browser-onboarding.test.js` covers the no-repository start and a read-only website audit;
 `tests/browser-product.test.js` covers authentication, CSRF, the audit operation and the removed
 endpoints answering 404. `tests/browser-chat-narration.test.js` covers prompt classification and
-the chat's narration and summary without a browser.
+the chat's narration and summary without a browser, and
+`tests/browser-run-reading.test.js` covers finding groups and the coverage graph the same way —
+the browser journey then drives both views against a real run.
 
 ## Hosted relationship
 

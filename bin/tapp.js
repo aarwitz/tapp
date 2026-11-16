@@ -1488,7 +1488,7 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--var NAME=VALUE ...] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
+      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--var NAME=VALUE ...] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID] [--record out.mp4 [--hold 3s]]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
       process.exit(2);
     }
     // Several Flows in one command (field issue #9): the shell usually expands the glob, but a
@@ -1648,7 +1648,77 @@ switch (command) {
       requireMacFor("iOS Flow replay");
       invocation = ["bash", [path.join(packageRoot, "scripts", "run-flow.sh"), absolute, typeof flags["bundle-id"] === "string" ? flags["bundle-id"] : flow.app || ""]];
     }
+    // --record / --hold (TM-497). tapp owns the recorder so the video and the step times come out
+    // of the same run; before this the wrapper started simctl by hand and the two clocks drifted.
+    const recordTo = typeof flags.record === "string" && flags.record ? path.resolve(flags.record) : "";
+    let holdMs = 0;
+    let recorder = null;
+    if (recordTo || flags.hold !== undefined) {
+      const { parseHold } = await import(path.join(packageRoot, "mcp-server", "src", "flow-recording.js"));
+      try { holdMs = parseHold(flags.hold === true ? "" : flags.hold); }
+      catch (error) { console.error(`❌ ${error.message}`); process.exit(2); }
+    }
+    if (recordTo) {
+      if (platform !== "ios") { console.error(`❌ --record records an iOS simulator (this Flow is ${platform})`); process.exit(2); }
+      const { prepareRecorder, recorderToolingError, startRecording } = await import(path.join(packageRoot, "mcp-server", "src", "sim-recorder.js"));
+      const missing = recorderToolingError();
+      if (missing) { console.error(`❌ ${missing}`); process.exit(2); }
+      const ready = prepareRecorder(env.TAPP_UDID);
+      if (!ready.ok) { console.error(`❌ ${ready.error}`); process.exit(2); }
+      // One line, because a repair nobody is told about costs the same three re-records next time.
+      for (const note of ready.repaired) console.log(`   recorder: ${note}`);
+      recorder = startRecording({ udid: env.TAPP_UDID, out: recordTo, holdMs });
+      // The recorder marks itself on a still screen; the flow must not start before that mark, or
+      // the first change in the file is the app moving and the whole clock is wrong.
+      await recorder.ready();
+    }
+    const flowStartedAtMs = Date.now();
     const result = spawnSync(invocation[0], invocation[1], { stdio: "inherit", env });
+    if (recorder) {
+      const stopped = await recorder.stop();
+      if (!stopped.ok) {
+        console.error(`\n⚠️ ${stopped.error}`);
+      } else {
+        const { flowStartedAtEpochMs, parseFlowSteps, writeStepsSidecar } = await import(path.join(packageRoot, "mcp-server", "src", "flow-recording.js"));
+        const logText = fs.existsSync(flowLog) ? fs.readFileSync(flowLog, "utf8") : "";
+        const steps = parseFlowSteps(logText);
+        // The runner's own start, not this process's: on iOS most of a minute passes building and
+        // launching the harness while the recorder is already rolling, and using the CLI's clock
+        // puts every step that far too early in the video.
+        const startedAt = flowStartedAtEpochMs(logText) ?? flowStartedAtMs;
+        // The recorder writes a frame when the screen CHANGES, so a flow that ends on a still
+        // screen leaves the file ending before the flow does and the last steps land past its end.
+        // Cloning the final frame covers that gap; the hold comes on top of it. This happens
+        // before the sidecar is written so the sidecar can be told the file's real length.
+        const { padTail, tailMsFor } = await import(path.join(packageRoot, "mcp-server", "src", "sim-recorder.js"));
+        const { stepsInVideoTime } = await import(path.join(packageRoot, "mcp-server", "src", "flow-recording.js"));
+        const placed = stepsInVideoTime(steps, { flowStartedAtMs: startedAt, recordingStartedAtMs: stopped.startedAtMs });
+        const lastStepEndMs = placed.length ? placed[placed.length - 1].end * 1000 : 0;
+        // TAPP_RECORD_DEBUG keeps the capture exactly as simctl wrote it, before any tail is added,
+        // and prints the two clocks. This is what a report of "the step times are wrong" needs:
+        // every timing bug found while building this was invisible in the finished file.
+        if (process.env.TAPP_RECORD_DEBUG === "1") {
+          fs.copyFileSync(recordTo, `${recordTo}.raw.mp4`);
+          console.error(`[record] capture ${(stopped.durationMs / 1000).toFixed(3)}s, ${stopped.frames} frames, first frame at ${stopped.startedAtMs}, flow started at ${startedAt} (+${((startedAt - stopped.startedAtMs) / 1000).toFixed(3)}s), last step ends ${(lastStepEndMs / 1000).toFixed(3)}s`);
+          console.error(`[record] capture kept unpadded at ${recordTo}.raw.mp4`);
+        }
+        const held = padTail(recordTo, tailMsFor({ durationMs: stopped.durationMs, lastStepEndMs, holdMs }));
+        if (held.error) console.error(`⚠️ ${held.error}`);
+        const finalMs = held.durationMs ?? stopped.durationMs;
+        // Say how much of the finished file is a held frame rather than captured picture. The
+        // recorder stops writing when the screen stops changing, so the tail is always partly a
+        // clone — a few seconds on a normal run. One take ended its capture 26 seconds before the
+        // flow did and the rest was a single frozen frame, and the finished file gave no sign of
+        // it; anyone editing that would have found out the hard way.
+        const heldMs = Math.max(0, finalMs - stopped.durationMs);
+        const sidecar = writeStepsSidecar(recordTo, steps, {
+          flowStartedAtMs: startedAt, recordingStartedAtMs: stopped.startedAtMs, holdMs,
+          name: flow.name || "", videoDurationMs: finalMs,
+        });
+        console.log(`\nRecording: ${recordTo} (${(finalMs / 1000).toFixed(1)}s — ${(stopped.durationMs / 1000).toFixed(1)}s captured${heldMs > 500 ? `, ${(heldMs / 1000).toFixed(1)}s holding the last screen` : ""})`);
+        console.log(`Step times: ${sidecar.path} (${sidecar.steps.length} step${sidecar.steps.length === 1 ? "" : "s"} in the video's own seconds)`);
+      }
+    }
     const evidenceWritten = fs.existsSync(evidenceDir) && fs.readdirSync(evidenceDir).length > 0;
     if (evidenceWritten) console.log(`\nEvidence: ${evidenceDir}`);
     else console.error("\n⚠️ Evidence unavailable — the platform runner did not write any artifacts for this Flow run.");

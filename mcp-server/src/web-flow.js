@@ -203,7 +203,7 @@ export function distillPlaywrightFailure(message) {
   return `${firstLine} — ${reason}`;
 }
 
-export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout = DEFAULT_TIMEOUT }) {
+export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout = DEFAULT_TIMEOUT, stepScreenshotDir = "" }) {
   const raw = normalizeFlowStep(step);
   const action = raw.action;
   const target = substituteFlowValue(raw.target, vars);
@@ -236,9 +236,117 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
       await submit.locator.click();
       await page.waitForTimeout(400);
       if (await password.isVisible().catch(() => false)) throw new Error("submit left the app on the login screen");
+    } else if (action === "press") {
+      // TM-593: a journey could not press a key, so anything a keyboard drives — a slider, a
+      // shortcut, a combobox — was unreachable. `press: ArrowRight` or
+      // `press: { key: ArrowRight, on: <target>, times: 5 }`.
+      const key = String(raw.params.key ?? value ?? target ?? "").trim();
+      if (!key) throw new Error("press needs a key, e.g. `press: ArrowRight`");
+      // `on:` is unusable as a key here: YAML 1.1 reads a bare `on` as the boolean true, so
+      // `on: price-max` arrives as {"true": "price-max"} and the target silently vanishes. Say so
+      // rather than pressing into the void and passing, which is what this step did first.
+      if (raw.params.true !== undefined) {
+        throw new Error("press takes `target:`, not `on:` — YAML reads a bare `on` as true, so the target is lost");
+      }
+      // Only the object form can name a control to focus. In the string form — `press: ArrowRight`,
+      // which is the form the story and the reporter both asked for — normalizeFlowStep puts the
+      // key in `target` as well, so reading a focus target from there looked for a control called
+      // "ArrowRight" and the step failed (Linux's check of 6d8d531). A bare key presses wherever
+      // the focus already is, which is what a shortcut means.
+      const onTarget = "key" in raw.params
+        ? substituteFlowValue(String(raw.target || raw.params.onTarget || ""), vars)
+        : "";
+      const times = Math.max(1, Math.min(50, Number(raw.params.times) || 1));
+      const el = onTarget ? await locateWebElement(page, onTarget) : null;
+      if (onTarget && !el) throw new Error(`could not find ‘${onTarget}’ to press ${key} on`);
+      if (el) await el.focus();
+      for (let i = 0; i < times; i += 1) {
+        if (el) await el.press(key);
+        else await page.keyboard.press(key);
+      }
+    } else if (action === "drag") {
+      // TM-593: `type` on a range input calls fill(), which sets the value without the handle
+      // ever moving, so nothing the page listens for fires and the step proves nothing. A drag
+      // moves it the way a person does. `drag: { from: <target>, by: [dx, dy] }` or `{ from, to }`.
+      const from = substituteFlowValue(String(raw.params.from ?? target ?? ""), vars);
+      if (!from) throw new Error("drag needs `from`, e.g. `drag: { from: price-min, by: [60, 0] }`");
+      const handle = await locateWebElement(page, from);
+      if (!handle) throw new Error(`could not find ‘${from}’ to drag`);
+      // Playwright's own click() scrolls a control into view first; raw mouse moves do not, so a
+      // handle below the fold would be "dragged" at coordinates pointing somewhere else entirely —
+      // passing, and moving nothing.
+      await handle.scrollIntoViewIfNeeded().catch(() => {});
+      const start = await handle.boundingBox();
+      if (!start) throw new Error(`‘${from}’ is not on screen, so it cannot be dragged`);
+      const startX = start.x + start.width / 2;
+      const startY = start.y + start.height / 2;
+      let endX;
+      let endY;
+      const to = substituteFlowValue(String(raw.params.to ?? ""), vars);
+      if (to) {
+        const dest = await locateWebElement(page, to);
+        if (dest) await dest.scrollIntoViewIfNeeded().catch(() => {});
+        const box = dest && await dest.boundingBox();
+        if (!box) throw new Error(`could not find ‘${to}’ to drag onto`);
+        endX = box.x + box.width / 2;
+        endY = box.y + box.height / 2;
+      } else {
+        const by = Array.isArray(raw.params.by) ? raw.params.by : [Number(raw.params.by) || 0, 0];
+        endX = startX + (Number(by[0]) || 0);
+        endY = startY + (Number(by[1]) || 0);
+      }
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      // In steps, because a single jump is not a drag to a listener watching movement.
+      const steps = 12;
+      for (let i = 1; i <= steps; i += 1) {
+        await page.mouse.move(startX + ((endX - startX) * i) / steps, startY + ((endY - startY) * i) / steps);
+      }
+      await page.mouse.up();
     } else if (action === "swipe") {
+      // TM-593: this only ever scrolled the window, so content inside a drawer or modal could not
+      // be brought into view and the step passed having moved nothing. With a target it scrolls
+      // that container, and either way it fails when nothing actually moved.
       const dy = target.toLowerCase() === "down" ? -600 : 600;
-      await page.evaluate((y) => window.scrollBy({ top: y, behavior: "instant" }), dy);
+      const within = substituteFlowValue(String(raw.params.within ?? raw.params.in ?? ""), vars);
+      if (within) {
+        const box = await locateWebElement(page, within);
+        if (!box) throw new Error(`could not find ‘${within}’ to scroll`);
+        const moved = await box.evaluate((node, y) => {
+          const before = node.scrollTop;
+          node.scrollBy({ top: y, behavior: "instant" });
+          return { before, after: node.scrollTop, canScroll: node.scrollHeight > node.clientHeight };
+        }, dy);
+        if (!moved.canScroll) throw new Error(`‘${within}’ has nothing to scroll`);
+        if (moved.before === moved.after) {
+          throw new Error(`‘${within}’ did not move: it is already at the ${dy > 0 ? "bottom" : "top"}`);
+        }
+      } else {
+        const moved = await page.evaluate((y) => {
+          const before = window.scrollY;
+          window.scrollBy({ top: y, behavior: "instant" });
+          return { before, after: window.scrollY };
+        }, dy);
+        if (moved.before === moved.after) {
+          throw new Error(`the page did not scroll: it is already at the ${dy > 0 ? "bottom" : "top"}`);
+        }
+      }
+    } else if (action === "screenshot") {
+      // TM-593: evidence was one full-page shot at the end, in which a fixed overlay cannot be
+      // located at all — the reporter could not find an open drawer in a 1170x18972 capture. A
+      // named shot at the moment that matters, viewport-sized, so it shows what a person sees.
+      const name = String(raw.params.name ?? target ?? value ?? "").trim() || "step";
+      const safe = name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60);
+      if (stepScreenshotDir) {
+        fs.mkdirSync(stepScreenshotDir, { recursive: true });
+        await page.screenshot({ path: path.join(stepScreenshotDir, `flow-${safe}.png`) });
+        detail = `saved flow-${safe}.png`;
+      } else {
+        // The step's promise is a picture. Passing green with nothing written is the same empty
+        // success this story exists to remove, so say which it was (Linux's check of 6d8d531).
+        status = "skip";
+        detail = "not saved: this run has no evidence folder";
+      }
     } else if (action === "back") {
       await page.goBack({ waitUntil: "domcontentloaded" });
     } else if (action === "wait_for") {
@@ -362,7 +470,7 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
           emit({action:"origin",target:"connected app",status:"fail",detail:"The workflow left the connected app origin. Authorize a supported sign-in route before continuing."});
           break;
         }
-        const outcome = await executeWebFlowStep({ page, step, vars, defaultTimeout: timeout });
+        const outcome = await executeWebFlowStep({ page, step, vars, defaultTimeout: timeout, stepScreenshotDir: screenshotDir });
         emit(outcome);
         if (outcome.status === "fail" && screenshotDir) {
           fs.mkdirSync(screenshotDir, { recursive: true });
@@ -374,6 +482,9 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
     if (screenshotDir) {
       fs.mkdirSync(screenshotDir, { recursive: true });
       await page.screenshot({ path: path.join(screenshotDir, "flow-final.png"), fullPage: true }).catch(() => {});
+      // Beside it, what the person actually sees: a fixed header, an open drawer or a toast is
+      // placeable here and invisible in a full-page capture (TM-593).
+      await page.screenshot({ path: path.join(screenshotDir, "flow-final-screen.png") }).catch(() => {});
     }
   } finally {
     await requestPhase(teardown);

@@ -38,8 +38,10 @@ test("browser journey: target, exploration, live session, saved Flow, gate, and 
     await page.locator("#targets .target-card").waitFor({ state:"visible", timeout:30_000 });
     assert.match(await page.locator("body").innerText(), /Choose the product target/);
     assert.match(await page.locator("body").innerText(), /Web/);
-    // The removed views are gone, not hidden.
-    for (const id of ["contracts", "coverage", "settings", "findings"]) assert.equal(await page.locator(`.primary-nav [data-view="${id}"]`).count(), 0, `${id} view removed`);
+    // The views removed in October are gone, not hidden. Findings and Coverage are back (TM-794):
+    // reading a run is the Studio's job, and only those two do it.
+    for (const id of ["contracts", "settings"]) assert.equal(await page.locator(`.primary-nav [data-view="${id}"]`).count(), 0, `${id} view removed`);
+    for (const id of ["findings", "coverage"]) assert.equal(await page.locator(`.primary-nav [data-view="${id}"]`).count(), 1, `${id} view present`);
     assert.equal(await page.locator("#folder-input").count(), 0, "no upload path");
 
     await operate("#explore");
@@ -75,6 +77,30 @@ test("browser journey: target, exploration, live session, saved Flow, gate, and 
     assert.match(detail, /Decision rationale/);
     assert.match(detail, /Visual report/, "every run links to the report page the engine wrote");
     await page.screenshot({ path: path.join(process.env.TAPP_HOME, "release-studio.png"), fullPage: true });
+
+    // Reading the run (TM-794). Both views read whichever run the Runs view has selected, so a
+    // real run must arrive in both without anything else being clicked.
+    await page.locator('.primary-nav [data-view="findings"]').click();
+    await page.locator('[data-view-panel="findings"].active').waitFor({ state: "visible" });
+    const findings = await page.locator("#findings-body").innerText();
+    assert.match(findings, /An observation, not a release decision|Nothing was found|finding/i, "Findings never states a verdict");
+    const groups = await page.locator("#findings-body .finding-group").count();
+    if (groups) {
+      // Opening a group shows the individual places, which is the whole point of grouping them.
+      const first = page.locator("#findings-body .finding-group").first();
+      assert.match(await first.locator(".group-count").innerText(), /\d/, "a group says how many places it covers");
+      await first.locator("summary").click();
+      await first.locator(".detail-list li").first().waitFor({ state: "visible" });
+    }
+
+    await page.locator('.primary-nav [data-view="coverage"]').click();
+    await page.locator('[data-view-panel="coverage"].active').waitFor({ state: "visible" });
+    await page.locator("#coverage-body .screen-card").first().waitFor({ state: "visible", timeout: 15_000 });
+    assert.ok(await page.locator("#coverage-body .screen-card").count() >= 2, "the map draws the screens the run reached");
+    assert.match(await page.locator("#coverage-counts").innerText(), /screens/, "the counts are above the map");
+    assert.match(await page.locator("#coverage-body").innerText(), /tap|open|back|goes to/i, "each screen carries the action that led on from it");
+    assert.equal(await page.locator("#coverage-body .screen-shot img").first().evaluate((image) => image.naturalWidth > 0), true, "a screen's picture is the still the run wrote");
+    await page.screenshot({ path: path.join(process.env.TAPP_HOME, "release-studio-coverage.png"), fullPage: true });
   } finally {
     await browser.close();
     await product.close();

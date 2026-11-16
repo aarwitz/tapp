@@ -487,6 +487,74 @@ class ExplorerTests: XCTestCase {
 
     private var backTitleHistory: [String] = []
 
+    /// A system alert belongs to SpringBoard, not to the app, so a Flow's `tap: OK` cannot reach it
+    /// and the step fails on a button the author can plainly see. A field case: changing an app's
+    /// theme switched its icon, iOS asked "You have changed the icon for <app>", and the flow for
+    /// that screen stopped after one choice.
+    private func systemAlertButton(labelled label: String) -> XCUIElement? {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.exists else { return nil }
+        // By label, not by subscript: `alert.buttons["Allow"]` matched "Allow Once" on an alert
+        // that has no "Allow" at all, so a flow asking for a button that is not there pressed a
+        // different one and passed.
+        let wanted = alertLabelKey(label)
+        return alert.buttons.allElementsBoundByIndex
+            .first { alertLabelKey($0.label) == wanted && $0.exists && $0.isHittable }
+    }
+
+    /// The labels an `alerts:` setting will press, and nothing else.
+    ///
+    /// Matched through `alertLabelKey`, because iOS writes "Don\u{2019}t Allow" with a typographic
+    /// apostrophe: a list spelled with the ASCII one matched nothing at all, the dismiss mode
+    /// silently did nothing, and the run still reported a pass (found by running it against Maps).
+    private static let alertAllowLabels = ["Allow While Using App", "Allow Once", "Allow", "OK", "Continue"]
+    private static let alertDismissLabels = ["Don't Allow", "Not Now", "Cancel", "Dismiss", "Later"]
+
+    /// Compare alert labels the way a person reads them: either apostrophe, any case.
+    private func alertLabelKey(_ label: String) -> String {
+        label.replacingOccurrences(of: "\u{2019}", with: "'")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+
+    /// Clear a one-time system alert standing between the flow and the app (TM-497).
+    ///
+    /// Three of the eight takes on 11/7 were re-recorded because of these. Returns the button it
+    /// pressed, so the run records that it diverged from the script rather than quietly doing it.
+    ///
+    /// Only a recognised label, or a single-button alert. An unrecognised alert with a choice in it
+    /// is left alone and the step fails naming its buttons: guessing on a dialog about permissions,
+    /// money or deletion is worse than stopping.
+    private func handleSystemAlert(mode: String) -> String? {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.exists else { return nil }
+        let wanted = (mode == "dismiss" ? Self.alertDismissLabels : Self.alertAllowLabels).map(alertLabelKey)
+        let present = alert.buttons.allElementsBoundByIndex
+        for key in wanted {
+            if let button = present.first(where: { alertLabelKey($0.label) == key && $0.exists && $0.isHittable }) {
+                let label = button.label
+                button.tap()
+                waitForUIStability(timeout: 1.5)
+                return label
+            }
+        }
+        if alert.buttons.count == 1 {
+            let button = alert.buttons.element(boundBy: 0)
+            let label = button.label
+            button.tap()
+            waitForUIStability(timeout: 1.5)
+            return label
+        }
+        return nil
+    }
+
+    /// What a system alert offers, for a failure message that names the way out.
+    private func systemAlertButtonLabels() -> [String] {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.exists else { return [] }
+        return alert.buttons.allElementsBoundByIndex.map { $0.label }.filter { !$0.isEmpty }
+    }
+
     private func sessionTapById(_ identifier: String) -> String {
         var existedButNotHittable = false
         var existedButDisabled = false
@@ -1046,6 +1114,10 @@ class ExplorerTests: XCTestCase {
         // Per-flow wait default (field issue #20): a splash that prefetches for ~8s makes the
         // fixed 6s wait_for fail on a healthy app. Steps may still override individually.
         let flowDefaultTimeoutMs = (flow["timeoutMs"] as? Int) ?? (flow["timeout"] as? Int) ?? 6000
+        // `alerts: allow|dismiss` (TM-497). One-time system alerts — "Allow notifications", "You
+        // have changed the icon" — appear on some runs and not others and belong to SpringBoard,
+        // not the app, so without this they stop the flow dead on a screen nobody scripted.
+        let alertMode = ((flow["alerts"] as? String) ?? "").lowercased()
         // XCTest runs teardown blocks even when a step aborts unexpectedly. Keep the final
         // visible frame inspectable for both successful and failing replays (public issue #26).
         addTeardownBlock { [self] in recordFlowScreenshot(name: "flow-final") }
@@ -1088,6 +1160,16 @@ class ExplorerTests: XCTestCase {
         var failed = 0
         var executed = 0
         var aiIndex = 0
+        // TM-497: every step says when it happened, in milliseconds from the flow's start, so a
+        // recording can be cut by step name. The JavaScript runners have carried this since the
+        // first half of the story; iOS has its own loop and did not, which meant the one platform
+        // the demo videos are made on was the one platform whose steps had no times.
+        //
+        // Contiguous by construction: a step starts where the previous one ended, so its window
+        // carries its own settling and waiting — the seconds an editor is looking for.
+        let flowStartedAt = Date()
+        print("OCQA_FLOW_CLOCK:{\"startedAtEpochMs\":\(Int(flowStartedAt.timeIntervalSince1970 * 1000))}")
+        var stepStartMs = 0
         for (i, raw) in steps.enumerated() {
             let idx = i + 1
             executed = idx
@@ -1100,10 +1182,22 @@ class ExplorerTests: XCTestCase {
             let timeoutMs = (step["timeoutMs"] as? Int) ?? (step["timeout"] as? Int) ?? flowDefaultTimeoutMs
             var status = "pass"
             var detail = ""
+            // Before the step, not after: an alert on screen is what makes the step fail.
+            var alertNote = ""
+            if alertMode == "allow" || alertMode == "dismiss", let pressed = handleSystemAlert(mode: alertMode) {
+                alertNote = "a system alert was \(alertMode == "dismiss" ? "dismissed" : "allowed") first: pressed ‘\(escapeJSON(pressed))’"
+            }
 
             switch action {
             case "tap":
-                let tapStatus = sessionTapById(target)
+                var tapStatus = sessionTapById(target)
+                // TM-686: the button really is on screen, it just belongs to SpringBoard.
+                if tapStatus != "ok", let alertButton = systemAlertButton(labelled: target) {
+                    alertButton.tap()
+                    waitForUIStability(timeout: 1.5)
+                    tapStatus = "ok"
+                    detail = "‘\(escapeJSON(target))’ is a system alert's button, not the app's"
+                }
                 status = tapStatus == "ok" ? "pass" : "fail"
                 if status == "fail" {
                     // Name which of the three it was. "Disabled" in particular sends the
@@ -1114,6 +1208,10 @@ class ExplorerTests: XCTestCase {
                     case "disabled":     detail = "‘\(target)’ is on screen but disabled — an earlier step has not met whatever enables it"
                     case "not_hittable": detail = "‘\(target)’ exists but could not be reached, even after dismissing the keyboard and scrolling"
                     default:             detail = "could not find ‘\(target)’ on this screen"
+                    }
+                    let alertButtons = systemAlertButtonLabels()
+                    if !alertButtons.isEmpty {
+                        detail += " — a system alert is in the way, offering \(escapeJSON(alertButtons.joined(separator: ", "))); add `alerts: allow` or `alerts: dismiss` to the flow, or tap one of them"
                     }
                 }
             case "type":
@@ -1181,7 +1279,13 @@ class ExplorerTests: XCTestCase {
             let isAssert = action.hasPrefix("assert_")
             let taskEvidence = taskName.isEmpty ? "" : ",\"task\":\"\(escapeJSON(taskName))\""
             let contractEvidence = contractName.isEmpty ? "" : ",\"contract\":\"\(escapeJSON(contractName))\""
-            print("OCQA_FLOW_STEP:{\"index\":\(idx),\"action\":\"\(escapeJSON(action))\",\"target\":\"\(escapeJSON(target.isEmpty ? value : target))\",\"assert\":\(isAssert),\"status\":\"\(status)\",\"detail\":\"\(escapeJSON(detail))\"\(taskEvidence)\(contractEvidence)}")
+            // Kept whatever the step then did: the first version wrote it into `detail` and the
+            // tap-failure branch overwrote it, so a run that handled an alert and then failed said
+            // nothing about the alert at all.
+            if !alertNote.isEmpty { detail = detail.isEmpty ? alertNote : "\(alertNote); \(detail)" }
+            let stepEndMs = Int(Date().timeIntervalSince(flowStartedAt) * 1000)
+            print("OCQA_FLOW_STEP:{\"index\":\(idx),\"action\":\"\(escapeJSON(action))\",\"target\":\"\(escapeJSON(target.isEmpty ? value : target))\",\"assert\":\(isAssert),\"status\":\"\(status)\",\"detail\":\"\(escapeJSON(detail))\",\"startMs\":\(stepStartMs),\"endMs\":\(stepEndMs)\(taskEvidence)\(contractEvidence)}")
+            stepStartMs = stepEndMs
             if status == "fail" {
                 failed += 1
                 // Web and Android flows write flow-failure-N.png next to the log; iOS buried the

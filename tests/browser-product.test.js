@@ -48,7 +48,7 @@ test("browser product is a loopback, authenticated, CSRF-protected adapter over 
     assert.deepEqual(session.contract.repositorySources, ["local-path", "github"]);
     // Admin is declared so it can be opened at all (activateView refuses anything undeclared),
     // but it is shown only to an address listed in TAPP_ADMIN_EMAILS.
-    assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs", "platforms", "admin"]);
+    assert.deepEqual(session.contract.views.map((view) => view.id), ["overview", "runs", "findings", "coverage", "platforms", "admin"]);
     assert.equal(session.contract.operations.includes("audit"), true);
     assert.equal(session.contract.operations.includes("ci-install"), false);
     const rejected = await fetch(`${product.origin}/api/operations/initialize`, { method: "POST", headers: { cookie, origin: product.origin, "content-type": "application/json" }, body: "{}" });

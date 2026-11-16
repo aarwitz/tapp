@@ -1,5 +1,5 @@
 import { customerProductContract } from "./product-contract.js";
-import { classifyPrompt, narrate, narrateFinding, operationIsPending, summarize } from "./view-model.js";
+import { classifyPrompt, coverageGraph, groupFindings, narrate, narrateFinding, operationIsPending, severityTally, summarize } from "./view-model.js";
 
 const API_BASE = String(document.querySelector('meta[name="tapp-api-base"]')?.content || "").replace(/\/$/, "");
 const LOGIN_URL = String(document.querySelector('meta[name="tapp-login-url"]')?.content || "");
@@ -141,6 +141,10 @@ function activateView(view) {
   $$('.primary-nav [data-view]').forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   history.replaceState(null, "", `#${view}`);
   window.scrollTo({ top:0, behavior:"instant" });
+  // Findings and Coverage read whichever run is selected; render on arrival so they are never a
+  // stale picture of a run the person has since changed in another view.
+  if (view === "findings") renderFindings();
+  if (view === "coverage") renderCoverage();
 }
 
 // A hosted Studio has no Mac, no simulator and no access to the visitor's disk, so folders,
@@ -742,6 +746,9 @@ function renderRuns() {
   const chosen = runs.find((run) => run.id === state.selectedRunId) || runs[0];
   if (chosen) state.selectedRunId = chosen.id;
   renderRunDetail(chosen);
+  setCount("#findings-count", runFindings(chosen).length);
+  if (state.activeView === "findings") renderFindings();
+  if (state.activeView === "coverage") renderCoverage();
 }
 
 function detailLists(report) {
@@ -768,6 +775,214 @@ function renderRunDetail(run) {
   const report = run.report;
   const contracts = report.contracts || [];
   $("#run-detail").innerHTML = `<div class="run-detail-head"><div><p class="eyebrow">${esc(report.gate?.failed ? "BLOCKED" : report.inconclusive ? "INCONCLUSIVE" : "RELEASE RUN")}</p><h2>${esc(report.headline || "Release gate completed")}</h2><small><code>${esc(run.id)}</code> · ${compactDate(run.createdAt)}</small></div>${reportLink(report, "Visual report")}</div><div class="run-stats"><div><strong>${report.screensExplored || 0}</strong><small>states</small></div><div><strong>${report.actionsPerformed || 0}</strong><small>actions</small></div><div><strong>${contracts.filter((item) => item.passed).length}/${contracts.length}</strong><small>contracts</small></div><div><strong>${report.findingCounts?.total ?? (report.findings || []).length}</strong><small>findings</small></div></div><h3>Decision rationale</h3><ul class="detail-list">${(report.gate?.reasons || ["No blocking gate reason reported."]).map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h3>Deterministic contracts</h3>${contracts.length ? contracts.map((contract) => `<div class="contract-result"><span class="${contract.passed ? "pass" : "fail"}">${contract.passed ? "✓" : "×"}</span><div><strong>${esc(contract.title || contract.name || contract.path)}</strong><small>${esc(contract.detail || contract.path || "Deterministic replay")}</small></div></div>`).join("") : '<p class="muted">No committed release contracts applied to this target.</p>'}${detailLists(report)}`;
+}
+
+// ---- Findings and Coverage: reading a run (TM-794) ------------------------------------------
+// Both views read the run the Runs view has selected, so picking a run in one picks it in all
+// three. Neither computes anything about the run: Findings arranges the findings the engine
+// reported, and Coverage draws the map the engine wrote beside the capture.
+
+function selectedRun() {
+  const runs = allRuns();
+  return runs.find((run) => run.id === state.selectedRunId) || runs[0] || null;
+}
+
+// What a run reported, in the engine's own two kinds. A read-only audit keeps them apart on
+// purpose: an *issue* is broken, an *observation* is something a person would notice and not
+// like. Merging them would say a site is broken because its body text is faint, so the view
+// keeps the separation the engine drew and groups each side on its own.
+function runSections(run) {
+  if (!run) return [];
+  const page = (item) => ({ ...item, screen: item.screen || item.pages?.[0] || "" });
+  if (run.kind === "audit") {
+    return [
+      { id: "issues", title: "Broken", note: "Structural defects the pages were served with.", empty: "Nothing broken was observed. That says the pages are served without structural defects, not that the site works.", items: (run.audit?.issues || []).map(page) },
+      { id: "observations", title: "Worth a look", note: "Not broken — things a person would notice and may not like.", empty: "", items: (run.audit?.observations || []).map(page) },
+    ];
+  }
+  const report = run.kind === "explore" ? run.explore?.report : run.report;
+  return [{ id: "findings", title: "Findings", note: "", empty: "Nothing was found in the surfaces this run exercised. That is not the same as “this works”.", items: (report?.findings || []).map(page) }];
+}
+
+// Every finding a run reported, whatever kind of run it is — what the nav badge counts.
+function runFindings(run) {
+  return runSections(run).flatMap((section) => section.items);
+}
+
+function runLabel(run) {
+  if (!run) return "";
+  if (run.kind === "audit") { try { return `Audit · ${new URL(run.audit.url).host}`; } catch { return `Audit · ${run.audit.url}`; } }
+  if (run.kind === "explore") return `Explore · ${run.explore.target || run.explore.platform}`;
+  return run.report?.headline ? String(run.report.headline).slice(0, 60) : `Release run ${run.id.slice(-8)}`;
+}
+
+// What a run drove, so its evidence can be shown in that thing's shape.
+function runPlatform(run) {
+  if (!run) return "";
+  if (run.kind === "audit") return "web";
+  if (run.kind === "explore") return run.explore?.platform || "";
+  return run.report?.platform || "";
+}
+
+// The capture a run's evidence lives in. Explorations and audits are named for it; a gate run
+// carries it inside its report.
+function runCaptureId(run) {
+  if (!run) return "";
+  if (run.kind === "audit" || run.kind === "explore") return run.id;
+  return captureId(run.report);
+}
+
+function renderRunPicker(selector) {
+  const runs = allRuns();
+  const node = $(selector);
+  if (!node) return;
+  node.innerHTML = runs.map((run) => `<option value="${esc(run.id)}"${run.id === state.selectedRunId ? " selected" : ""}>${esc(runLabel(run))} · ${esc(compactDate(run.createdAt))}</option>`).join("");
+  node.classList.toggle("hidden", runs.length < 2);
+}
+
+function renderFindings() {
+  const run = selectedRun();
+  renderRunPicker("#findings-run");
+  const body = $("#findings-body");
+  if (!run) { body.innerHTML = '<div class="empty">No run yet. Put a URL in the prompt and tapp will go and look.</div>'; return; }
+  const sections = runSections(run).map((section) => ({ ...section, groups: groupFindings(section.items) }));
+  const total = sections.reduce((sum, section) => sum + section.items.length, 0);
+  const kinds = sections.reduce((sum, section) => sum + section.groups.length, 0);
+  $("#findings-title").textContent = runLabel(run);
+  $("#findings-note").textContent = total
+    ? `${total} in ${kinds} kind${kinds === 1 ? "" : "s"}, worst first. An observation, not a release decision.`
+    : "An observation, not a release decision.";
+  body.innerHTML = `<div class="findings-tally">${findingsTally(sections)}${evidenceLink(runCaptureId(run), "Visual report")}</div>
+    ${sections.filter((section) => section.groups.length || section.empty).map((section) => `
+      <section class="findings-section">
+        <h2>${esc(section.title)}${section.items.length ? ` <i>${section.items.length}</i>` : ""}</h2>
+        ${section.note ? `<p class="muted">${esc(section.note)}</p>` : ""}
+        ${section.groups.length ? section.groups.map(findingGroupHtml).join("") : `<p class="muted">${esc(section.empty)}</p>`}
+      </section>`).join("")}`;
+}
+
+function findingsTally(sections) {
+  return severityTally(sections.flatMap((section) => section.items))
+    .map(({ severity, count }) => `<span class="sev-tally ${esc(severity)}">${count} ${esc(severity)}</span>`).join("");
+}
+
+// Where one finding is, said once. An audit reports the pages a finding appears on, so naming
+// the first of them and then counting them again reads as `on / (7 pages)`.
+function findingWhere(item) {
+  const pages = item.pages || [];
+  if (pages.length > 1) return `on ${pages.length} pages`;
+  if (pages.length === 1) return `on ${pages[0]}`;
+  return item.screen ? `on ${item.screen}` : "";
+}
+
+// One kind of problem: its name in the engine's words, how many places it covers, and — once
+// opened — every one of those places. A group that is already serious opens itself.
+function findingGroupHtml(group) {
+  // A group of one is already fully written on its own row; opening it would show the same
+  // sentence again, so it is a row rather than something to click.
+  const item = group.count === 1 ? group.items[0] : null;
+  if (item) {
+    const where = findingWhere(item);
+    return `<div class="finding-group single">
+      <span class="sev-dot ${esc(group.severity)}" aria-hidden="true"></span>
+      <span class="group-label">${esc(group.label)}</span>
+      ${where ? `<span class="group-count">${esc(where)}</span>` : ""}
+    </div>`;
+  }
+  return `<details class="finding-group"${group.severity === "critical" || group.severity === "high" ? " open" : ""}>
+    <summary>
+      <span class="sev-dot ${esc(group.severity)}" aria-hidden="true"></span>
+      <span class="group-label">${esc(group.label)}</span>
+      <span class="group-count">${group.count}${group.screens.length > 1 ? ` · ${group.screens.length} screens` : ""}</span>
+    </summary>
+    <ul class="detail-list">${group.items.map((item) => `<li>
+      <b class="sev-${esc(String(item.severity || "info").toLowerCase())}">${esc(item.severity || "info")}</b> · ${esc(item.title || item.type || "Finding")}
+      <small>${esc(findingWhere(item))}</small>
+    </li>`).join("")}</ul>
+  </details>`;
+}
+
+function renderCoverage() {
+  const run = selectedRun();
+  renderRunPicker("#coverage-run");
+  const body = $("#coverage-body");
+  const counts = $("#coverage-counts");
+  if (!run) { counts.innerHTML = ""; body.innerHTML = '<div class="empty">No run yet.</div>'; return; }
+  const id = runCaptureId(run);
+  if (!id) { counts.innerHTML = ""; body.innerHTML = '<div class="empty">This run kept no capture, so there is no map to draw.</div>'; return; }
+  const cached = state.coverage?.[id];
+  if (!cached) { counts.innerHTML = ""; body.innerHTML = '<div class="empty">Reading the map this run wrote…</div>'; loadCoverage(id); return; }
+  if (cached.error) { counts.innerHTML = ""; body.innerHTML = `<div class="empty">${esc(cached.error)}</div>`; return; }
+  const graph = cached.graph;
+  if (!graph.screens.length) { counts.innerHTML = ""; body.innerHTML = '<div class="empty">This run recorded no screens. Older runs, and runs that never got past the first screen, have no map.</div>'; return; }
+
+  const actions = run.kind === "explore" ? run.explore?.report?.actionsPerformed : run.report?.actionsPerformed;
+  // A card takes the shape of the thing it is a picture of, the same rule the stage follows: a
+  // web page is landscape, a phone is portrait. Forced into the wrong one, `cover` crops a web
+  // still so hard that the screen's own name is cut off the left edge of its card.
+  const platform = runPlatform(run);
+  counts.innerHTML = `<span><b>${graph.counts.screens}</b> screens</span><span><b>${graph.counts.transitions}</b> transitions</span>${
+    actions ? `<span><b>${actions}</b> actions</span>` : ""}${evidenceLink(id, "Visual report")}`;
+
+  const byId = new Map(graph.screens.map((screen) => [screen.id, screen]));
+  // A run with no transitions has no path to draw. That is the normal and correct outcome of a
+  // read-only audit, which opens pages and clicks nothing — so say that, rather than labelling
+  // every page "no recorded way in" and reading as a fault in the run.
+  if (!graph.counts.transitions) {
+    body.innerHTML = `<p class="muted coverage-note">${run.kind === "audit"
+      ? "Nothing was clicked in this read-only pass, so no path between pages was recorded. These are the pages it opened."
+      : "This run recorded no way from one screen to another, so there is no path to draw. These are the screens it reached."}</p>
+      <div class="coverage-map flat" data-platform="${esc(platform)}">${graph.screens.map((screen) => screenCardHtml(screen, id)).join("")}</div>`;
+    return;
+  }
+  body.innerHTML = `<div class="coverage-map" data-platform="${esc(platform)}">${graph.columns.map((column, index) => {
+    const screens = column.map((screenId) => byId.get(screenId)).filter(Boolean);
+    if (!screens.length) return "";
+    const unreached = screens.every((screen) => !screen.reached);
+    return `<div class="coverage-column">
+      <p class="coverage-column-head">${unreached ? "No recorded way in" : index === 0 ? "Started here" : `${index} step${index === 1 ? "" : "s"} in`}</p>
+      ${screens.map((screen) => screenCardHtml(screen, id, { deadEnds: true })).join("")}
+    </div>`;
+  }).join("")}</div>
+  <p class="muted coverage-note">Only transitions the engine recorded are drawn. A screen with no recorded way in is in its own column, never implied to follow from the one beside it.</p>`;
+}
+
+// One screen: the still the run wrote, what the engine called it, and what led on from it. A
+// screen with no still says so rather than borrowing another screen's picture. `deadEnds` is on
+// only where it means something: in a path, a screen nothing led on from is a dead end worth
+// naming; where the run recorded no transitions at all, every screen is one and saying so is noise.
+function screenCardHtml(screen, captureId, { deadEnds = false } = {}) {
+  return `<article class="screen-card${screen.reached ? "" : " orphan"}">
+    <div class="screen-shot">${screen.shot
+      ? `<img loading="lazy" src="${esc(captureUrl(captureId, screen.shot))}" alt="${esc(screen.name)}">`
+      : '<span class="screen-shot-none">no picture</span>'}
+      ${screen.shotIsOfBaseScreen ? '<span class="screen-note" title="The stills are named for the screen, not the state, so this is that screen in a different state.">picture is of another state</span>' : ""}
+    </div>
+    <strong>${esc(screen.name)}</strong>
+    <small>${screen.controls} control${screen.controls === 1 ? "" : "s"}</small>
+    ${screen.outgoing.length
+      ? `<ul class="screen-exits">${screen.outgoing.map((exit) => `<li>${esc(exit.label)} <span>→ ${esc(exit.toName)}</span></li>`).join("")}</ul>`
+      : deadEnds ? '<p class="screen-exits-none">nothing led on from here</p>' : ""}
+  </article>`;
+}
+
+// The map is written beside the run, not sent with the run list, so it is fetched once per
+// capture and kept. A capture from before the map was written answers 404; say so plainly.
+async function loadCoverage(id) {
+  state.coverage ||= {};
+  if (state.coverage[id]) return;
+  state.coverage[id] = { loading: true };
+  try {
+    const [map, files] = await Promise.all([
+      fetch(captureUrl(id, "ui-map.json")).then((response) => response.ok ? response.json() : Promise.reject(new Error("no map"))),
+      api(`/api/captures/${encodeURIComponent(id)}/files`).catch(() => ({ shots: [] })),
+    ]);
+    const platform = map?.app?.platforms?.[0] || "";
+    state.coverage[id] = { graph: coverageGraph(map, files.shots || [], { platform }) };
+  } catch {
+    state.coverage[id] = { error: "This run wrote no map. Runs from before tapp recorded one, and runs that ended on the first screen, have nothing to draw." };
+  }
+  if (state.activeView === "coverage") renderCoverage();
 }
 
 // ---- tapp chat: the engine's progress log, rendered as a transcript -------------------------
@@ -1177,6 +1392,11 @@ document.addEventListener("click", (event) => {
     if (liveControl.dataset.liveInput === "true") $("#live-action-text").focus();
     else runOperation("session-act", { action:"tap", id:target }).catch((error) => toast(error.message, true));
   }
+});
+
+document.addEventListener("change", (event) => {
+  const picker = event.target.closest("#findings-run, #coverage-run");
+  if (picker) { state.selectedRunId = picker.value; renderRuns(); }
 });
 
 document.addEventListener("submit", (event) => {

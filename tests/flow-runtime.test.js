@@ -64,8 +64,11 @@ test("FlowLog identifies compiled release-contract evidence and every attributed
   const result = log.finish();
   assert.equal(result.kind, "release-contract");
   assert.equal(result.contract, "checkoutCompletes");
-  assert.match(result.lines[1], /"contract":"checkoutCompletes"/);
-  assert.match(result.lines[1], /"task":"completeCheckout"/);
+  // Found by its prefix, not by its position: the log grew an OCQA_FLOW_CLOCK line between the
+  // start and the first step (TM-497), and anything reading it by index broke.
+  const stepLine = result.lines.find((line) => line.startsWith("OCQA_FLOW_STEP:"));
+  assert.match(stepLine, /"contract":"checkoutCompletes"/);
+  assert.match(stepLine, /"task":"completeCheckout"/);
 });
 
 test("a step can be optional, so a screen that only sometimes appears does not decide the run", () => {
@@ -85,4 +88,32 @@ test("a step can be optional, so a screen that only sometimes appears does not d
   assert.equal(step.action, "tap");
   assert.equal(step.target, "Not Now");
   assert.deepEqual(validateFlowSteps({ platform: "ios", steps: [{ tap: { target: "Not Now", optional: true } }] }), []);
+});
+
+// TM-497 / TM-686: a one-time system alert belongs to the operating system, not the app, so a
+// Flow's own `tap:` cannot reach it and the run stops on a screen nobody scripted. `alerts:` says
+// what to do with it. Three of the eight demo takes on 11/7 were re-recorded because of these.
+test("a flow says what to do with a system alert, and a typo is refused rather than ignored", () => {
+  const ios = (alerts) => ({ name: "f", platform: "ios", app: "com.x", alerts, steps: [{ tap: "A" }] });
+  assert.deepEqual(validateFlowSteps(ios("allow")), []);
+  assert.deepEqual(validateFlowSteps(ios("dismiss")), []);
+  assert.deepEqual(validateFlowSteps(ios("")), []);
+  assert.deepEqual(validateFlowSteps({ ...ios("allow"), alerts: undefined }), []);
+
+  // Silently doing nothing is how `alerts: yes` would behave, and YAML turns a bare `yes` into a
+  // boolean on the way in, so the author would never learn their setting was not a setting.
+  assert.match(validateFlowSteps(ios("Allow please"))[0], /is not a setting/);
+  assert.match(validateFlowSteps(ios(true))[0], /is not a setting/);
+
+  // Web and Android have no system alert in this sense; accepting it there would be a lie.
+  const web = { name: "f", platform: "web", url: "https://x.test", alerts: "allow", steps: [{ tap: "A" }] };
+  assert.match(validateFlowSteps(web, "web")[0], /applies to iOS flows/);
+});
+
+test("the alerts setting survives the parser that hands the flow to the harness", () => {
+  // It is a flow-level key, and flow_lib.py copies a fixed list of those: a key missing from that
+  // list is dropped on the floor, which is what happened the first time.
+  const flowLib = fs.readFileSync(new URL("../scripts/flow_lib.py", import.meta.url), "utf8");
+  assert.match(flowLib, /"releaseContract", "alerts"/,
+    "flow_lib.py must copy `alerts` through to the harness, or the setting never arrives");
 });

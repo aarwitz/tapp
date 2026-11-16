@@ -13,6 +13,8 @@
 <body>
   <svg hidden aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-grid" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2.2 14.3 13H1.7z" stroke-linejoin="round"/><path d="M8 6.3v3"/><circle cx="8" cy="11.3" r=".55" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-map" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.6" y="4" width="4.3" height="4.3" rx="1"/><rect x="10.1" y="2.3" width="4.3" height="4.3" rx="1"/><rect x="10.1" y="9.4" width="4.3" height="4.3" rx="1"/><path d="M5.9 6.15h1.9a1 1 0 0 1 1 1v4.4a1 1 0 0 0 1 1h.3M8.8 6.15h1.3"/></symbol>
     <symbol id="i-play" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.25"/><path d="M6.5 5.5v5l4-2.5z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v5.5A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z"/></symbol>
     <symbol id="i-branch" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="5" r="1.5"/><path d="M4 5v6M12 6.5c0 3-8 2-8 4.5"/></symbol>
@@ -90,6 +92,8 @@
       <nav class="primary-nav" aria-label="Product navigation">
         <button data-view="overview" class="active"><span><svg><use href="#i-grid"/></svg></span>Overview</button>
         <button data-view="runs"><span><svg><use href="#i-play"/></svg></span>Runs <i id="run-count" class="zero">0</i></button>
+        <button data-view="findings"><span><svg><use href="#i-alert"/></svg></span>Findings <i id="findings-count" class="zero">0</i></button>
+        <button data-view="coverage"><span><svg><use href="#i-map"/></svg></span>Coverage</button>
         <button data-view="platforms"><span><svg><use href="#i-grid"/></svg></span>Platforms</button>
         <button data-view="admin" id="admin-nav" class="hidden"><span><svg><use href="#i-grid"/></svg></span>Admin</button>
       </nav>
@@ -168,6 +172,21 @@
         </section>
       </section>
 
+      <section class="workspace-view" data-view-panel="findings">
+        <div class="view-heading simple">
+          <div><p class="eyebrow">Findings</p><h1 id="findings-title">What the last run noticed</h1><p id="findings-note">Grouped by kind, worst first. Every finding is inside a group — nothing is dropped, and nothing here is a verdict.</p></div>
+          <select id="findings-run" class="run-picker" aria-label="Which run"></select>
+        </div>
+        <div id="findings-body"><div class="empty">No run yet.</div></div>
+      </section>
+      <section class="workspace-view" data-view-panel="coverage">
+        <div class="view-heading simple">
+          <div><p class="eyebrow">Coverage</p><h1>Where the run went</h1><p>Each screen tapp reached, and the action that led to the next one. Drawn from the map the engine wrote during the run.</p></div>
+          <select id="coverage-run" class="run-picker" aria-label="Which run"></select>
+        </div>
+        <div class="coverage-counts" id="coverage-counts"></div>
+        <div id="coverage-body"><div class="empty">No run yet.</div></div>
+      </section>
       <section class="workspace-view" data-view-panel="platforms">
         <div class="view-heading simple"><div><p class="eyebrow">Platforms</p><h1>What tapp can drive</h1><p>tapp is one engine with a driver per platform. This page says what this Studio can start right now, and where the rest runs.</p></div></div>
         <div id="platform-list"><div class="empty">Checking this machine…</div></div>
