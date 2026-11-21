@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { AccountStore, normalizeEmail, LINK_TTL_MS, SESSION_TTL_MS } from "../mcp-server/src/account-store.js";
+import { AccountStore, normalizeEmail, LINK_TTL_MS, SESSION_TTL_MS, TRIAL_MS } from "../mcp-server/src/account-store.js";
 import { createMailer, signInMessage } from "../mcp-server/src/mailer.js";
 
 const fresh = (clock = { t: Date.parse("2026-10-22T12:00:00Z") }) => ({ store: new AccountStore({ root: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-accounts-")), now: () => clock.t }), clock });
@@ -117,4 +117,44 @@ test("a personal access token acts as its account, is shown once, and is revoked
   assert.equal(store.tokenAccount(issued.token), null, "revoked");
   assert.deepEqual(store.listTokens(account.id), []);
   assert.throws(() => store.issueToken("../x"), /account id/);
+});
+
+test("a new account is on a free trial, a lapsed one is not, and the owner can change that (ADR-0011 §3)", () => {
+  const { store, clock } = fresh();
+  const { account } = store.signIn("new@example.test");
+  let plan = store.entitlement(account);
+  assert.equal(plan.kind, "trial");
+  assert.equal(plan.allowed, true);
+  assert.equal(plan.daysLeft, 14, "fourteen days, counted from signing up");
+
+  clock.t += TRIAL_MS + 1;
+  plan = store.entitlement(account.id);
+  assert.equal(plan.kind, "lapsed");
+  assert.equal(plan.allowed, false);
+  assert.equal(plan.daysLeft, 0);
+
+  // The owner's word: thirty more days from today, or paid for good.
+  assert.equal(store.setPlan(account.id, { kind: "trial", days: 30 }).daysLeft, 30);
+  assert.equal(store.entitlement(account.id).allowed, true);
+  assert.equal(store.setPlan(account.id, { kind: "paid" }).kind, "paid");
+  clock.t += 10 * TRIAL_MS;
+  assert.equal(store.entitlement(account.id).allowed, true, "paid has no end");
+  assert.throws(() => store.setPlan(account.id, { kind: "trial", days: 0 }), /1 to 365 days/);
+  assert.throws(() => store.setPlan(account.id, { kind: "gold" }), /'paid' or 'trial'/);
+  assert.throws(() => store.setPlan("0".repeat(24), { kind: "paid" }), /No such account/);
+});
+
+test("an account from before plans existed gets its trial from the day it is next seen, not the day it joined", () => {
+  const { store, clock } = fresh();
+  const { account } = store.signIn("old@example.test");
+  // Strip the plan the way an older release would have written the record.
+  const file = path.join(store.root, "accounts", `${account.id}.json`);
+  const record = JSON.parse(fs.readFileSync(file, "utf8"));
+  delete record.plan;
+  fs.writeFileSync(file, JSON.stringify(record));
+  clock.t += 200 * 86_400_000; // joined two hundred days ago
+  const plan = store.entitlement(account.id);
+  assert.equal(plan.kind, "trial");
+  assert.equal(plan.daysLeft, 14, "a change in the rules never locks out someone already here");
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).plan.kind, "trial", "and it is written down once");
 });

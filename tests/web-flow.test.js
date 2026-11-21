@@ -309,3 +309,23 @@ test("a screenshot step says when it saved nothing", async () => {
   assert.equal(out.status, "skip");
   assert.match(out.detail, /not saved/);
 });
+
+// A journey starting from an email link ("tap the sign-in link in your receipt") could not be
+// written down before: the one-time part had to be written into the app's storage by a wrapper
+// script. open_url substitutes like any other target, so the link itself carries it.
+test("open_url navigates straight there, with $VAR substitution like any other target", async () => {
+  const calls = [];
+  const page = {
+    goto: async (url, opts) => { calls.push({ url, opts }); },
+    waitForLoadState: async () => {},
+    waitForTimeout: async () => {},
+  };
+  const out = await executeWebFlowStep({
+    page,
+    step: { open_url: "https://example.test/claim?t=$CLAIM_TOKEN" },
+    vars: { CLAIM_TOKEN: "abc123" },
+  });
+  assert.equal(out.status, "pass");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://example.test/claim?t=abc123");
+});

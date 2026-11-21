@@ -110,6 +110,15 @@ test("a flow says what to do with a system alert, and a typo is refused rather t
   assert.match(validateFlowSteps(web, "web")[0], /applies to iOS flows/);
 });
 
+// A journey starting from an email link ("tap the sign-in link in your receipt") could not be
+// written down before — open_url is a committed step, not a per-platform special case, so the
+// validator has to agree on it the same way it agrees on any other step with a target.
+test("open_url is a committed step, and needs a target like tap or wait_for", () => {
+  assert.deepEqual(validateFlowSteps({ platform: "ios", steps: [{ open_url: "myapp://claim?t=$CLAIM_TOKEN" }] }), []);
+  assert.deepEqual(validateFlowSteps({ platform: "web", steps: [{ open_url: "https://example.test/claim" }] }), []);
+  assert.match(validateFlowSteps({ platform: "ios", steps: [{ open_url: "" }] })[0], /open_url needs a target/);
+});
+
 test("the alerts setting survives the parser that hands the flow to the harness", () => {
   // It is a flow-level key, and flow_lib.py copies a fixed list of those: a key missing from that
   // list is dropped on the floor, which is what happened the first time.

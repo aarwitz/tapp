@@ -170,12 +170,30 @@ function accountAllows(method, pathname) {
   if (method === "POST" && (pathname === "/api/alerts" || pathname === "/api/alerts/test")) return true;
   // Personal access tokens: the owner's coding agent acting as them (ADR-0009 slice 4).
   if (method === "POST" && pathname === "/api/tokens") return true;
+  // The deployment's owner marks an account paid or extends its trial; the handler checks who.
+  if (method === "POST" && pathname === "/api/admin/plan") return true;
   if (method === "DELETE" && /^\/api\/tokens\/[a-f0-9]{12}$/.test(pathname)) return true;
   if (method === "DELETE" && /^\/api\/actors\/[A-Za-z0-9.:-]{1,253}\/[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(pathname)) return true;
   // Journeys: keep a proven run, replay it, forget it (ADR-0009 slice 3).
   if (method === "POST" && (/^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname) || pathname === "/api/operations/run-flow" || pathname === "/api/journeys")) return true;
+  // A journey run on the owner's own machine reports how it went (ADR-0011 §4).
+  if (method === "POST" && pathname === "/api/journeys/report") return true;
   if (method === "DELETE" && /^\/api\/journeys\/[a-z0-9-]{1,60}$/.test(pathname)) return true;
   return false;
+}
+
+// Starting a cloud run — going inside a site, keeping or replaying a journey, importing one —
+// is what a plan or a free trial buys (ADR-0011 §3). Reading what you own is not gated, so a
+// lapsed trial can still see its journeys, test accounts and tokens, and forget them.
+function cloudRunRoute(method, pathname) {
+  if (method !== "POST") return false;
+  return pathname === "/api/operations/explore" || pathname === "/api/operations/run-flow" || pathname === "/api/journeys"
+    || /^\/api\/captures\/[A-Za-z0-9._-]{1,128}\/keep$/.test(pathname);
+}
+
+function trialEndedMessage(plan) {
+  const when = plan?.endsAt ? ` on ${String(plan.endsAt).slice(0, 10)}` : "";
+  return `Your free trial ended${when}. Cloud runs — going inside a site, kept journeys and daily checks — are for accounts on a plan. Write to hello@runtapp.com, or run everything on your own machine, where nothing is gated: npx -y @aarwitz/tapp@latest app`;
 }
 
 // One visitor may start a bounded number of audits per hour. Each audit drives a real browser
@@ -358,7 +376,32 @@ async function replayJourney({ store, slug, flow, actorRoot = "", ownerKey = nul
 // due when its last result is older than the interval (TAPP_JOURNEY_CHECK_HOURS, default 24);
 // a restart therefore does not re-run everything, and a busy lane simply waits for the next tick.
 export function dueJourneys(journeys, { intervalMs, now = Date.now() }) {
-  return journeys.filter((j) => (j.platform || "web") === "web" && (!j.status || now - Date.parse(j.status.at || 0) >= intervalMs));
+  // A reported journey runs on somebody's own machine; the cloud has no flow to replay.
+  return journeys.filter((j) => j.source !== "reported" && (j.platform || "web") === "web" && (!j.status || now - Date.parse(j.status.at || 0) >= intervalMs));
+}
+
+// ADR-0011 §4: results flow up, the browser never reaches down. A self-hosted Studio can be
+// linked to an account on a hosted one with a token the owner created there; from then on a
+// journey run here reports its name and result to that account. The link lives beside the
+// machine's other state, readable by this user only. Never on a hosted Studio: its account IS
+// the account.
+function studioLinkPath() {
+  return path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "studio-link.json");
+}
+function readStudioLink() {
+  try {
+    const link = JSON.parse(fs.readFileSync(studioLinkPath(), "utf8"));
+    return link && typeof link.origin === "string" && typeof link.token === "string" ? link : null;
+  } catch { return null; }
+}
+function writeStudioLink(link) {
+  const file = studioLinkPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(file, JSON.stringify(link), { mode: 0o600 });
+}
+function studioLinkSummary() {
+  const link = readStudioLink();
+  return link ? { origin: link.origin, email: link.email || "", linkedAt: link.linkedAt || null } : null;
 }
 
 function openBrowser(url) {
@@ -733,6 +776,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
     for (const accountId of owners) {
       const store = JourneyStore.forAccount(accountId);
       const ownerKey = `acct:${accountId}`;
+      // A daily check is a cloud run: a lapsed trial's journeys keep their last result and are
+      // not re-run until the account is on a plan again (ADR-0011 §3).
+      const record = accounts.getAccount(accountId);
+      if (record && !isAdmin(record) && !accounts.entitlement(record).allowed) continue;
       for (const journey of dueJourneys(store.list(), { intervalMs: checkIntervalMs })) {
         const flowPath = store.flowPath(journey.slug);
         let flow;
@@ -803,6 +850,16 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       if (account && !accountAllows(request.method, url.pathname)) {
         json(response, 401, { error: "That part of the Studio runs on your own machine: npx -y @aarwitz/tapp@latest app" });
         return;
+      }
+      // The cloud beyond the visitor audit is for an account on a plan or in its free trial
+      // (ADR-0011 §3). The deployment's owner is never gated on their own machine.
+      if (account && !isAdmin(account) && cloudRunRoute(request.method, url.pathname)) {
+        const plan = accounts.entitlement(account);
+        if (!plan.allowed) {
+          logUsage("refused", { account: account.id.slice(0, 8), reason: "trial-ended", method: request.method, path: url.pathname, status: 402 });
+          json(response, 402, { error: trialEndedMessage(plan), plan });
+          return;
+        }
       }
       if (publicAccess && !authenticated && !account) {
         anonymous = true;
@@ -1037,6 +1094,57 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         json(response, 200, { name: journey.flow.name, slug: kept.slug, steps: journey.steps, screens: journey.screens, signedIn: journey.signedIn, path: registry.currentRoot() && !account ? path.relative(registry.currentRoot(), kept.path) : null });
         return;
       }
+      // A journey that ran on the owner's own machine says how it went (ADR-0011 §4). The name
+      // and the result are kept under the account; nothing else is accepted, and a change
+      // between runs is announced the way a cloud check's would be.
+      if (account && request.method === "POST" && url.pathname === "/api/journeys/report") {
+        guardMutation(request);
+        const body = await readJsonBody(request);
+        const name = String(body.name || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120);
+        if (!name) throw Object.assign(new Error("A report names the journey"), { statusCode: 400 });
+        const platform = ["web", "ios", "android", "macos"].includes(body.platform) ? body.platform : "web";
+        const machine = String(body.machine || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 64);
+        const count = (value) => Math.max(0, Math.min(10_000, Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0));
+        const at = Number.isFinite(Date.parse(body.at)) ? new Date(Date.parse(body.at)).toISOString() : null;
+        const store = JourneyStore.forAccount(account.id);
+        const previous = store.reported(slugify(name))?.status || null;
+        const record = store.report({ name, platform, url: String(body.url || "").slice(0, 2048), steps: count(body.steps), machine, passed: body.passed === true, executed: count(body.executed), total: count(body.total), failed: count(body.failed), at });
+        const change = alertForChange({ previous, current: record.status });
+        if (change) {
+          const alerts = AlertStore.forAccount(accounts.root, account.id);
+          const settings = alerts.read();
+          if (settings.webhook) {
+            const alert = await deliverAlert({ webhook: settings.webhook, message: alertMessage({ kind: change, journey: `${name}${machine ? ` (on ${machine})` : ""}`, status: record.status, origin: publicOrigins[0] || "" }) });
+            alerts.write({ lastDelivery: { at: new Date().toISOString(), journey: name, change, ...alert } });
+          }
+        }
+        logUsage("journey.reported", { account: account.id.slice(0, 8), passed: record.status.passed, platform, change: change || null });
+        json(response, 200, { ok: true, slug: record.slug, status: record.status, change: change || null });
+        return;
+      }
+      // Linking this machine to an account on a hosted Studio (ADR-0011 §4). Operator only, and
+      // only on a self-hosted Studio: a hosted one has nothing to link to but itself.
+      if (!hosted && authenticated && url.pathname === "/api/studio-link") {
+        if (request.method === "GET") { json(response, 200, { link: studioLinkSummary() }); return; }
+        guardMutation(request);
+        if (request.method === "DELETE") { try { fs.rmSync(studioLinkPath(), { force: true }); } catch { /* gone */ } json(response, 200, { ok: true, link: null }); return; }
+        if (request.method === "POST") {
+          const body = await readJsonBody(request);
+          const { studioConfig, verifyStudioToken } = await import("./studio-client.js");
+          let config;
+          try { config = studioConfig({ studio: String(body.origin || "https://app.runtapp.com"), token: String(body.token || "") }, {}); }
+          catch (error) { json(response, 400, { error: error.message }); return; }
+          if (!config) { json(response, 400, { error: "A Studio URL is needed" }); return; }
+          let who;
+          try { who = await verifyStudioToken(config); }
+          catch (error) { json(response, 400, { error: error.message }); return; }
+          const link = { origin: config.origin, token: config.token, email: who.email, linkedAt: new Date().toISOString() };
+          writeStudioLink(link);
+          logUsage("studio.linked", { origin: config.origin });
+          json(response, 200, { ok: true, link: studioLinkSummary() });
+          return;
+        }
+      }
       if (!anonymous && request.method === "GET" && url.pathname === "/api/journeys") {
         const store = journeyStore();
         const root = !account ? registry.currentRoot() : null;
@@ -1109,6 +1217,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // What the owner of this deployment can see: how it is being used, who has an account, and
       // which journeys are failing. Never a credential — they are encrypted and never decrypted
       // for display — and never anyone's evidence.
+      // The owner decides who is on a plan: mark an account paid, or give it a trial of so many
+      // days from today. Anyone else asking gets 403, not a hint of who has an account.
+      if (account && request.method === "POST" && url.pathname === "/api/admin/plan") {
+        if (!isAdmin(account)) { json(response, 403, { error: "Only the owner of this deployment can do that" }); return; }
+        guardMutation(request);
+        const body = await readJsonBody(request);
+        const plan = accounts.setPlan(String(body.accountId || ""), { kind: String(body.kind || ""), days: body.days });
+        logUsage("plan.set", { account: String(body.accountId || "").slice(0, 8), kind: plan.kind, by: account.id.slice(0, 8) });
+        json(response, 200, { ok: true, plan });
+        return;
+      }
       if (account && isAdmin(account) && request.method === "GET" && url.pathname === "/api/admin/overview") {
         const accountsRoot = accounts.root;
         const listAccounts = () => {
@@ -1127,7 +1246,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
               }
             } catch { /* none yet */ }
             return {
-              email: record.email, createdAt: record.createdAt, lastSeenAt: record.lastSeenAt || null,
+              id: record.id, email: record.email, createdAt: record.createdAt, lastSeenAt: record.lastSeenAt || null,
+              plan: isAdmin(record) ? { kind: "owner", allowed: true, endsAt: null, daysLeft: null } : accounts.entitlement(record),
               journeys: journeys.length,
               failing: journeys.filter((j) => j.status && !j.status.passed).length,
               neverRun: journeys.filter((j) => !j.status).length,
@@ -1291,6 +1411,8 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             csrfToken, mode: "public", product: "Tapp", root: null, repository: null, repositories: [],
             contract: customerProductContract, supportedPlatforms: ["web"], runners: [],
             access: "account", email: account.email, signInProvider, signInOptions, viaToken, admin: isAdmin(account),
+            // What the cloud will do for this account, and until when (ADR-0011 §3).
+            plan: isAdmin(account) ? { kind: "owner", allowed: true, endsAt: null, daysLeft: null } : accounts.entitlement(account),
             accepts: ["url"],
             selfHostOnly: ["path", "github", "bundle", "app", "apk"],
             // What tapp drives, and what THIS machine can start. The Studio shows all of it:
@@ -1316,7 +1438,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           });
           return;
         }
-        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }), platforms: platformStates({ hosted }) });
+        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }), platforms: platformStates({ hosted }), studioLink: hosted ? null : studioLinkSummary() });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
@@ -1572,6 +1694,17 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         const job = startJob(operation, async (progress) => {
           const result = await replayJourney({ store, slug, flow, actorRoot: actorRootFor() || "", ownerKey, progress, alerts: account ? AlertStore.forAccount(accounts.root, account.id) : null, origin: publicOrigins[0] || "" });
           logUsage("journey.run", { owner: (ownerKey || "operator").slice(0, 13), passed: result.passed });
+          // A run on this machine reports to the linked account: the name and how it went,
+          // never the journey, a credential or a screenshot (ADR-0011 §4). Best effort — a
+          // Studio that cannot be reached is said in the chat and never fails the run.
+          const link = !hosted && !account ? readStudioLink() : null;
+          if (link) {
+            try {
+              const { reportStudioJourney } = await import("./studio-client.js");
+              await reportStudioJourney({ origin: link.origin, token: link.token }, { name: flow.name || slug, platform, url: flow.url || "", steps: (flow.steps || []).length, machine: os.hostname(), passed: result.passed, executed: result.executed, total: result.total, failed: result.failed, at: result.status?.at || null });
+              progress({ phase: "replay", text: `Reported to ${link.origin} as ${link.email || "your account"}` });
+            } catch (error) { progress({ phase: "replay", text: `Could not report to ${link.origin}: ${error.message}` }); }
+          }
           return result;
         }, null, { lane: ownerKey || OPERATOR_LANE });
         job.ownerKey = ownerKey;

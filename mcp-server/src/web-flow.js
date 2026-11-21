@@ -349,6 +349,10 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
       }
     } else if (action === "back") {
       await page.goBack({ waitUntil: "domcontentloaded" });
+    } else if (action === "open_url") {
+      // A journey starting from an email link ("tap the sign-in link in your receipt") is just a
+      // navigation on web — the one-time part of the link substitutes like any other target.
+      await page.goto(target, { waitUntil: "domcontentloaded" });
     } else if (action === "wait_for") {
       if (!await waitForScreen(page, target, timeout)) throw new Error(`‘${target}’ never appeared within ${timeout}ms${await visibleLabelsHint(page)}`);
     } else if (action === "wait") {
@@ -424,8 +428,8 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
   const loggedFlow = { ...flow, steps: [...setup, ...flow.steps, ...teardown] };
   const log = new FlowLog({ logPath, flow: loggedFlow });
   const pw = playwright || await loadPlaywright();
-  const { webBrowserLaunchOptions } = await import("./web-explorer.js");
-  const browser = await pw.chromium.launch(webBrowserLaunchOptions());
+  const { webBrowserLaunchOptions, launchWebBrowser } = await import("./web-explorer.js");
+  const browser = await launchWebBrowser(pw.chromium, webBrowserLaunchOptions());
   const contextOptions = webContextOptions({ device, viewport, devices: pw.devices });
   // Without an explicit size Playwright fits the recording into 800px, so a replay filmed at a
   // desktop viewport came out small and soft however large the window was. Film at the size the

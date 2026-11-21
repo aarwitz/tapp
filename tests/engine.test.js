@@ -439,3 +439,19 @@ test("a verbose/full screen readout lists every control, not the first eight", (
   assert.match(full, /Tab 12/);
   assert.doesNotMatch(full, /… and \d+ more/);
 });
+
+test("evidence from a source checkout goes to ~/.tapp, never into the repository (TM-651)", () => {
+  // The clearing-out (evidence-retention.js) only walks TAPP_HOME/captures; anything written
+  // into the repository was never cleared. Every writer now defaults to ~/.tapp.
+  const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+  const capture = read("scripts/quick-capture.sh");
+  assert.match(capture, /TAPP_RUNTIME_HOME="\$\{TAPP_HOME:-\$HOME\/\.tapp\}"/);
+  assert.doesNotMatch(capture, /\$PROJECT_ROOT\/captures/);
+  assert.doesNotMatch(read("mcp-server/src/index.js"), /path\.join\(repoRoot, "captures"\)/);
+  for (const p of ["scripts/ci-gate.sh", "scripts/corpus-sweep.sh", "scripts/coverage-eval.sh"]) {
+    // corpus-sweep and coverage-eval are private-only (not in the public allowlist), so in the
+    // published tree there is nothing to read — and a shipped test must not fail on that.
+    if (!fs.existsSync(new URL(`../${p}`, import.meta.url))) continue;
+    assert.doesNotMatch(read(p), /"\$ROOT"?\/captures|\$\{TAPP_HOME:-\$ROOT\}/, p);
+  }
+});

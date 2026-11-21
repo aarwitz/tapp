@@ -660,3 +660,24 @@ test("a screen is named by the heading a person can see, the way the flow runner
     assert.equal(webScreenTitle({ heading: seen, title: "Coach Profile Setup" }, "/"), "Where do you coach?");
   } finally { await browser.close(); }
 });
+
+test("browser startup failures name their reason without launch arguments (TM-909)", async () => {
+  const { launchWebBrowser } = await import("../mcp-server/src/web-explorer.js");
+  const chromium = { launch: async ({ logger }) => {
+    logger.log("browser", "info", "<launching> /path/chrome --secret-arg=1");
+    logger.log("browser", "info", "[1:2:1118/120000.1:ERROR:bootstrap.cc(65)] bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer: Permission denied (1100)");
+    logger.log("protocol", "info", "unrelated error chatter");
+    throw new Error("browserType.launch: Target page, context or browser has been closed\nCall log:\n- <launching> x");
+  } };
+  const error = await launchWebBrowser(chromium, { headless: true }).catch((e) => e);
+  assert.match(error.message, /Target page, context or browser has been closed/);
+  assert.match(error.message, /Browser startup reason:/);
+  assert.match(error.message, /Permission denied \(1100\)/);
+  assert.doesNotMatch(error.message, /secret-arg|unrelated/);
+});
+
+test("a browser that said nothing useful leaves the launch error alone (TM-909)", async () => {
+  const { launchWebBrowser } = await import("../mcp-server/src/web-explorer.js");
+  const original = new Error("boom");
+  await assert.rejects(launchWebBrowser({ launch: async () => { throw original; } }, {}), (e) => e === original);
+});

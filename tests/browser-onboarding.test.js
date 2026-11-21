@@ -74,6 +74,9 @@ test("without a repository the Studio explains how to open one, goes inside a we
     assert.doesNotMatch(onboarding, /Upload a project folder|Connect to GitHub/);
     assert.match(onboarding, /audit a website read-only/);
     assert.equal(await page.locator(".hero-device").count(), 1, "the empty state shows what tapp does");
+    // This IS the person's machine: nothing to install, every example is something to type here.
+    assert.equal(await page.locator("#selfhost-card").isVisible(), false, "a local Studio does not tell you to run it locally");
+    assert.equal(await page.locator(".prompt-suggestions li:visible").count(), 4, "every example is offered on a local Studio");
 
     // On your own machine a URL from the prompt is a real exploration — it can stop at a sign-in
     // and ask (ADR-0009). This fixture has no sign-in, so it simply goes through.
@@ -118,6 +121,39 @@ test("without a repository the Studio explains how to open one, goes inside a we
     await product.close();
     site.server.close();
     if (priorHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = priorHome;
+  }
+});
+
+test("a hosted Studio is the front door: a website here, everything else on your own machine, with the command", { skip:skipRealBrowser || !chromium, timeout:60_000 }, async () => {
+  // ADR-0011. The hosted first page used to offer four examples and refuse three of them when
+  // tried — honest, but a stranger learned what the page could not do by doing it. Now the box
+  // takes a website, and a card under it names the rest with the command, before anyone types.
+  const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-front-door-"));
+  const product = await startBrowserProduct({ port:0, publicOrigin:"https://app.runtapp.com", publicAccess:true, workspaceRoot });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless:true });
+    const page = await browser.newPage();
+    await page.goto(`${product.origin}/`, { waitUntil:"networkidle" });
+    await page.locator("#selfhost-card").waitFor({ state:"visible", timeout:10_000 });
+    const card = await page.locator("#selfhost-card").innerText();
+    assert.match(card, /runs on your own machine/);
+    assert.match(card, /staging and localhost/, "the private targets the cloud can never reach are named");
+    assert.equal((await page.locator("#selfhost-command").innerText()).trim(), "npx -y @aarwitz/tapp@latest app");
+    assert.match(card, /no account needed/, "self-host never needs an account");
+    // Only the example this deployment can start is offered as something to type here.
+    const offered = await page.locator(".prompt-suggestions li:visible [data-kind]").evaluateAll((nodes) => nodes.map((node) => node.dataset.kind));
+    assert.deepEqual(offered, ["url"]);
+    assert.equal(await page.locator("#prompt-input").getAttribute("placeholder"), "A website URL — https://…");
+    // What tapp drives is still all on the first screen (ADR-0010): chips for every platform.
+    const chips = await page.locator("#platform-strip .platform-chip").allInnerTexts();
+    assert.deepEqual(chips.map((text) => text.trim()), ["Web", "iOS", "Android", "macOS app", "Windows app"]);
+    // The cloud beyond the audit is behind a sign-in: offered, and opened only when asked for.
+    await page.locator("#account-slot [data-signin]").click();
+    await page.locator("#signin-card").waitFor({ state:"visible", timeout:5000 });
+  } finally {
+    await browser?.close();
+    await product.close();
   }
 });
 

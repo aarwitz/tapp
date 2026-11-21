@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
 
 import { studioConfig, listStudioJourneys, runStudioJourney, formatJourneyStatus } from "../mcp-server/src/studio-client.js";
 
@@ -50,4 +53,19 @@ test("a journey that needs a device, a revoked token, and an unreachable Studio 
   globalThis.fetch = async () => { throw new Error("ECONNREFUSED"); };
   await assert.rejects(listStudioJourneys(config), /Could not reach the Studio/);
   delete globalThis.fetch;
+});
+
+test("the CLI reports where the Studio does: from the machine's link, or the environment, with the runner's own verdict", async () => {
+  const { studioLinkFor, flowResultFromLog } = await import("../mcp-server/src/studio-client.js");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-cli-link-"));
+  assert.equal(studioLinkFor({ TAPP_HOME: home }), null, "nothing linked, nothing reported");
+  fs.writeFileSync(path.join(home, "studio-link.json"), JSON.stringify({ origin: "https://app.runtapp.com", token: "tapp_abc", email: "o@example.test" }));
+  assert.deepEqual(studioLinkFor({ TAPP_HOME: home }), { origin: "https://app.runtapp.com", token: "tapp_abc", email: "o@example.test" });
+  // The environment wins, so one shell can report to a different Studio than the machine's link.
+  assert.deepEqual(studioLinkFor({ TAPP_HOME: home, TAPP_STUDIO: "https://studio.example.test/", TAPP_TOKEN: "tapp_env" }), { origin: "https://studio.example.test", token: "tapp_env", email: "" });
+  assert.equal(studioLinkFor({ TAPP_HOME: home, TAPP_STUDIO: "not a url", TAPP_TOKEN: "tapp_env" }), null, "a bad environment is not a reason to fail a run");
+  // The verdict is the runner's last result line, as every platform's runner writes it.
+  const log = ["OCQA_FLOW_RESULT:started total=3 name=x kind=flow", "OCQA_FLOW_STEP:{\"index\":1}", 'OCQA_FLOW_RESULT:{"passed":false,"name":"x","total":3,"executed":2,"failed":1}', ""].join("\n");
+  assert.deepEqual(flowResultFromLog(log), { passed: false, name: "x", total: 3, executed: 2, failed: 1 });
+  assert.equal(flowResultFromLog("nothing here"), null);
 });

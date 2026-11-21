@@ -26,6 +26,12 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /npx -y skills add aarwitz\/tapp --skill tapp/);
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);
   assert.match(index, /Point tapp at anything\./);
+  // Where it runs (ADR-0011): the hosted product is a public website; the rest is the person's
+  // own machine with the same Studio, and macOS desktop is listed because it is driven.
+  assert.match(index, /npx -y @aarwitz\/tapp@latest app\b/);
+  assert.match(index, /runs on your own machine/);
+  assert.match(index, /macOS desktop/);
+  assert.match(index, /A public website runs in the cloud/);
   assert.match(index, /Real evidence/);
   assert.match(index, /The Studio on a real run: ask, go inside, keep, replay/);
   assert.match(index, /assets\/tapp-film\.mp4/);

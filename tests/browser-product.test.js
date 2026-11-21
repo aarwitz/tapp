@@ -552,10 +552,50 @@ test("an account signs in by email link, may go inside a site, and sees only its
       assert.equal((await call(pathname, { method })).status, 401, `${method} ${pathname} stays the operator's`);
     }
     // Going inside is accepted (a visitor gets the self-host answer instead; see the test above).
+    assert.equal(session.plan.kind, "trial", "a new account is on its free trial");
+    assert.equal(session.plan.daysLeft, 14);
     const explore = await mutate("/api/operations/explore", { url: "http://127.0.0.1:9/" });
     assert.equal(explore.status, 202, "an account starts a real exploration");
     const job = (await explore.json()).job;
     assert.equal((await call(`/api/jobs/${job.id}`)).status, 200, "the account sees its own job");
+
+    // Once the trial has lapsed, a cloud run is refused with the reason and the way round it;
+    // what the account owns is still readable (ADR-0011 §3).
+    const accountFile = fs.readdirSync(path.join(home, "accounts", "accounts")).map((name) => path.join(home, "accounts", "accounts", name))
+      .find((file) => JSON.parse(fs.readFileSync(file, "utf8")).email === "owner@example.test");
+    const record = JSON.parse(fs.readFileSync(accountFile, "utf8"));
+    record.plan = { kind: "trial", endsAt: "2026-01-01T00:00:00.000Z" };
+    fs.writeFileSync(accountFile, JSON.stringify(record));
+    const lapsed = await mutate("/api/operations/explore", { url: "http://127.0.0.1:9/" });
+    assert.equal(lapsed.status, 402);
+    const refusal = await lapsed.json();
+    assert.match(refusal.error, /free trial ended on 2026-01-01/);
+    assert.match(refusal.error, /npx -y @aarwitz\/tapp@latest app/, "the way round the gate is the person's own machine");
+    assert.equal(refusal.plan.kind, "lapsed");
+    assert.equal((await mutate("/api/journeys", { flow: "name: x\n" })).status, 402, "importing a journey is a cloud run too");
+    assert.equal((await call("/api/journeys")).status, 200, "but reading what you own stays open");
+    assert.equal((await call("/api/actors")).status, 200);
+    assert.equal((await (await call("/api/session")).json()).plan.kind, "lapsed", "and the Studio is told");
+    assert.equal((await mutate("/api/admin/plan", { accountId: record.id, kind: "paid" })).status, 403, "only the owner changes plans");
+    record.plan = { kind: "paid" };
+    fs.writeFileSync(accountFile, JSON.stringify(record));
+    assert.equal((await (await call("/api/session")).json()).plan.kind, "paid");
+
+    // A journey run on the owner's own machine reports its result here (ADR-0011 §4): listed
+    // with where it ran, never runnable from the cloud, forgettable.
+    assert.equal((await mutate("/api/journeys/report", { machine: "x" })).status, 400, "a report names the journey");
+    const reported = await mutate("/api/journeys/report", { name: "Book a coach", platform: "web", url: "http://localhost:3000/", steps: 7, machine: "aarons-mac", passed: true, executed: 7, total: 7 });
+    assert.equal(reported.status, 200);
+    assert.equal((await reported.json()).slug, "book-a-coach");
+    const listed = (await (await call("/api/journeys")).json()).journeys.find((j) => j.slug === "book-a-coach");
+    assert.equal(listed.source, "reported");
+    assert.equal(listed.machine, "aarons-mac");
+    assert.equal(listed.status.passed, true);
+    const broke = await (await mutate("/api/journeys/report", { name: "Book a coach", machine: "aarons-mac", passed: false, executed: 3, total: 7, failed: 1 })).json();
+    assert.equal(broke.change, "broke", "a change between reports is news, as it is for a cloud check");
+    assert.equal((await mutate("/api/operations/run-flow", { name: "book-a-coach" })).status, 404, "the cloud has no flow for a reported journey");
+    assert.equal((await call("/api/journeys/book-a-coach", { method: "DELETE", headers: { origin, "x-tapp-csrf": csrf } })).status, 200);
+    assert.equal((await (await call("/api/journeys")).json()).journeys.some((j) => j.slug === "book-a-coach"), false);
 
     // Test accounts are listed by name only, and forgetting one works.
     const { ActorStore } = await import("../mcp-server/src/actor-store.js");
@@ -699,8 +739,9 @@ test("a kept journey is due for its daily check when its last result is older th
     { slug: "fresh", platform: "web", status: { passed: true, at: "2026-10-22T12:00:00Z" } },
     { slug: "stale", platform: "web", status: { passed: false, at: "2026-10-21T12:00:00Z" } },
     { slug: "ios", platform: "ios", status: null },
+    { slug: "reported", platform: "web", status: null, source: "reported" },
   ];
-  assert.deepEqual(dueJourneys(journeys, { intervalMs: day, now }).map((j) => j.slug), ["never", "stale"], "never-run and day-old journeys are due; a fresh one and a non-web one are not");
+  assert.deepEqual(dueJourneys(journeys, { intervalMs: day, now }).map((j) => j.slug), ["never", "stale"], "never-run and day-old journeys are due; a fresh one, a non-web one and one that runs on somebody's own machine are not");
 });
 
 test("a journey that types its own credentials is never handed a saved session", () => {
@@ -893,6 +934,52 @@ test("“Continue with Google” signs in on our own page, and a callback cannot
   }
 });
 
+test("a self-hosted Studio links to an account on a hosted one with a token, and says whose (ADR-0011 §4)", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-link-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const accessVerifier = { verify: async () => ({ email: "owner@example.test" }) };
+  const cloud = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-link-cloud-")), accessVerifier });
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-link-local-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>local</h1>");
+  const local = await startBrowserProduct({ projectDir: root, port: 0, launch: false });
+  try {
+    // The owner creates a token on the hosted Studio, signed in.
+    const cloudCookie = (await fetch(`${cloud.origin}/auth/cloudflare`, { redirect: "manual", headers: { "cf-access-jwt-assertion": "x" } })).headers.get("set-cookie").split(";")[0];
+    const cloudCsrf = (await (await fetch(`${cloud.origin}/api/session`, { headers: { cookie: cloudCookie } })).json()).csrfToken;
+    const issued = await (await fetch(`${cloud.origin}/api/tokens`, { method: "POST", headers: { cookie: cloudCookie, origin: "https://app.runtapp.com", "x-tapp-csrf": cloudCsrf, "content-type": "application/json" }, body: JSON.stringify({ label: "my mac" }) })).json();
+    assert.match(issued.token, /^tapp_/);
+
+    // The local Studio, as its operator.
+    const cookie = cookieFrom(await fetch(local.launchUrl, { redirect: "manual" }));
+    const session = await (await fetch(`${local.origin}/api/session`, { headers: { cookie } })).json();
+    assert.equal(session.studioLink, null, "nothing is linked until the owner says so");
+    const post = (body) => fetch(`${local.origin}/api/studio-link`, { method: "POST", headers: { cookie, origin: local.origin, "x-tapp-csrf": session.csrfToken, "content-type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal((await post({ origin: cloud.origin, token: "not-a-token" })).status, 400, "a value that is not a tapp token is refused before anything is sent");
+    assert.equal((await post({ origin: cloud.origin, token: "tapp_" + "0".repeat(40) })).status, 400, "a token the Studio does not know is refused");
+    const linked = await post({ origin: cloud.origin, token: issued.token });
+    assert.equal(linked.status, 200);
+    const { link } = await linked.json();
+    assert.equal(link.email, "owner@example.test", "the link says whose account it reports to");
+    assert.equal(link.origin, cloud.origin);
+    assert.equal(link.token, undefined, "the token is never read back");
+    assert.equal((await (await fetch(`${local.origin}/api/session`, { headers: { cookie } })).json()).studioLink.email, "owner@example.test");
+    const onDisk = JSON.parse(fs.readFileSync(path.join(home, "studio-link.json"), "utf8"));
+    assert.equal(onDisk.token, issued.token);
+    assert.equal((fs.statSync(path.join(home, "studio-link.json")).mode & 0o777), 0o600);
+    // Not for strangers, and not for a hosted Studio.
+    assert.equal((await fetch(`${local.origin}/api/studio-link`)).status, 401);
+    assert.equal((await fetch(`${cloud.origin}/api/studio-link`, { headers: { cookie: cloudCookie } })).status, 401, "a hosted Studio has nothing to link to but itself");
+    const unlinked = await fetch(`${local.origin}/api/studio-link`, { method: "DELETE", headers: { cookie, origin: local.origin, "x-tapp-csrf": session.csrfToken } });
+    assert.equal(unlinked.status, 200);
+    assert.equal(fs.existsSync(path.join(home, "studio-link.json")), false);
+  } finally {
+    await local.close();
+    await cloud.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+});
+
 test("the owner sees how their deployment is being used; nobody else sees that it exists", async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-admin-home-"));
   const previous = { home: process.env.TAPP_HOME, admins: process.env.TAPP_ADMIN_EMAILS };
@@ -937,6 +1024,26 @@ test("the owner sees how their deployment is being used; nobody else sees that i
     // Now that a stranger exists, the owner sees both — that is the point of the page.
     const after = await (await fetch(`${product.origin}/api/admin/overview`, { headers: { cookie: ownerCookie } })).json();
     assert.deepEqual(after.accounts.map((a) => a.email).sort(), ["owner@example.test", "stranger@example.test"]);
+
+    // Each account's plan is on the page, and the owner's word changes it (ADR-0011 §3).
+    const stranger = after.accounts.find((a) => a.email === "stranger@example.test");
+    assert.equal(stranger.plan.kind, "trial");
+    assert.equal(after.accounts.find((a) => a.email === "owner@example.test").plan.kind, "owner", "the owner is never gated");
+    const ownerCsrf = (await (await fetch(`${product.origin}/api/session`, { headers: { cookie: ownerCookie } })).json()).csrfToken;
+    const setPlan = (body, cookie, csrf) => fetch(`${product.origin}/api/admin/plan`, {
+      method: "POST", headers: { cookie, origin, "x-tapp-csrf": csrf, "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const extended = await setPlan({ accountId: stranger.id, kind: "trial", days: 30 }, ownerCookie, ownerCsrf);
+    assert.equal(extended.status, 200);
+    assert.equal((await extended.json()).plan.daysLeft, 30);
+    const paid = await setPlan({ accountId: stranger.id, kind: "paid" }, ownerCookie, ownerCsrf);
+    assert.equal((await paid.json()).plan.kind, "paid");
+    assert.equal((await setPlan({ accountId: stranger.id, kind: "gold" }, ownerCookie, ownerCsrf)).status, 400);
+    // The stranger cannot promote themselves, and the refusal names no accounts.
+    const strangerCsrf = (await (await fetch(`${product.origin}/api/session`, { headers: { cookie: strangerCookie } })).json()).csrfToken;
+    const refused = await setPlan({ accountId: stranger.id, kind: "paid" }, strangerCookie, strangerCsrf);
+    assert.equal(refused.status, 403);
+    assert.doesNotMatch(await refused.text(), /owner@example\.test/);
   } finally {
     await product.close();
     for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_ADMIN_EMAILS", previous.admins]]) {

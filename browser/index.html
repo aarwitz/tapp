@@ -65,10 +65,18 @@
         <li><button type="button" data-kind="github" data-prompt="owner/repo"><span>🐙</span><b>owner/repo</b><small>clone from GitHub into an isolated workspace, then the same</small></button></li>
         <li><button type="button" data-kind="build" data-prompt="com.company.app"><span>📱</span><b>com.company.app</b><small>explore a build already on the booted simulator (or give a .app / .apk)</small></button></li>
       </ul>
+      <!-- The front door (ADR-0011): on a hosted Studio, everything a website is not runs on the
+           person's own machine, and the page says so — with the command — before anyone types
+           one. Hidden on a local Studio, which is that machine. -->
+      <section class="selfhost-card hidden" id="selfhost-card">
+        <p class="selfhost-lead"><strong>Everything else runs on your own machine.</strong> Your repositories, iOS and Android builds, macOS apps, staging and localhost — the same Studio, on your Mac or PC, and nothing leaves it.</p>
+        <div class="selfhost-row"><code id="selfhost-command">npx -y @aarwitz/tapp@latest app</code><button class="quiet" type="button" id="selfhost-copy">Copy</button></div>
+        <small>Needs Node.js 20 or newer. It opens this same Studio in your browser, on your machine — no account needed.</small>
+      </section>
       <!-- Signing in to a public Studio: an email address and a link, nothing else. Hidden on a
            local Studio, where the one person at the keyboard is the operator already. -->
       <section class="signin-card hidden" id="signin-card" aria-live="polite">
-        <p class="signin-lead"><strong>Sign in to go inside a site.</strong> tapp can stop at a sign-in and ask you for a test account, then remember it — for that it needs to know it is you.</p>
+        <p class="signin-lead"><strong>Sign in to go inside a site from here.</strong> tapp can stop at a sign-in and ask you for a test account, then remember it — for that it needs to know it is you. The cloud is free for 14 days, no card; your own machine is never gated.</p>
         <div id="signin-providers"></div>
         <form id="signin-form" autocomplete="email">
           <div class="signin-row"><input id="signin-email" name="email" type="email" placeholder="you@company.com" required><button class="primary" type="submit" id="signin-send">Email me a link</button></div>
@@ -218,6 +226,14 @@
             <button class="quiet" id="create-token" type="button">＋ New token</button>
           </div>
           <div id="token-list"><div class="empty">No tokens yet.</div></div>
+        </section>
+        <!-- Results flow up, the browser never reaches down (ADR-0011 §4): a self-hosted Studio
+             reports journeys run here to an account on app.runtapp.com. Local only. -->
+        <section class="panel section hidden" id="link-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">Your tapp account</p><h2>Report what runs here to your account</h2><p id="link-note">Journeys you run on this machine — including against staging and localhost — show up on your account with how their last run went. Nothing else leaves this machine: not the journey, not a credential, not a screenshot.</p></div>
+          </div>
+          <div id="link-body"></div>
         </section>
         <section class="panel section" id="journeys-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Journeys</p><h2>What this app has proven <i id="journey-count" class="zero">0</i></h2><p id="journeys-note">Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.</p></div></div>

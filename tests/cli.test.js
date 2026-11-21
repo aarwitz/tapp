@@ -1141,3 +1141,20 @@ test("flow run --var carries values into the journey, and rejects a malformed on
   const help = spawnSync("node", [tappBin, "run", "--help"], { cwd: dir, env, encoding: "utf8" });
   assert.match(`${help.stdout}`, /--var NAME=VALUE/);
 });
+
+test("tapp doctor mentions old evidence left in the Tapp checkout (TM-651)", () => {
+  // captures/ is gitignored; a made-up run is added and removed again.
+  const run = path.join(root, "captures", `tm651-doctor-${process.pid}`);
+  fs.mkdirSync(run, { recursive: true });
+  fs.writeFileSync(path.join(run, "shot.png"), Buffer.alloc(2048));
+  try {
+    const report = JSON.parse(execFileSync("node", [tappBin, "doctor", "--json"], { cwd: root, encoding: "utf8" }));
+    assert.equal(report.strayEvidence.path, path.join(root, "captures"));
+    assert.ok(report.strayEvidence.runs >= 1);
+    assert.ok(report.strayEvidence.bytes >= 2048);
+    const out = execFileSync("node", [tappBin, "doctor"], { cwd: root, encoding: "utf8" });
+    assert.match(out, /Old evidence in the Tapp checkout .* delete it once/);
+  } finally {
+    fs.rmSync(run, { recursive: true, force: true });
+  }
+});

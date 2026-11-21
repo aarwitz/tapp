@@ -374,7 +374,7 @@ xcrun simctl install "$UDID" "$APP_PATH" || { echo "❌ simctl install failed �
 # ── Autonomous exploration (quick-capture builds the harness itself if needed).
 # --actions 0 = flows-only: the reviewed suites are the whole deterministic surface. No
 # explorer touches the app — the point, for targets wired to production backends (#11).
-CAPTURE_ROOT="${TAPP_HOME:-$ROOT}/captures"
+CAPTURE_ROOT="${TAPP_HOME:-$HOME/.tapp}/captures"  # never the repository (TM-651)
 mkdir -p "$CAPTURE_ROOT"
 CAPTURE_DIR="$(mktemp -d "$CAPTURE_ROOT/ci.XXXXXX")"
 MARKERS=""

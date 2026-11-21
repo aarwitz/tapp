@@ -163,7 +163,7 @@ export class JourneyStore {
   }
 
   forget(slug) {
-    try { fs.rmSync(this.flowPath(slug), { force: true }); fs.rmSync(this.statusPath(slug), { force: true }); return true; } catch { return false; }
+    try { fs.rmSync(this.flowPath(slug), { force: true }); fs.rmSync(this.statusPath(slug), { force: true }); fs.rmSync(this.reportedPath(slug), { force: true }); return true; } catch { return false; }
   }
 
   statusPath(slug) {
@@ -183,10 +183,38 @@ export class JourneyStore {
   }
 
   /** Every journey here, with its last result. Names only; never the file contents. */
+  // A journey that runs somewhere else — the owner's own machine, against staging or
+  // localhost — and reports how it went (ADR-0011 §4). Only the name and the result arrive:
+  // never the journey, a credential or a screenshot. The cloud cannot run it, so there is no
+  // flow file, and it is never due for a daily check.
+  reportedPath(slug) {
+    return path.join(this.root, ".reported", `${slugify(slug)}.json`);
+  }
+
+  report({ name, platform = "web", url = "", steps = 0, machine = "", passed, executed = 0, total = 0, failed = 0, at = null }) {
+    const slug = slugify(name);
+    const file = this.reportedPath(slug);
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    const status = { passed: !!passed, at: at || new Date().toISOString(), captureId: null, executed, total, failed };
+    const record = { name, slug, platform, url, steps, machine, status, reportedAt: new Date().toISOString() };
+    fs.writeFileSync(file, JSON.stringify(record), { mode: 0o600 });
+    return record;
+  }
+
+  reported(slug) {
+    try { return JSON.parse(fs.readFileSync(this.reportedPath(slug), "utf8")); } catch { return null; }
+  }
+
   list() {
     let entries = [];
     try { entries = fs.readdirSync(this.root, { withFileTypes: true }); } catch { return []; }
     const out = [];
+    let reported = [];
+    try { reported = fs.readdirSync(path.join(this.root, ".reported")).filter((name) => name.endsWith(".json")); } catch { /* none */ }
+    for (const name of reported.sort()) {
+      const record = this.reported(name.replace(/\.json$/, ""));
+      if (record) out.push({ name: record.name, slug: record.slug, platform: record.platform || "web", url: record.url || "", actor: "", steps: record.steps || 0, status: record.status, source: "reported", machine: record.machine || "" });
+    }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (!entry.isFile() || !/\.ya?ml$/i.test(entry.name)) continue;
       const slug = entry.name.replace(/\.ya?ml$/i, "");

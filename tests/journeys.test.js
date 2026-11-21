@@ -150,3 +150,22 @@ test("a journey is the path a person could walk, so it ends where the crawler te
   ]);
   assert.doesNotMatch(journey.yaml, /Marketing home|Pricing/, "nothing after the jump is claimed as proven");
 });
+
+test("a journey run somewhere else is listed by its report — where it ran and how it went — and never as something to replay here (ADR-0011 §4)", () => {
+  const store = new JourneyStore({ root: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-reported-")) });
+  const record = store.report({ name: "Book a coach", platform: "web", url: "http://localhost:3000/", steps: 7, machine: "aarons-mac", passed: true, executed: 7, total: 7, at: "2026-11-20T10:00:00.000Z" });
+  assert.equal(record.slug, "book-a-coach");
+  const [listed] = store.list();
+  assert.equal(listed.source, "reported");
+  assert.equal(listed.machine, "aarons-mac");
+  assert.equal(listed.status.passed, true);
+  assert.equal(listed.status.at, "2026-11-20T10:00:00.000Z");
+  assert.equal(listed.steps, 7);
+  assert.equal(fs.existsSync(store.flowPath("book-a-coach")), false, "no flow arrives with a report — the cloud cannot replay it");
+  // A later report replaces the earlier result; the previous one is readable first, for the alert.
+  assert.equal(store.reported("book-a-coach").status.passed, true);
+  store.report({ name: "Book a coach", machine: "aarons-mac", passed: false, executed: 3, total: 7, failed: 1 });
+  assert.equal(store.list()[0].status.passed, false);
+  assert.equal(store.forget("book-a-coach"), true);
+  assert.deepEqual(store.list(), []);
+});

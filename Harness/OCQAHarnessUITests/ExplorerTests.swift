@@ -12,6 +12,17 @@ import XCTest
 /// - testDumpUITree: One-shot accessibility tree dump
 /// - testTapAtCoordinate / testTapById: Single action for engine control
 /// - testScreenshot: Capture and attach a screenshot
+extension XCUIElementQuery {
+    /// XCUITest raises NSInternalInconsistencyException for an identifier subscript longer than
+    /// 128 characters, which ends the whole run. Longer text is matched with a predicate on
+    /// label, value, title or identifier instead, so it is found like short text.
+    func byText(_ text: String) -> XCUIElement {
+        if text.count <= 128 { return self[text] }
+        let predicate = NSPredicate(format: "label == %@ OR value == %@ OR title == %@ OR identifier == %@", text, text, text, text)
+        return matching(predicate).firstMatch
+    }
+}
+
 class ExplorerTests: XCTestCase {
 
     private struct InputDescriptor {
@@ -154,7 +165,7 @@ class ExplorerTests: XCTestCase {
         addUIInterruptionMonitor(withDescription: "System Alert") { alert in
             let allowLabels = ["Allow", "Allow While Using App", "OK", "Continue", "Allow Full Access"]
             for label in allowLabels {
-                let btn = alert.buttons[label]
+                let btn = alert.buttons.byText(label)
                 if btn.exists {
                     btn.tap()
                     return true
@@ -229,7 +240,7 @@ class ExplorerTests: XCTestCase {
             app.links, app.switches, app.textFields
         ]
         for query in queries {
-            let element = query[identifier]
+            let element = query.byText(identifier)
             if element.exists && element.isHittable {
                 if !waitForEnabled(element) {
                     print("OCQA_ACTION:{\"type\":\"tap\",\"identifier\":\"\(identifier)\",\"status\":\"disabled\"}")
@@ -282,14 +293,14 @@ class ExplorerTests: XCTestCase {
         }
         let identifier = resolve("OCQA_TYPE_ID")
         if !identifier.isEmpty {
-            let field = app.textFields[identifier]
+            let field = app.textFields.byText(identifier)
             if field.exists {
                 field.tap()
                 field.typeText(text)
                 print("OCQA_ACTION:{\"type\":\"typeText\",\"identifier\":\"\(identifier)\"}")
                 return
             }
-            let secure = app.secureTextFields[identifier]
+            let secure = app.secureTextFields.byText(identifier)
             if secure.exists {
                 secure.tap()
                 secure.typeText(text)
@@ -558,9 +569,14 @@ class ExplorerTests: XCTestCase {
     private func sessionTapById(_ identifier: String) -> String {
         var existedButNotHittable = false
         var existedButDisabled = false
+        var existedButCovered = false
         func tryTap(_ el: XCUIElement) -> Bool {
             guard el.exists else { return false }
             if !waitForEnabled(el) { existedButDisabled = true; return false }
+            // TM-897: isHittable is true for an element only partly under the tab bar, and the
+            // touch at its centre then lands on the tab bar. Treat that as not reachable so the
+            // scroll below runs, and a tap that still cannot clear the bar fails, never passes.
+            if el.isHittable && coveredByTabBar(el) { existedButCovered = true; existedButNotHittable = true; return false }
             if el.isHittable { el.tap(); return true }
             // Often covered by the keyboard (a submit button below filled fields) — dismiss + retry,
             // like Playwright auto-scrolls a target into view.
@@ -570,7 +586,18 @@ class ExplorerTests: XCTestCase {
             return false
         }
         let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.secureTextFields, app.textViews]
-        for query in queries where tryTap(query[identifier]) { return "ok" }
+        // TM-922: enumerate rather than subscript. subscripting a query by identifier resolves to ONE element, and
+        // when a screen hidden under a full-screen cover shares the identifier XCTest aborts the run
+        // with "Multiple matching elements found". Enumerating lets the visible one win.
+        lastAmbiguity = ""
+        func tryTapNamed(_ query: XCUIElementQuery) -> Bool {
+            guard let el = preferVisible(query.matching(identifier: identifier).allElementsBoundByIndex, name: identifier) else { return false }
+            return tryTap(el)
+        }
+        for query in queries {
+            if tryTapNamed(query) { return "ok" }
+            if !lastAmbiguity.isEmpty { return "ambiguous" }
+        }
         // Exact label, then a forgiving case-insensitive "contains" match so callers can tap by the
         // visible text they see in the tree without an exact accessibility id.
         let exactMatches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).allElementsBoundByIndex
@@ -584,7 +611,10 @@ class ExplorerTests: XCTestCase {
             for _ in 0..<3 {
                 app.swipeUp()
                 Thread.sleep(forTimeInterval: 0.25)
-                for query in queries where tryTap(query[identifier]) { return "ok" }
+                for query in queries {
+                    if tryTapNamed(query) { return "ok" }
+                    if !lastAmbiguity.isEmpty { return "ambiguous" }
+                }
                 let scrolledExact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", identifier)).allElementsBoundByIndex
                 for match in scrolledExact where tryTap(match) { return "ok" }
                 let scrolledContains = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", identifier)).allElementsBoundByIndex
@@ -595,10 +625,51 @@ class ExplorerTests: XCTestCase {
         // label) — "Password" must reach the secureTextField or a later `type` lands in whatever
         // field still has keyboard focus.
         if let field = resolveFieldByHint(identifier), tryTap(field) { return "ok" }
+        if !lastAmbiguity.isEmpty { return "ambiguous" }
         // "disabled" outranks the others: the control was found and refused to act, which
         // is a different answer from "it is not here" and needs a different fix.
         if existedButDisabled { return "disabled" }
+        if existedButCovered { return "covered" }
         return existedButNotHittable ? "not_hittable" : "not_found"
+    }
+
+    /// TM-922: what the last lookup could not choose between, in plain words. Empty when it chose.
+    private var lastAmbiguity = ""
+
+    /// Of several elements sharing one name, the one the person can see. A box on a screen hidden
+    /// under a full-screen cover keeps its accessibility identifier but is not hittable, so the
+    /// visible one wins. With none visible the first is returned (the caller reports why it can't
+    /// be reached); with two visible at different places this sets `lastAmbiguity` and returns nil.
+    private func preferVisible(_ matches: [XCUIElement], name: String) -> XCUIElement? {
+        let live = matches.filter { $0.exists }
+        guard live.count > 1 else { return live.first }
+        let visible = live.filter { $0.isHittable }
+        if visible.count == 1 { return visible[0] }
+        if visible.isEmpty { return live[0] }
+        var distinct: [XCUIElement] = []
+        for el in visible where !distinct.contains(where: { $0.frame == el.frame }) { distinct.append(el) }
+        if distinct.count == 1 { return distinct[0] }
+        let described = distinct.map { el -> String in
+            let f = el.frame
+            return "‘\(fieldDesc(el))’ at \(Int(f.minX)),\(Int(f.minY))"
+        }.joined(separator: " and ")
+        lastAmbiguity = "‘\(name)’ matches \(distinct.count) boxes that are all on screen — \(described) — so tapp cannot tell which one you mean; give the one you want a more specific name"
+        return nil
+    }
+
+    /// True when the point a tap would touch (the element's centre) sits under the app's tab bar
+    /// and the element is not itself a tab bar item (TM-897).
+    private func coveredByTabBar(_ el: XCUIElement) -> Bool {
+        let bar = app.tabBars.firstMatch
+        guard bar.exists, bar.isHittable, let elFrame = (try? el.snapshot())?.frame else { return false }
+        let barFrame = bar.frame
+        guard barFrame.height > 0,
+              barFrame.contains(CGPoint(x: elFrame.midX, y: elFrame.midY)) else { return false }
+        let isTabItem = bar.descendants(matching: .any).allElementsBoundByIndex.contains {
+            guard let f = (try? $0.snapshot())?.frame else { return false }
+            return f == elFrame
+        }
+        return !isTabItem
     }
 
     /// Resolve a text/secure field by accessibility id, label, or placeholder (exact first, then
@@ -632,10 +703,18 @@ class ExplorerTests: XCTestCase {
         // highest on screen, so a field whose label happens to equal the hint would beat the
         // field actually named that — precedence the identifier subscripts used to provide, and
         // which was lost when this resolver moved in front of them (caught in review, TM-496).
-        if let match = described.first(where: { $0.identifier == h }) { return match.element }
-        if let match = described.first(where: { $0.label == h }) { return match.element }
-        if let match = described.first(where: { $0.placeholder == h }) { return match.element }
-        if let match = described.first(where: { "\($0.identifier) \($0.label) \($0.placeholder)".contains(h) }) { return match.element }
+        // TM-922: a tier can match several boxes (a sign-in screen still sitting under a full-screen
+        // cover). The visible one wins; two visible ones is reported, not guessed at.
+        lastAmbiguity = ""
+        let tiers: [((identifier: String, label: String, placeholder: String)) -> Bool] = [
+            { $0.identifier == h }, { $0.label == h }, { $0.placeholder == h },
+            { "\($0.identifier) \($0.label) \($0.placeholder)".contains(h) },
+        ]
+        for tier in tiers {
+            let hits = described.filter { tier(($0.identifier, $0.label, $0.placeholder)) }.map { $0.element }
+            if hits.isEmpty { continue }
+            return preferVisible(hits, name: hint)
+        }
         if h.contains("password") {
             let secure = app.secureTextFields.firstMatch
             if secure.exists { return secure }
@@ -679,7 +758,7 @@ class ExplorerTests: XCTestCase {
         // SwiftUI apps don't resign focus on background taps by default.
         let kb = app.keyboards.firstMatch
         for label in ["Done", "done", "Return", "return", "Go", "go"] {
-            let key = kb.buttons[label]
+            let key = kb.buttons.byText(label)
             if key.exists && key.isHittable {
                 key.tap()
                 Thread.sleep(forTimeInterval: 0.4)
@@ -716,7 +795,7 @@ class ExplorerTests: XCTestCase {
         let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000.0)
         repeat {
             let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.otherElements]
-            for q in queries where q[target].exists { return true }
+            for q in queries where q.byText(target).exists { return true }
             if app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label CONTAINS[c] %@", target, target)).firstMatch.exists { return true }
             Thread.sleep(forTimeInterval: 0.3)
         } while Date() < deadline
@@ -737,7 +816,7 @@ class ExplorerTests: XCTestCase {
         // submits, and append-on-retry turns "Lemonade" into "LemonadeLemonade" — a malformed
         // credential the server rejects with no visible cause.
         if let id = id, !id.isEmpty {
-            // Enumerate before subscripting. `app.textFields[hint]` builds a query against
+            // Enumerate before subscripting. `app.textFields.byText(hint)` builds a query against
             // IDENTIFIERS, and resolving one of those against a SwiftUI `TextField(axis:
             // .vertical)` raises "Failed to get matching snapshot … Automation type mismatch:
             // computed TextField from legacy attrib", which aborts the whole run instead of
@@ -748,7 +827,8 @@ class ExplorerTests: XCTestCase {
                 guard replaceText(on: field, with: text) else { return false }
                 lastTypedInto = fieldDesc(field); return true
             }
-            for field in [app.textFields[id], app.secureTextFields[id], app.textViews[id]] where field.exists {
+            if !lastAmbiguity.isEmpty { lastTypeFailure = lastAmbiguity; return false }
+            for field in [app.textFields.byText(id), app.secureTextFields.byText(id), app.textViews.byText(id)] where field.exists {
                 guard replaceText(on: field, with: text) else { return false }
                 lastTypedInto = fieldDesc(field); return true
             }
@@ -823,7 +903,7 @@ class ExplorerTests: XCTestCase {
                     // iOS offers to save the password after a successful sign-in — never wanted
                     // in QA; decline so login lands on the app's real post-auth screen.
                     for label in ["Not Now", "Not now", "Never", "Never for This Website"] {
-                        let b = app.buttons[label]
+                        let b = app.buttons.byText(label)
                         if b.exists && b.isHittable {
                             b.tap()
                             waitForAnimationsToSettle()
@@ -943,7 +1023,7 @@ class ExplorerTests: XCTestCase {
         }
         // 1. An explicit dismissal control, in the app and in SpringBoard (extensions live there).
         for label in ["Close", "Cancel", "Done", "Dismiss"] {
-            for candidate in [app.buttons[label], XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons[label]] {
+            for candidate in [app.buttons.byText(label), XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons.byText(label)] {
                 if candidate.exists && candidate.isHittable {
                     candidate.tap()
                     waitForUIStability(timeout: 1.5)
@@ -975,7 +1055,7 @@ class ExplorerTests: XCTestCase {
     private func tapSystemSheetButton(_ identifier: String) -> Bool {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for query in [springboard.buttons, springboard.staticTexts] {
-            let element = query[identifier]
+            let element = query.byText(identifier)
             if element.exists && element.isHittable { element.tap(); return true }
         }
         let matches = springboard.descendants(matching: .any)
@@ -1206,7 +1286,9 @@ class ExplorerTests: XCTestCase {
                     // whatever guards it.
                     switch tapStatus {
                     case "disabled":     detail = "‘\(target)’ is on screen but disabled — an earlier step has not met whatever enables it"
+                    case "covered":      detail = "‘\(target)’ is on screen but sits under the tab bar, and scrolling did not clear it — a tap there would open a tab instead"
                     case "not_hittable": detail = "‘\(target)’ exists but could not be reached, even after dismissing the keyboard and scrolling"
+                    case "ambiguous":    detail = lastAmbiguity
                     default:             detail = "could not find ‘\(target)’ on this screen"
                     }
                     let alertButtons = systemAlertButtonLabels()
@@ -1229,6 +1311,13 @@ class ExplorerTests: XCTestCase {
                     if detail.lowercased().contains("accessing the keychain") {
                         detail += " — simulator keychain is stale; `xcrun simctl erase <udid>` (or Device ▸ Erase All Content and Settings) usually fixes Firebase keychain errors"
                     }
+                } else if let pressed = handleSystemAlert(mode: "dismiss") {
+                    // TM-996: iOS's own "Save Password?" offer follows a real sign-in
+                    // unpredictably — only some runs, regardless of the flow's own `alerts:`
+                    // setting, since no flow author expects it. Checked here, once, right
+                    // after login succeeds, rather than asking every flow to anticipate it.
+                    let loginAlertNote = "a system alert was dismissed after signing in: pressed ‘\(escapeJSON(pressed))’"
+                    alertNote = alertNote.isEmpty ? loginAlertNote : "\(alertNote); \(loginAlertNote)"
                 }
             case "swipe":
                 switch target.lowercased() { case "down": app.swipeDown(); case "left": app.swipeLeft(); case "right": app.swipeRight(); default: app.swipeUp() }
@@ -1238,6 +1327,23 @@ class ExplorerTests: XCTestCase {
                 // screen and fail somewhere unrelated.
                 status = sessionBack() == "ok" ? "pass" : "fail"
                 if status == "fail" { detail = "back did not navigate: no back control on this screen, or tapping it did not change the screen\(visibleLabelsHint())" }
+            case "open_url":
+                // A journey starting from an email link ("tap the sign-in link in your receipt")
+                // opens it the way the system would hand it to the app under test — not a debug
+                // hook or a shell wrapper that writes a token into the app's defaults before launch.
+                if let url = URL(string: target), !target.isEmpty {
+                    if #available(iOS 16.4, *) {
+                        XCUIDevice.shared.system.open(url)
+                        waitForUIStability(timeout: 1.5)
+                        status = "pass"
+                    } else {
+                        status = "fail"
+                        detail = "open_url needs iOS 16.4 or later on the simulator/device running this Flow"
+                    }
+                } else {
+                    status = "fail"
+                    detail = "‘\(target)’ is not a URL open_url can open"
+                }
             case "wait":
                 Thread.sleep(forTimeInterval: Double(timeoutMs) / 1000.0)
             case "wait_for":
@@ -1350,7 +1456,7 @@ class ExplorerTests: XCTestCase {
     private func elementPresent(_ target: String) -> Bool {
         guard !target.isEmpty else { return false }
         let queries: [XCUIElementQuery] = [app.buttons, app.staticTexts, app.cells, app.links, app.switches, app.textFields, app.otherElements]
-        for q in queries where q[target].exists { return true }
+        for q in queries where q.byText(target).exists { return true }
         return app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR label CONTAINS[c] %@", target, target)).firstMatch.exists
     }
 
@@ -1557,7 +1663,7 @@ class ExplorerTests: XCTestCase {
             if allSecureFields.count > 1 {
                 let existingAccountLabels = ["Back to login", "Back to Login", "Already have an account?", "Sign in instead", "Log in instead"]
                 for label in existingAccountLabels {
-                    let control = app.buttons[label].exists ? app.buttons[label] : app.staticTexts[label]
+                    let control = app.buttons.byText(label).exists ? app.buttons.byText(label) : app.staticTexts.byText(label)
                     if control.exists && control.isHittable {
                         control.tap()
                         print("OCQA_STATE:login_preamble_switched_from_signup")
@@ -1651,13 +1757,13 @@ class ExplorerTests: XCTestCase {
                 let loginLabels = ["Log In", "Login", "Sign In", "Sign in", "log in", "LOG IN", "SIGN IN"]
                 var tappedLogin = false
                 for label in loginLabels {
-                    let btn = app.buttons[label]
+                    let btn = app.buttons.byText(label)
                     if btn.exists && btn.isHittable {
                         btn.tap()
                         tappedLogin = true
                         break
                     }
-                    let st = app.staticTexts[label]
+                    let st = app.staticTexts.byText(label)
                     if st.exists && st.isHittable {
                         st.tap()
                         tappedLogin = true
@@ -1673,7 +1779,7 @@ class ExplorerTests: XCTestCase {
                     let continueLabels = ["Continue", "Next", "Submit", "Proceed", "Get Started"]
                     var tappedContinue = false
                     for label in continueLabels {
-                        let btn = app.buttons[label]
+                        let btn = app.buttons.byText(label)
                         if btn.exists && btn.isHittable {
                             btn.tap()
                             tappedContinue = true
@@ -1691,7 +1797,7 @@ class ExplorerTests: XCTestCase {
                             passFieldAfter.typeText(preamblePassword)
                             Thread.sleep(forTimeInterval: 0.3)
                             for label in loginLabels + continueLabels {
-                                let btn = app.buttons[label]
+                                let btn = app.buttons.byText(label)
                                 if btn.exists && btn.isHittable {
                                     btn.tap()
                                     print("OCQA_STATE:login_preamble_two_step_submitted")
@@ -1721,7 +1827,7 @@ class ExplorerTests: XCTestCase {
                     print("OCQA_STATE:otp_entered")
                     Thread.sleep(forTimeInterval: 0.3)
                     for label in ["Verify", "Continue", "Submit", "Confirm"] {
-                        let btn = app.buttons[label]
+                        let btn = app.buttons.byText(label)
                         if btn.exists && btn.isHittable { btn.tap(); break }
                     }
                     Thread.sleep(forTimeInterval: 2.0)
@@ -1751,7 +1857,7 @@ class ExplorerTests: XCTestCase {
         let startupAlert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
         if startupAlert.exists {
             for label in ["Allow While Using App", "Allow Once", "OK", "Allow", "Don't Allow"] {
-                let button = startupAlert.buttons[label]
+                let button = startupAlert.buttons.byText(label)
                 if button.exists && button.isHittable {
                     button.tap()
                     waitForAnimationsToSettle()
@@ -3415,7 +3521,7 @@ class ExplorerTests: XCTestCase {
             }
             var tappedLabel: String? = nil
             for label in candidates {
-                let btn = app.buttons[label]
+                let btn = app.buttons.byText(label)
                 if btn.exists && btn.isHittable {
                     btn.tap()
                     Thread.sleep(forTimeInterval: 0.5)
@@ -3817,7 +3923,7 @@ class ExplorerTests: XCTestCase {
         let deadline = Date().addingTimeInterval(max(0, timeoutSeconds))
         repeat {
             for query in [app.buttons, app.cells, app.links, app.staticTexts] {
-                let el = query[trimmed]
+                let el = query.byText(trimmed)
                 if el.exists && el.isHittable { el.tap(); return true }
             }
             let exact = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", trimmed)).allElementsBoundByIndex
@@ -4083,9 +4189,9 @@ class ExplorerTests: XCTestCase {
 
     private func resolveTextElement(for element: SimpleElement, in app: XCUIApplication) -> XCUIElement? {
         if !element.identifier.isEmpty {
-            let tf = app.textFields[element.identifier]
+            let tf = app.textFields.byText(element.identifier)
             if tf.exists { return tf }
-            let stf = app.secureTextFields[element.identifier]
+            let stf = app.secureTextFields.byText(element.identifier)
             if stf.exists { return stf }
         }
 
@@ -4306,7 +4412,7 @@ class ExplorerTests: XCTestCase {
         }
         // Try common dismiss buttons (expanded set)
         for label in ["Close", "Cancel", "Done", "Dismiss", "Back", "X", "close"] {
-            let btn = app.buttons[label]
+            let btn = app.buttons.byText(label)
             if btn.exists && btn.isHittable {
                 btn.tap()
                 Thread.sleep(forTimeInterval: 0.5)

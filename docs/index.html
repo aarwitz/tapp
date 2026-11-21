@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tapp — UI verification for coding agents</title>
-<meta name="description" content="Let coding agents verify UI changes on real iOS, Android, web, and Windows desktop apps, then turn reviewed proof into deterministic CI checks.">
+<meta name="description" content="Verify UI changes on real web, iOS, Android, macOS, and Windows desktop apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
 <link rel="canonical" href="https://runtapp.com/">
 <meta property="og:title" content="tapp — UI verification for coding agents">
-<meta property="og:description" content="Verify UI changes on real iOS, Android, web, and Windows desktop apps, then turn reviewed proof into deterministic CI checks.">
+<meta property="og:description" content="Verify UI changes on real web, iOS, Android, macOS, and Windows desktop apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
 <meta property="og:image" content="https://runtapp.com/assets/tapp-social.png">
@@ -16,7 +16,7 @@
 <meta property="og:image:alt" content="tapp — let your coding agent prove the UI it changed">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="tapp — UI verification for coding agents">
-<meta name="twitter:description" content="Let coding agents verify real iOS, Android, web, and Windows desktop UI changes, then enforce reviewed proof in CI.">
+<meta name="twitter:description" content="Verify real web, iOS, Android, macOS, and Windows desktop UI changes — a public website in the cloud, the rest on your own machine — then enforce reviewed proof in CI.">
 <meta name="twitter:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta name="theme-color" content="#2f6fed">
 <link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
@@ -279,14 +279,16 @@
   <form class="prompt" id="prompt-form" autocomplete="off" novalidate>
     <input id="prompt-input" type="text" spellcheck="false" autocapitalize="off" autocorrect="off"
            placeholder="runtapp.com"
-           aria-label="A website, a GitHub repo, a folder on this machine, a bundle id, an .app or an .apk">
+           aria-label="A public website to audit">
     <button type="submit" aria-label="Open this target in the tapp Studio">→</button>
   </form>
+  <p class="copy-note">A public website runs in the cloud, no account. Everything else — your repositories, iOS and Android builds, macOS apps, staging and localhost — runs on your own machine, and nothing leaves it:</p>
   <div class="copybox mono">
-    <span id="install-command">npx -y skills add aarwitz/tapp --skill tapp</span>
+    <span id="install-command">npx -y @aarwitz/tapp@latest app</span>
     <button id="copy-install" type="button" aria-describedby="copy-status">copy</button>
   </div>
-  <p class="copy-note" id="copy-status" role="status" aria-live="polite">Or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code></p>
+  <p class="copy-note">For your coding agent: <code>npx -y skills add aarwitz/tapp --skill tapp</code> · or run the package directly: <code>npx -y @aarwitz/tapp@latest init . --explore</code></p>
+  <p class="copy-note" id="copy-status" role="status" aria-live="polite"></p>
   <div class="hero-demo" id="film">
     <div class="film-frame">
       <video class="embedded-film" autoplay muted loop playsinline preload="metadata"
@@ -345,8 +347,10 @@
     <span class="tag">Platforms</span>
     <h2>Works with the apps you actually ship.</h2>
     <p class="lead">
-      iOS, Android, web, and Windows desktop — tapp drives the real thing, not a mock. Same
-      commands, same evidence, same CI check on every platform.
+      iOS, Android, web, macOS, and Windows desktop — tapp drives the real thing, not a mock.
+      Same commands, same evidence, same CI check on every platform. A public website runs in
+      the cloud at app.runtapp.com; every other platform — and anything private, like staging
+      or localhost — runs on your own machine with the same Studio, and nothing is uploaded.
     </p>
     <div class="grid">
       <div class="card">
@@ -366,6 +370,13 @@
         <h3>Web</h3>
         <p>Explores your web app in a real Chromium browser and catches broken links, failed
         requests, missing assets, and JavaScript errors.</p>
+      </div>
+      <div class="card">
+        <div class="icon">💻</div>
+        <h3>macOS desktop</h3>
+        <p>Drives a Mac app through Apple's Accessibility API on your own Mac — one permission,
+        no Xcode, nothing added to the app. Destructive controls are refused and menus are
+        inventoried, not pressed.</p>
       </div>
       <div class="card">
         <div class="icon">🪟</div>
@@ -507,13 +518,13 @@
   // collects a target and hands it over — classification, refusals and execution all live in the
   // product, so this page has no product logic of its own to drift.
   const STUDIO = "https://app.runtapp.com/";
+  // Websites only: the box on the front door audits a public site in the cloud. Repositories,
+  // builds and anything private run on the person's own machine (ADR-0011), and the command for
+  // that is right under the box — cycling a bundle id here would send someone to be told so.
   const EXAMPLES = [
     "runtapp.com",
-    "aarwitz/tapp",
-    "~/repos/MyApp",
-    "com.myco.app",
-    "build/MyApp.app",
-    "app-release.apk",
+    "yourshop.com",
+    "app.yourcompany.com",
   ];
 
   const promptForm = document.getElementById("prompt-form");

@@ -128,6 +128,8 @@ export async function runMacosFlow({ flow, appPath, logPath, screenshotDir, driv
       } else if (action === "assert_ai") {
         status = "skip";
         detail = "AI assertions are advisory and are not part of deterministic macOS replay";
+      } else if (action === "open_url") {
+        throw new Error("open_url is not supported on macOS — a desktop app has no system-level link handoff to replay");
       } else {
         throw new Error(`unknown action ‘${action}’`);
       }

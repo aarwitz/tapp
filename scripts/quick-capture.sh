@@ -18,16 +18,16 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # TAPP_CAPTURE_DIR selects one exact run directory (used by CI so a failed run can never
 # accidentally reuse stale markers). TAPP_HOME redirects all writable output otherwise —
 # set by the `tapp` CLI when running as an installed npm package, where the package dir
-# must stay read-only. Unset (repo dev flow), everything lands in the repo as before.
-TAPP_RUNTIME_HOME="${TAPP_HOME:-}"
+# must stay read-only. Unset (a run from a source checkout), evidence still goes to
+# ~/.tapp/captures like everywhere else in Tapp (TM-651): never into the repository,
+# where the evidence clearing-out (evidence-retention.js) never looks.
+TAPP_RUNTIME_HOME="${TAPP_HOME:-$HOME/.tapp}"
 if [[ -n "${TAPP_CAPTURE_DIR:-}" ]]; then
   CAPTURE_DIR="$TAPP_CAPTURE_DIR"
-elif [[ -n "$TAPP_RUNTIME_HOME" ]]; then
-  CAPTURE_DIR="$TAPP_RUNTIME_HOME/captures/ios-$(date +%Y%m%d-%H%M%S)"
 else
-  CAPTURE_DIR="$PROJECT_ROOT/captures/ios-$(date +%Y%m%d-%H%M%S)"
+  CAPTURE_DIR="$TAPP_RUNTIME_HOME/captures/ios-$(date +%Y%m%d-%H%M%S)"
 fi
-if [[ -n "$TAPP_RUNTIME_HOME" ]]; then
+if [[ -n "${TAPP_HOME:-}" ]]; then
   HARNESS_DERIVED="$TAPP_RUNTIME_HOME/harness-derived"
 else
   HARNESS_DERIVED="/tmp/tapp-harness-derived"
@@ -104,24 +104,44 @@ ensure_harness_built() {
   fi
   echo "Preparing harness for $sim_name (source, simulator, or Xcode cache changed)..." >&2
   local src_fp=$(harness_fingerprint)
-  mkdir -p "$HARNESS_DERIVED/Build/Products"
-  rm -f "$marker"
-  # Xcode leaves old SDK descriptors beside the new one. Only the descriptor emitted by
-  # this successful build may become current; never select an arbitrary directory entry.
-  find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f -delete
-  xcodebuild build-for-testing \
-    -project "$HARNESS_PROJECT" \
-    -scheme OCQAHarnessUITests \
-    -destination "platform=iOS Simulator,id=$UDID" \
-    -derivedDataPath "$HARNESS_DERIVED" \
-    2>&1 | tail -5 >&2
-  local products=()
-  while IFS= read -r product; do products+=("$product"); done < <(find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f)
-  if [[ ${#products[@]} -ne 1 ]]; then
-    echo "ERROR: Harness build produced ${#products[@]} test descriptors; no cache was selected." >&2
-    return 1
-  fi
-  printf '%s\n%s\n%s\n' "$udid" "$src_fp" "$(basename "${products[0]}")" > "$marker"
+  # TM-973: a build-for-testing into ~/.tapp/harness-derived has failed with
+  # errors that only show up under disk/memory pressure ("disk I/O error" on
+  # XCBuildData/build.db) — an identical build into a FRESH derived-data
+  # folder succeeds. One retry from a clean folder recovers from that, and
+  # the full log (not just xcodebuild's own tail) names what actually failed
+  # when both attempts fail, instead of a bare "(5 failures)".
+  local log_dir; log_dir="$(dirname "$HARNESS_DERIVED")"
+  mkdir -p "$log_dir"
+  local build_log build_rc attempt products
+  for attempt in 1 2; do
+    mkdir -p "$HARNESS_DERIVED/Build/Products"
+    rm -f "$marker"
+    # Xcode leaves old SDK descriptors beside the new one. Only the descriptor emitted by
+    # this successful build may become current; never select an arbitrary directory entry.
+    find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f -delete
+    build_log="$log_dir/harness-build-attempt-$attempt.log"
+    build_rc=0
+    xcodebuild build-for-testing \
+      -project "$HARNESS_PROJECT" \
+      -scheme OCQAHarnessUITests \
+      -destination "platform=iOS Simulator,id=$UDID" \
+      -derivedDataPath "$HARNESS_DERIVED" \
+      > "$build_log" 2>&1 || build_rc=$?
+    tail -5 "$build_log" >&2
+    products=()
+    while IFS= read -r product; do products+=("$product"); done < <(find "$HARNESS_DERIVED/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f 2>/dev/null)
+    if [[ $build_rc -eq 0 && ${#products[@]} -eq 1 ]]; then
+      printf '%s\n%s\n%s\n' "$udid" "$src_fp" "$(basename "${products[0]}")" > "$marker"
+      return 0
+    fi
+    if [[ $attempt -eq 1 ]]; then
+      echo "Harness build failed (exit $build_rc, ${#products[@]} test descriptor(s)); deleting $HARNESS_DERIVED and retrying once into a clean folder..." >&2
+      rm -rf "$HARNESS_DERIVED"
+    fi
+  done
+  echo "ERROR: Harness build failed twice (exit $build_rc, ${#products[@]} test descriptor(s) produced). Full log: $build_log" >&2
+  grep -i "error:" "$build_log" >&2 || tail -20 "$build_log" >&2
+  return 1
 }
 
 run_harness_test() {

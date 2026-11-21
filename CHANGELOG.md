@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.35.8
+
+**app.runtapp.com is the front door: a website runs here, everything else runs on your own machine,
+and the page says so first.** The hosted first page offered four example inputs and five platform
+chips, and three of each answered "Needs your machine" when tried — honest, but a stranger learned
+what the page could not do by doing it. Three facts decide where tapp runs for whom, and they are
+now written down (ADR-0011). An iOS run needs Xcode *and* a simulator build that only a developer
+can produce, so a website is the only surface a non-technical owner can hand over. The hosted
+engine refuses every private address by design, so staging, a VPN and localhost are unreachable
+from the cloud and must stay so. And one Mac runs a few simulators at once, so native capacity in
+the cloud is bought per handful of users. So the box takes a public website; a self-host card under
+it names repositories, iOS and Android builds, macOS apps, staging and localhost, with the one
+command that opens this same Studio on your machine — no account needed, nothing uploaded — and the
+examples the cloud cannot start are not offered. The platform chips, the Platforms view and the
+"here is where that runs" answer to anything typed anyway are unchanged. runtapp.com says where
+each platform runs, lists macOS desktop, and its hero cycles websites only.
+
+**The cloud beyond the visitor audit is for an account on a plan or in its free trial.** A new
+account starts a 14-day trial — a date, nothing more: no card, no counter of runs — and an
+account from before plans existed gets its trial from the day it is next seen, so a change in
+the rules never locks out someone who was already here. Once a trial has lapsed, starting a
+cloud run (going inside a site, keeping, replaying or importing a journey) is answered with the
+reason and the way round it — everything runs ungated on your own machine — and the daily checks
+skip that account's journeys, which keep their last result. Reading what the account owns stays
+open: a lapsed trial can still see and forget its journeys, test accounts and tokens. The
+deployment's owner is never gated, sees each account's plan in Admin, and marks an account paid
+or gives it thirty more days from there. "Paid" is the owner's word; there is no payment step.
+
+**A Studio on your own machine reports to your account.** Results flow up; the browser never
+reaches down into your machine. Under *Your tapp account* on a self-hosted Studio, paste a token
+created on app.runtapp.com (under *Your coding agent*); it is checked, kept on this machine only,
+and from then on every journey run here — including against staging and localhost — tells your
+account its name, platform, step count, which machine, and how it went. The journey itself, your
+test accounts and your screenshots never leave. Your account lists it as running on that machine,
+with no Run button (the cloud has no flow for it) and a Forget; a pass-to-fail or fail-to-pass
+change between reports is announced the way a cloud check's is; the daily checks leave it alone.
+A Studio that cannot be reached is said in the chat and never fails the run. `tapp run` on a
+linked machine reports the same way — the runner's own verdict, with the step counts — so an iOS
+or Android journey run from a terminal shows on your account too; `--no-report` keeps one run to
+itself, and `TAPP_STUDIO` + `TAPP_TOKEN` report somewhere else for one shell.
+
+**A Flow can start from a link, the way an email sign-in does.** `open_url` joins the committed step
+vocabulary: a journey that begins by following a link ("tap the sign-in link in your receipt") can
+be written down, instead of needing a wrapper that writes the token into the app's defaults and a
+debug hook in the app. iOS opens it through the system (iOS 16.4 or newer; a clear failure below
+that), Android sends a VIEW intent, web navigates; macOS refuses with the reason, since there is no
+system-level link hand-off to replay.
+
+**iPhone runs: four things that used to fail quietly or pass wrongly.** Apple's own "Save
+Password?" offer follows a real sign-in on some runs and not others, whatever the flow's `alerts:`
+setting says, so it is closed once, right after a login succeeds, rather than every flow having to
+anticipate it. A tap whose centre sits under the tab bar used to land on the tab bar and pass; it
+now scrolls clear, and if it still cannot, fails as *covered* with the reason — never passes. A text
+lookup longer than 128 characters crashed the whole run (XCUITest's identifier-subscript limit);
+longer text is matched by predicate instead and is found like short text. And when a visible field
+shares its name with one hidden behind the screen, a tap or type acts on the visible one. The
+iPhone helper is also rebuilt reliably after its build folder has been cleared.
+
+**A browser that cannot start says why.** Playwright reports a Chromium that dies at startup as
+"Target page, context or browser has been closed" and keeps the real reason in its debug log. The
+browser's own stderr is captured through a logger so the reason — a missing library, a sandbox
+refusal, a denied path — reaches the ordinary error, without launch arguments or protocol chatter;
+a browser that said nothing useful leaves the launch error alone.
+
+**Evidence from a source checkout goes to `~/.tapp`, never into the repository.**
+`quick-capture.sh` and the MCP server fell back to `<repo>/captures` when `TAPP_HOME` was unset,
+where the clearing-out from 0.35.6 never looks. Both now default to `~/.tapp` like the rest of
+tapp; `tapp doctor` mentions old evidence left in a checkout (size, runs, the one command to clear
+it). `TAPP_CAPTURE_DIR` still overrides.
+
 ## 0.35.7
 
 **A run can be read: Findings and Coverage are back in the Studio.** A finding's identity is

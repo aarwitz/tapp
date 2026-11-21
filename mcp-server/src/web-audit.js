@@ -13,7 +13,7 @@ import fs from "fs";
 import path from "path";
 import { createRequire } from "module";
 import {
-  NAV_TIMEOUT_MS, loadPlaywright, webBrowserLaunchOptions, webContextOptions, installWebListenerTracking,
+  NAV_TIMEOUT_MS, loadPlaywright, webBrowserLaunchOptions, launchWebBrowser, webContextOptions, installWebListenerTracking,
   waitForWebStability, captureElementEvidence, shouldReportWebRequestFailure, auditStructuralControls,
   auditFindingsFromControls, slug, detectBlockingOverlay, chooseOverlayDismissal,
 } from "./web-explorer.js";
@@ -406,7 +406,7 @@ export async function auditWebSite({
   const maxPages = Math.max(1, Math.min(200, Number(pages) || 1));
 
   const { chromium, devices } = await loadPlaywright();
-  const browser = await chromium.launch(webBrowserLaunchOptions(process.env, {}));
+  const browser = await launchWebBrowser(chromium, webBrowserLaunchOptions(process.env, {}));
   const capture = capturesDir ? openCapture(capturesDir, captureId || auditCaptureId()) : null;
   const provenance = capture ? writeCaptureProvenance(capture.dir, { kind: "audit", platform: "web", target: start.href }) : null;
   try {

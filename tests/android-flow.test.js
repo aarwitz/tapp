@@ -36,6 +36,39 @@ test("Android Flow replays deterministically without a model", async () => {
   assert.match(fs.readFileSync(logPath, "utf8"), /"action":"assert_screen".*"status":"pass"/);
 });
 
+// A journey starting from an email link ("tap the sign-in link in your receipt") opens it the
+// way Android itself would hand it to the app — a VIEW intent, not a shell workaround.
+class OpenUrlDriver extends FakeAndroidDriver {
+  constructor({ fails = false } = {}) { super(); this.fails = fails; this.adbCalls = []; }
+  async adb(args) {
+    this.adbCalls.push(args);
+    return this.fails ? { code: 0, stdout: "Error: Activity not started, unable to resolve Intent" } : { code: 0, stdout: "Starting: Intent { ... }" };
+  }
+}
+
+test("open_url opens a link the way Android would hand it to the app", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-open-url-"));
+  const driver = new OpenUrlDriver();
+  const result = await runAndroidFlow({
+    flow: { name: "Android link", app: "io.github.aarwitz.tapp.demo", vars: { CLAIM_TOKEN: "abc123" }, steps: [{ open_url: "myapp://claim?t=$CLAIM_TOKEN" }] },
+    logPath: path.join(dir, "flow.log"),
+    driver,
+  });
+  assert.equal(result.passed, true);
+  assert.deepEqual(driver.adbCalls[0], ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", "myapp://claim?t=abc123"]);
+});
+
+test("open_url fails with what Android actually said, when nothing handled the link", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-android-open-url-fail-"));
+  const result = await runAndroidFlow({
+    flow: { name: "Android link", app: "io.github.aarwitz.tapp.demo", steps: [{ open_url: "myapp://nowhere" }] },
+    logPath: path.join(dir, "flow.log"),
+    driver: new OpenUrlDriver({ fails: true }),
+  });
+  assert.equal(result.passed, false);
+  assert.match(fs.readFileSync(path.join(dir, "flow.log"), "utf8"), /no app handled this link|Activity not started/);
+});
+
 // TM-554: a login step may not report pass while the app is still on the sign-in form.
 // `settle()` returns fresh element objects, as the real driver does — that is what broke the
 // original identity-based lookup of the password field.

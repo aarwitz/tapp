@@ -536,6 +536,42 @@ export function webTransitionOrigin(pendingNavigation, currentScreen) {
   return pendingNavigation?.fromScreen || currentScreen || null;
 }
 
+// Playwright reports a browser that dies at startup as "Target page, context or browser has been
+// closed" and keeps the real reason in its debug log (DEBUG=pw:browser). Capture the browser's own
+// stderr through a logger so the reason reaches the ordinary error, without launch arguments
+// ("<launching>"), env, or unrelated protocol chatter.
+export function browserStartupReason(lines) {
+  const reasons = [];
+  for (const raw of lines) {
+    for (const part of String(raw).split("\n")) {
+      const line = part.replace(/^\[\d+:\d+:\d+\/\d+\.\d+:/, "[").trim();
+      if (!line || /^<(launching|launched|gracefully|kill)/i.test(line) || /^<\w+ pid=/.test(line)) continue;
+      if (/\b(error|fail(ed)?|denied|fatal|cannot|can't|unable|sandbox|missing|not found|no such)\b/i.test(line) && !reasons.includes(line)) reasons.push(line.slice(0, 300));
+    }
+  }
+  return reasons.slice(0, 5);
+}
+
+export async function launchWebBrowser(chromium, options) {
+  const lines = [];
+  const logger = {
+    isEnabled: (name) => name === "browser",
+    log: (name, _severity, message) => { if (name === "browser") lines.push(String(message)); },
+  };
+  try {
+    return await chromium.launch({ ...options, logger });
+  } catch (error) {
+    const reasons = browserStartupReason(lines);
+    if (reasons.length) {
+      const first = String(error?.message || error).split("\n")[0];
+      const wrapped = new Error(`${first}\nBrowser startup reason: ${reasons.join(" | ")}`);
+      wrapped.cause = error;
+      throw wrapped;
+    }
+    throw error;
+  }
+}
+
 export function webBrowserLaunchOptions(environment = process.env, { watch = false } = {}) {
   const browserProxy = String(environment.TAPP_BROWSER_PROXY_SERVER || "").trim();
   if (environment.TAPP_ENFORCE_PUBLIC_EGRESS === "1" && !/^http:\/\/127\.0\.0\.1:\d+$/.test(browserProxy)) {
@@ -696,7 +732,7 @@ export async function inspectWebPage({ url, timeoutMs = NAV_TIMEOUT_MS, screensh
   if (!/^https?:$/.test(target.protocol)) throw new Error("Web inspection needs a valid http(s) URL");
 
   const { chromium, devices } = await loadPlaywright();
-  const browser = await chromium.launch(webBrowserLaunchOptions());
+  const browser = await launchWebBrowser(chromium, webBrowserLaunchOptions());
   try {
     const context = await browser.newContext(webContextOptions({ device, viewport, devices }));
     const page = await context.newPage();
@@ -872,7 +908,7 @@ export async function exploreWeb({ url, maxActions = 40, timeoutSec = 300, outDi
   };
 
   const { chromium, devices } = await loadPlaywright();
-  const browser = await chromium.launch(webBrowserLaunchOptions(process.env, { watch }));
+  const browser = await launchWebBrowser(chromium, webBrowserLaunchOptions(process.env, { watch }));
   const captureProfile = webContextOptions({ device, viewport, devices });
   // Evidence is only comparable when the capture conditions are on record: a desktop run and a
   // phone run legitimately disagree about which nav links exist, and a baseline diff across

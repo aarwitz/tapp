@@ -32,9 +32,10 @@ const scriptsDir = path.join(repoRoot, "scripts");
 import { writeCaptureProvenance, readCaptureProvenance, captureBelongsToProject, provenanceLabel } from "./capture-provenance.js";
 import { chooseSignInSubmit, findSignInSubmit } from "./sign-in.js";
 // TAPP_HOME (set by the `tapp` CLI when installed) redirects writable output to a user directory.
-// The old alias remains a read-only fallback; unset repository development stays local.
+// Unset (a source checkout), evidence still goes to ~/.tapp/captures (TM-651): never into the
+// repository, where the evidence clearing-out never looks.
 const tappHome = (process.env.TAPP_HOME || "").trim();
-const capturesDir = tappHome ? path.join(tappHome, "captures") : path.join(repoRoot, "captures");
+const capturesDir = path.join(tappHome || path.join(os.homedir(), ".tapp"), "captures");
 const MAX_OUTPUT_CHARS = 60_000;
 const requiredAuthToken = (process.env.TAPP_MCP_TOKEN || "").trim();
 
@@ -935,9 +936,9 @@ async function startWebSession(url, { testEmail = "", testPassword = "", device 
   try {
     const parsed = new URL(String(url || ""));
     if (!/^https?:$/.test(parsed.protocol)) return { error:"Web session URL must be http(s)" };
-    const { loadPlaywright, webContextOptions, webBrowserLaunchOptions } = await import("./web-explorer.js");
+    const { loadPlaywright, webContextOptions, webBrowserLaunchOptions, launchWebBrowser } = await import("./web-explorer.js");
     const { chromium, devices } = await loadPlaywright();
-    browser = await chromium.launch(webBrowserLaunchOptions());
+    browser = await launchWebBrowser(chromium, webBrowserLaunchOptions());
     const context = await browser.newContext({ ...webContextOptions({ device, viewport, devices }), ...(recordVideoDir ? {recordVideo:{dir:recordVideoDir}} : {}) });
     const page = await context.newPage();
     await page.goto(parsed.href, { waitUntil:"domcontentloaded", timeout:30_000 });

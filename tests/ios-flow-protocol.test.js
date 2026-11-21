@@ -301,3 +301,39 @@ test("iOS field-persistence findings agree with the completed issue count", () =
     "the completion counter must be updated before the public issue marker is emitted",
   );
 });
+
+test("TM-922: a name shared with a box hidden behind the screen resolves to the visible one", () => {
+  // Subscripting a query by identifier aborts the run with "Multiple matching elements found"
+  // when a sign-in screen sits under a full-screen cover; the tap path must enumerate instead.
+  const tap = source.slice(source.indexOf("private func sessionTapById"), source.indexOf("private func resolveFieldByHint"));
+  assert.doesNotMatch(tap, /tryTap\(query\[identifier\]\)/, "tap must not subscript by identifier");
+  assert.match(tap, /matching\(identifier: identifier\)\.allElementsBoundByIndex/);
+  assert.match(source, /private func preferVisible\(/);
+  const prefer = source.slice(source.indexOf("private func preferVisible"), source.indexOf("private func resolveFieldByHint"));
+  assert.match(prefer, /filter \{ \$0\.isHittable \}/, "the visible (hittable) match wins");
+  assert.match(prefer, /boxes that are all on screen/, "two visible matches are named in plain words");
+  // type resolves through the same preference, and reports the ambiguity instead of guessing
+  const resolve = source.slice(source.indexOf("private func resolveFieldByHint"), source.indexOf("private func fieldDesc"));
+  assert.match(resolve, /preferVisible\(hits, name: hint\)/);
+  assert.match(source, /if !lastAmbiguity\.isEmpty \{ lastTypeFailure = lastAmbiguity; return false \}/);
+  assert.match(source, /case "ambiguous":\s+detail = lastAmbiguity/);
+});
+
+test("iOS harness never subscripts a query with free text longer than 128 characters (TM-899)", () => {
+  assert.match(source, /func byText\(_ text: String\) -> XCUIElement \{\s*if text\.count <= 128 \{ return self\[text\] \}/);
+  assert.match(source, /label == %@ OR value == %@ OR title == %@ OR identifier == %@/);
+  // flow targets, taps and waits all go through the guarded lookup
+  assert.doesNotMatch(source, /\bq\[target\]/);
+  assert.doesNotMatch(source, /\bquery\[(identifier|trimmed)\]/);
+  assert.doesNotMatch(source, /app\.(buttons|staticTexts|textFields|secureTextFields|textViews)\[(label|id|identifier|target)\]/);
+});
+
+test("TM-897: a tap whose centre is under the tab bar scrolls, and fails as covered rather than passing", () => {
+  const tap = source.slice(source.indexOf("private func sessionTapById"), source.indexOf("private func resolveFieldByHint"));
+  assert.match(tap, /coveredByTabBar\(el\)[\s\S]*existedButNotHittable = true/, "a partly covered element must be treated as not reachable, so the swipe-up retry runs");
+  assert.ok(tap.indexOf("coveredByTabBar(el)") < tap.indexOf("el.tap()"), "the cover check must come before the first tap");
+  assert.match(tap, /existedButCovered \{ return "covered" \}/);
+  assert.match(source, /case "covered":[^\n]*under the tab bar/);
+  assert.match(source, /private func coveredByTabBar[\s\S]*barFrame\.contains\(CGPoint\(x: elFrame\.midX, y: elFrame\.midY\)\)/);
+  assert.match(source, /isTabItem/, "tapping a tab bar item itself must stay allowed");
+});

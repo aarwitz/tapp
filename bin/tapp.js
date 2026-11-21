@@ -1488,7 +1488,7 @@ switch (command) {
       break;
     }
     if (!["run", "validate"].includes(verb) || !flowPath) {
-      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--var NAME=VALUE ...] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID] [--record out.mp4 [--hold 3s]]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
+      console.error("usage: tapp validate --example\n       tapp flow steps [--json]\n       tapp run <flow.yml|glob> [...more] [--var NAME=VALUE ...] [--platform ios|android|web] [--actor NAME] [--email VALUE] [--password VALUE] [--url URL] [--app-id ID] [--apk FILE] [--serial ID] [--record out.mp4 [--hold 3s]] [--no-report]\n       tapp validate <flow.yml|glob> [...more]\n       Several Flows (or a glob) run in sequence and print one line per Flow; exit 1 if any failed.");
       process.exit(2);
     }
     // Several Flows in one command (field issue #9): the shell usually expands the glob, but a
@@ -1722,6 +1722,21 @@ switch (command) {
     const evidenceWritten = fs.existsSync(evidenceDir) && fs.readdirSync(evidenceDir).length > 0;
     if (evidenceWritten) console.log(`\nEvidence: ${evidenceDir}`);
     else console.error("\n⚠️ Evidence unavailable — the platform runner did not write any artifacts for this Flow run.");
+    // A machine linked to an account reports how the journey went — the name and the result,
+    // never the Flow, a credential or a screenshot (ADR-0011 §4). The same rule as the Studio on
+    // this machine, so an iOS or Android journey run from a terminal shows on the account too.
+    // `--no-report` keeps one run to itself; a Studio that cannot be reached never fails the run.
+    if (flags["no-report"] !== true) {
+      const { studioLinkFor, reportStudioJourney, flowResultFromLog } = await import(path.join(packageRoot, "mcp-server", "src", "studio-client.js"));
+      const link = studioLinkFor();
+      if (link) {
+        const verdict = flowResultFromLog(fs.existsSync(flowLog) ? fs.readFileSync(flowLog, "utf8") : "") || {};
+        try {
+          await reportStudioJourney(link, { name: flow.name || path.basename(flowPath, path.extname(flowPath)), platform, url: flow.url || "", steps: (flow.steps || []).length, machine: os.hostname(), passed: verdict.passed ?? result.status === 0, executed: verdict.executed ?? 0, total: verdict.total ?? (flow.steps || []).length, failed: verdict.failed ?? 0 });
+          console.log(`Reported to ${link.origin}${link.email ? ` as ${link.email}` : ""}`);
+        } catch (error) { console.error(`⚠️ Could not report to ${link.origin}: ${error.message}`); }
+      }
+    }
     await pruneEvidenceQuietly();
     process.exit(result.status ?? 1);
   }
@@ -2079,6 +2094,16 @@ switch (command) {
         : "kept for ever — TAPP_KEEP_EVIDENCE_DAYS is off";
       say(`  ${days ? "✅" : "⚠️ "} Evidence — ${formatStorage(usage.bytes)} in ${usage.runs} run${usage.runs === 1 ? "" : "s"}`
         + `${usage.oldestMs ? `, oldest ${formatAge(Date.now() - usage.oldestMs)}` : ""} · ${window}`);
+    }
+
+    // Evidence an older Tapp wrote into its own source checkout (TM-651): the clearing-out above
+    // never looks there, so it stays until someone deletes it. Mentioned once it exists.
+    const repoCaptures = path.join(packageRoot, "captures");
+    const stray = evidenceUsage({ root: repoCaptures });
+    report.strayEvidence = stray.runs ? { path: repoCaptures, runs: stray.runs, bytes: stray.bytes } : null;
+    if (stray.runs) {
+      say(`  ⚠️  Old evidence in the Tapp checkout — ${formatStorage(stray.bytes)} in ${stray.runs} run${stray.runs === 1 ? "" : "s"} at ${repoCaptures}`
+        + ` · never cleared automatically; Tapp no longer writes there, so delete it once: rm -rf "${repoCaptures}"`);
     }
 
     say("\n  Platforms:");

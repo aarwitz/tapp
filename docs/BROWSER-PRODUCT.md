@@ -1,8 +1,9 @@
 # Browser Studio
 
-Status: current product contract as of 2026-11-15 (ADR-0006, owner decision, amended twice:
-2026-10-19, and TM-794 on 2026-11-15 bringing Findings and Coverage back). Supersedes
-the "desktop-parity Command Center" framing of 2026-10-14.
+Status: current product contract as of 2026-11-20 (ADR-0006, owner decision, amended three
+times: 2026-10-19; TM-794 on 2026-11-15 bringing Findings and Coverage back; and ADR-0011 on
+2026-11-20 making the hosted first page the front door). Supersedes the "desktop-parity Command
+Center" framing of 2026-10-14.
 
 The Studio in `browser/` is the one browser surface. It is a **run viewer**: point Tapp at a
 repository target or a website, watch the run live, open its evidence. It never scores or judges
@@ -38,6 +39,13 @@ looping animation of a device being driven (launch, tap, tap, screenshot, ✓). 
 
 The server classifies the input again (`classifyPrompt` in `browser/view-model.js` is shared) and
 refuses what the mode cannot do: a hosted Studio cannot open a path or a build on your machine.
+
+**On a hosted Studio the page is the front door (ADR-0011).** The box takes a public website. A
+self-host card under it names everything else — repositories, iOS and Android builds, macOS apps,
+staging and localhost — with the command that opens this same Studio on the person's machine, and
+the examples the deployment cannot start are not offered. Typing one anyway still gets the
+structured `self-host` answer in the chat (ADR-0010). The platform chips are the same in both
+modes; on a laptop most of them say "ready".
 
 ## What is on the page
 
@@ -100,6 +108,31 @@ an allowlist in `browser-product.js` (`anonymousAllows`, `accountAllows`):
 | May | Audit a public website read-only; see their own audits | Everything a visitor may, plus: explore a website for real (it stops at a sign-in and **asks** in the chat), answer the ask, and see / forget the **test accounts** tapp holds for them | Everything, including repositories, live sessions and the gate |
 | Evidence | Captures stamped with their visitor cookie | Captures stamped `acct:<id>` | All captures on the machine |
 | Test accounts | None — a visitor is never asked | Encrypted, per account: `TAPP_HOME/accounts/actors/<id>/` | `TAPP_HOME/actors/` |
+
+**The cloud beyond the visitor audit is for an account on a plan or in its free trial (ADR-0011
+§3).** A new account starts a 14-day trial (`plan` on the account record; `account-store.js`
+`entitlement`); an account from before plans existed gets its trial from the day it is next seen.
+Starting a cloud run — `POST /api/operations/explore`, `/api/operations/run-flow`,
+`/api/journeys`, `/api/captures/<id>/keep` — answers **402** with the reason once the trial has
+lapsed, and the daily checks skip that account's journeys; reading what the account owns stays
+open, so it can still see and forget its journeys, test accounts and tokens. The deployment's
+owner (`TAPP_ADMIN_EMAILS`) is never gated and marks an account paid or extends its trial from the
+Admin view (`POST /api/admin/plan`). There is no payment step yet: "paid" is the owner's word.
+Nothing a local Studio does needs an account.
+
+**A self-hosted Studio can report to an account (ADR-0011 §4).** Results flow up; the browser
+never reaches down. Under *Your tapp account* on a local Studio, the owner pastes a token created
+on the hosted one (under *Your coding agent*); the local Studio checks it against that Studio,
+records whose it is, and keeps it in `TAPP_HOME/studio-link.json` (0600, this user only). From
+then on every journey run on this machine — including against staging and localhost — posts its
+name, platform, step count, machine name and result to `POST /api/journeys/report`; the journey
+itself, credentials and screenshots never leave. The account's Journeys list shows it with "runs
+on <machine>", no Run button (the cloud has no flow for it), and Forget; a pass↔fail change between
+reports delivers the same alert a cloud check's would; the daily checks never pick it up. A Studio
+that cannot be reached is said in the chat and never fails the run. `tapp run` on this machine
+reports the same way — so an iOS or Android journey run from a terminal shows on the account too —
+using the machine's link, or `TAPP_STUDIO` + `TAPP_TOKEN` when set; `--no-report` keeps one run to
+itself.
 
 **Signing in** is `POST /api/auth/link` with an email, then `GET /auth/<token>` from the email.
 There is no password. Links work once and expire in 15 minutes; sessions last 90 days; only the

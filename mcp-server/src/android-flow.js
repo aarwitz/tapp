@@ -107,6 +107,11 @@ export async function runAndroidFlow({ flow, appId, apkPath, serial, logPath, sc
         await d.swipe(target || "up");
       } else if (action === "back") {
         await d.back();
+      } else if (action === "open_url") {
+        // A journey starting from an email link ("tap the sign-in link in your receipt") opens it
+        // the way Android itself would hand it to the app — a VIEW intent, not a shell workaround.
+        const r = await d.adb(["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", target]);
+        if (r.code !== 0 || /Error:/i.test(r.stdout || "")) throw new Error(`could not open ‘${target}’: ${(r.stdout || r.stderr || "").trim() || "no app handled this link"}`);
       } else if (action === "wait_for") {
         const waited = await d.waitFor(target, timeout);
         if (!waited) throw new Error(`‘${target}’ never appeared within ${timeout}ms`);

@@ -49,6 +49,7 @@ export const FLOW_ACTIONS = Object.freeze([
   { action: "drag", target: "{from, by: [dx, dy]} or {from, to}", passes: "the control was dragged in steps, so listeners watching movement fire; web only — typing into a range input sets its value without the handle moving. This says the gesture was made, not that the page reacted: assert after it" },
   { action: "screenshot", target: "a name for the picture", passes: "a viewport-sized picture was saved beside the run's evidence; web only" },
   { action: "back", target: "(none)", passes: "the platform back navigation was performed" },
+  { action: "open_url", target: "a URL or deep link (myapp://claim?t=$TOKEN; $NAME substitutes like any other step)", passes: "the link was opened and the app under test came to the front (iOS/Android); on web, the page navigated there. Not supported on macOS" },
   { action: "wait", target: "milliseconds (fixed pause; prefer wait_for)", passes: "always" },
   { action: "wait_for", target: "label / text (+ per-step timeoutMs/timeout; flow-level timeoutMs sets the default)", passes: "the element appeared before the timeout" },
   { action: "assert_screen", target: "the detected SCREEN TITLE (navigation bar / heading), not arbitrary text", passes: "the current screen's title equals the target" },
@@ -103,7 +104,7 @@ export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
     if (step.action === "tap" && /^\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*$/.test(step.target)) {
       errors.push(`step ${n}: tap target '${step.target.trim()}' is a coordinate; Flow taps are label-only on ${platform} (use tapp_session_act tap {x,y} to learn the label, then record it)`);
     }
-    if (["tap", "wait_for", "assert_screen", "assert_exists", "assert_absent"].includes(step.action) && !step.target.trim()) {
+    if (["tap", "wait_for", "assert_screen", "assert_exists", "assert_absent", "open_url"].includes(step.action) && !step.target.trim()) {
       errors.push(`step ${n}: ${step.action} needs a target`);
     }
     if (step.action === "type" && (!step.target.trim() || !("value" in (step.params || {})))) {

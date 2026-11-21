@@ -153,6 +153,16 @@ function activateView(view) {
 // On a public Studio a person is a visitor until they sign in, and an account after. Both slots
 // (prompt screen and sidebar) show the same thing. A local Studio has neither: the one person at
 // the keyboard is the operator.
+// What the cloud will do for this account, in a word: the trial's days left, that it ended, or
+// that there is nothing to count (ADR-0011 §3). Never shown to the deployment's owner.
+function planPill(plan) {
+  if (!plan || plan.kind === "owner") return "";
+  if (plan.kind === "paid") return `<span class="journey-status passing" title="On a plan">plan</span>`;
+  if (plan.kind === "lapsed") return `<span class="journey-status failing" title="Cloud runs are for accounts on a plan — write to hello@runtapp.com">trial ended</span>`;
+  const days = plan.daysLeft ?? 0;
+  return `<span class="journey-status ${days <= 3 ? "failing" : "never"}" title="Free trial until ${esc(String(plan.endsAt || "").slice(0, 10))}">trial · ${esc(String(days))} day${days === 1 ? "" : "s"} left</span>`;
+}
+
 function renderAccount() {
   const session = state.session || {};
   const isPublic = session.access === "anonymous" || session.access === "account";
@@ -160,7 +170,7 @@ function renderAccount() {
     slot.classList.toggle("hidden", !isPublic);
     if (!isPublic) continue;
     slot.innerHTML = session.access === "account"
-      ? `<span class="account-email" title="${esc(session.email || "")}">${esc(session.email || "")}</span><button type="button" data-signout>Sign out</button>`
+      ? `<span class="account-email" title="${esc(session.email || "")}">${esc(session.email || "")}</span>${planPill(session.plan)}<button type="button" data-signout>Sign out</button>`
       : `<button type="button" class="primary" data-signin>Sign in</button>`;
   }
   $("#signin-card")?.classList.toggle("hidden", session.access !== "anonymous" || !state.signInOpen);
@@ -210,21 +220,24 @@ function applyAccessMode() {
   // one where most of it says "ready".
   renderPlatformStrip();
   renderPlatforms();
+  renderStudioLink();
   if (session.access !== "anonymous" && session.access !== "account") return;
   const signedIn = session.access === "account";
   const accepts = new Set(session.accepts || ["url"]);
-  // A target this Studio cannot START is still a thing tapp does. It used to be deleted from
-  // the screen, which is how a cross-platform product came to look like a website checker: the
-  // hosted Studio erased every mention of iOS, Android and folders. Keep them, mark them, and
-  // let the answer be "here is where that runs" (ADR-0010).
+  // A target this Studio cannot START is still a thing tapp does — on the person's own machine.
+  // It used to be deleted from the screen, which is how a cross-platform product came to look
+  // like a website checker; then dimmed but offered (ADR-0010), so a stranger learned what the
+  // page could not do by trying it. Now the self-host card names it, with the command, before
+  // anyone types it (ADR-0011): an example nobody can start here is not offered as something to
+  // type here. Typing one anyway still gets the "here is where that runs" answer.
   for (const button of document.querySelectorAll("[data-kind]")) {
     const kind = button.dataset.kind;
     const usable = kind === "url" ? accepts.has("url") : accepts.has(kind);
-    button.closest("li")?.classList.remove("hidden");
-    button.classList.toggle("elsewhere", !usable);
+    button.closest("li")?.classList.toggle("hidden", !usable);
   }
+  $("#selfhost-card")?.classList.remove("hidden");
   const input = $("#prompt-input");
-  if (input) input.placeholder = accepts.has("path") ? input.placeholder : "A website URL — or an .app, .apk or repo to be told where it runs…";
+  if (input) input.placeholder = accepts.has("path") ? input.placeholder : "A website URL — https://…";
   // Everything that only means something against a source repository: a target to build, a
   // runner, a release gate, a decision. A hosted visitor auditing a URL has none of them, and
   // showing the empty frames makes a working run look like a broken one.
@@ -237,8 +250,8 @@ function applyAccessMode() {
   if (!state.headingOwnedByRun) setHeading("tapp", signedIn ? "Give it a website. If there is a sign-in, I will ask you for a test account and remember it." : "Give it a public website and it will audit the pages read-only.");
   const note = $("#privacy-note-detail");
   if (note) note.textContent = signedIn
-    ? "Websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again. iOS, Android and folders on your own machine run the same Studio there: npx -y @aarwitz/tapp@latest app"
-    : "Websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site. iOS, Android and folders on your own machine run the same Studio there: npx -y @aarwitz/tapp@latest app";
+    ? "Public websites are explored in the cloud. Test accounts you give tapp are kept encrypted, used only to sign in, and never shown again."
+    : "Public websites are audited read-only in the cloud; nothing is clicked. Sign in to go inside a site from here.";
   $("#actors-panel")?.classList.toggle("hidden", !signedIn);
   $("#journeys-panel")?.classList.toggle("hidden", !signedIn);
   $("#agent-panel")?.classList.toggle("hidden", !signedIn);
@@ -346,7 +359,7 @@ function renderAdmin() {
 
     <section class="panel section">
       <div class="section-heading compact"><div><p class="eyebrow">Accounts</p><h2>People with a tapp account <i class="zero">${data.accounts.length}</i></h2><p>Test accounts are counted, never shown — tapp cannot show them.</p></div></div>
-      ${data.accounts.length ? data.accounts.map((account) => `<div class="actor-row"><span><strong>${esc(account.email)}</strong>${owner(account.email) ? ' <small class="journey-status passing">owner</small>' : ""}<br><small>joined ${esc(compactDate(account.createdAt))}${account.lastSeenAt ? ` · last seen ${esc(compactDate(account.lastSeenAt))}` : ""}</small></span><span><small>${account.journeys} journey${account.journeys === 1 ? "" : "s"}${account.failing ? ` · <b class="journey-status failing">${account.failing} failing</b>` : ""}${account.neverRun ? ` · ${account.neverRun} never run` : ""}</small></span><span><small>${account.testAccounts} test account${account.testAccounts === 1 ? "" : "s"} · ${account.tokens} token${account.tokens === 1 ? "" : "s"}</small></span></div>`).join("") : '<div class="empty">Nobody has signed in yet.</div>'}
+      ${data.accounts.length ? data.accounts.map((account) => `<div class="actor-row"><span><strong>${esc(account.email)}</strong>${owner(account.email) ? ' <small class="journey-status passing">owner</small>' : ` ${planPill(account.plan)}`}<br><small>joined ${esc(compactDate(account.createdAt))}${account.lastSeenAt ? ` · last seen ${esc(compactDate(account.lastSeenAt))}` : ""}</small></span><span><small>${account.journeys} journey${account.journeys === 1 ? "" : "s"}${account.failing ? ` · <b class="journey-status failing">${account.failing} failing</b>` : ""}${account.neverRun ? ` · ${account.neverRun} never run` : ""}<br>${account.testAccounts} test account${account.testAccounts === 1 ? "" : "s"} · ${account.tokens} token${account.tokens === 1 ? "" : "s"}</small></span><span class="journey-actions">${owner(account.email) ? "" : `<button class="quiet" type="button" data-plan-account="${esc(account.id)}" data-plan-kind="trial" data-plan-days="30">+30 days</button>${account.plan?.kind === "paid" ? "" : `<button class="quiet" type="button" data-plan-account="${esc(account.id)}" data-plan-kind="paid">Mark paid</button>`}`}</span></div>`).join("") : '<div class="empty">Nobody has signed in yet.</div>'}
     </section>
 
     <section class="panel section">
@@ -620,6 +633,24 @@ function journeyStatus(status) {
   return `<span class="journey-status ${status.passed ? "passing" : "failing"}">${status.passed ? "passing" : "failing"} · ${esc(compactDate(status.at))}</span>`;
 }
 
+// The link from this machine to an account on a hosted Studio (ADR-0011 §4). Local only.
+function renderStudioLink() {
+  const panel = $("#link-panel");
+  const body = $("#link-body");
+  if (!panel || !body) return;
+  const local = state.session?.mode === "local";
+  panel.classList.toggle("hidden", !local);
+  if (!local) return;
+  const link = state.session?.studioLink;
+  body.innerHTML = link
+    ? `<div class="link-state"><span class="journey-status passing">connected</span><span>${esc(link.email || "")} · <small>${esc(link.origin)}</small></span><button class="quiet" type="button" data-unlink-studio>Disconnect</button></div>`
+    : `<form class="link-form" id="link-form" autocomplete="off">
+        <input id="link-origin" name="origin" type="url" value="https://app.runtapp.com" aria-label="Studio URL" spellcheck="false">
+        <input id="link-token" name="token" type="password" placeholder="tapp_… — a token from your Studio, under “Your coding agent”" aria-label="Token" autocomplete="off" required>
+        <div class="ask-actions"><button class="primary" type="submit" id="link-connect">Connect</button><small>The token is kept on this machine only, readable by you.</small></div>
+      </form>`;
+}
+
 function renderJourneys() {
   const node = $("#journeys-list");
   if (!node) return;
@@ -634,7 +665,9 @@ function renderJourneys() {
   if (!journeys.length) { node.innerHTML = '<div class="empty">No journeys yet. Explore a site — when a run gets somewhere, tapp offers to keep it.</div>'; return; }
   const groups = new Map();
   for (const journey of journeys) { const key = journey.group || ""; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(journey); }
-  const row = (j) => `<div class="journey-row"><span class="journey-platform ${esc(j.platform || "web")}">${esc(j.platform || "web")}</span><span class="journey-name">${esc(j.name)}<br><small>${j.steps || 0} steps · ${journeyStatus(j.status)}</small></span><span></span><span class="journey-actions"><button class="quiet" data-run-journey="${esc(j.slug)}" title="Replay this journey">▶ Run</button>${j.source === "kept" ? `<button class="quiet" data-forget-journey="${esc(j.slug)}" title="Forget this journey">Forget</button>` : ""}</span></div>`;
+  // A reported journey ran on the owner's own machine: it is listed with where, and cannot be
+  // run from here — the cloud has no flow for it, only the result (ADR-0011 §4).
+  const row = (j) => `<div class="journey-row"><span class="journey-platform ${esc(j.platform || "web")}">${esc(j.platform || "web")}</span><span class="journey-name">${esc(j.name)}<br><small>${j.steps || 0} steps · ${journeyStatus(j.status)}${j.source === "reported" ? ` · runs on ${esc(j.machine || "your machine")}` : ""}</small></span><span></span><span class="journey-actions">${j.source === "reported" ? "" : `<button class="quiet" data-run-journey="${esc(j.slug)}" title="Replay this journey">▶ Run</button>`}${j.source === "kept" || j.source === "reported" ? `<button class="quiet" data-forget-journey="${esc(j.slug)}" title="Forget this journey">Forget</button>` : ""}</span></div>`;
   node.innerHTML = [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b))).map(([group, items]) =>
     group === ""
       ? items.map(row).join("")
@@ -1295,7 +1328,7 @@ function setHeading(title, summary, { owned = false } = {}) {
 // simulator build, a repository that needs a toolchain. The engine answers with where they do
 // run; show that answer where it stays put, not in a toast that disappears in six seconds.
 function answerSelfHost(answer) {
-  setHeading("Run this on your machine", "The cloud Studio audits websites; this target needs your toolchain.", { owned: true });
+  setHeading("Run this on your machine", "The cloud Studio runs public websites; this target runs on your own machine, with the same Studio.", { owned: true });
   document.querySelector(".summary-panel")?.classList.add("hidden");
   document.querySelector(".device-stage")?.classList.add("hidden");
   state.transcript = [];
@@ -1385,6 +1418,20 @@ document.addEventListener("click", (event) => {
   if (runButton) { state.selectedRunId = runButton.dataset.runId; renderRuns(); }
   const suggestion = event.target.closest("[data-prompt]");
   if (suggestion) { const input = $("#prompt-input"); input.value = suggestion.dataset.prompt; input.focus(); input.select(); }
+  if (event.target.closest("[data-unlink-studio]")) {
+    api("/api/studio-link", { method:"DELETE" }).then(async () => { toast("Disconnected."); await refreshSession(); }).catch((error) => toast(error.message, true));
+  }
+  const planButton = event.target.closest("[data-plan-account]");
+  if (planButton) {
+    const { planAccount, planKind, planDays } = planButton.dataset;
+    api("/api/admin/plan", { method:"POST", body: JSON.stringify({ accountId: planAccount, kind: planKind, days: planDays ? Number(planDays) : undefined }) })
+      .then(async () => { toast(planKind === "paid" ? "Marked paid." : `Trial set to ${planDays} days from today.`); await loadAdmin(); renderAdmin(); })
+      .catch((error) => toast(error.message, true));
+  }
+  if (event.target.closest("#selfhost-copy")) {
+    const text = $("#selfhost-command")?.textContent || "";
+    navigator.clipboard?.writeText(text).then(() => toast("Copied. Run it in a terminal on your machine."), () => toast("Select the command and copy it.", true));
+  }
   const liveControl = event.target.closest("[data-live-control]");
   if (liveControl) {
     const target = liveControl.dataset.liveTarget;
@@ -1392,6 +1439,20 @@ document.addEventListener("click", (event) => {
     if (liveControl.dataset.liveInput === "true") $("#live-action-text").focus();
     else runOperation("session-act", { action:"tap", id:target }).catch((error) => toast(error.message, true));
   }
+});
+
+document.addEventListener("submit", async (event) => {
+  const form = event.target.closest("#link-form");
+  if (!form) return;
+  event.preventDefault();
+  const button = $("#link-connect");
+  if (button) button.disabled = true;
+  try {
+    await api("/api/studio-link", { method:"POST", body: JSON.stringify({ origin: $("#link-origin")?.value || "", token: $("#link-token")?.value || "" }) });
+    toast("Connected. Journeys run here will report to your account.");
+    await refreshSession();
+  } catch (error) { toast(error.message, true); }
+  finally { if (button) button.disabled = false; }
 });
 
 document.addEventListener("change", (event) => {

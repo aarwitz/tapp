@@ -10,7 +10,7 @@
 //
 // Layout:  TAPP_HOME/accounts/
 //            by-email/<sha256(email)>      → account id
-//            accounts/<id>.json            { id, email, createdAt, lastSeenAt }
+//            accounts/<id>.json            { id, email, createdAt, lastSeenAt, plan }
 //            links/<sha256(token)>.json    { email, expiresAt }      (removed on use)
 //            sessions/<sha256(token)>.json { accountId, createdAt, expiresAt }
 //            tokens/<sha256(token)>.json   { id, accountId, label, createdAt, lastUsedAt }
@@ -25,6 +25,10 @@ import path from "node:path";
 export const TOKEN_PREFIX = "tapp_";
 export const LINK_TTL_MS = 15 * 60 * 1000;
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+// The cloud beyond the visitor audit is for an account on a plan or in its free trial
+// (ADR-0011 §3). A trial is a date, nothing more: no card, no counter of runs.
+export const TRIAL_DAYS = 14;
+export const TRIAL_MS = TRIAL_DAYS * 24 * 60 * 60 * 1000;
 // One address may ask for this many links in a ten-minute window; more is someone else's mailbox
 // being flooded through us.
 const LINKS_PER_WINDOW = 5;
@@ -171,6 +175,46 @@ export class AccountStore {
     return false;
   }
 
+  /** The account record by id, or null. */
+  getAccount(accountId) {
+    if (!/^[a-f0-9]{24}$/.test(String(accountId || ""))) return null;
+    return readJson(this.#file("accounts", accountId));
+  }
+
+  /**
+   * Whether this account may start a cloud run, and why. `paid` has no end; `trial` has one and
+   * is allowed until it; `lapsed` is a trial whose date has passed. An account from before plans
+   * existed has none on record — it is given a trial from the day it is next seen, not from the
+   * day it joined, so a change in the rules never locks out someone who was already here.
+   */
+  entitlement(accountOrId) {
+    const account = typeof accountOrId === "string" ? this.getAccount(accountOrId) : accountOrId;
+    if (!account) return { kind: "lapsed", allowed: false, endsAt: null, daysLeft: 0 };
+    if (!account.plan || typeof account.plan !== "object") {
+      account.plan = { kind: "trial", endsAt: new Date(this.now() + TRIAL_MS).toISOString() };
+      writeJson(this.#file("accounts", account.id), account);
+    }
+    if (account.plan.kind === "paid") return { kind: "paid", allowed: true, endsAt: null, daysLeft: null };
+    const endsAt = Date.parse(account.plan.endsAt);
+    const left = Number.isFinite(endsAt) ? endsAt - this.now() : -1;
+    if (left <= 0) return { kind: "lapsed", allowed: false, endsAt: account.plan.endsAt || null, daysLeft: 0 };
+    return { kind: "trial", allowed: true, endsAt: account.plan.endsAt, daysLeft: Math.ceil(left / 86_400_000) };
+  }
+
+  /** The owner of the deployment decides: mark an account paid, or give it a trial of so many days from now. */
+  setPlan(accountId, { kind, days } = {}) {
+    const account = this.getAccount(accountId);
+    if (!account) throw Object.assign(new Error("No such account"), { statusCode: 404 });
+    if (kind === "paid") account.plan = { kind: "paid" };
+    else if (kind === "trial") {
+      const length = Number(days);
+      if (!Number.isInteger(length) || length < 1 || length > 365) throw Object.assign(new Error("A trial is 1 to 365 days"), { statusCode: 400 });
+      account.plan = { kind: "trial", endsAt: new Date(this.now() + length * 86_400_000).toISOString() };
+    } else throw Object.assign(new Error("A plan is 'paid' or 'trial'"), { statusCode: 400 });
+    writeJson(this.#file("accounts", account.id), account);
+    return this.entitlement(account);
+  }
+
   /** Where this account's encrypted test accounts live. */
   actorRoot(accountId) {
     if (!/^[a-f0-9]{24}$/.test(String(accountId || ""))) throw new Error("Not an account id");
@@ -186,7 +230,7 @@ export class AccountStore {
       if (existing) return existing;
     }
     id = crypto.randomBytes(12).toString("hex");
-    const account = { id, email, createdAt: new Date(this.now()).toISOString(), lastSeenAt: new Date(this.now()).toISOString() };
+    const account = { id, email, createdAt: new Date(this.now()).toISOString(), lastSeenAt: new Date(this.now()).toISOString(), plan: { kind: "trial", endsAt: new Date(this.now() + TRIAL_MS).toISOString() } };
     writeJson(this.#file("accounts", id), account);
     fs.mkdirSync(path.dirname(indexFile), { recursive: true, mode: 0o700 });
     fs.writeFileSync(indexFile, `${id}\n`, { mode: 0o600 });

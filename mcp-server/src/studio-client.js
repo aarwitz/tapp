@@ -8,6 +8,10 @@
 // Configuration is two values, from flags or the environment:
 //   TAPP_STUDIO   https://app.runtapp.com
 //   TAPP_TOKEN    tapp_…
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 const POLL_MS = 1500;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -74,10 +78,52 @@ export async function runStudioJourney(config, name, { onProgress = () => {}, ti
   }
 }
 
+/**
+ * The account this machine reports to (ADR-0011 §4): the link the Studio wrote under TAPP_HOME,
+ * or TAPP_STUDIO + TAPP_TOKEN in the environment, which win so one shell can report elsewhere.
+ * Null when neither is set — reporting is then simply not on.
+ */
+export function studioLinkFor(env = process.env) {
+  if (env.TAPP_STUDIO && env.TAPP_TOKEN) {
+    try { const config = studioConfig({}, env); return config ? { ...config, email: "" } : null; } catch { return null; }
+  }
+  const home = (env.TAPP_HOME || "").trim() || path.join(os.homedir(), ".tapp");
+  try {
+    const link = JSON.parse(fs.readFileSync(path.join(home, "studio-link.json"), "utf8"));
+    return link && typeof link.origin === "string" && typeof link.token === "string" ? { origin: link.origin, token: link.token, email: link.email || "" } : null;
+  } catch { return null; }
+}
+
+/** The runner's own verdict, from the log every platform's runner writes: the last result line. */
+export function flowResultFromLog(text) {
+  let found = null;
+  for (const line of String(text || "").split("\n")) {
+    const m = line.match(/^OCQA_FLOW_RESULT:(\{.*\})\s*$/);
+    if (m) { try { found = JSON.parse(m[1]); } catch { /* a partial line */ } }
+  }
+  return found;
+}
+
+/** Who this token belongs to. Used once, when a machine is linked, so the link can say whose it is. */
+export async function verifyStudioToken(config) {
+  const session = await call(config, "/api/session");
+  if (session.access !== "account" || !session.email) throw new Error("That token did not sign in to an account on the Studio");
+  return { email: session.email };
+}
+
+/**
+ * Tell the Studio how a journey run somewhere else went (ADR-0011 §4). The name and the result
+ * travel; the journey itself, credentials and screenshots stay where the run happened.
+ */
+export async function reportStudioJourney(config, { name, platform = "web", url = "", steps = 0, machine = "", passed, executed = 0, total = 0, failed = 0, at = null }) {
+  return call(config, "/api/journeys/report", { method: "POST", body: { name, platform, url, steps, machine, passed: !!passed, executed, total, failed, at } });
+}
+
 /** One line per journey, for a terminal or an agent's transcript. */
 export function formatJourneyStatus(journey) {
   const status = journey.status;
   const state = !status ? "never run" : status.passed ? "passing" : "FAILING";
   const when = status?.at ? ` · ${new Date(status.at).toISOString().replace("T", " ").slice(0, 16)}` : "";
-  return `${state === "FAILING" ? "✗" : state === "passing" ? "✓" : "·"} ${journey.name} — ${journey.steps || 0} steps · ${state}${when}`;
+  const where = journey.source === "reported" && journey.machine ? ` · runs on ${journey.machine}` : "";
+  return `${state === "FAILING" ? "✗" : state === "passing" ? "✓" : "·"} ${journey.name} — ${journey.steps || 0} steps · ${state}${when}${where}`;
 }
