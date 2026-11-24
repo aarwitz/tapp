@@ -465,7 +465,7 @@ function safeCommandUsage(verb) {
     baseline: "tapp ci baseline [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
     ci: "tapp ci ...\ntapp ci install [repo] [--out FILE] [--manifest FILE] [--dry-run] [--replace]\ntapp ci baseline [repo] [--platform PLATFORM] [--target NAME] [--from GATE.json] [--replace]",
     actor: "tapp plan actor set NAME --email-env ENV --password-env ENV [--replace] [--project-dir DIR]\ntapp plan actor list [repo]",
-    app: "tapp app [repo] [--no-open] [--port PORT]",
+    app: "tapp app [repo] [--no-open] [--port PORT] [--connect [https://app.runtapp.com]]\n  --connect: drive this machine from the hosted Studio in your browser; everything still runs here",
     report: "tapp report [captureId|latest]\n  --journeys: list the journeys you own and how each one's last check went (exit 1 if any is failing)\n    Add --studio https://app.runtapp.com (or $TAPP_STUDIO) with a token from the Studio's “Your coding agent” card ($TAPP_TOKEN) to ask your hosted Studio.",
     feedback: "tapp feedback \"short title\" [--body TEXT|--body-file FILE] [--type bug|idea|question] [--capture ID|latest|none] [--as human] [--submit] [--json]\n  Drafts a public GitHub issue on aarwitz/tapp about tapp itself; --submit files it with the authenticated gh CLI.\n  Exit codes: 0 drafted or filed · 1 gh submission failed · 2 usage error",
     audit: "tapp explore --read-only <url> [<url>...] [--urls FILE] [--pages N] [--delay MS] [--links N] [--json [FILE]] [--no-capture] [--device NAME] [--viewport WxH]\n  Read-only: renders each page and reads it, never clicks — safe to point at production or a site you do not own.\n  Finds dead controls, broken images/assets/links, 5xx/failed requests, JS exceptions, mixed content, horizontal overflow.\n  --pages N crawls same-origin links (robots.txt honoured, --delay between pages). Writes a capture with screenshots, evidence and report.html.\n  Exit codes: 0 nothing broken · 1 defects found · 2 usage/infrastructure",
@@ -2479,6 +2479,12 @@ switch (command) {
     // there is no way to offer them safely to an anonymous visitor on a shared machine.
     const publicAccess = flags.public === true;
     const publicOrigin = typeof flags.origin === "string" ? flags.origin : "";
+    // --connect: this runtime is driven from app.runtapp.com (or another hosted Studio) in the
+    // browser, instead of from its own page. The hosted page is opened with this runtime's
+    // address and launch secret in the URL fragment, which never reaches the hosted server.
+    const connectOrigin = flags.connect === true ? "https://app.runtapp.com" : typeof flags.connect === "string" ? flags.connect.replace(/\/$/, "") : "";
+    if (connectOrigin && publicAccess) { console.error("❌ --connect is for a Studio on your own machine, not a --public one"); process.exit(2); }
+    if (connectOrigin && !/^https?:\/\/[^\s/]+$/.test(connectOrigin)) { console.error("❌ --connect needs a Studio origin like https://app.runtapp.com"); process.exit(2); }
     // https for anything real; plain http on loopback so the public mode can be dry-run locally
     // before a tunnel or TLS terminator is in front of it.
     const localOrigin = /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(publicOrigin);
@@ -2490,10 +2496,11 @@ switch (command) {
     const { startBrowserProduct } = await import(path.join(packageRoot, "mcp-server", "src", "browser-product.js"));
     const product = await startBrowserProduct({
       projectDir, port,
-      launch: !publicAccess && flags.open !== false && flags["no-open"] !== true,
+      launch: !publicAccess && !connectOrigin && flags.open !== false && flags["no-open"] !== true,
       // A loopback origin is a trial of the public Studio on your own machine; pinning its
       // browser to public addresses would stop it reaching the very thing you are trying.
       ...(publicAccess ? { publicAccess: true, publicOrigin, publicEgressOnly: !localOrigin } : {}),
+      ...(connectOrigin ? { connectOrigin } : {}),
     });
     if (publicAccess) {
       console.log(`Tapp · public Studio for ${publicOrigin}`);
@@ -2501,6 +2508,12 @@ switch (command) {
       console.log("Anonymous visitors may audit a public website read-only. Repositories, live");
       console.log("sessions and the release gate require an authenticated local session.");
       console.log(localOrigin ? "Local trial: browser egress is not pinned, so this can reach services on this machine." : "Browser egress is pinned to public addresses; private ranges are refused.");
+    } else if (connectOrigin) {
+      console.log(`Tapp · this machine, driven from ${connectOrigin}`);
+      console.log(`Open: ${product.connectUrl}`);
+      console.log(`If that page cannot reach this machine (some browsers refuse), open it directly: ${product.launchUrl}`);
+      console.log("Everything still runs here; press Ctrl-C to stop.");
+      if (flags.open !== false && flags["no-open"] !== true) product.openConnect();
     } else {
       console.log(`Tapp · ${product.root || "choose a local folder or GitHub repository in the browser"}`);
       console.log(`Open: ${product.launchUrl}`);

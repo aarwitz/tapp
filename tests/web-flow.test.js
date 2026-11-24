@@ -329,3 +329,81 @@ test("open_url navigates straight there, with $VAR substitution like any other t
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://example.test/claim?t=abc123");
 });
+
+// TM-1077: an admin "Import contacts" page (and certificate/newsletter uploads) starts with
+// choosing a local file, which no committed Flow step could do before — the upload had to be
+// driven by hand with raw Playwright, so the journey could never be kept and replayed.
+test("upload needs {field, file}, and says so without touching the page", async () => {
+  const page = {};
+  const out = await executeWebFlowStep({ page, step: { upload: { field: "ci-file" } } });
+  assert.equal(out.status, "fail");
+  assert.match(out.detail, /upload needs \{field, file\}/);
+});
+
+test("upload refuses a file that does not exist, before looking for the picker", async () => {
+  const page = {};
+  const out = await executeWebFlowStep({
+    page,
+    step: { upload: { field: "ci-file", file: "nope.csv" } },
+    flowDir: os.tmpdir(),
+  });
+  assert.equal(out.status, "fail");
+  assert.match(out.detail, /upload file not found/);
+});
+
+// A real <input type=file>, hidden behind a styled label the way a real app's own upload
+// buttons often are — opacity/position, never display:none, which a browser refuses to let
+// choose a file at all. locateWebElement's visibility check would skip this control entirely.
+const UPLOAD_PAGE = `<!doctype html><body>
+  <label for="ci-file" style="position:absolute;opacity:0;width:1px;height:1px;overflow:hidden">Upload CSV</label>
+  <input id="ci-file" type="file" style="position:absolute;opacity:0;width:1px;height:1px;overflow:hidden">
+  <span id="chosen">none</span>
+  <script>
+    document.getElementById('ci-file').addEventListener('change', (e) => {
+      chosen.textContent = e.target.files[0] ? e.target.files[0].name : 'none';
+    });
+  </script></body>`;
+
+test("upload chooses a real file for an input hidden behind its label, and the page's own change handler runs", browserTest, async (t) => {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); } catch { return t.skip("playwright not installed"); }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-upload-"));
+  const filePath = path.join(dir, "contacts.csv");
+  fs.writeFileSync(filePath, "name,email\nJordan,jordan@example.test\n");
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    await page.setContent(UPLOAD_PAGE, { waitUntil: "domcontentloaded" });
+    const out = await executeWebFlowStep({
+      page,
+      step: { upload: { field: "Upload CSV", file: "contacts.csv" } },
+      flowDir: dir,
+    });
+    assert.equal(out.status, "pass");
+    assert.equal((await page.locator("#chosen").innerText()).trim(), "contacts.csv", "the page's own change handler fired");
+    const picked = await page.locator("#ci-file").evaluate((el) => el.files[0]?.name);
+    assert.equal(picked, "contacts.csv");
+  } finally { await browser.close(); }
+});
+
+test("upload resolves a relative file path against the Flow file's own directory, never the process cwd", browserTest, async (t) => {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); } catch { return t.skip("playwright not installed"); }
+  const flowDir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-upload-flowdir-"));
+  fs.writeFileSync(path.join(flowDir, "contacts.csv"), "name,email\n");
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext()).newPage();
+    await page.setContent(UPLOAD_PAGE, { waitUntil: "domcontentloaded" });
+    const originalCwd = process.cwd();
+    process.chdir(os.tmpdir()); // a directory that does not hold contacts.csv
+    try {
+      const out = await executeWebFlowStep({
+        page,
+        step: { upload: { field: "Upload CSV", file: "contacts.csv" } },
+        flowDir,
+      });
+      assert.equal(out.status, "pass", "the path resolved against flowDir, not the cwd we just changed to");
+    } finally { process.chdir(originalCwd); }
+  } finally { await browser.close(); }
+});

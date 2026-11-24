@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.35.9
+
+**app.runtapp.com drives the runtime on your own machine.** The hosted page is the one UI; your
+machine is the engine. `npx -y @aarwitz/tapp@latest app --connect` starts the runtime here and
+opens app.runtapp.com with this machine's address and launch secret in the URL fragment — which a
+browser never sends to the server — and from then on the page talks to your machine: every call
+to its loopback address with the secret as a bearer, images and reports with it on the query. The
+runtime answers CORS and the browser's local-network check for exactly that one origin, still
+asks for the CSRF token on anything that changes state, and tells every other origin nothing;
+the hosted page allows loopback in its content-security policy, a local Studio does not. The
+header reads *Connected · your machine* with a Disconnect. A runtime that stops answering is
+said on the first screen and the page carries on as a visitor; a browser that refuses loopback
+from an https page is sent to the runtime's own address, the same UI. The cloud — tapp running it
+for you — is coming soon, not sold: the visitor's card says so and takes an address (kept beside
+the Studio's other state, an address and a date and nothing else); an account that already
+exists signs in from that card, and there is no sign-in button up front.
+
+**Setting this machine up is a screen, not a document.** The first thing a local Studio shows is
+*This machine*: the runtime (tapp and Node, python3 and PyYAML for Flow replay, disk); every
+coding agent found and how it is signed in, with *Use* to choose which drives the chat, a *Sign
+in with ChatGPT* button that runs Codex's device flow and shows the link and one-time code until
+a plan is reported, and a field for an Anthropic API key as the fallback brain — checked against
+Anthropic, kept readable by you alone, shown by its last four characters, and handed to Claude
+Code only when no plan is signed in, so a key can never quietly override a plan; what `tapp
+doctor` found for each kind of app with the one thing to install when something is missing
+("Install Xcode from the App Store and open it once", "System Settings → Privacy & Security →
+Accessibility", "Install Android Studio…"); and the account link. It collapses to one line once
+ready, and *Check again* re-reads the machine. A Mac without Xcode is now told to install Xcode,
+not to go and find a Mac.
+
+**The chat drives your own Claude Code, on your plan — tapp holds no model token.** Everything
+worth doing in tapp is an agent calling tapp's tools, and that is only economical on the plan
+you already pay for. Anthropic's terms forbid a Claude subscription's OAuth token in any product
+but Claude Code and claude.ai, so tapp signs you in to nothing: it finds the `claude`, `codex`
+and `gemini` already on the machine, says for each whether it is signed in with a plan, with an
+API key that bills per use, or not at all, and drives Claude Code — `claude -p` streaming its
+events, with tapp's own MCP server attached and the tapp skill appended, allowed tapp's tools
+and reading the project, and Bash, Edit and Write ruled out by name. Its words, the tool it
+reached for, a tool that answered with an error and its final answer arrive as chat lines; a
+thread continues across turns; Stop ends the turn the way Ctrl-C would; a turn is one job on the
+operator's lane, so it cannot run over a release check. Codex and Gemini are found and reported,
+not yet driven. Nothing here reaches a hosted Studio.
+
+**A web Flow can choose a file in a file picker.** `upload: {field, file}` joins the step
+vocabulary, the file resolved against the Flow's own path; a file that does not exist is refused
+before the picker is looked for, and a step missing either half says so without touching the
+page.
+
+**A business name finds its App Store publishers.** A name typed into the prompt is looked up in
+Apple's public catalog; each match shows the app, its publisher and the listing, and the
+publisher's website — when one is listed — is one press from the read-only audit. A publisher
+without a website is said to have none.
+
+**Hosted findings say which page.** A finding from a website audit carries the page it was seen
+on, and a file path is no longer mistaken for a URL.
+
+**Recordings play, scrub and seek.** The hosted Studio serves video by byte range — `206` for a
+range, `416` for one past the end — so a run's recording can be measured and seeked in the
+browser instead of only downloaded.
+
+**When tapp's own browser cannot start, an approved one can be attached or started.** A
+restricted macOS runner kills Chromium at its Mach-port check-in; `TAPP_BROWSER_ENDPOINT` names
+a Chromium on this machine that something allowed has already started with a debugging port,
+and `TAPP_BROWSER_EXECUTABLE` names an approved binary tapp starts instead of its own. Neither is
+accepted under the public egress policy, because tapp cannot pin a browser it did not start.
+
 ## 0.35.8
 
 **app.runtapp.com is the front door: a website runs here, everything else runs on your own machine,

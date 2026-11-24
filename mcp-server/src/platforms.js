@@ -84,6 +84,18 @@ export function hostToolchain({ env = process.env, platform = process.platform }
   };
 }
 
+// What to install on THIS machine when it is the right kind and lacks the one thing. Returns
+// null when the machine is the wrong kind, so the general "needs a Mac" answer stands.
+const MISSING_ON_THIS_MACHINE = {
+  ios: (platform) => platform === "darwin"
+    ? { summary: "This Mac has no Xcode yet.", how: "Install Xcode from the App Store and open it once to finish its setup. tapp then builds and boots a simulator itself; give it a repository, a simulator .app or a bundle id." }
+    : null,
+  macos: (platform) => platform === "darwin"
+    ? { summary: "This Mac has not given tapp the Accessibility permission.", how: "System Settings → Privacy & Security → Accessibility: allow the app that runs tapp (your terminal, or Node). Then give it a .app." }
+    : null,
+  android: () => ({ summary: "The Android SDK is not on this machine, or adb cannot be found.", how: "Install Android Studio (or the command-line tools) so adb exists — set ANDROID_HOME if tapp still cannot find it — then plug in a phone with USB debugging allowed, or start an emulator, and give it an .apk." }),
+};
+
 /** The command that opens this same Studio on a machine that can do the work. */
 export const SELF_HOST_COMMAND = "npx -y @aarwitz/tapp@latest app";
 
@@ -122,16 +134,19 @@ export function platformStates({ hosted = false, env = process.env, platform = p
       };
     }
     const because = has[target.id] && !exposed ? "not-exposed" : "no-toolchain";
+    // The right machine, missing one thing, is a different sentence from the wrong machine: a
+    // Mac without Xcode is told to install Xcode, not to find a Mac (ADR-0012's setup flow).
+    const missing = because === "no-toolchain" && !hosted ? MISSING_ON_THIS_MACHINE[target.id]?.(platform) : null;
     return {
       ...target,
       state: "needs-machine", because,
       summary: because === "not-exposed"
         ? `tapp drives ${target.subject}, and this machine could — but a public Studio only starts website runs.`
-        : `tapp drives ${target.subject}, but this Studio is not on ${target.machine}.`,
+        : missing ? missing.summary : `tapp drives ${target.subject}, but this Studio is not on ${target.machine}.`,
       // Two ways out, always both: self-host is the same product without the hosting (ADR-0006),
       // and not everyone has the machine or wants to keep it awake.
-      how: `Run this Studio on ${target.machine} and give it ${lower(target.give)} there — or have tapp run it for you.`,
-      command: SELF_HOST_COMMAND,
+      how: missing ? missing.how : `Run this Studio on ${target.machine} and give it ${lower(target.give)} there — or have tapp run it for you.`,
+      command: missing ? "" : SELF_HOST_COMMAND,
     };
   });
 }

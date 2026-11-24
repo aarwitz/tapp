@@ -139,21 +139,71 @@ test("a hosted Studio is the front door: a website here, everything else on your
     const card = await page.locator("#selfhost-card").innerText();
     assert.match(card, /runs on your own machine/);
     assert.match(card, /staging and localhost/, "the private targets the cloud can never reach are named");
-    assert.equal((await page.locator("#selfhost-command").innerText()).trim(), "npx -y @aarwitz/tapp@latest app");
-    assert.match(card, /no account needed/, "self-host never needs an account");
+    assert.equal((await page.locator("#selfhost-command").innerText()).trim(), "npx -y @aarwitz/tapp@latest app --connect", "the command connects this page to the machine");
+    assert.match(card, /No account needed/, "self-host never needs an account");
     // Only the example this deployment can start is offered as something to type here.
     const offered = await page.locator(".prompt-suggestions li:visible [data-kind]").evaluateAll((nodes) => nodes.map((node) => node.dataset.kind));
     assert.deepEqual(offered, ["url"]);
-    assert.equal(await page.locator("#prompt-input").getAttribute("placeholder"), "A website URL — https://…");
+    assert.equal(await page.locator("#prompt-input").getAttribute("placeholder"), "A business name or website URL…");
+    await page.route("**/api/operations/open", route => route.fulfill({ json: {
+      kind: "business", message: "Which business did you mean?", matches: [
+        { name: "Sample", publisher: "Sample Co.", listing: "https://apps.apple.com/us/app/id12", website: "https://sample.example/" },
+      ],
+    } }));
+    await page.locator("#prompt-input").fill("Sample");
+    await page.locator("#prompt-start").click();
+    await page.getByRole("button", { name: "Audit sample.example" }).waitFor();
+    await page.locator("#prompt-input").fill("different.example");
+    assert.equal(await page.locator("#business-results").isHidden(), true);
     // What tapp drives is still all on the first screen (ADR-0010): chips for every platform.
     const chips = await page.locator("#platform-strip .platform-chip").allInnerTexts();
     assert.deepEqual(chips.map((text) => text.trim()), ["Web", "iOS", "Android", "macOS app", "Windows app"]);
-    // The cloud beyond the audit is behind a sign-in: offered, and opened only when asked for.
-    await page.locator("#account-slot [data-signin]").click();
+    // The cloud is coming soon, not sold: an address to tell, and a way in for an account that
+    // already exists — opened only when asked for.
+    const cloud = await page.locator("#cloud-card").innerText();
+    assert.match(cloud, /coming soon/i);
+    assert.equal(await page.locator("#account-slot [data-signin]").count(), 0, "no Sign in button up front for a visitor");
+    await page.locator("#cloud-card [data-signin]").click();
     await page.locator("#signin-card").waitFor({ state:"visible", timeout:5000 });
   } finally {
     await browser?.close();
     await product.close();
+  }
+});
+
+test("opened from the runtime's link, the hosted page drives this machine: the setup card, the operator's Studio, and a Disconnect (ADR-0011 §4)", { skip:skipRealBrowser || !chromium, timeout:90_000 }, async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-connected-home-"));
+  const priorHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const hosted = await startBrowserProduct({ port:0, publicOrigin:"https://app.runtapp.com", publicAccess:true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-connected-ws-")) });
+  // The runtime is told which page may drive it: here, the hosted page's real loopback origin.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-connected-proj-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>mine</h1>");
+  const runtime = await startBrowserProduct({ projectDir: root, port:0, launch:false, connectOrigin: hosted.origin, doctor: async () => ({ version: "0.35.8", node: { ok:true, version: process.versions.node }, platforms: { web: { available:true } } }) });
+  let browser;
+  try {
+    browser = await chromium.launch({ headless:true });
+    const page = await browser.newPage();
+    const token = new URL(runtime.launchUrl).searchParams.get("token");
+    await page.goto(`${hosted.origin}/#connect=${encodeURIComponent(runtime.origin)}&token=${encodeURIComponent(token)}`, { waitUntil:"networkidle" });
+    assert.equal(page.url().includes("token="), false, "the secret is taken off the address bar");
+    // The runtime was started on a project, so the operator's Studio opens straight away.
+    await page.locator("#product-shell").waitFor({ state:"visible", timeout:15_000 });
+    assert.equal((await page.locator("#mode-pill").innerText()).trim(), "Connected · your machine");
+    assert.equal(await page.locator("#cloud-card").isVisible(), false);
+    assert.equal(await page.locator("#account-slot [data-disconnect-machine], #account-slot-side [data-disconnect-machine]").count() > 0, true);
+    // The project the runtime was started on is what the page shows: the operator's Studio.
+    const sidebar = await page.locator("#sidebar-project-name").innerText().catch(() => "");
+    assert.match(sidebar, /tapp-connected-proj-/);
+    // Disconnecting forgets the machine in this browser and leaves the visitor's page.
+    await page.locator("#account-slot-side [data-disconnect-machine]").click();
+    await page.locator("#selfhost-card").waitFor({ state:"visible", timeout:10_000 });
+    assert.equal((await page.locator("#onboarding-mode-pill").innerText()).trim(), "Cloud");
+  } finally {
+    await browser?.close();
+    await runtime.close();
+    await hosted.close();
+    if (priorHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = priorHome;
   }
 });
 

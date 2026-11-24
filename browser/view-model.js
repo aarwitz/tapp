@@ -64,6 +64,12 @@ const RULES = [
 export function narrate(entry = {}, { platform = "" } = {}) {
   const text = String(entry.text || "").trim().replace(/\s+/g, " ");
   if (!text) return null;
+  // The person's own agent talking (ADR-0012): its words, the tapp tool it reached for, a tool
+  // that answered with an error, and its final answer — each told apart at a glance.
+  if (entry.phase === "agent") return { kind: "agent", icon: "🤖", text };
+  if (entry.phase === "agent-tool") return { kind: "step", icon: "🛠️", text };
+  if (entry.phase === "agent-warning") return { kind: "warning", icon: "⚠️", text };
+  if (entry.phase === "agent-done") return { kind: "agent", icon: "✅", text };
   const progress = text.match(/^(\d+)\/(\d+) actions(?: · (\d+) (?:states?|pages?|screens?)[^·]*)?/i);
   if (progress) return { kind: "progress", icon: "⏳", text, current: Number(progress[1]), total: Number(progress[2]), states: progress[3] ? Number(progress[3]) : null };
   for (const [pattern, icon] of RULES) {
@@ -98,6 +104,11 @@ export function summarize(name, result = {}, { access = "" } = {}) {
     const pill = issues ? `${issues} issue${issues === 1 ? "" : "s"}${noticed ? ` · ${noticed} to notice` : ""}` : noticed ? `${noticed} thing${noticed === 1 ? "" : "s"} a person would notice` : "✓ Nothing broken observed";
     const noticedText = noticed ? ` It also found ${noticed} thing${noticed === 1 ? "" : "s"} a person would notice — faint text, controls too small to tap on a phone, copy nobody finished — listed under “Worth a look”.` : "";
     return { tone: issues ? "caution" : noticed ? "caution" : "ready", pill, text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "Nothing is broken."}${noticedText}${next}` };
+  }
+  // A chat turn with the agent: what it said last, and how many turns it took. Never a verdict.
+  if (name === "agent") {
+    const turns = Number(result?.turns) || 0;
+    return { tone: result?.isError ? "caution" : "ready", pill: result?.isError ? "Stopped" : `✓ ${turns} turn${turns === 1 ? "" : "s"}`, text: String(result?.text || "Done.").slice(0, 600) };
   }
   if (gateOutcome) {
     const tone = { pass: "ready", fail: "blocked", inconclusive: "caution" }[gateOutcome] || "caution";
@@ -292,4 +303,17 @@ export function coverageGraph(uiMap, shots = [], { platform = "" } = {}) {
     entryId,
     unreachable,
   };
+}
+
+// app.runtapp.com driving the runtime on this person's machine (ADR-0011 §4, join B). The
+// runtime opens the hosted page with its own address and the launch secret in the URL FRAGMENT,
+// which a browser never sends to the server — so the hosted Studio learns where the machine is
+// without the cloud ever seeing the secret.
+export function parseConnectFragment(hash = "") {
+  const params = new URLSearchParams(String(hash || "").replace(/^#/, ""));
+  const origin = String(params.get("connect") || "").trim().replace(/\/$/, "");
+  const token = String(params.get("token") || "").trim();
+  if (!/^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(origin)) return null;
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(token)) return null;
+  return { origin, token };
 }

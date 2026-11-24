@@ -31,7 +31,7 @@ export const customerProductContract = Object.freeze({
     { id: "platforms", label: "Platforms", capabilities: ["platform-matrix", "self-host-command", "platform-interest"] },
     { id: "admin", label: "Admin", capabilities: ["deployment-usage", "account-list", "platform-demand"] },
   ],
-  operations: ["initialize", "session-start", "session-act", "session-save-flow", "session-end", "gate", "audit"],
+  operations: ["initialize", "session-start", "session-act", "session-save-flow", "session-end", "gate", "audit", "agent", "agent-stop"],
   invariants: [
     "The Studio shows runs; it never scores or judges them. Only the deterministic gate decides.",
     "Every run's evidence is the report.html the engine wrote; the Studio links to it rather than re-rendering it.",

@@ -66,6 +66,40 @@ function targetCandidates(scope, target) {
   ];
 }
 
+// TM-1077: a file input for `upload:`. Visibility-agnostic on purpose — a file
+// picker is routinely a real <input type=file> hidden behind a styled label or
+// button (opacity/position, never display:none, which browsers refuse to let
+// choose a file at all), and Playwright's setInputFiles works on it either way.
+// locateWebElement's firstVisible() would skip it, so this never calls it.
+async function locateFileInput(page, target) {
+  const candidates = [
+    page.getByTestId(target),
+    page.locator(cssId(target)),
+    page.getByLabel(target, { exact: true }),
+    page.getByLabel(target),
+  ];
+  for (const locator of candidates) {
+    try {
+      const first = locator.first();
+      if ((await first.count()) === 0) continue;
+      const tag = await first.evaluate((el) => el.tagName).catch(() => "");
+      if (tag === "INPUT") {
+        const type = (await first.getAttribute("type").catch(() => "")) || "";
+        if (!type || type.toLowerCase() === "file") return first;
+        continue;
+      }
+      // A styled label/button that wraps the real input rather than being it.
+      const inner = first.locator("input[type=file]").first();
+      if ((await inner.count()) > 0) return inner;
+    } catch { /* try the next candidate */ }
+  }
+  // Last resort: the page's one file input, when the target names it (id, name,
+  // aria-label, nearby text) in a way none of the semantic locators matched.
+  const only = page.locator("input[type=file]");
+  if ((await only.count().catch(() => 0)) === 1) return only.first();
+  return null;
+}
+
 export async function locateWebElement(page, target) {
   const top = await firstVisible(targetCandidates(page, target));
   if (top) return top;
@@ -203,7 +237,7 @@ export function distillPlaywrightFailure(message) {
   return `${firstLine} — ${reason}`;
 }
 
-export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout = DEFAULT_TIMEOUT, stepScreenshotDir = "" }) {
+export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout = DEFAULT_TIMEOUT, stepScreenshotDir = "", flowDir = "" }) {
   const raw = normalizeFlowStep(step);
   const action = raw.action;
   const target = substituteFlowValue(raw.target, vars);
@@ -353,6 +387,18 @@ export async function executeWebFlowStep({ page, step, vars = {}, defaultTimeout
       // A journey starting from an email link ("tap the sign-in link in your receipt") is just a
       // navigation on web — the one-time part of the link substitutes like any other target.
       await page.goto(target, { waitUntil: "domcontentloaded" });
+    } else if (action === "upload") {
+      // TM-1077: an admin "Import contacts" page (and certificate/newsletter uploads) starts
+      // with choosing a local file — the only way to replay that journey as a committed Flow
+      // from the start. The path is relative to the Flow file, not wherever `tapp run` happened
+      // to be invoked from, so a Flow stays correct wherever it's checked out.
+      const filePath = substituteFlowValue(String(raw.params.file ?? ""), vars);
+      if (!filePath) throw new Error("upload needs {field, file}");
+      const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(flowDir || process.cwd(), filePath);
+      if (!fs.existsSync(resolved)) throw new Error(`upload file not found: ${resolved}`);
+      const input = await locateFileInput(page, target);
+      if (!input) throw new Error(`could not find a file picker for ‘${target}’`);
+      await input.setInputFiles(resolved);
     } else if (action === "wait_for") {
       if (!await waitForScreen(page, target, timeout)) throw new Error(`‘${target}’ never appeared within ${timeout}ms${await visibleLabelsHint(page)}`);
     } else if (action === "wait") {
@@ -422,6 +468,9 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
   const declaredUrl = flow.url || (/^https?:\/\//i.test(flow.app || "") ? flow.app : "");
   const startUrl = urlIsFallback ? resolveGateFlowUrl(declaredUrl, url) : (url || declaredUrl);
   if (!startUrl) throw new Error("Web Flow needs `url:` (or an http(s) `app:` value)");
+  // TM-1077: an `upload:` step's file path is relative to the Flow file (stamped
+  // on it by loadFlowFile), not the directory `tapp run` happened to be invoked from.
+  const flowDir = flow.sourcePath ? path.dirname(flow.sourcePath) : process.cwd();
   if (logPath) fs.rmSync(logPath, { force: true });
   const setup = flow.setup || [];
   const teardown = flow.teardown || [];
@@ -474,7 +523,7 @@ export async function runWebFlow({ flow, url, logPath, screenshotDir, recordVide
           emit({action:"origin",target:"connected app",status:"fail",detail:"The workflow left the connected app origin. Authorize a supported sign-in route before continuing."});
           break;
         }
-        const outcome = await executeWebFlowStep({ page, step, vars, defaultTimeout: timeout, stepScreenshotDir: screenshotDir });
+        const outcome = await executeWebFlowStep({ page, step, vars, defaultTimeout: timeout, stepScreenshotDir: screenshotDir, flowDir });
         emit(outcome);
         if (outcome.status === "fail" && screenshotDir) {
           fs.mkdirSync(screenshotDir, { recursive: true });

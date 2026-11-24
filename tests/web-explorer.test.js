@@ -681,3 +681,38 @@ test("a browser that said nothing useful leaves the launch error alone (TM-909)"
   const original = new Error("boom");
   await assert.rejects(launchWebBrowser({ launch: async () => { throw original; } }, {}), (e) => e === original);
 });
+
+test("an approved browser endpoint is attached instead of launching one (TM-1023)", async () => {
+  const { launchWebBrowser, webBrowserLaunchOptions, approvedBrowserEndpoint } = await import("../mcp-server/src/web-explorer.js");
+  const chromium = { launch: async () => { throw new Error("must not launch"); }, connectOverCDP: async (url) => ({ attachedTo: url }) };
+  const got = await launchWebBrowser(chromium, {}, { TAPP_BROWSER_ENDPOINT: "http://127.0.0.1:9333" });
+  assert.deepEqual(got, { attachedTo: "http://127.0.0.1:9333" });
+  assert.equal(approvedBrowserEndpoint({}), null);
+  assert.throws(() => approvedBrowserEndpoint({ TAPP_BROWSER_ENDPOINT: "http://example.com:9333" }), /on this machine/);
+  assert.throws(() => approvedBrowserEndpoint({ TAPP_BROWSER_ENDPOINT: "nonsense" }), /not a URL/);
+  assert.throws(() => approvedBrowserEndpoint({ TAPP_BROWSER_ENDPOINT: "http://127.0.0.1:9333", TAPP_ENFORCE_PUBLIC_EGRESS: "1" }), /public egress/);
+  assert.equal(webBrowserLaunchOptions({ TAPP_BROWSER_EXECUTABLE: "/opt/chrome" }).executablePath, "/opt/chrome");
+  assert.equal("executablePath" in webBrowserLaunchOptions({}), false);
+});
+
+test("tapp attaches to an already-running browser and captures a loopback page (TM-1023)", async (t) => {
+  const { launchWebBrowser } = await import("../mcp-server/src/web-explorer.js");
+  const http = await import("node:http");
+  const { chromium } = await import("playwright");
+  const server = http.createServer((_q, r) => { r.setHeader("content-type", "text/html"); r.end("<h1>Loopback ok</h1>"); });
+  await new Promise((res) => server.listen(0, "127.0.0.1", res));
+  const port = 20000 + Math.floor(Math.random() * 20000);
+  let host;
+  try {
+    host = await chromium.launch({ args: [`--remote-debugging-port=${port}`] });
+  } catch { server.close(); t.skip("no browser can start here"); return; }
+  try {
+    const browser = await launchWebBrowser(chromium, {}, { TAPP_BROWSER_ENDPOINT: `http://127.0.0.1:${port}` });
+    const page = await (await browser.newContext()).newPage();
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    const png = await page.screenshot();
+    assert.ok(png.length > 100);
+    assert.equal(await page.locator("h1").innerText(), "Loopback ok");
+    await browser.close();
+  } finally { await host.close(); server.close(); }
+});

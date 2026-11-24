@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 // Node 20 has no assert.partialDeepStrictEqual.
 const includes = (actual, expected) => { for (const [key, value] of Object.entries(expected)) assert.deepEqual(actual[key], value, key); };
-import { classifyPrompt, narrate, narrateFinding, summarize } from "../browser/view-model.js";
+import { classifyPrompt, narrate, narrateFinding, summarize, parseConnectFragment } from "../browser/view-model.js";
 
 test.describe("prompt classification", () => {
   test("routes every kind of thing a person can point tapp at", () => {
@@ -44,4 +44,21 @@ test.describe("chat narration", () => {
     assert.match(summarize("explore-build", { headline: "Explored 6 screens", screensExplored: 6, actionsPerformed: 20, findings: [] }).text, /not a release decision/);
     assert.doesNotMatch(JSON.stringify(gate), /\b\d{2,3}\/100\b/);
   });
+});
+
+test("the person's own agent is told apart in the chat, and its turn is summarised without a verdict (ADR-0012)", () => {
+  assert.deepEqual(narrate({ phase: "agent", text: "Looking at the sign-in page." }), { kind: "agent", icon: "🤖", text: "Looking at the sign-in page." });
+  assert.deepEqual(narrate({ phase: "agent-tool", text: "tapp_look — url: http://localhost:3000/" }), { kind: "step", icon: "🛠️", text: "tapp_look — url: http://localhost:3000/" });
+  assert.deepEqual(narrate({ phase: "agent-warning", text: "Tool error: No booted simulator" }), { kind: "warning", icon: "⚠️", text: "Tool error: No booted simulator" });
+  assert.deepEqual(narrate({ phase: "agent-done", text: "The sign-in works." }), { kind: "agent", icon: "✅", text: "The sign-in works." });
+  assert.deepEqual(summarize("agent", { text: "The sign-in works.", turns: 3 }), { tone: "ready", pill: "✓ 3 turns", text: "The sign-in works." });
+  assert.deepEqual(summarize("agent", { text: "", turns: 1, isError: true }), { tone: "caution", pill: "Stopped", text: "Done." });
+});
+
+test("the runtime's address and secret arrive in the fragment, and only a loopback address with a real secret is believed (ADR-0011 §4)", () => {
+  assert.deepEqual(parseConnectFragment("#connect=http%3A%2F%2F127.0.0.1%3A4317&token=" + "a".repeat(32)), { origin: "http://127.0.0.1:4317", token: "a".repeat(32) });
+  assert.deepEqual(parseConnectFragment("connect=http://localhost:4317/&token=" + "b".repeat(43)), { origin: "http://localhost:4317", token: "b".repeat(43) });
+  assert.equal(parseConnectFragment("#connect=https://evil.example&token=" + "a".repeat(32)), null, "never a remote address");
+  assert.equal(parseConnectFragment("#connect=http://127.0.0.1:4317&token=short"), null);
+  assert.equal(parseConnectFragment(""), null);
 });

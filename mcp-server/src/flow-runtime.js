@@ -50,6 +50,7 @@ export const FLOW_ACTIONS = Object.freeze([
   { action: "screenshot", target: "a name for the picture", passes: "a viewport-sized picture was saved beside the run's evidence; web only" },
   { action: "back", target: "(none)", passes: "the platform back navigation was performed" },
   { action: "open_url", target: "a URL or deep link (myapp://claim?t=$TOKEN; $NAME substitutes like any other step)", passes: "the link was opened and the app under test came to the front (iOS/Android); on web, the page navigated there. Not supported on macOS" },
+  { action: "upload", target: "{field, file} — file is a local path, resolved relative to the Flow file", passes: "the file was chosen for that <input type=file>, including one hidden behind a styled label, and the page's change handler ran; web only" },
   { action: "wait", target: "milliseconds (fixed pause; prefer wait_for)", passes: "always" },
   { action: "wait_for", target: "label / text (+ per-step timeoutMs/timeout; flow-level timeoutMs sets the default)", passes: "the element appeared before the timeout" },
   { action: "assert_screen", target: "the detected SCREEN TITLE (navigation bar / heading), not arbitrary text", passes: "the current screen's title equals the target" },
@@ -109,6 +110,9 @@ export function validateFlowSteps(flow, platform = inferFlowPlatform(flow)) {
     }
     if (step.action === "type" && (!step.target.trim() || !("value" in (step.params || {})))) {
       errors.push(`step ${n}: type needs {field, value}`);
+    }
+    if (step.action === "upload" && (!step.target.trim() || !String(step.params.file ?? "").trim())) {
+      errors.push(`step ${n}: upload needs {field, file}`);
     }
     if (step.action === "assert_text" && (!step.target.trim() || !step.value)) {
       errors.push(`step ${n}: assert_text needs {of, contains}`);
@@ -175,7 +179,11 @@ export function loadFlowFile(flowPath, options = {}) {
   if (parsed.status !== 0) {
     throw new Error((parsed.stderr || parsed.stdout || "Could not parse Flow").trim());
   }
-  return compileFlowTasksFromRepository({ flow: JSON.parse(parsed.stdout), sourcePath: flowPath, ...options });
+  const compiled = compileFlowTasksFromRepository({ flow: JSON.parse(parsed.stdout), sourcePath: flowPath, ...options });
+  // TM-1077: an `upload:` step's file path is relative to the Flow file, not the
+  // process's cwd — carried on the flow object itself so every runner (web today;
+  // the vocabulary is shared) can resolve it without its own sourcePath parameter.
+  return { ...compiled, sourcePath: flowPath };
 }
 
 export class FlowLog {

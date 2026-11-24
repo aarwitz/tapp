@@ -87,3 +87,23 @@ test("a public Studio never promises a run its own rules will refuse", () => {
   // The same machine, run as somebody's own Studio, starts all three.
   assert.deepEqual(readyPlatforms({ ...publicMac, hosted: false }), ["web", "ios", "android", "macos"]);
 });
+
+test("the right machine missing one thing is told what to install, not to find another machine (ADR-0012)", () => {
+  const mac = platformStates({ hosted: false, platform: "darwin", toolchain: { ios: false, android: false, macos: false, web: true } });
+  const byId = Object.fromEntries(mac.map((entry) => [entry.id, entry]));
+  assert.equal(byId.ios.state, "needs-machine");
+  assert.equal(byId.ios.summary, "This Mac has no Xcode yet.");
+  assert.match(byId.ios.how, /Install Xcode from the App Store/);
+  assert.equal(byId.ios.command, "", "no command opens a Studio elsewhere when this machine is the right one");
+  assert.match(byId.macos.summary, /Accessibility permission/);
+  assert.match(byId.macos.how, /System Settings/);
+  assert.match(byId.android.summary, /Android SDK/);
+  assert.match(byId.android.how, /Android Studio/);
+  // The wrong kind of machine keeps the general answer: a Linux box is sent to a Mac.
+  const linux = platformStates({ hosted: false, platform: "linux", toolchain: { ios: false, android: false, macos: false, web: true } });
+  const ios = linux.find((entry) => entry.id === "ios");
+  assert.match(ios.summary, /not on a Mac with Xcode/);
+  assert.match(ios.command, /npx -y @aarwitz\/tapp@latest app/);
+  // And a hosted Studio never says "install Xcode" to a visitor: it is not their machine.
+  assert.doesNotMatch(platformStates({ hosted: true, platform: "darwin", toolchain: { ios: false, android: false, macos: false, web: true } }).find((e) => e.id === "ios").summary, /This Mac/);
+});

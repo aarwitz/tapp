@@ -1,9 +1,24 @@
 import { customerProductContract } from "./product-contract.js";
-import { classifyPrompt, coverageGraph, groupFindings, narrate, narrateFinding, operationIsPending, severityTally, summarize } from "./view-model.js";
+import { classifyPrompt, coverageGraph, groupFindings, narrate, narrateFinding, operationIsPending, severityTally, summarize, parseConnectFragment } from "./view-model.js";
 
 const API_BASE = String(document.querySelector('meta[name="tapp-api-base"]')?.content || "").replace(/\/$/, "");
 const LOGIN_URL = String(document.querySelector('meta[name="tapp-login-url"]')?.content || "");
+// app.runtapp.com driving the runtime on this person's machine (ADR-0011 §4, join B). The
+// runtime opened this page with its address and launch secret in the URL fragment; the page
+// keeps them in this browser only and talks to that address with the secret as a bearer.
+function loadConnection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("tapp.connect") || "null");
+    return saved && /^http:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(saved.origin) && /^[A-Za-z0-9_-]{20,}$/.test(saved.token || "") ? saved : null;
+  } catch { return null; }
+}
+function saveConnection(connection) {
+  try { if (connection) localStorage.setItem("tapp.connect", JSON.stringify(connection)); else localStorage.removeItem("tapp.connect"); } catch { /* fine */ }
+}
+
 function apiRoute(route) {
+  // A page that is not itself that runtime talks to it; the runtime's own page never loops back.
+  if (state.connection && state.connection.origin !== location.origin) return `${state.connection.origin}${route}`;
   if (!API_BASE) return route;
   if (route === "/api" || route.startsWith("/api/")) return `${API_BASE}${route.slice(4)}`;
   if (route === "/evidence" || route.startsWith("/evidence/")) return `${API_BASE}${route}`;
@@ -12,9 +27,17 @@ function apiRoute(route) {
 
 const state = {
   csrf: "", session: null, project: null, audits: [], explores: [], activeJob: null, activeView: "overview",
-  selectedTargetId: "", selectedRunId: "", live: { active:false }, transcript: [], transcriptSource: "", frameTimer: null, pendingInput: null,
+  selectedTargetId: "", selectedRunId: "", live: { active:false }, transcript: [], transcriptSource: "", transcriptKind: "", activeOperation: "", engines: null, setup: null, setupCollapsed: null, deviceAuthPoll: null, connection: null, connectionLost: null, frameTimer: null, pendingInput: null,
   chatCollapsed: false, shotScreens: new Set(), lastShotAt: 0,
 };
+{
+  // The runtime hands this page its address and secret in the fragment; keep them here, and take
+  // them off the address bar so a copied link carries no secret.
+  const fromHash = parseConnectFragment(location.hash);
+  if (fromHash) { saveConnection(fromHash); history.replaceState(null, "", location.pathname + location.search); }
+  state.connection = loadConnection();
+  if (state.connection && state.connection.origin === location.origin) state.connection = null;
+}
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[character]));
@@ -32,7 +55,8 @@ function toast(message, error = false) {
 
 async function api(route, options = {}) {
   const mutation = options.method && options.method !== "GET";
-  const headers = { ...(options.body !== undefined ? { "content-type":"application/json" } : {}), ...(mutation ? { "x-tapp-csrf":state.csrf } : {}), ...(options.headers || {}) };
+  const connected = state.connection && state.connection.origin !== location.origin;
+  const headers = { ...(options.body !== undefined ? { "content-type":"application/json" } : {}), ...(mutation ? { "x-tapp-csrf":state.csrf } : {}), ...(connected ? { authorization: `Bearer ${state.connection.token}` } : {}), ...(options.headers || {}) };
   const response = await fetch(apiRoute(route), { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 && LOGIN_URL) {
@@ -51,7 +75,14 @@ function captureId(report) {
   }
   return report?.capture?.id || "";
 }
-const captureUrl = (id, file = "report.html") => apiRoute(`/evidence/captures/${encodeURIComponent(id)}/${file}`);
+// An image or a report the page shows cannot carry a header, so when this page is driving a
+// runtime on the person's machine the launch secret rides on the query instead (ADR-0011 §4).
+const assetUrl = (route) => {
+  const base = apiRoute(route);
+  if (!state.connection) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}token=${encodeURIComponent(state.connection.token)}`;
+};
+const captureUrl = (id, file = "report.html") => assetUrl(`/evidence/captures/${encodeURIComponent(id)}/${file}`);
 function evidenceLink(id, label = "Open visual evidence") {
   return id ? `<a class="button-link" href="${esc(captureUrl(id))}" target="_blank" rel="noreferrer">${esc(label)}</a>` : "";
 }
@@ -167,11 +198,18 @@ function renderAccount() {
   const session = state.session || {};
   const isPublic = session.access === "anonymous" || session.access === "account";
   for (const slot of document.querySelectorAll("#account-slot, #account-slot-side")) {
+    if (state.connection) {
+      slot.classList.remove("hidden");
+      slot.innerHTML = `<span class="account-email" title="${esc(state.connection.origin)}">your machine</span><button type="button" data-disconnect-machine>Disconnect</button>`;
+      continue;
+    }
     slot.classList.toggle("hidden", !isPublic);
     if (!isPublic) continue;
+    // A visitor is not offered a sign-in button up front: the cloud is coming soon, and the way
+    // in for an account that already exists sits on that card (ADR-0011 §3).
     slot.innerHTML = session.access === "account"
       ? `<span class="account-email" title="${esc(session.email || "")}">${esc(session.email || "")}</span>${planPill(session.plan)}<button type="button" data-signout>Sign out</button>`
-      : `<button type="button" class="primary" data-signin>Sign in</button>`;
+      : "";
   }
   $("#signin-card")?.classList.toggle("hidden", session.access !== "anonymous" || !state.signInOpen);
   renderSignInOptions();
@@ -221,6 +259,7 @@ function applyAccessMode() {
   renderPlatformStrip();
   renderPlatforms();
   renderStudioLink();
+  renderSetup();
   if (session.access !== "anonymous" && session.access !== "account") return;
   const signedIn = session.access === "account";
   const accepts = new Set(session.accepts || ["url"]);
@@ -236,8 +275,11 @@ function applyAccessMode() {
     button.closest("li")?.classList.toggle("hidden", !usable);
   }
   $("#selfhost-card")?.classList.remove("hidden");
+  $("#cloud-card")?.classList.toggle("hidden", signedIn);
+  const lead = $("#selfhost-lead");
+  if (lead && state.connectionLost) lead.innerHTML = `<strong>Your machine stopped answering at ${esc(state.connectionLost.origin)}.</strong> Start the runtime again and this page connects to it; or open the address the command prints if this browser will not reach your machine.`;
   const input = $("#prompt-input");
-  if (input) input.placeholder = accepts.has("path") ? input.placeholder : "A website URL — https://…";
+  if (input && !accepts.has("path")) input.placeholder = "A business name or website URL…";
   // Everything that only means something against a source repository: a target to build, a
   // runner, a release gate, a decision. A hosted visitor auditing a URL has none of them, and
   // showing the empty frames makes a working run look like a broken one.
@@ -546,7 +588,7 @@ function refreshLiveFrame() {
   if (!image.naturalWidth) loading.classList.remove("hidden");
   image.onload = () => { loading.classList.add("hidden"); scheduleLiveFrame(); };
   image.onerror = () => { loading.textContent = "Live frame could not be captured. The semantic controls remain available."; scheduleLiveFrame(); };
-  image.src = apiRoute(`${source}?at=${Date.now()}`);
+  image.src = assetUrl(`${source}?at=${Date.now()}`);
 }
 function scheduleLiveFrame() { clearTimeout(state.frameTimer); if (frameSource()) state.frameTimer = setTimeout(refreshLiveFrame, 1500); }
 function stopLiveFrames() { clearTimeout(state.frameTimer); state.frameTimer = null; }
@@ -644,11 +686,94 @@ function renderStudioLink() {
   const link = state.session?.studioLink;
   body.innerHTML = link
     ? `<div class="link-state"><span class="journey-status passing">connected</span><span>${esc(link.email || "")} · <small>${esc(link.origin)}</small></span><button class="quiet" type="button" data-unlink-studio>Disconnect</button></div>`
-    : `<form class="link-form" id="link-form" autocomplete="off">
-        <input id="link-origin" name="origin" type="url" value="https://app.runtapp.com" aria-label="Studio URL" spellcheck="false">
-        <input id="link-token" name="token" type="password" placeholder="tapp_… — a token from your Studio, under “Your coding agent”" aria-label="Token" autocomplete="off" required>
-        <div class="ask-actions"><button class="primary" type="submit" id="link-connect">Connect</button><small>The token is kept on this machine only, readable by you.</small></div>
+    : linkFormMarkup();
+}
+
+function linkFormMarkup() {
+  return `<form class="link-form" data-link-form autocomplete="off">
+        <input name="origin" type="url" value="https://app.runtapp.com" aria-label="Studio URL" spellcheck="false">
+        <input name="token" type="password" placeholder="tapp_… — a token from your Studio, under “Your coding agent”" aria-label="Token" autocomplete="off" required>
+        <div class="ask-actions"><button class="primary" type="submit">Connect</button><small>The token is kept on this machine only, readable by you.</small></div>
       </form>`;
+}
+
+// ——— Setting this machine up (ADR-0012) ——————————————————————————————————————————————————
+// The journey's first screen on a local Studio: the runtime, the agent on your own plan, what
+// each target needs with the exact fix, and the account. Collapses to one line once ready.
+async function loadSetup() {
+  if (state.session?.mode !== "local") { state.setup = null; return; }
+  state.setup = await api("/api/setup").catch(() => null);
+  if (state.setup) state.engines = { engines: state.setup.engines, selected: state.setup.selected };
+}
+
+function setupEngine() {
+  return (state.setup?.engines || []).find((engine) => engine.id === state.setup?.selected) || null;
+}
+
+function renderSetup() {
+  const card = $("#setup-card");
+  if (!card) return;
+  const local = state.session?.mode === "local";
+  card.classList.toggle("hidden", !local);
+  if (!local) return;
+  const steps = $("#setup-steps");
+  const setup = state.setup;
+  if (!setup) { steps.innerHTML = '<li class="empty">Checking this machine…</li>'; return; }
+  const engine = setupEngine();
+  const agentOk = !!(engine?.usable && engine?.drives);
+  const readyTargets = (setup.targets || []).filter((t) => t.ready).map((t) => t.label);
+  let stored = null;
+  try { stored = localStorage.getItem("tapp.setupCollapsed"); } catch { /* fine */ }
+  const collapsed = state.setupCollapsed ?? (stored !== null ? stored === "1" : agentOk && readyTargets.length > 1);
+  card.classList.toggle("collapsed", collapsed);
+  $("#setup-toggle").textContent = collapsed ? "Show" : "Hide";
+  $("#setup-title").textContent = agentOk ? "This machine is ready" : "Set up tapp here";
+  const agentWord = !engine ? "no agent signed in" : engine.usable ? `${engine.label}${engine.billing === "plan" ? ` on your ${engine.account?.plan ? engine.account.plan[0].toUpperCase() + engine.account.plan.slice(1) : engine.plan} plan` : engine.billing === "api-key" ? " on an API key" : ""}` : `${engine.label} not signed in`;
+  $("#setup-sub").textContent = `${agentWord} · ${readyTargets.length ? `${readyTargets.join(", ")} ready` : "no target ready yet"} · ${setup.link ? `reports to ${setup.link.email || setup.link.origin}` : "not linked to an account"}`;
+
+  const mark = (ok, warn = false) => ok ? "✓" : warn ? "⚠️" : "○";
+  const pill = (e) => e.state === "ok" ? `<span class="journey-status passing">signed in</span>` : e.state === "warning" ? `<span class="journey-status warning">${esc(e.billing === "api-key" ? "API key" : "not signed in")}</span>` : `<span class="journey-status never">not installed</span>`;
+  const r = setup.runtime || {};
+  const runtimeIssue = r.pyyaml === false ? " Flow replay needs PyYAML: <code>python3 -m pip install pyyaml</code>." : r.disk?.level === "blocked" ? ` ${esc(r.disk.message || "Disk is full.")}` : "";
+  const runtime = `<li class="setup-step"><i>${mark(!runtimeIssue, true)}</i><div><h3>Runtime</h3><p>tapp v${esc(r.version || "")} · Node ${esc(r.node || "")}${r.python ? ` · ${esc(r.python)}` : ""}.${runtimeIssue}</p></div></li>`;
+
+  const claude = (setup.engines || []).find((e) => e.id === "claude");
+  const codex = (setup.engines || []).find((e) => e.id === "codex");
+  const engineRows = (setup.engines || []).map((e) => `<li class="engine-line"><span>${pill(e)}</span><span><strong>${esc(e.label)}</strong>${e.id === setup.selected && e.usable ? ' <small class="journey-status passing" style="display:inline">drives the chat</small>' : ""}<small>${esc(e.detail)}${e.fix ? ` ${esc(e.fix)}` : ""}${e.usable && !e.drives ? " Driving the chat from here comes next." : ""}</small>${e.usable && e.drives && e.id !== setup.selected ? `<button class="quiet" type="button" data-engine-select="${esc(e.id)}" style="margin-top:4px">Use</button>` : ""}</span></li>`).join("");
+  const codexSignIn = codex && codex.state !== "missing" && codex.billing !== "plan"
+    ? (setup.deviceAuth
+      ? `<div class="button-row"><span>1. Open <a href="${esc(setup.deviceAuth.url)}" target="_blank" rel="noreferrer">${esc(setup.deviceAuth.url)}</a> &nbsp; 2. Enter <code>${esc(setup.deviceAuth.code)}</code> — waiting for you to finish…</span><button class="quiet" type="button" data-codex-cancel>Cancel</button></div>`
+      : `<div class="button-row"><button class="quiet" type="button" data-codex-signin>Sign in with ChatGPT</button><small>You get a link and a code to finish on any device.</small></div>`)
+    : "";
+  const apiKey = setup.apiKey?.set
+    ? `<div class="button-row"><span>API key on file ${esc(setup.apiKey.hint)} — bills per use.</span><button class="quiet" type="button" data-apikey-forget>Forget</button></div>`
+    : `<form id="setup-apikey" autocomplete="off"><input name="key" type="password" placeholder="Or paste an Anthropic API key (sk-ant-…) — bills per use" aria-label="Anthropic API key" autocomplete="off" required><button class="quiet" type="submit">Save key</button></form>`;
+  const agent = `<li class="setup-step"><i>${mark(agentOk, !!claude && claude.state !== "missing")}</i><div><h3>Your agent</h3><p>tapp signs you in to nothing and holds no token: it drives the coding agent you already signed in to, on your own plan.</p><ul>${engineRows}</ul>${codexSignIn}${apiKey}</div></li>`;
+
+  const targets = `<li class="setup-step"><i>${mark(readyTargets.length > 1, readyTargets.length === 1)}</i><div><h3>What you'll test</h3><p>What this machine has for each kind of app, and the one thing to install when something is missing.</p><ul>${(setup.targets || []).map((t) => `<li><span>${mark(t.ready)}</span><span><strong>${esc(t.label)}</strong>${t.items.map((i) => `<small>${i.ok ? "✓" : "○"} ${esc(i.text)}${i.fix ? ` — ${esc(i.fix)}` : ""}</small>`).join("")}</span></li>`).join("")}</ul></div></li>`;
+
+  const account = `<li class="setup-step"><i>${mark(!!setup.link)}</i><div><h3>Your account <small>optional</small></h3><p>${setup.link ? `Journeys run here report to <strong>${esc(setup.link.email || setup.link.origin)}</strong>. <button class="quiet" type="button" data-unlink-studio>Disconnect</button>` : "Link this machine to your account on app.runtapp.com and journeys run here show up there with how they went. Nothing else leaves this machine."}</p>${setup.link ? "" : linkFormMarkup()}</div></li>`;
+  steps.innerHTML = runtime + agent + targets + account;
+}
+
+async function refreshSetup() {
+  await loadSetup();
+  renderSetup();
+  renderEngines();
+  renderChatPrompt();
+}
+
+// While a Codex device sign-in is open, look every few seconds for it to finish.
+function watchDeviceAuth() {
+  if (state.deviceAuthPoll) return;
+  state.deviceAuthPoll = setInterval(async () => {
+    await refreshSetup();
+    const codex = (state.setup?.engines || []).find((e) => e.id === "codex");
+    if (!state.setup?.deviceAuth || codex?.billing === "plan") {
+      clearInterval(state.deviceAuthPoll); state.deviceAuthPoll = null;
+      if (codex?.billing === "plan") toast("Codex is signed in with your ChatGPT plan.");
+    }
+  }, 3000);
 }
 
 function renderJourneys() {
@@ -1039,6 +1164,7 @@ function renderChat() {
   }).join("") + renderAskCard() + renderKeepCard() + (state.activeJob && !state.pendingInput ? '<div class="chat-line typing"><span class="chat-icon">✨</span><span>tapp is working<i>…</i></span></div>' : "");
   node.innerHTML = lines;
   if (stickToBottom) node.scrollTop = node.scrollHeight;
+  renderChatPrompt();
   const progress = [...state.transcript].reverse().find((entry) => entry.kind === "progress");
   $("#chat-status").textContent = state.activeJob ? (progress ? `${progress.current}/${progress.total} actions${progress.states != null ? ` · ${progress.states} screens` : ""}` : "working…") : state.transcript.length > 1 ? "done" : "ready";
 }
@@ -1084,6 +1210,54 @@ function setChatCollapsed(collapsed) {
 
 function pushLine(entry) { state.transcript.push({ at: new Date().toISOString(), ...entry }); }
 
+// ——— Your agent (ADR-0012) ———————————————————————————————————————————————————————————————————
+// The chat can ask the person's own coding agent — found on this machine, signed in to their own
+// plan — to drive tapp. Local only; nothing on a hosted Studio can reach a laptop.
+function selectedEngine() {
+  const engines = state.engines?.engines || [];
+  return engines.find((engine) => engine.id === state.engines?.selected) || null;
+}
+
+function renderChatPrompt() {
+  const form = $("#chat-prompt");
+  if (!form) return;
+  const engine = selectedEngine();
+  const local = state.session?.mode === "local";
+  form.classList.toggle("hidden", !(local && engine?.usable && engine?.drives));
+  const input = $("#chat-prompt-input");
+  const send = $("#chat-prompt-send");
+  const stop = $("#chat-prompt-stop");
+  const busy = !!state.activeJob;
+  if (input) input.disabled = busy;
+  if (send) send.disabled = busy;
+  if (stop) stop.classList.toggle("hidden", !(busy && state.activeOperation === "agent"));
+}
+
+async function loadEngines() {
+  if (state.session?.mode !== "local") { state.engines = null; return; }
+  state.engines = await api("/api/engines").catch(() => null);
+}
+
+function renderEngines() {
+  const panel = $("#engines-panel");
+  const node = $("#engines-list");
+  if (!panel || !node) return;
+  const local = state.session?.mode === "local";
+  panel.classList.toggle("hidden", !local);
+  if (!local) return;
+  const data = state.engines;
+  if (!data) { node.innerHTML = '<div class="empty">Checking this machine…</div>'; return; }
+  const pill = (engine) => engine.state === "ok" ? `<span class="journey-status passing">signed in</span>`
+    : engine.state === "warning" ? `<span class="journey-status warning">${esc(engine.billing === "api-key" ? "API key" : "not signed in")}</span>`
+    : `<span class="journey-status never">not installed</span>`;
+  node.innerHTML = data.engines.map((engine) => `<div class="engine-row">
+      <span>${pill(engine)}</span>
+      <span><strong>${esc(engine.label)}</strong>${engine.id === data.selected ? ' <small class="journey-status passing" style="display:inline">drives the chat</small>' : ""}<small>${esc(engine.detail)}${engine.fix ? ` ${esc(engine.fix)}` : ""}${engine.usable && !engine.drives ? " Driving the chat from here comes next; Claude Code drives it today." : ""}</small></span>
+      <span class="journey-actions">${engine.usable && engine.drives && engine.id !== data.selected ? `<button class="quiet" type="button" data-engine-select="${esc(engine.id)}">Use</button>` : ""}</span>
+    </div>`).join("");
+  renderChatPrompt();
+}
+
 // A screenshot the engine wrote during the run, kept as a thumbnail in the transcript. Captured
 // once per screen name the engine reports, and never more often than every few seconds.
 async function keepShot(screen) {
@@ -1105,15 +1279,22 @@ async function keepShot(screen) {
 
 function syncTranscriptFromJob(name, job) {
   if (state.transcriptSource !== job.id) {
-    state.transcript = [{ at: job.createdAt, kind: "phase", icon: "🚀", text: startLine(name, job) }];
+    // A run starts a fresh transcript. A chat turn with the agent is a conversation: the person's
+    // words go in as a line of their own, and an earlier turn in the same thread stays on screen.
+    const first = name === "agent"
+      ? { at: job.createdAt, kind: "you", icon: "🧑", text: job.input || "" }
+      : { at: job.createdAt, kind: "phase", icon: "🚀", text: startLine(name, job) };
+    if (name === "agent" && state.transcriptKind === "agent") state.transcript.push(first);
+    else state.transcript = [first];
+    state.transcriptKind = name === "agent" ? "agent" : "run";
     state.transcriptSource = job.id;
     state.shotScreens = new Set();
     state.lastShotAt = 0;
   }
-  const seen = state.transcript.filter((entry) => entry.source === "job").length;
+  const seen = state.transcript.filter((entry) => entry.source === job.id).length;
   for (const entry of job.progress.slice(seen)) {
     const line = narrate(entry, { platform: currentPlatform() });
-    state.transcript.push({ ...(line || { kind: "step", icon: "•", text: "" }), at: entry.at, source: "job" });
+    state.transcript.push({ ...(line || { kind: "step", icon: "•", text: "" }), at: entry.at, source: job.id });
     if (line && line.kind !== "progress") {
       const last = state.transcript.at(-2);
       if (last && last.text === line.text && last.kind !== "shots") state.transcript.splice(-1, 1);
@@ -1223,13 +1404,27 @@ function renderProject() {
 }
 
 async function refreshSession() {
-  state.session = await api("/api/session");
+  if (state.connection) {
+    try { state.session = await api("/api/session"); }
+    catch (error) {
+      // The machine stopped answering (the runtime was closed, or this browser will not reach
+      // loopback). Say so on the hosted page and carry on as a visitor; the saved connection is
+      // dropped so a reload does not loop on the same failure.
+      state.connectionLost = { origin: state.connection.origin, reason: error.message };
+      state.connection = null;
+      saveConnection(null);
+      state.session = await api("/api/session");
+    }
+  } else state.session = await api("/api/session");
   state.csrf = state.session.csrfToken;
   const local = state.session.mode === "local";
-  $("#mode-pill").textContent = local ? "Self-host · this machine" : "Cloud · outbound runner";
-  $("#onboarding-mode-pill").textContent = local ? "Self-host · this machine" : "Cloud";
+  $("#mode-pill").textContent = local ? (state.connection ? "Connected · your machine" : "Self-host · this machine") : "Cloud · outbound runner";
+  $("#onboarding-mode-pill").textContent = local ? (state.connection ? "Connected · your machine" : "Self-host · this machine") : "Cloud";
   $("#privacy-note-detail").textContent = local ? "Everything runs on this machine. Exploration, replay and merge decisions are deterministic and need no API key." : "Your repository stays in your private Tapp workspace.";
   applyAccessMode();
+  // The setup answer takes a few seconds the first time (doctor asks xcodebuild and adb), so it
+  // follows the session rather than holding it up.
+  if (local) refreshSetup().catch(() => {});
 }
 
 async function refresh() {
@@ -1255,8 +1450,9 @@ async function refresh() {
   state.live = live;
   state.audits = runs.audits || [];
   state.explores = runs.explores || [];
-  await loadJourneys();
+  await Promise.all([loadJourneys(), loadEngines()]);
   renderProject();
+  renderEngines();
 }
 
 async function runOperation(name, body = {}, { input = "" } = {}) {
@@ -1264,9 +1460,10 @@ async function runOperation(name, body = {}, { input = "" } = {}) {
   const started = await api(`/api/operations/${name}`, { method:"POST", body:JSON.stringify(body) });
   if (!started.job) return started; // synchronous answers (open a path, a business name)
   state.activeJob = started.job.id;
+  state.activeOperation = name;
   const drawer = $("#operation-drawer");
   drawer.classList.remove("hidden");
-  $("#operation-title").textContent = name === "audit" ? "Read-only audit" : pretty(name);
+  $("#operation-title").textContent = name === "audit" ? "Read-only audit" : name === "agent" ? "Your agent is on it" : pretty(name);
   $("#operation-progress").textContent = "Starting";
   $("#operation-progress-bar").style.width = "6%";
   syncTranscriptFromJob(name, { ...started.job, input });
@@ -1302,6 +1499,7 @@ async function runOperation(name, body = {}, { input = "" } = {}) {
   } finally {
     if (state.jobHasFrame) { state.jobHasFrame = false; await new Promise((resolve) => setTimeout(resolve, 200)); stopLiveFrames(); }
     state.activeJob = null;
+    state.activeOperation = "";
     try {
       await refreshSession();
       await refresh();
@@ -1339,13 +1537,39 @@ function answerSelfHost(answer) {
   toast(answer.message, true);
 }
 
-async function startFromPrompt(raw) {
+let businessRequest = 0;
+function clearBusinessResults() {
+  businessRequest++;
+  const panel = $("#business-results");
+  panel.replaceChildren();
+  panel.classList.add("hidden");
+  $("#business-hint").classList.toggle("hidden", classifyPrompt($("#prompt-input").value).kind !== "business");
+}
+$("#prompt-input").addEventListener("input", clearBusinessResults);
+
+async function searchBusiness(name) {
+  const request = ++businessRequest;
+  const panel = $("#business-results");
+  panel.textContent = "Searching the App Store…";
+  panel.classList.remove("hidden");
+  const result = await api("/api/operations/open", { method: "POST", body: JSON.stringify({ input: name, searchAppStore: true }) }).catch(() => ({
+    message: "Search could not finish. Enter a website or try again.", matches: [],
+  }));
+  if (request !== businessRequest) return;
+  panel.innerHTML = `<p>${esc(result.message)}</p>` + (result.matches || []).map(app =>
+    `<div class="business-match"><strong>${esc(app.name)}<small>${esc(app.publisher)}</small></strong><a href="${esc(app.listing)}" target="_blank" rel="noreferrer">App Store listing</a>${app.website ? `<button type="button" class="secondary" data-business-site="${esc(app.website)}">Audit ${esc(new URL(app.website).host)}</button>` : "<small>Publisher has no website listed.</small>"}</div>`
+  ).join("");
+}
+
+async function startFromPrompt(raw, { readOnly = false } = {}) {
   const prompt = classifyPrompt(raw);
   if (prompt.kind === "empty") return;
+  if (prompt.kind === "business") return searchBusiness(prompt.value);
+  clearBusinessResults();
   if (prompt.kind === "url") {
     // On your own machine, or signed in to a public Studio, a website is explored for real — it
     // can stop at a sign-in and ask you. A visitor only ever reads.
-    if (state.session?.mode === "local" || state.session?.access === "account") {
+    if (!readOnly && (state.session?.mode === "local" || state.session?.access === "account")) {
       state.promptRun = true; state.promptPlatform = "web";
       showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
       document.querySelector(".device-stage")?.classList.remove("hidden");
@@ -1368,7 +1592,7 @@ async function startFromPrompt(raw) {
     showProduct(); activateView("overview"); renderDeviceChrome(); renderChat();
     document.querySelector(".device-stage")?.classList.remove("hidden");
     if (state.session?.access !== "anonymous") document.querySelector(".summary-panel")?.classList.remove("hidden");
-    if (state.session?.access === "anonymous") setHeading("Website audit", "Read-only. Nothing on the page is clicked.", { owned: true });
+    setHeading("Website audit", "Read-only. Nothing on the page is clicked.", { owned: true });
     const result = await runOperation("audit", { url: prompt.value }, { input: prompt.value });
     state.selectedRunId = result?.capture?.id || state.selectedRunId;
     return;
@@ -1384,7 +1608,6 @@ async function startFromPrompt(raw) {
   showProduct(); activateView("overview"); renderChat();
   const answer = await runOperation("open", { input: prompt.value }, { input: prompt.value });
   if (answer?.kind === "self-host") { answerSelfHost(answer); return; }
-  if (answer?.kind === "business") { answerSelfHost({ message: answer.message }); return; }
   await refreshSession();
   await refresh();
   state.selectedTargetId = "";
@@ -1401,6 +1624,12 @@ async function auditWebsite(url) {
 }
 
 document.addEventListener("click", (event) => {
+  const site = event.target.closest("[data-business-site]");
+  if (site) {
+    $("#prompt-input").value = site.dataset.businessSite;
+    startFromPrompt(site.dataset.businessSite, { readOnly: true }).catch(error => toast(error.message, true));
+    return;
+  }
   const viewButton = event.target.closest("[data-view]");
   if (viewButton && $("#product-shell").contains(viewButton)) activateView(viewButton.dataset.view);
   // "What tapp can drive" is reachable from the first screen, before there is any project.
@@ -1418,8 +1647,39 @@ document.addEventListener("click", (event) => {
   if (runButton) { state.selectedRunId = runButton.dataset.runId; renderRuns(); }
   const suggestion = event.target.closest("[data-prompt]");
   if (suggestion) { const input = $("#prompt-input"); input.value = suggestion.dataset.prompt; input.focus(); input.select(); }
+  if (event.target.closest("[data-disconnect-machine]")) {
+    saveConnection(null); state.connection = null; location.replace(location.pathname);
+  }
+  if (event.target.closest("#chat-prompt-stop")) {
+    api("/api/operations/agent-stop", { method:"POST", body:"{}" }).then((r) => toast(r.stopped ? "Stopping the agent after this step." : "Nothing was running.")).catch((error) => toast(error.message, true));
+  }
+  const engineButton = event.target.closest("[data-engine-select]");
+  if (engineButton) {
+    api("/api/engines", { method:"POST", body: JSON.stringify({ engine: engineButton.dataset.engineSelect }) })
+      .then(async (data) => { state.engines = data; renderEngines(); toast(`${selectedEngine()?.label || "That agent"} drives the chat now.`); await refreshSetup(); })
+      .catch((error) => toast(error.message, true));
+  }
   if (event.target.closest("[data-unlink-studio]")) {
     api("/api/studio-link", { method:"DELETE" }).then(async () => { toast("Disconnected."); await refreshSession(); }).catch((error) => toast(error.message, true));
+  }
+  if (event.target.closest("#setup-refresh")) refreshSetup().then(() => toast("Checked again.")).catch((error) => toast(error.message, true));
+  if (event.target.closest("#setup-toggle")) {
+    state.setupCollapsed = !$("#setup-card").classList.contains("collapsed");
+    try { localStorage.setItem("tapp.setupCollapsed", state.setupCollapsed ? "1" : "0"); } catch { /* fine */ }
+    renderSetup();
+  }
+  if (event.target.closest("[data-apikey-forget]")) {
+    api("/api/engines/api-key", { method:"DELETE" }).then(async () => { toast("Key forgotten."); await refreshSetup(); }).catch((error) => toast(error.message, true));
+  }
+  if (event.target.closest("[data-codex-signin]")) {
+    api("/api/engines/codex/sign-in", { method:"POST", body:"{}" }).then(async (data) => {
+      if (data.alreadySignedIn) { toast("Codex is already signed in."); return; }
+      await refreshSetup();
+      watchDeviceAuth();
+    }).catch((error) => toast(error.message, true));
+  }
+  if (event.target.closest("[data-codex-cancel]")) {
+    api("/api/engines/codex/sign-in", { method:"DELETE" }).then(refreshSetup).catch((error) => toast(error.message, true));
   }
   const planButton = event.target.closest("[data-plan-account]");
   if (planButton) {
@@ -1442,13 +1702,47 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
-  const form = event.target.closest("#link-form");
+  const ask = event.target.closest("#chat-prompt");
+  if (ask) {
+    event.preventDefault();
+    const input = $("#chat-prompt-input");
+    const prompt = String(input?.value || "").trim();
+    if (!prompt || state.activeJob) return;
+    input.value = "";
+    setChatCollapsed(false);
+    runOperation("agent", { prompt, thread: "studio" }, { input: prompt }).catch((error) => toast(error.message, true));
+    return;
+  }
+  const cloudForm = event.target.closest("#cloud-interest");
+  if (cloudForm) {
+    event.preventDefault();
+    try {
+      await api("/api/cloud/interest", { method:"POST", body: JSON.stringify({ email: cloudForm.elements.email?.value || "" }) });
+      cloudForm.classList.add("hidden");
+      const sent = $("#cloud-sent"); if (sent) { sent.textContent = "Noted — we will write when the cloud opens."; sent.classList.remove("hidden"); }
+    } catch (error) { toast(error.message, true); }
+    return;
+  }
+  const keyForm = event.target.closest("#setup-apikey");
+  if (keyForm) {
+    event.preventDefault();
+    const button = keyForm.querySelector("button");
+    if (button) button.disabled = true;
+    try {
+      await api("/api/engines/api-key", { method:"POST", body: JSON.stringify({ key: keyForm.elements.key?.value || "" }) });
+      toast("Key saved on this machine. It bills per use.");
+      await refreshSetup();
+    } catch (error) { toast(error.message, true); }
+    finally { if (button) button.disabled = false; }
+    return;
+  }
+  const form = event.target.closest("form[data-link-form]");
   if (!form) return;
   event.preventDefault();
-  const button = $("#link-connect");
+  const button = form.querySelector("button[type=submit]");
   if (button) button.disabled = true;
   try {
-    await api("/api/studio-link", { method:"POST", body: JSON.stringify({ origin: $("#link-origin")?.value || "", token: $("#link-token")?.value || "" }) });
+    await api("/api/studio-link", { method:"POST", body: JSON.stringify({ origin: form.elements.origin?.value || "", token: form.elements.token?.value || "" }) });
     toast("Connected. Journeys run here will report to your account.");
     await refreshSession();
   } catch (error) { toast(error.message, true); }
@@ -1570,6 +1864,7 @@ try {
   if (handoff) {
     const input = $("#prompt-input");
     if (input) input.value = handoff;
-    await startFromPrompt(handoff);
+    if (classifyPrompt(handoff).kind === "business") { showPrompt(); clearBusinessResults(); }
+    else await startFromPrompt(handoff);
   }
 } catch (error) { toast(error.message, true); }

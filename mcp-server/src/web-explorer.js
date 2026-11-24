@@ -552,7 +552,28 @@ export function browserStartupReason(lines) {
   return reasons.slice(0, 5);
 }
 
-export async function launchWebBrowser(chromium, options) {
+// An approved browser environment for runs where the browser tapp would start itself is not allowed
+// to start (a restricted macOS runner kills Chromium with SIGTRAP at its Mach-port check-in).
+//   TAPP_BROWSER_ENDPOINT    http(s)/ws URL on this machine of a Chromium that something outside the
+//                            restriction already started with --remote-debugging-port; tapp attaches.
+//   TAPP_BROWSER_EXECUTABLE  path of an approved Chromium/Chrome binary tapp starts instead of its own.
+export function approvedBrowserEndpoint(environment = process.env) {
+  const raw = String(environment.TAPP_BROWSER_ENDPOINT || "").trim();
+  if (!raw) return null;
+  let url;
+  try { url = new URL(raw); } catch { throw new Error("TAPP_BROWSER_ENDPOINT is not a URL"); }
+  if (!/^(https?|wss?):$/.test(url.protocol) || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
+    throw new Error("TAPP_BROWSER_ENDPOINT must be a http or ws URL on this machine (127.0.0.1 or localhost)");
+  }
+  if (environment.TAPP_ENFORCE_PUBLIC_EGRESS === "1") {
+    throw new Error("TAPP_BROWSER_ENDPOINT cannot be used under the public egress policy: tapp cannot enforce the proxy on a browser it did not start");
+  }
+  return raw;
+}
+
+export async function launchWebBrowser(chromium, options, environment = process.env) {
+  const endpoint = approvedBrowserEndpoint(environment);
+  if (endpoint) return await chromium.connectOverCDP(endpoint);
   const lines = [];
   const logger = {
     isEnabled: (name) => name === "browser",
@@ -577,8 +598,10 @@ export function webBrowserLaunchOptions(environment = process.env, { watch = fal
   if (environment.TAPP_ENFORCE_PUBLIC_EGRESS === "1" && !/^http:\/\/127\.0\.0\.1:\d+$/.test(browserProxy)) {
     throw new Error("public egress policy proxy is required");
   }
+  const executable = String(environment.TAPP_BROWSER_EXECUTABLE || "").trim();
   return {
     headless: !watch,
+    ...(executable ? { executablePath: executable } : {}),
     ...(watch ? { slowMo: 200 } : {}),
     ...(browserProxy ? { proxy: { server: browserProxy, bypass: "<-loopback>" } } : {}),
     args: browserProxy ? [

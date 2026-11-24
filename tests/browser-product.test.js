@@ -3,7 +3,59 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { normalizeInteractiveElements, startBrowserProduct, dueJourneys, journeySignInPlan } from "../mcp-server/src/browser-product.js";
+import http from "node:http";
+import { normalizeInteractiveElements, startBrowserProduct, dueJourneys, journeySignInPlan, withAuditPageUrls, serveFile } from "../mcp-server/src/browser-product.js";
+import { discoverApps } from "../mcp-server/src/app-store-discovery.js";
+
+test("published video can be played, measured and seeked", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-film-"));
+  const file = path.join(root, "demo.mp4");
+  fs.writeFileSync(file, "0123456789");
+  const server = http.createServer((req, res) => serveFile(res, file, { request: req }));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => {
+    await new Promise(resolve => server.close(resolve));
+    fs.rmSync(root, { recursive: true });
+  });
+  const url = `http://127.0.0.1:${server.address().port}/demo.mp4`;
+  const head = await fetch(url, { method: "HEAD" });
+  assert.equal(head.headers.get("content-type"), "video/mp4");
+  assert.equal(head.headers.get("content-length"), "10");
+  assert.equal(head.headers.get("accept-ranges"), "bytes");
+  for (const [range, expected] of [["0-1","01"], ["7-","789"], ["-2","89"], ["8-99","89"]]) {
+    const part = await fetch(url, { headers: { range: "bytes=" + range } });
+    assert.equal(part.status, 206);
+    assert.equal(await part.text(), expected);
+  }
+  const invalid = await fetch(url, { headers: { range: "bytes=10-" } });
+  assert.equal(invalid.status, 416);
+  assert.equal(invalid.headers.get("content-range"), "bytes */10");
+});
+
+test("hosted findings label verified page paths without interpreting file paths as URLs", () => {
+  const url = "https://sample.example/services?type=1";
+  const finding = { pages: ["/services?type=1", "/private/run.html"], evidence: "/private/capture.png" };
+  const audit = withAuditPageUrls({ pages: [{ url, findings: [{ screen: "/services?type=1" }] }], observations: [finding] });
+  assert.deepEqual(audit.observations[0], { pages: [url, "/private/run.html"], evidence: finding.evidence });
+  assert.equal(audit.pages[0].findings[0].screen, url);
+});
+
+test("a business name returns matching publishers and usable website choices", async (t) => {
+  const catalog = t.mock.method(globalThis, "fetch", async url => {
+    assert.equal(url.origin, "https://itunes.apple.com");
+    assert.equal(url.searchParams.get("term"), "Studio Sample");
+    return Response.json({ results: [
+      { trackId: 12, trackName: "Studio Sample", sellerName: "First", sellerUrl: "https://sample.example" },
+      { trackId: 13, trackName: "Studio Sample Photos", sellerName: "Second", sellerUrl: "javascript:alert(1)" },
+      { trackId: 14, trackName: "Other", sellerUrl: "https://other.example" },
+    ] });
+  });
+  const result = await discoverApps("Studio Sample");
+  assert.deepEqual(result.matches.map(app => app.website), ["https://sample.example/", ""]);
+  assert.equal(result.matches[0].listing, "https://apps.apple.com/us/app/id12");
+  assert.deepEqual(await discoverApps("studio sample"), result);
+  assert.equal(catalog.mock.callCount(), 1);
+});
 
 function cookieFrom(response) {
   return response.headers.get("set-cookie").split(";", 1)[0];
@@ -931,6 +983,262 @@ test("“Continue with Google” signs in on our own page, and a callback cannot
     for (const [key, value] of [["TAPP_HOME", previous.home], ["TAPP_OAUTH_GOOGLE_CLIENT_ID", previous.id], ["TAPP_OAUTH_GOOGLE_CLIENT_SECRET", previous.secret]]) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
+  }
+});
+
+test("the chat drives the person's own Claude Code, on their plan, with tapp's tools and no shell (ADR-0012)", async () => {
+  // A machine with a stub `claude`: `auth status` answers like the real one, and a prompt run
+  // prints the event stream — echoing its own arguments, so the test can see what it was given.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-agent-home-"));
+  const bin = path.join(home, "bin");
+  fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "claude"), `#!${process.execPath}
+const a = process.argv.slice(2);
+if (a[0] === "auth") { console.log(JSON.stringify({ loggedIn: true, authMethod: "claude.ai", email: "o@example.test", subscriptionType: "max" })); process.exit(0); }
+const resumed = a.includes("--resume") ? a[a.indexOf("--resume") + 1] : "";
+console.log(JSON.stringify({ type: "system", subtype: "init", session_id: resumed || "sess-1" }));
+console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "ARGS " + JSON.stringify(a) }, { type: "tool_use", name: "mcp__tapp__tapp_look", input: { url: "http://127.0.0.1:1/" } }] } }));
+console.log(JSON.stringify({ type: "result", subtype: "success", session_id: resumed || "sess-1", result: resumed ? "Still fine." : "All good.", num_turns: 2, total_cost_usd: 0.01, is_error: false }));
+`, { mode: 0o755 });
+  const previous = { home: process.env.TAPP_HOME, path: process.env.PATH };
+  process.env.TAPP_HOME = home;
+  process.env.PATH = `${bin}${path.delimiter}${process.env.PATH || ""}`;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-agent-proj-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>x</h1>");
+  const product = await startBrowserProduct({ projectDir: root, port: 0, launch: false });
+  try {
+    assert.equal((await fetch(`${product.origin}/api/engines`)).status, 401, "a stranger is not told what is installed here");
+    const cookie = cookieFrom(await fetch(product.launchUrl, { redirect: "manual" }));
+    const session = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const call = (pathname, init = {}) => fetch(`${product.origin}${pathname}`, { ...init, headers: { cookie, origin: product.origin, "x-tapp-csrf": session.csrfToken, "content-type": "application/json", ...(init.headers || {}) } });
+
+    const engines = await (await call("/api/engines")).json();
+    assert.equal(engines.selected, "claude");
+    const claude = engines.engines.find((e) => e.id === "claude");
+    assert.equal(claude.state, "ok");
+    assert.equal(claude.detail, "Claude Max plan · o@example.test");
+    // Codex and Gemini are reported from the real machine (a well-known install dir, not only
+    // PATH), so their state here depends on the machine; only the shape is asserted.
+    assert.ok(["ok", "warning", "missing"].includes(engines.engines.find((e) => e.id === "codex").state));
+
+    const wait = async (id) => { for (;;) { const job = await (await call(`/api/jobs/${id}`)).json(); if (job.status !== "running") return job; await new Promise((r) => setTimeout(r, 50)); } };
+    const started = await call("/api/operations/agent", { method: "POST", body: JSON.stringify({ prompt: "Check the sign-in", thread: "studio" }) });
+    assert.equal(started.status, 202);
+    const job = await wait((await started.json()).job.id);
+    assert.equal(job.status, "completed", JSON.stringify(job.error));
+    const texts = job.progress.map((p) => p.text);
+    assert.ok(texts.includes("Claude Code is on it."));
+    assert.ok(texts.some((t) => t === "tapp_look — url: http://127.0.0.1:1/"), "the tool it reached for, in tapp's words");
+    const args = JSON.parse(texts.find((t) => t.startsWith("ARGS ")).slice(5));
+    assert.deepEqual(args.slice(0, 2), ["-p", "Check the sign-in"]);
+    assert.equal(args[args.indexOf("--disallowedTools") + 1].includes("Bash"), true, "no shell");
+    assert.equal(args[args.indexOf("--allowedTools") + 1].startsWith("mcp__tapp"), true, "tapp's tools");
+    assert.match(args[args.indexOf("--mcp-config") + 1], /bin\/tapp\.js/, "the MCP server is this package");
+    assert.match(fs.readFileSync(args[args.indexOf("--append-system-prompt-file") + 1], "utf8"), /# Tapp[\s\S]*You are in the tapp Studio/, "the skill plus the Studio's own note");
+    assert.equal(args.includes("--resume"), false, "a new thread");
+    assert.equal(job.result.sessionId, "sess-1");
+    assert.equal(job.result.text, "All good.");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, "agent", "threads.json"), "utf8")), { studio: "sess-1" });
+
+    // The same thread continues the same session.
+    const again = await wait((await (await call("/api/operations/agent", { method: "POST", body: JSON.stringify({ prompt: "And the checkout?" }) })).json()).job.id);
+    const argsAgain = JSON.parse(again.progress.map((p) => p.text).find((t) => t.startsWith("ARGS ")).slice(5));
+    assert.equal(argsAgain[argsAgain.indexOf("--resume") + 1], "sess-1");
+    assert.equal(again.result.text, "Still fine.");
+
+    // Nothing running: stop is a no-op, said plainly. An engine that cannot drive is refused with the reason.
+    assert.deepEqual(await (await call("/api/operations/agent-stop", { method: "POST", body: "{}" })).json(), { ok: true, stopped: false });
+    assert.equal((await call("/api/engines", { method: "POST", body: JSON.stringify({ engine: "codex" }) })).status, 200);
+    const refused = await call("/api/operations/agent", { method: "POST", body: JSON.stringify({ prompt: "x" }) });
+    assert.equal(refused.status, 400);
+    assert.match((await refused.json()).error, /Codex/, "the reason names the engine: not installed, not signed in, or not driving yet");
+    assert.equal((await call("/api/engines", { method: "POST", body: JSON.stringify({ engine: "toaster" }) })).status, 400);
+    await call("/api/engines", { method: "POST", body: JSON.stringify({ engine: "claude" }) });
+    assert.equal((await call("/api/operations/agent", { method: "POST", body: JSON.stringify({ prompt: "" }) })).status, 400, "an empty ask is refused");
+  } finally {
+    await product.close();
+    process.env.PATH = previous.path;
+    if (previous.home === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous.home;
+  }
+});
+
+test("setting this machine up: the runtime, the agent (plan, key, or a Codex device sign-in), what each target needs, the account (ADR-0012)", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-setup-home-"));
+  const bin = path.join(home, "bin");
+  fs.mkdirSync(bin);
+  // Claude Code installed but signed out; Codex installed, signed out, offering a device sign-in.
+  fs.writeFileSync(path.join(bin, "claude"), `#!${process.execPath}
+if (process.argv[2] === "auth") { console.log(JSON.stringify({ loggedIn: false })); process.exit(0); }
+console.log(JSON.stringify({ type: "result", subtype: "success", session_id: "k1", result: "ran on the key", num_turns: 1, is_error: false }));
+`, { mode: 0o755 });
+  fs.writeFileSync(path.join(bin, "codex"), `#!${process.execPath}
+const a = process.argv.slice(2);
+if (a[0] === "login" && a[1] === "status") { console.log("Not logged in"); process.exit(0); }
+if (a[0] === "login" && a[1] === "--device-auth") {
+  process.stdout.write("\\u001b[90mFollow these steps to sign in with ChatGPT using device code authorization:\\u001b[0m\\n1. Open this link in your browser and sign in to your account\\n   \\u001b[94mhttps://auth.openai.com/codex/device\\u001b[0m\\n2. Enter this one-time code (expires in 15 minutes)\\n   \\u001b[94mQ7MX-H2KPL\\u001b[0m\\n");
+  process.on("SIGINT", () => process.exit(130));
+  setTimeout(() => {}, 60000);
+}
+`, { mode: 0o755 });
+  const previous = { home: process.env.TAPP_HOME, path: process.env.PATH, key: process.env.ANTHROPIC_API_KEY };
+  process.env.TAPP_HOME = home;
+  process.env.PATH = `${bin}${path.delimiter}${process.env.PATH || ""}`;
+  delete process.env.ANTHROPIC_API_KEY;
+  const report = { version: "0.35.8", node: { ok: true, version: "22.0.0" }, python3: { ok: true, version: "Python 3.12.1" }, pyyaml: { ok: true }, disk: { level: "ok", message: "40 GiB free" },
+    platforms: { ios: { available: true, xcode: "Xcode 26.4", bootedSimulator: "" }, macos: { available: false, accessibility: false }, android: { adb: false, devicesConnected: 0 }, web: { available: true } } };
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-setup-proj-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>x</h1>");
+  const product = await startBrowserProduct({ projectDir: root, port: 0, launch: false, doctor: async () => report, apiKeyVerifier: async (key) => key.endsWith("GOOD") });
+  try {
+    assert.equal((await fetch(`${product.origin}/api/setup`)).status, 401);
+    const cookie = cookieFrom(await fetch(product.launchUrl, { redirect: "manual" }));
+    const session = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const call = (pathname, init = {}) => fetch(`${product.origin}${pathname}`, { ...init, headers: { cookie, origin: product.origin, "x-tapp-csrf": session.csrfToken, "content-type": "application/json", ...(init.headers || {}) } });
+
+    let setup = await (await call("/api/setup")).json();
+    assert.equal(setup.runtime.version, "0.35.8");
+    assert.equal(setup.runtime.node, "22.0.0");
+    assert.deepEqual(setup.targets.map((t) => t.id), ["web", "ios", "android", "macos", "windows"]);
+    assert.equal(setup.targets[0].ready, true, "web needs nothing the person has to do");
+    const android = setup.targets.find((t) => t.id === "android");
+    assert.equal(android.ready, false);
+    assert.match(android.items[0].fix, /Android Studio/);
+    const ios = setup.targets.find((t) => t.id === "ios");
+    if (process.platform === "darwin") {
+      assert.equal(ios.items[0].ok, true, "Xcode is there");
+      assert.equal(ios.items[0].text, "Xcode 26.4");
+      assert.equal(ios.items[1].ok, false);
+      assert.match(ios.items[1].fix, /boots one when a run needs it/);
+    } else {
+      assert.match(ios.items[0].text, /runs on a Mac/);
+    }
+    const claude = setup.engines.find((e) => e.id === "claude");
+    assert.equal(claude.usable, false, "signed out, no key: nothing drives the chat yet");
+    assert.equal(setup.apiKey.set, false);
+    assert.equal(setup.deviceAuth, null);
+    assert.equal(setup.link, null);
+
+    // An API key is the fallback brain: checked with Anthropic, kept on this machine, shown by its tail.
+    assert.equal((await call("/api/engines/api-key", { method: "POST", body: JSON.stringify({ key: "nope" }) })).status, 400);
+    assert.equal((await call("/api/engines/api-key", { method: "POST", body: JSON.stringify({ key: "sk-ant-" + "x".repeat(30) + "BAD" }) })).status, 400, "Anthropic refused it");
+    const saved = await call("/api/engines/api-key", { method: "POST", body: JSON.stringify({ key: "sk-ant-" + "x".repeat(30) + "GOOD" }) });
+    assert.equal(saved.status, 200);
+    assert.deepEqual((await saved.json()).apiKey, { set: true, hint: "…GOOD" });
+    assert.equal((fs.statSync(path.join(home, "agent", "anthropic-api-key")).mode & 0o777), 0o600);
+    assert.equal(process.env.ANTHROPIC_API_KEY, "sk-ant-" + "x".repeat(30) + "GOOD", "tapp's own model features see it");
+    setup = await (await call("/api/setup")).json();
+    const onKey = setup.engines.find((e) => e.id === "claude");
+    assert.equal(onKey.usable, true);
+    assert.equal(onKey.billing, "api-key");
+    assert.match(onKey.detail, /bills per use/);
+    // And the chat runs Claude Code on that key.
+    const started = await (await call("/api/operations/agent", { method: "POST", body: JSON.stringify({ prompt: "hi" }) })).json();
+    let job; for (;;) { job = await (await call(`/api/jobs/${started.job.id}`)).json(); if (job.status !== "running") break; await new Promise((r) => setTimeout(r, 50)); }
+    assert.equal(job.result?.text, "ran on the key", JSON.stringify(job.error));
+    assert.equal((await call("/api/engines/api-key", { method: "DELETE" })).status, 200);
+    assert.equal(process.env.ANTHROPIC_API_KEY, undefined);
+    assert.equal((await (await call("/api/setup")).json()).apiKey.set, false);
+
+    // Codex: a device sign-in shows the link and the code, waits, and can be cancelled.
+    const device = await (await call("/api/engines/codex/sign-in", { method: "POST", body: "{}" })).json();
+    assert.deepEqual({ url: device.url, code: device.code }, { url: "https://auth.openai.com/codex/device", code: "Q7MX-H2KPL" }, JSON.stringify(device));
+    setup = await (await call("/api/setup")).json();
+    assert.equal(setup.deviceAuth.code, "Q7MX-H2KPL");
+    assert.equal((await call("/api/engines/codex/sign-in", { method: "DELETE" })).status, 200);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal((await (await call("/api/setup")).json()).deviceAuth, null);
+  } finally {
+    await product.close();
+    process.env.PATH = previous.path;
+    if (previous.home === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previous.home;
+    if (previous.key === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = previous.key;
+  }
+});
+
+test("a hosted page drives the runtime on the person's machine: one origin, a bearer, the secret on images, nothing else (ADR-0011 §4)", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-connect-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-connect-proj-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>x</h1>");
+  const studio = "https://app.runtapp.com";
+  const product = await startBrowserProduct({ projectDir: root, port: 0, launch: false, connectOrigin: studio });
+  try {
+    const token = new URL(product.launchUrl).searchParams.get("token");
+    assert.equal(product.connectUrl, `${studio}/#connect=${encodeURIComponent(product.origin)}&token=${encodeURIComponent(token)}`, "the secret travels in the fragment, which a browser never sends");
+
+    // The browser asks first; the answer names the one origin and allows the local-network hop.
+    const preflight = await fetch(`${product.origin}/api/session`, { method: "OPTIONS", headers: { origin: studio, "access-control-request-method": "GET" } });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), studio);
+    assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
+    assert.match(preflight.headers.get("access-control-allow-headers"), /authorization/);
+    const other = await fetch(`${product.origin}/api/session`, { method: "OPTIONS", headers: { origin: "https://evil.example", "access-control-request-method": "GET" } });
+    assert.equal(other.headers.get("access-control-allow-origin"), null, "any other origin is told nothing");
+
+    // The launch secret as a bearer is the operator; without it the page is a stranger.
+    assert.equal((await fetch(`${product.origin}/api/session`, { headers: { origin: studio } })).status, 401);
+    const session = await fetch(`${product.origin}/api/session`, { headers: { origin: studio, authorization: `Bearer ${token}` } });
+    assert.equal(session.status, 200);
+    assert.equal(session.headers.get("access-control-allow-origin"), studio);
+    const body = await session.json();
+    assert.equal(body.mode, "local");
+    assert.equal(body.connectOrigin, studio);
+    assert.equal((await fetch(`${product.origin}/api/session`, { headers: { origin: studio, authorization: "Bearer " + "x".repeat(43) } })).status, 401);
+
+    // A mutation from the hosted page still needs the CSRF token it was given.
+    const post = (headers) => fetch(`${product.origin}/api/engines`, { method: "POST", headers: { origin: studio, authorization: `Bearer ${token}`, "content-type": "application/json", ...headers }, body: JSON.stringify({ engine: "claude" }) });
+    assert.equal((await post({})).status, 403);
+    assert.notEqual((await post({ "x-tapp-csrf": body.csrfToken })).status, 403);
+
+    // An image cannot send a header: the secret rides on the query, for GET only, and the
+    // bootstrap redirect no longer swallows it on any path but "/".
+    fs.mkdirSync(path.join(home, "captures", "web-audit-planted"), { recursive: true });
+    fs.writeFileSync(path.join(home, "captures", "web-audit-planted", "report.html"), "<h1>evidence</h1>");
+    const image = await fetch(`${product.origin}/evidence/captures/web-audit-planted/report.html?token=${encodeURIComponent(token)}`, { redirect: "manual" });
+    assert.equal(image.status, 200);
+    assert.equal((await fetch(`${product.origin}/evidence/captures/web-audit-planted/report.html`, { redirect: "manual" })).status, 401);
+    assert.equal((await fetch(`${product.origin}/?token=${encodeURIComponent(token)}`, { redirect: "manual" })).status, 303, "the page bootstrap still sets its cookie");
+    // A local Studio's own page never allows loopback fetches from elsewhere.
+    const csp = (await fetch(product.launchUrl, { redirect: "manual" })).headers.get("content-security-policy");
+    assert.doesNotMatch(csp, /127\.0\.0\.1/);
+  } finally {
+    await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+
+  // Without --connect, a bearer is not an operator and no origin gets CORS: the surface is closed.
+  const plain = await startBrowserProduct({ projectDir: root, port: 0, launch: false });
+  try {
+    const token = new URL(plain.launchUrl).searchParams.get("token");
+    assert.equal(plain.connectUrl, "");
+    assert.equal((await fetch(`${plain.origin}/api/session`, { headers: { origin: studio, authorization: `Bearer ${token}` } })).status, 401);
+    assert.equal((await fetch(`${plain.origin}/api/session`, { method: "OPTIONS", headers: { origin: studio } })).headers.get("access-control-allow-origin"), null);
+  } finally { await plain.close(); }
+});
+
+test("the hosted page may reach a runtime on the viewer's machine, and a visitor may leave an address for the cloud", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-cloud-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home;
+  const product = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-cloud-ws-")) });
+  try {
+    const page = await fetch(`${product.origin}/`);
+    const csp = page.headers.get("content-security-policy");
+    assert.match(csp, /connect-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\*/);
+    assert.match(csp, /img-src 'self' data: blob: http:\/\/127\.0\.0\.1:\*/);
+    const cookie = page.headers.get("set-cookie").split(";")[0];
+    const session = await (await fetch(`${product.origin}/api/session`, { headers: { cookie } })).json();
+    const ask = (email) => fetch(`${product.origin}/api/cloud/interest`, { method: "POST", headers: { cookie, origin: "https://app.runtapp.com", "x-tapp-csrf": session.csrfToken, "content-type": "application/json" }, body: JSON.stringify({ email }) });
+    assert.equal((await ask("not an address")).status, 400);
+    assert.equal((await ask("Owner@Example.test")).status, 200);
+    const lines = fs.readFileSync(path.join(home, "cloud-interest.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].email, "owner@example.test");
+    assert.equal(lines[0].visitor, undefined, "an address and a date; nothing that identifies the browser");
+  } finally {
+    await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
   }
 });
 

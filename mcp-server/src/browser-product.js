@@ -24,8 +24,10 @@ import { accessConfig, createAccessVerifier } from "./access-jwt.js";
 import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider } from "./oauth.js";
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 import { AlertStore, alertForChange, alertMessage, deliverAlert } from "./alerts.js";
+import { ENGINES, detectEngines, claudeArguments, agentLines, runClaude, tappMcpConfig } from "./engines.js";
 import { platformStates, selfHostAnswer, PLATFORM_TARGETS, hostToolchain } from "./platforms.js";
 import { isMacosAppBundle } from "./macos-driver.js";
+import { discoverApps } from "./app-store-discovery.js";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const assetRoot = path.join(packageRoot, "browser");
@@ -36,7 +38,7 @@ const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"], [".html", "text/html; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"], [".json", "application/json; charset=utf-8"],
   [".png", "image/png"], [".jpg", "image/jpeg"], [".jpeg", "image/jpeg"],
-  [".webm", "video/webm"], [".mov", "video/quicktime"], [".svg", "image/svg+xml"],
+  [".webm", "video/webm"], [".mp4", "video/mp4"], [".mov", "video/quicktime"], [".svg", "image/svg+xml"],
 ]);
 
 function sameSecret(left, right) {
@@ -75,16 +77,39 @@ function readJsonBody(request) {
   });
 }
 
-function serveFile(response, file, { inline = true } = {}) {
-  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) { response.writeHead(404); response.end("Not found"); return; }
+export function serveFile(response, file, { inline = true, request } = {}) {
+  const stat = fs.statSync(file, { throwIfNoEntry: false });
+  if (!stat?.isFile()) { response.writeHead(404); response.end("Not found"); return; }
+  const size = stat.size;
   const headers = {
     "content-type": contentTypes.get(path.extname(file).toLowerCase()) || "application/octet-stream",
     "cache-control": "no-store",
     "x-content-type-options": "nosniff",
+    "content-length": size,
   };
   if (!inline) headers["content-disposition"] = `attachment; filename="${path.basename(file).replaceAll('"', "")}"`;
-  response.writeHead(200, headers);
-  fs.createReadStream(file).pipe(response);
+  let range;
+  if (request && headers["content-type"].startsWith("video/")) {
+    headers["accept-ranges"] = "bytes";
+    const match = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range || "");
+    if (request.method === "GET" && match && (match[1] || match[2])) {
+      const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+      const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+      if (start > end || !Number.isSafeInteger(start)) {
+        response.writeHead(416, { ...headers, "content-range": `bytes */${size}`, "content-length": 0 });
+        response.end();
+        return;
+      }
+      range = { start, end };
+      headers["content-range"] = `bytes ${start}-${end}/${size}`;
+      headers["content-length"] = end - start + 1;
+    }
+  }
+  response.writeHead(range ? 206 : 200, headers);
+  if (request?.method === "HEAD") { response.end(); return; }
+  const stream = fs.createReadStream(file, range);
+  response.on("close", () => stream.destroy());
+  stream.on("error", error => response.destroy(error)).pipe(response);
 }
 
 function serveBrowserIndex(response, { apiBase = "", loginUrl = "" } = {}) {
@@ -134,6 +159,7 @@ const OAUTH_STATE_COOKIE = "tapp_oauth_state";
 // What a signed-out visitor on a public Studio may reach. Everything absent from this list is
 // refused, so a new route is private until someone deliberately opens it.
 function anonymousAllows(method, pathname) {
+  if (method === "HEAD" && pathname.startsWith("/assets/")) return true;
   if (method === "GET") {
     if (pathname === "/" || pathname === "/admin" || pathname === "/api/version" || pathname === "/api/session" || pathname === "/api/audits") return true;
     if (pathname === "/api/platforms") return true;
@@ -148,6 +174,8 @@ function anonymousAllows(method, pathname) {
   }
   // Asking for a sign-in link is the one thing a stranger may post besides a run.
   if (method === "POST" && pathname === "/api/auth/link") return true;
+  // The cloud is "coming soon": an address to tell when it is, nothing more (ADR-0011 §3).
+  if (method === "POST" && pathname === "/api/cloud/interest") return true;
   // A visitor may start a read-only audit, and may *ask* about the other kinds of target so the
   // Studio can say where they actually run. A bare 401 reads as "broken" to someone who typed a
   // repo into the landing page, which is how five of its six examples used to dead-end.
@@ -231,7 +259,7 @@ function visibleToOwner(captureId, owner) {
 
 // Read-only website audits live in the captures directory like every other run; the Studio
 // lists the ones with a summary file. Newest first, bounded.
-function listAudits(limit = 50, owner = null) {
+function listAudits(limit = 50, owner = null, hosted = false) {
   const root = captureRoot();
   let names;
   try { names = fs.readdirSync(root); } catch { return []; }
@@ -242,6 +270,7 @@ function listAudits(limit = 50, owner = null) {
     const summaryPath = path.join(root, name, "audit.json");
     let summary;
     try { summary = JSON.parse(fs.readFileSync(summaryPath, "utf8")); } catch { continue; }
+    if (hosted) summary = withAuditPageUrls(summary);
     const provenance = readCaptureProvenance(path.join(root, name));
     audits.push({
       id: name, createdAt: provenance?.createdAt || fs.statSync(summaryPath).mtime.toISOString(),
@@ -404,6 +433,99 @@ function studioLinkSummary() {
   return link ? { origin: link.origin, email: link.email || "", linkedAt: link.linkedAt || null } : null;
 }
 
+// The person's own agent drives tapp from the chat (ADR-0012). Which one, and the session each
+// chat thread continues, live beside the machine's other state.
+function agentRoot() {
+  return path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "agent");
+}
+function readJsonFile(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
+}
+function writeJsonFile(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(file, JSON.stringify(value), { mode: 0o600 });
+}
+function selectedEngineId(engines) {
+  const chosen = String(readJsonFile(path.join(agentRoot(), "engine.json"), {}).engine || "");
+  if (chosen && engines.some((e) => e.id === chosen)) return chosen;
+  return engines.find((e) => e.usable && e.drives)?.id || engines.find((e) => e.usable)?.id || "";
+}
+// What the agent is told beyond its own defaults: the tapp skill (how to use the tools), and
+// that it is in the Studio for the owner of this machine, with no shell.
+function agentSystemPromptFile() {
+  const file = path.join(agentRoot(), "system.md");
+  const skill = (() => { try { return fs.readFileSync(path.join(packageRoot, "skills", "tapp", "SKILL.md"), "utf8"); } catch { return ""; } })();
+  const studio = [
+    "# You are in the tapp Studio",
+    "You are driving tapp from its Studio on this machine, for the person who owns it, through the `tapp_*` MCP tools. You have no shell and cannot edit files; tapp's tools are how you act, and reading the project is how you orient. Keep replies short — the Studio shows screenshots and evidence beside the chat — and say plainly what you observed, what you could not, and what you did not try. Never claim a screen or journey works from source alone.",
+  ].join("\n\n");
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(file, `${skill}\n\n${studio}\n`, { mode: 0o600 });
+  return file;
+}
+
+// An Anthropic API key the person pasted in the Studio: the fallback brain when no agent is
+// signed in with a plan (ADR-0012 §4). Kept 0600 beside the machine's other state; shown only
+// by its last four characters; handed to Claude Code only when it is NOT signed in with a plan,
+// because an ANTHROPIC_API_KEY in the environment would override the plan and bill per use.
+function apiKeyPath() { return path.join(agentRoot(), "anthropic-api-key"); }
+function readApiKey() { try { return fs.readFileSync(apiKeyPath(), "utf8").trim(); } catch { return ""; } }
+function apiKeySummary() { const key = readApiKey(); return { set: !!key, hint: key ? `…${key.slice(-4)}` : "" }; }
+async function verifyAnthropicKey(key) {
+  // The models list costs nothing and answers 401 for a bad key.
+  const response = await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" } });
+  return response.ok;
+}
+// With a key on file, Claude Code works without a plan (billing per use); say so in its row.
+function withApiKey(engines) {
+  const key = readApiKey();
+  if (!key) return engines;
+  return engines.map((engine) => {
+    if (engine.id !== "claude" || engine.state === "missing" || engine.billing === "plan") return engine;
+    return { ...engine, state: "warning", usable: true, billing: "api-key", detail: "API key on file, which bills per use.", fix: "Sign in with your Claude account instead to use your plan: run `claude`, then /login." };
+  });
+}
+
+// What a person needs on THIS machine for each thing tapp drives, from `tapp doctor` — the one
+// place that already knows whether Xcode is installed, a simulator is booted, adb exists, the
+// Accessibility permission is granted. The setup card shows these with the exact fix.
+function setupTargets(report, platform = process.platform) {
+  const p = report?.platforms || {};
+  const mac = platform === "darwin";
+  const item = (ok, text, fix = "") => ({ ok: !!ok, text, fix: ok ? "" : fix });
+  const targets = [
+    { id: "web", label: "Web", items: [
+      item(p.web?.available, p.web?.available ? "Chromium for Playwright is installed" : "Chromium for Playwright is not installed yet", "tapp downloads it on the first web run; nothing to do."),
+    ] },
+    { id: "ios", label: "iOS", items: mac ? [
+      item(p.ios?.xcode, p.ios?.xcode ? `${p.ios.xcode}` : "Xcode is not installed", "Install Xcode from the App Store and open it once to finish its setup."),
+      item(p.ios?.bootedSimulator, p.ios?.bootedSimulator ? `${p.ios.bootedSimulator} is booted` : "No simulator is booted", "tapp boots one when a run needs it; or open Simulator.app."),
+    ] : [item(false, "iOS runs on a Mac", "A Mac with Xcode runs iOS; this machine cannot.")] },
+    { id: "android", label: "Android", items: [
+      item(p.android?.adb, p.android?.adb ? "The Android SDK (adb) is installed" : "The Android SDK (adb) is not installed", "Install Android Studio or the command-line tools; set ANDROID_HOME if tapp still cannot find adb."),
+      item((p.android?.devicesConnected || 0) > 0, (p.android?.devicesConnected || 0) > 0 ? `${p.android.devicesConnected} device(s) connected` : "No device or emulator is connected", "Plug in a phone with USB debugging allowed, or start an emulator from Android Studio."),
+    ] },
+    { id: "macos", label: "macOS app", items: mac ? [
+      item(p.macos?.accessibility, p.macos?.accessibility ? "Accessibility permission granted" : "Accessibility permission not granted", "System Settings → Privacy & Security → Accessibility: allow the app that runs tapp (your terminal, or Node)."),
+    ] : [item(false, "macOS apps run on a Mac", "A Mac runs macOS apps; this machine cannot.")] },
+    { id: "windows", label: "Windows app", items: [item(false, "No Windows driver yet", "It is being built; early Windows runs are set up with us — hello@runtapp.com.")] },
+  ];
+  // A target is ready when nothing on its list is missing — web counts as ready because the one
+  // thing it needs arrives by itself.
+  return targets.map((target) => ({ ...target, ready: target.id === "web" ? true : target.items.every((i) => i.ok) }));
+}
+
+// The Codex device sign-in (ADR-0012): `codex login --device-auth` prints a link and a one-time
+// code and waits for the person to finish on any device. tapp shows those two things and polls.
+// Started only when Codex is not signed in — starting the flow discards an existing sign-in.
+const ANSI = /\u001b\[[0-9;]*m/g;
+function parseDeviceAuth(text) {
+  const plain = String(text).replace(ANSI, "");
+  const url = plain.match(/https:\/\/\S+/)?.[0] || "";
+  const code = plain.match(/\b[A-Z0-9]{4,6}-[A-Z0-9]{4,6}\b/)?.[0] || "";
+  return url && code ? { url, code } : null;
+}
+
 function openBrowser(url) {
   const invocation = process.platform === "darwin" ? ["open", [url]]
     : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
@@ -526,6 +648,23 @@ function hostedRepository(repository) {
   return safe;
 }
 
+// Website paths like /services.html look like files to hostedPayload. Resolve only
+// page identifiers corroborated by the audit's own visited URLs; keep file redaction intact.
+export function withAuditPageUrls(audit) {
+  const urls = new Map();
+  for (const page of audit.pages || []) {
+    try {
+      const url = new URL(page.url);
+      if (url.protocol === "http:" || url.protocol === "https:") urls.set(url.pathname + url.search, url.href);
+    } catch { /* Older or incomplete captures may have no page URL. */ }
+  }
+  const label = value => urls.get(value) || value;
+  const located = item => ({ ...item, ...(item.pages ? { pages: item.pages.map(label) } : {}), ...(item.screen ? { screen: label(item.screen) } : {}) });
+  return { ...audit, issues: (audit.issues || []).map(located), observations: (audit.observations || []).map(located),
+    pages: (audit.pages || []).map(page => ({ ...page, findings: (page.findings || []).map(located), observations: (page.observations || []).map(located) })),
+  };
+}
+
 function hostedPayload(value) {
   if (Array.isArray(value)) return value.map(hostedPayload);
   if (!value || typeof value !== "object") {
@@ -603,7 +742,7 @@ function serveLoginPage(response, { failed = false, next = "" } = {}) {
   response.end(html);
 }
 
-export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined, oauthExchange = null } = {}) {
+export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined, oauthExchange = null, doctor = null, apiKeyVerifier = null, connectOrigin = "" } = {}) {
   const hosted = !!trustedProxyToken || !!directLogin || !!publicAccess;
   // publicOrigin accepts a comma-separated allowlist; the first entry is canonical.
   const publicOrigins = String(publicOrigin || "").split(",").map((value) => value.trim().replace(/\/$/, "")).filter(Boolean);
@@ -669,6 +808,26 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   const sessionToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
   const jobs = new Map();
+  // `tapp doctor --json` is the one place that knows what this machine has; it takes a few
+  // seconds (xcodebuild, adb), so the setup card reuses an answer for half a minute.
+  let doctorCache = { at: 0, report: null };
+  const runDoctor = doctor || (async () => {
+    const run = spawn(process.execPath, [path.join(packageRoot, "bin", "tapp.js"), "doctor", "--json"], { env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    run.stdout.on("data", (chunk) => { out += chunk; });
+    await new Promise((resolve) => { run.on("close", resolve); run.on("error", resolve); setTimeout(() => { try { run.kill(); } catch { /* done */ } resolve(); }, 60_000); });
+    try { return JSON.parse(out); } catch { return null; }
+  });
+  const doctorReport = async () => {
+    if (doctorCache.report && Date.now() - doctorCache.at < 30_000) return doctorCache.report;
+    const report = await runDoctor();
+    doctorCache = { at: Date.now(), report };
+    return report;
+  };
+  let deviceAuth = null; // { child, url, code, startedAt }
+  // A key pasted in an earlier run of this Studio serves tapp's own model features again after a
+  // restart; a key already in the environment is the operator's and is left alone.
+  if (!hosted && !process.env.ANTHROPIC_API_KEY && readApiKey()) process.env.ANTHROPIC_API_KEY = readApiKey();
   // A public Studio serves strangers, and until now it recorded nothing about that — the journal
   // held only startup lines, so "is anyone using this?" had no answer at all. These lines go to
   // stdout, which systemd already captures, so there is no new storage to run:
@@ -806,13 +965,33 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // The application uses bounded runtime style properties for map layout and
       // operation progress. Keep scripts locked to first-party files while
       // allowing those styles to render in both local and relayed deployments.
-      "content-security-policy": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      // A hosted page drives the runtime on the viewer's own machine (ADR-0011 §4): its fetches
+      // and the evidence images it shows come from that machine's loopback address, and nothing
+      // else. A local Studio talks only to itself.
+      "content-security-policy": `default-src 'self'; img-src 'self' data: blob:${hosted ? " http://127.0.0.1:* http://localhost:*" : ""}; media-src 'self' blob:${hosted ? " http://127.0.0.1:* http://localhost:*" : ""}; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'${hosted ? " http://127.0.0.1:* http://localhost:*" : ""}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`,
       "referrer-policy": "no-referrer", "x-content-type-options": "nosniff", "x-frame-options": "DENY",
     };
     for (const [key, value] of Object.entries(baseHeaders)) response.setHeader(key, value);
 
     try {
-      if (request.method === "GET" && url.searchParams.has("token")) {
+      // Driven from a hosted Studio (ADR-0011 §4, join B): exactly one foreign origin may call
+      // this runtime from a browser, with the launch secret as a bearer token instead of the
+      // cookie, and the browser's own local-network check is answered. Every other origin gets
+      // no CORS headers and so no answer the browser will show it.
+      const foreignOrigin = String(request.headers.origin || "");
+      const connectedCaller = !!connectOrigin && foreignOrigin === connectOrigin;
+      if (connectedCaller) {
+        response.setHeader("access-control-allow-origin", connectOrigin);
+        response.setHeader("vary", "Origin");
+      }
+      if (request.method === "OPTIONS") {
+        if (connectedCaller) {
+          response.writeHead(204, { "access-control-allow-methods": "GET,POST,DELETE,OPTIONS", "access-control-allow-headers": "authorization,content-type,x-tapp-csrf", "access-control-allow-private-network": "true", "access-control-max-age": "600" });
+        } else response.writeHead(204);
+        response.end();
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/" && url.searchParams.has("token")) {
         if (!sameSecret(url.searchParams.get("token"), sessionToken)) { response.writeHead(403); response.end("Invalid local session token"); return; }
         response.writeHead(303, { location: "/", "set-cookie": `${SESSION_COOKIE}=${encodeURIComponent(sessionToken)}; HttpOnly; SameSite=Strict; Path=/` });
         response.end();
@@ -823,7 +1002,12 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
         return;
       }
       const proxyAuthenticated = !!trustedProxyToken && sameSecret(request.headers["x-tapp-proxy-token"], trustedProxyToken);
-      const authenticated = proxyAuthenticated || sameSecret(cookies(request)[SESSION_COOKIE], sessionToken);
+      // The operator from a hosted page: the launch secret as a bearer (fetches), or on the query
+      // for the images a page cannot send headers with. Both only when something is connected.
+      const operatorBearer = connectOrigin ? (/^Bearer\s+(\S+)$/i.exec(String(request.headers.authorization || ""))?.[1] || "") : "";
+      const operatorQuery = connectOrigin && request.method === "GET" ? String(url.searchParams.get("token") || "") : "";
+      const authenticated = proxyAuthenticated || sameSecret(cookies(request)[SESSION_COOKIE], sessionToken)
+        || (!!operatorBearer && sameSecret(operatorBearer, sessionToken)) || (!!operatorQuery && sameSecret(operatorQuery, sessionToken));
 
       // A public Studio lets anyone in without an account, but an anonymous visitor gets a far
       // smaller surface than the operator: audit a public website, and read back only the
@@ -846,7 +1030,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // CSRF defends against a browser being made to act with its ambient cookie. A bearer token
       // is never sent ambiently, so the check does not apply to it — and must not, or no agent
       // could ever post anything.
-      const guardMutation = (req) => { if (viaToken) return; requireMutationAuth(req, hosted ? publicOrigins : origin, csrfToken); };
+      const guardMutation = (req) => { if (viaToken) return; requireMutationAuth(req, hosted ? publicOrigins : [origin, ...(connectOrigin ? [connectOrigin] : [])], csrfToken); };
       if (account && !accountAllows(request.method, url.pathname)) {
         json(response, 401, { error: "That part of the Studio runs on your own machine: npx -y @aarwitz/tapp@latest app" });
         return;
@@ -954,10 +1138,10 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           : {});
         return;
       }
-      if (request.method === "GET" && url.pathname.startsWith("/assets/")) {
+      if (["GET", "HEAD"].includes(request.method) && url.pathname.startsWith("/assets/")) {
         const file = assetPath(url.pathname);
         if (!file) { response.writeHead(404); response.end("Not found"); return; }
-        serveFile(response, file);
+        serveFile(response, file, { request });
         return;
       }
       // Signing in: an email address gets a link; the link, used once, becomes a session cookie.
@@ -1144,6 +1328,96 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           json(response, 200, { ok: true, link: studioLinkSummary() });
           return;
         }
+      }
+      // Setting this machine up (ADR-0012's journey): the runtime, the agent, what each target
+      // needs with the exact fix, and the account. One answer, so the first screen can say
+      // "3 of 4 ready" without four round trips. Operator only, local only.
+      if (!hosted && authenticated && request.method === "GET" && url.pathname === "/api/setup") {
+        const report = await doctorReport();
+        const engines = withApiKey(detectEngines());
+        json(response, 200, {
+          runtime: { version: report?.version || "", node: report?.node?.version || process.versions.node, python: report?.python3?.ok ? (report.python3.version || "python3") : "", pyyaml: report?.pyyaml?.ok ?? null, disk: report?.disk || null, home: report?.home || "" },
+          engines, selected: selectedEngineId(engines), apiKey: apiKeySummary(),
+          deviceAuth: deviceAuth ? { engine: "codex", url: deviceAuth.url, code: deviceAuth.code, startedAt: deviceAuth.startedAt } : null,
+          targets: setupTargets(report), platforms: platformStates({ hosted: false }),
+          link: studioLinkSummary(),
+        });
+        return;
+      }
+      if (!hosted && authenticated && url.pathname === "/api/engines/api-key") {
+        guardMutation(request);
+        if (request.method === "DELETE") { try { fs.rmSync(apiKeyPath(), { force: true }); } catch { /* gone */ } delete process.env.ANTHROPIC_API_KEY; json(response, 200, { ok: true, apiKey: apiKeySummary() }); return; }
+        if (request.method === "POST") {
+          const body = await readJsonBody(request);
+          const key = String(body.key || "").trim();
+          if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) { json(response, 400, { error: "That does not look like an Anthropic API key (they start with sk-ant-)." }); return; }
+          let valid = false;
+          try { valid = await (apiKeyVerifier || verifyAnthropicKey)(key); } catch (error) { json(response, 400, { error: `Could not check the key with Anthropic: ${error.message}` }); return; }
+          if (!valid) { json(response, 400, { error: "Anthropic refused that key. Check it in the Console and paste it again." }); return; }
+          fs.mkdirSync(agentRoot(), { recursive: true, mode: 0o700 });
+          fs.writeFileSync(apiKeyPath(), `${key}\n`, { mode: 0o600 });
+          process.env.ANTHROPIC_API_KEY = key;
+          logUsage("apikey.set", {});
+          json(response, 200, { ok: true, apiKey: apiKeySummary() });
+          return;
+        }
+      }
+      if (!hosted && authenticated && url.pathname === "/api/engines/codex/sign-in") {
+        guardMutation(request);
+        if (request.method === "DELETE") {
+          if (deviceAuth) { try { deviceAuth.child.kill("SIGINT"); } catch { /* gone */ } deviceAuth = null; }
+          json(response, 200, { ok: true });
+          return;
+        }
+        if (request.method === "POST") {
+          const codex = detectEngines().find((e) => e.id === "codex");
+          if (!codex || codex.state === "missing") { json(response, 400, { error: ENGINES[1].install }); return; }
+          if (codex.billing === "plan") { json(response, 200, { ok: true, alreadySignedIn: true }); return; }
+          if (deviceAuth) { json(response, 200, { ok: true, url: deviceAuth.url, code: deviceAuth.code }); return; }
+          const child = spawn(codex.binary, ["login", "--device-auth"], { stdio: ["ignore", "pipe", "pipe"] });
+          let text = "";
+          const parsed = await new Promise((resolve) => {
+            const onData = (chunk) => { text += chunk; const found = parseDeviceAuth(text); if (found) resolve(found); };
+            child.stdout.on("data", onData); child.stderr.on("data", onData);
+            child.on("close", () => resolve(null));
+            setTimeout(() => resolve(null), 15_000);
+          });
+          if (!parsed) { try { child.kill("SIGINT"); } catch { /* gone */ } json(response, 502, { error: "Codex did not offer a sign-in link. Run `codex login` in a terminal instead." }); return; }
+          deviceAuth = { child, ...parsed, startedAt: new Date().toISOString() };
+          child.on("close", () => { if (deviceAuth?.child === child) deviceAuth = null; });
+          logUsage("codex.signin.started", {});
+          json(response, 200, { ok: true, url: parsed.url, code: parsed.code });
+          return;
+        }
+      }
+      // Which coding agents are on this machine, signed in to whose plan, and which one drives
+      // tapp from the chat (ADR-0012). Operator only, local only.
+      if (!hosted && authenticated && url.pathname === "/api/engines") {
+        const engines = withApiKey(detectEngines());
+        if (request.method === "GET") { json(response, 200, { engines, selected: selectedEngineId(engines) }); return; }
+        if (request.method === "POST") {
+          guardMutation(request);
+          const body = await readJsonBody(request);
+          const engine = String(body.engine || "");
+          if (!ENGINES.some((e) => e.id === engine)) { json(response, 400, { error: "Not an engine tapp knows" }); return; }
+          writeJsonFile(path.join(agentRoot(), "engine.json"), { engine });
+          json(response, 200, { ok: true, engines, selected: selectedEngineId(engines) });
+          return;
+        }
+      }
+      // "Tell me when the cloud is ready": an address and the date, in a file the owner reads.
+      // No name, no IP, nothing else (ADR-0011 §3; the cloud is coming soon, not sold).
+      if (hosted && request.method === "POST" && url.pathname === "/api/cloud/interest") {
+        guardMutation(request);
+        const body = await readJsonBody(request);
+        const email = String(body.email || "").trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) { json(response, 400, { error: "That does not look like an email address." }); return; }
+        const file = path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "cloud-interest.jsonl");
+        fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+        fs.appendFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), email })}\n`, { mode: 0o600 });
+        logUsage("cloud.interest", { visitor: (visitorId || "").slice(0, 8) });
+        json(response, 200, { ok: true });
+        return;
       }
       if (!anonymous && request.method === "GET" && url.pathname === "/api/journeys") {
         const store = journeyStore();
@@ -1438,11 +1712,11 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           });
           return;
         }
-        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }), platforms: platformStates({ hosted }), studioLink: hosted ? null : studioLinkSummary() });
+        json(response, 200, { csrfToken, mode: hosted ? "managed" : "local", product: "Tapp", root: hosted ? null : registry.currentRoot(), repository: hosted ? hostedRepository(registry.current()) : registry.current(), repositories: hosted ? registry.list().map(hostedRepository) : registry.list(), contract: customerProductContract, supportedPlatforms: customerProductContract.targetPlatforms, runners: runnerSummary({ hosted }), platforms: platformStates({ hosted }), studioLink: hosted ? null : studioLinkSummary(), connectOrigin: hosted ? "" : connectOrigin });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/repositories") { json(response, 200, hosted ? { current:hostedRepository(registry.current()), repositories:registry.list().map(hostedRepository) } : { current: registry.current(), repositories: registry.list() }); return; }
-      if (request.method === "GET" && url.pathname === "/api/audits") { const audits = listAudits(50, evidenceOwner); const explores = anonymous ? [] : listBuildExplores(50, evidenceOwner); json(response, 200, { audits: hosted ? hostedPayload(audits) : audits, explores: hosted ? hostedPayload(explores) : explores }); return; }
+      if (request.method === "GET" && url.pathname === "/api/audits") { const audits = listAudits(50, evidenceOwner, hosted); const explores = anonymous ? [] : listBuildExplores(50, evidenceOwner); json(response, 200, { audits: hosted ? hostedPayload(audits) : audits, explores: hosted ? hostedPayload(explores) : explores }); return; }
       const filesMatch = url.pathname.match(/^\/api\/captures\/([A-Za-z0-9._-]{1,128})\/files$/);
       if (request.method === "GET" && filesMatch) {
         if (!visibleToOwner(filesMatch[1], evidenceOwner)) { response.writeHead(404); response.end("Not found"); return; }
@@ -1572,7 +1846,12 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
           return;
         }
         if (prompt.kind === "business") {
-          json(response, 200, { kind: "business", message: `I can't find a business's website or app from a name yet — paste its URL and I'll audit it read-only, or open its repository.` });
+          if (body.searchAppStore === true) {
+            const discovery = await discoverApps(prompt.value);
+            json(response, 200, { kind: "business", ...discovery });
+            return;
+          }
+          json(response, 200, { kind: "business", message: "Search the name in the App Store, or enter the website to audit it read-only." });
           return;
         }
         json(response, 200, { kind: prompt.kind, value: prompt.value });
@@ -1672,6 +1951,55 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       // Replay a committed journey from the open project's .tapp/flows/. Web journeys run here
       // with a recording; an iOS or Android journey needs the simulator or device, so it is
       // answered with the command to run it where that is.
+      // A chat turn with the person's own agent (ADR-0012): Claude Code on this machine, on
+      // their plan, with tapp's tools and no shell. One turn is one job on the operator's lane,
+      // so it cannot run over a release check; a thread continues the same session.
+      if (operation === "agent" || operation === "agent-stop") {
+        if (hosted || anonymous || account) { json(response, 401, { error: "The chat drives the agent on your own machine: npx -y @aarwitz/tapp@latest app" }); return; }
+        if (operation === "agent-stop") {
+          const running = [...jobs.values()].find((j) => j.operation === "agent" && j.status === "running" && j.agent);
+          if (!running) { json(response, 200, { ok: true, stopped: false }); return; }
+          running.agent.stop();
+          json(response, 200, { ok: true, stopped: true });
+          return;
+        }
+        const prompt = String(body.prompt || "").trim();
+        if (!prompt || prompt.length > 4000) throw Object.assign(new Error("Ask something, in under 4000 characters"), { statusCode: 400 });
+        const thread = /^[a-z0-9-]{1,40}$/.test(String(body.thread || "")) ? String(body.thread) : "studio";
+        const engines = withApiKey(detectEngines());
+        const engine = engines.find((e) => e.id === selectedEngineId(engines));
+        if (!engine) throw Object.assign(new Error("No coding agent is signed in on this machine. Install Claude Code and sign in with your Claude account, then try again."), { statusCode: 400 });
+        if (!engine.usable) throw Object.assign(new Error(`${engine.label}: ${engine.detail} ${engine.fix}`.trim()), { statusCode: 400 });
+        if (!engine.drives) throw Object.assign(new Error(`${engine.label} is found and signed in, but driving tapp from the chat runs on Claude Code for now. Choose Claude Code under “Your agent”.`), { statusCode: 400 });
+        const threadsFile = path.join(agentRoot(), "threads.json");
+        const threads = readJsonFile(threadsFile, {});
+        const resume = String(threads[thread] || "");
+        const root = registry.currentRoot();
+        const cwd = root || agentRoot();
+        fs.mkdirSync(cwd, { recursive: true });
+        const args = claudeArguments({ prompt, resume, mcpConfig: tappMcpConfig({ packageRoot }), systemPromptFile: agentSystemPromptFile() });
+        const job = startJob(operation, async (progress) => {
+          progress({ phase: "agent", text: resume ? "Continuing the thread." : "Starting a new thread." });
+          // A plan is never overridden: the key goes into Claude Code's environment only when the
+          // key is what this engine is running on.
+          const childEnv = { ...process.env };
+          if (engine.billing === "api-key" && readApiKey()) childEnv.ANTHROPIC_API_KEY = readApiKey(); else delete childEnv.ANTHROPIC_API_KEY;
+          const run = runClaude({ binary: engine.binary, args, cwd, env: childEnv, onEvent: (event) => { for (const line of agentLines(event)) progress(line); } });
+          job.agent = run;
+          let outcome;
+          try { outcome = await run.done; }
+          catch (error) {
+            // A thread that no longer exists on disk must not wedge the chat: start a fresh one.
+            if (resume && /No conversation found|session/i.test(error.message)) { delete threads[thread]; writeJsonFile(threadsFile, threads); }
+            throw error;
+          }
+          if (outcome.sessionId) { threads[thread] = outcome.sessionId; writeJsonFile(threadsFile, threads); }
+          logUsage("agent.turn", { engine: engine.id, billing: engine.billing, turns: outcome.turns, stopped: outcome.stopped, isError: outcome.isError });
+          return { kind: "agent", engine: engine.id, thread, ...outcome };
+        }, null, { lane: OPERATOR_LANE });
+        json(response, 202, { job: publicJob(job, { hosted }) });
+        return;
+      }
       if (operation === "run-flow") {
         if (anonymous) { json(response, 401, { error: "Sign in to replay a journey" }); return; }
         const store = journeyStore();
@@ -1746,7 +2074,7 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             findings: summary?.issueCount ?? (summary?.issues || []).length,
             seconds: Math.round((Date.now() - auditStartedMs) / 100) / 10,
           });
-          return hosted ? hostedPayload(summary) : summary;
+          return hosted ? hostedPayload(withAuditPageUrls(summary)) : summary;
         }, null, { lane: ownerKey || OPERATOR_LANE });
         job.ownerKey = ownerKey;
         json(response, 202, { job: publicJob(job, { hosted }) });
@@ -1879,9 +2207,12 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
   const address = server.address();
   origin = `http://127.0.0.1:${address.port}`;
   const launchUrl = `${origin}/?token=${encodeURIComponent(sessionToken)}`;
+  // The hosted page learns where this runtime is from the URL fragment, which a browser never
+  // sends to the hosted server: the secret stays between the page and this machine.
+  const connectUrl = connectOrigin ? `${connectOrigin}/#connect=${encodeURIComponent(origin)}&token=${encodeURIComponent(sessionToken)}` : "";
   if (launch) openBrowser(launchUrl);
   return {
-    root: registry.currentRoot(), origin, launchUrl, server, registry,
+    root: registry.currentRoot(), origin, launchUrl, connectUrl, openConnect: () => { if (connectUrl) openBrowser(connectUrl); }, server, registry,
     close: async () => {
       if (liveSession?.active) {
         const engine = await import("./index.js");

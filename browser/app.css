@@ -477,6 +477,12 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .prompt-suggestions button:hover { background:var(--tapp-panel); }
 .prompt-suggestions button span { font-size:16px; text-align:center; } .prompt-suggestions button b { font-weight:600; font-family:var(--tapp-font-mono); font-size:12.5px; white-space:nowrap; } .prompt-suggestions button small { color:var(--tapp-text-faint); font-size:12.5px; }
 .prompt-note { text-align:center; color:var(--tapp-text-faint); font-size:12px; margin:8px 0 0; }
+#business-results { display:grid; gap:10px; margin:12px 0; }
+#business-results p { margin:0; }
+.business-match { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; border-top:1px solid var(--tapp-border); padding:10px 0; }
+.business-match strong { flex:1 1 60%; }
+.business-match small { display:block; font-weight:400; }
+.business-match button { overflow-wrap:anywhere; }
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
 /* ---- Overview stage: the device as big as it can be, the chat floating over the corner -------- */
@@ -514,6 +520,16 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .chat-line em { color:var(--tapp-text-faint); font-style:normal; }
 .chat-line.phase { color:var(--tapp-text-soft); }
 .chat-line.warning { color:var(--tapp-amber); }
+.chat-line.agent { color:var(--tapp-text); white-space:pre-wrap; }
+.chat-line.you { color:var(--tapp-text-soft); font-style:italic; }
+/* Asking the person's own agent (ADR-0012). */
+.chat-prompt { display:flex; gap:6px; padding:8px; border-top:1px solid var(--tapp-border); }
+.chat-prompt input { flex:1 1 auto; min-width:0; font:inherit; font-size:13px; padding:8px 10px; border-radius:10px; border:1px solid var(--tapp-border); background:rgba(0,0,0,.25); color:var(--tapp-text); }
+.chat-prompt button { font:inherit; font-size:12px; padding:7px 12px; border-radius:10px; cursor:pointer; white-space:nowrap; }
+.engine-row { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--tapp-border); font-size:13px; }
+.engine-row:last-child { border-bottom:0; }
+.engine-row small { color:var(--muted); display:block; }
+.engine-row .journey-status.warning { background:rgba(210,153,34,.18); color:var(--tapp-amber-soft, #e3b341); }
 .chat-line.finding.critical, .chat-line.finding.high { color:var(--tapp-red); } .chat-line.finding.medium { color:var(--tapp-amber); } .chat-line.finding.low { color:var(--tapp-text-soft); }
 .chat-line.typing { color:var(--tapp-text-faint); } .chat-line.typing i { font-style:normal; animation:ellipsis 1.2s steps(4) infinite; }
 @keyframes ellipsis { 0% { content:""; opacity:.2; } 100% { opacity:1; } }
@@ -576,6 +592,29 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .selfhost-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .selfhost-row code { flex:1 1 220px; font-family:var(--tapp-font-mono); font-size:12.5px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.25); color:inherit; overflow-wrap:anywhere; }
 .selfhost-row button { font:inherit; font-size:12px; padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:var(--control); color:inherit; cursor:pointer; }
+.selfhost-row input { flex:1 1 220px; min-width:0; font:inherit; font-size:13px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.15); color:inherit; }
+.linklike { font:inherit; font-size:inherit; background:none; border:0; padding:0; color:var(--tapp-accent, #4f6cf7); cursor:pointer; text-decoration:underline; }
+.cloud-sent { margin:8px 0 0; }
+/* Setting this machine up (ADR-0012). */
+.setup-card { max-width:760px; margin:18px auto 0; padding:16px 18px; border-radius:var(--tapp-radius-lg, 14px); border:1px solid var(--line); background:var(--control); font-size:13px; line-height:1.5; text-align:left; }
+.setup-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.setup-head h2 { margin:2px 0 4px; font-size:16px; } .setup-head p { margin:0; } .setup-head .eyebrow { margin:0; }
+.setup-steps { list-style:none; margin:12px 0 0; padding:0; display:grid; gap:10px; }
+.setup-step { display:grid; grid-template-columns:26px 1fr; gap:10px; padding:10px 0 0; border-top:1px solid var(--tapp-border); }
+.setup-step > i { font-style:normal; font-size:16px; text-align:center; line-height:1.3; }
+.setup-step h3 { margin:0 0 2px; font-size:13.5px; } .setup-step p { margin:0; color:var(--tapp-text-soft); }
+.setup-step ul { list-style:none; margin:6px 0 0; padding:0; display:grid; gap:3px; }
+.setup-step li { display:grid; grid-template-columns:18px 1fr; gap:6px; } .setup-step li small { color:var(--tapp-text-faint); display:block; }
+.setup-step li.engine-line { grid-template-columns:96px 1fr; gap:10px; align-items:start; margin-top:4px; }
+.setup-step li.engine-line .journey-status { white-space:nowrap; }
+.setup-step form { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.setup-step form input { flex:1 1 220px; min-width:0; font:inherit; font-size:13px; padding:7px 10px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.15); color:inherit; }
+.setup-step form button, .setup-step .button-row button { font:inherit; font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer; }
+.setup-step .button-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center; }
+.setup-step code { font-family:var(--tapp-font-mono); font-size:12px; padding:1px 5px; border-radius:6px; background:rgba(0,0,0,.25); }
+.setup-summary { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+.setup-card.collapsed .setup-steps { display:none; }
+
 /* Linking this machine to an account (ADR-0011 §4). */
 .link-form { display:grid; gap:8px; max-width:560px; }
 .link-form input { font:inherit; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.15); color:inherit; }

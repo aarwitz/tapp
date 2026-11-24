@@ -119,6 +119,22 @@ test("open_url is a committed step, and needs a target like tap or wait_for", ()
   assert.match(validateFlowSteps({ platform: "ios", steps: [{ open_url: "" }] })[0], /open_url needs a target/);
 });
 
+// TM-1077: an admin "Import contacts" page starts with choosing a CSV; before this, there was
+// no committed Flow step for it, so that journey had to be driven by hand with raw Playwright.
+test("upload needs {field, file}, like type needs {field, value}", () => {
+  assert.deepEqual(validateFlowSteps({ platform: "web", steps: [{ upload: { field: "ci-file", file: "contacts.csv" } }] }), []);
+  assert.match(validateFlowSteps({ platform: "web", steps: [{ upload: { field: "ci-file" } }] })[0], /upload needs \{field, file\}/);
+  assert.match(validateFlowSteps({ platform: "web", steps: [{ upload: { file: "contacts.csv" } }] })[0], /upload needs \{field, file\}/);
+});
+
+test("loadFlowFile stamps the Flow with its own file path, so a later upload: resolves against it", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-flow-sourcepath-"));
+  const file = path.join(dir, "import.yml");
+  fs.writeFileSync(file, "name: Import contacts\nplatform: web\nurl: http://127.0.0.1:3000\nsteps:\n  - assert_screen: Home\n");
+  const flow = loadFlowFile(file);
+  assert.equal(flow.sourcePath, file);
+});
+
 test("the alerts setting survives the parser that hands the flow to the harness", () => {
   // It is a flow-level key, and flow_lib.py copies a fixed list of those: a key missing from that
   // list is dropped on the floor, which is what happened the first time.

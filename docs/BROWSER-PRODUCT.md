@@ -35,7 +35,7 @@ looping animation of a device being driven (launch, tap, tap, screenshot, ✓). 
 | `owner/repo`, `github.com/owner/repo` | Cloned with `gh` into an isolated workspace under `TAPP_HOME`, then the same. |
 | `com.company.app` | Explored on the booted iOS simulator as it is (no build). |
 | `/path/to/Demo.app`, `~/Downloads/app.apk` | Installed on the booted simulator / connected device, then explored. |
-| a business name | Answered honestly: nothing discovers surfaces from a name yet; paste its URL. |
+| a business name | Searches Apple's US App Store. Choose a matching publisher's website to start a run, or supply a URL directly. The App Store link opens the listing. |
 
 The server classifies the input again (`classifyPrompt` in `browser/view-model.js` is shared) and
 refuses what the mode cannot do: a hosted Studio cannot open a path or a build on your machine.
@@ -119,6 +119,53 @@ open, so it can still see and forget its journeys, test accounts and tokens. The
 owner (`TAPP_ADMIN_EMAILS`) is never gated and marks an account paid or extends its trial from the
 Admin view (`POST /api/admin/plan`). There is no payment step yet: "paid" is the owner's word.
 Nothing a local Studio does needs an account.
+
+**Driven from app.runtapp.com (ADR-0011 §2/§4, join B).** `tapp app --connect` starts the runtime
+on this machine and opens the hosted page with `#connect=<loopback origin>&token=<launch secret>`
+— a fragment, so the hosted server never sees it. The page keeps the pair in this browser only
+(`localStorage`, `tapp.connect`), takes it off the address bar, and from then on every `/api/*`
+call goes to that origin with `Authorization: Bearer <secret>`; images and reports carry
+`?token=` because an `<img>` cannot send a header. The runtime, started with `connectOrigin`,
+answers CORS for exactly that origin (`Access-Control-Allow-Origin`, the preflight with
+`Access-Control-Allow-Private-Network: true` for Chrome's local-network check), accepts the
+bearer or the query token as the operator, still requires the CSRF token on mutations, and tells
+every other origin nothing. The hosted page's CSP allows `http://127.0.0.1:*` and
+`http://localhost:*` for `connect-src`, `img-src` and `media-src`; a local Studio's does not. The
+header shows *Connected · your machine* with Disconnect, which forgets the pair. A runtime that
+stops answering is said on the first screen, the pair is dropped, and the page carries on as a
+visitor. A browser that refuses loopback from an https page (some do) is sent to the runtime's
+own address, the same UI. For a visitor the cloud card says *coming soon* and takes an address
+(`POST /api/cloud/interest` → `TAPP_HOME/cloud-interest.jsonl`, an address and a date, nothing
+else); an existing account signs in from that card.
+
+**Setting this machine up (ADR-0012's journey).** On a local Studio the first screen carries a
+setup card above the prompt — *This machine* — with four steps, from one answer
+(`GET /api/setup`): the **runtime** (tapp and Node versions, python3 and PyYAML for Flow replay,
+disk); **your agent** (every engine found, how it is signed in, Use to choose which drives the
+chat; a *Sign in with ChatGPT* button that runs `codex login --device-auth` and shows the link and
+one-time code until Codex reports a plan, `POST/DELETE /api/engines/codex/sign-in`; and a field for
+an Anthropic API key as the fallback brain, checked against Anthropic's models endpoint, kept 0600
+under `TAPP_HOME/agent/`, shown by its last four characters, handed to Claude Code only when no
+plan is signed in, `POST/DELETE /api/engines/api-key`); **what you'll test** (per target, what
+`tapp doctor --json` found and the exact fix — "Install Xcode from the App Store and open it
+once", "System Settings → Privacy & Security → Accessibility", "Install Android Studio…"); and
+**your account** (the link, optional). It collapses to one line once an agent drives and more
+than one target is ready, and *Check again* re-reads the machine (doctor's answer is reused for
+30 s). The Platforms view says the same thing per platform, and on the right kind of machine
+missing one thing it names the thing — a Mac without Xcode is told to install Xcode, not to
+find a Mac (`platforms.js`). Claude Code's own sign-in opens a browser from a terminal, so the
+card says to run `claude` and sign in, then Check again.
+
+**The chat drives the person's own agent (ADR-0012).** On a local Studio, *Your agent* lists the
+coding agents found on this machine — Claude Code, Codex, Gemini CLI — and how each is signed in:
+a plan, an API key that bills per use, or not at all, with the fix (`mcp-server/src/engines.js`;
+`GET/POST /api/engines`). tapp signs nobody in and holds no token. With Claude Code signed in, the
+chat grows an input: a prompt is one `agent` operation on the operator's lane that runs
+`claude -p … --output-format stream-json` with tapp's own MCP server attached and the tapp skill
+appended, allowed `mcp__tapp,Read,Glob,Grep` and nothing that touches the machine; its events
+arrive as chat lines (🤖 its words, 🛠️ the tool it reached for, ⚠️ a tool error, ✅ its answer) and
+the thread continues with `--resume`. Stop (`agent-stop`) sends `SIGINT`. Codex and Gemini are
+reported but do not drive the chat yet. A hosted Studio answers 401 to all of it.
 
 **A self-hosted Studio can report to an account (ADR-0011 §4).** Results flow up; the browser
 never reaches down. Under *Your tapp account* on a local Studio, the owner pastes a token created
@@ -246,3 +293,16 @@ Rules that keep it worth reading:
   delivery. Anyone holding the URL can post into that channel.
 - **Public https only.** The post comes from the server, so a webhook on localhost or a private
   range is refused, the same rule the egress proxy enforces for exploration.
+
+## Restricted runners: an approved browser (TM-1023)
+
+Where the sandbox stops tapp starting Chromium itself (macOS: `bootstrap_check_in …
+MachPortRendezvousServer: Permission denied (1100)`, SIGTRAP), use a browser started outside the
+restriction:
+
+- `TAPP_BROWSER_ENDPOINT=http://127.0.0.1:<port>` — tapp attaches to a Chromium already running with
+  `--remote-debugging-port=<port>`. Loopback only; refused under `TAPP_ENFORCE_PUBLIC_EGRESS=1`,
+  because tapp cannot enforce its proxy on a browser it did not start.
+- `TAPP_BROWSER_EXECUTABLE=/path/to/chrome` — tapp starts that approved binary instead of its own.
+
+Both apply to `tapp run`, `tapp look`, explore and audits.

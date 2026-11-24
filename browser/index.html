@@ -52,12 +52,24 @@
       </div>
     </section>
 
+    <!-- Setting this machine up (ADR-0012's journey): the runtime, the agent on your own plan,
+         what each target needs with the exact fix, and the account. Local only; collapses to one
+         line once this machine is ready. -->
+    <section class="setup-card hidden" id="setup-card" aria-live="polite">
+      <div class="setup-head">
+        <div><p class="eyebrow">This machine</p><h2 id="setup-title">Set up tapp here</h2><p id="setup-sub">Everything runs on this machine. Four things to check, once.</p></div>
+        <div class="button-row"><button class="quiet" type="button" id="setup-toggle">Hide</button><button class="quiet" type="button" id="setup-refresh">Check again</button></div>
+      </div>
+      <ol class="setup-steps" id="setup-steps"><li class="empty">Checking this machine…</li></ol>
+    </section>
     <section class="prompt-block">
       <h1>What should tapp test?</h1>
       <form class="prompt-form" id="prompt-form" autocomplete="off">
         <label class="prompt-field"><span class="sr-only">Website, repository, folder, or build</span><input id="prompt-input" name="input" placeholder="A website URL, a GitHub repo, a folder on this Mac, a bundle id, an .app or .apk…" spellcheck="false" required></label>
         <button class="primary prompt-go" type="submit" id="prompt-start" aria-label="Start">→</button>
       </form>
+      <small id="business-hint" class="prompt-note hidden">Search this name in Apple’s US App Store, or enter the website directly.</small>
+      <section id="business-results" class="hidden" aria-live="polite" aria-label="Matching apps"></section>
       <div class="platform-strip" id="platform-strip" hidden></div>
       <ul class="prompt-suggestions" aria-label="Examples">
         <li><button type="button" data-kind="url" data-prompt="https://example.com"><span>⌁</span><b>https://example.com</b><small>audit a website read-only — safe on production, nothing is clicked</small></button></li>
@@ -69,9 +81,16 @@
            person's own machine, and the page says so — with the command — before anyone types
            one. Hidden on a local Studio, which is that machine. -->
       <section class="selfhost-card hidden" id="selfhost-card">
-        <p class="selfhost-lead"><strong>Everything else runs on your own machine.</strong> Your repositories, iOS and Android builds, macOS apps, staging and localhost — the same Studio, on your Mac or PC, and nothing leaves it.</p>
-        <div class="selfhost-row"><code id="selfhost-command">npx -y @aarwitz/tapp@latest app</code><button class="quiet" type="button" id="selfhost-copy">Copy</button></div>
-        <small>Needs Node.js 20 or newer. It opens this same Studio in your browser, on your machine — no account needed.</small>
+        <p class="selfhost-lead" id="selfhost-lead"><strong>Everything else runs on your own machine — connect it.</strong> Run this once in a terminal: it opens this page connected to your Mac or PC, and everything — your repositories, iOS and Android builds, macOS apps, staging and localhost — runs there. Nothing leaves it.</p>
+        <div class="selfhost-row"><code id="selfhost-command">npx -y @aarwitz/tapp@latest app --connect</code><button class="quiet" type="button" id="selfhost-copy">Copy</button></div>
+        <small id="selfhost-note">Needs Node.js 20 or newer. No account needed. If your browser refuses to reach your machine, the same Studio opens at the address the command prints.</small>
+      </section>
+      <!-- The cloud — tapp running it for you — is coming, not sold (ADR-0011 §3). An address to
+           tell, and a way in for an account that already exists. -->
+      <section class="selfhost-card hidden" id="cloud-card">
+        <p class="selfhost-lead"><strong>Cloud — tapp runs it for you — coming soon.</strong> Leave an address and we will tell you when it opens. <button type="button" class="linklike" data-signin>Have an account? Sign in</button></p>
+        <form class="selfhost-row" id="cloud-interest" autocomplete="email"><input name="email" type="email" placeholder="you@company.com" aria-label="Email" required><button class="quiet" type="submit">Tell me</button></form>
+        <p class="cloud-sent hidden" id="cloud-sent"></p>
       </section>
       <!-- Signing in to a public Studio: an email address and a link, nothing else. Hidden on a
            local Studio, where the one person at the keyboard is the operator already. -->
@@ -153,6 +172,13 @@
               <span class="chat-caret" aria-hidden="true">▾</span>
             </button>
             <div class="chat-transcript" id="chat-transcript"></div>
+            <!-- The person's own agent, driving tapp from here (ADR-0012). Local only, and only when
+                 an engine on this machine is signed in. -->
+            <form class="chat-prompt hidden" id="chat-prompt" autocomplete="off">
+              <input id="chat-prompt-input" name="prompt" placeholder="Ask tapp to test something…" aria-label="Ask tapp" maxlength="4000" required>
+              <button class="primary" type="submit" id="chat-prompt-send">Send</button>
+              <button class="quiet hidden" type="button" id="chat-prompt-stop">Stop</button>
+            </form>
           </aside>
         </section>
 
@@ -234,6 +260,13 @@
             <div><p class="eyebrow">Your tapp account</p><h2>Report what runs here to your account</h2><p id="link-note">Journeys you run on this machine — including against staging and localhost — show up on your account with how their last run went. Nothing else leaves this machine: not the journey, not a credential, not a screenshot.</p></div>
           </div>
           <div id="link-body"></div>
+        </section>
+        <!-- Which agent drives tapp from the chat, on whose plan (ADR-0012). Local only. -->
+        <section class="panel section hidden" id="engines-panel">
+          <div class="section-heading compact">
+            <div><p class="eyebrow">Your agent</p><h2>Who drives tapp from the chat</h2><p>tapp signs you in to nothing and holds no token: it finds the coding agent you already signed in to on this machine and drives it on your own plan. In the chat it gets tapp's tools and reading the project — never a shell, never an edit.</p></div>
+          </div>
+          <div id="engines-list"><div class="empty">Checking this machine…</div></div>
         </section>
         <section class="panel section" id="journeys-panel">
           <div class="section-heading compact"><div><p class="eyebrow">Journeys</p><h2>What this app has proven <i id="journey-count" class="zero">0</i></h2><p id="journeys-note">Each replays exactly as written — no model, no key. Keep one from any run that got somewhere; run it any time to prove it still works.</p></div></div>
