@@ -37,6 +37,12 @@ const state = {
   if (fromHash) { saveConnection(fromHash); history.replaceState(null, "", location.pathname + location.search); }
   state.connection = loadConnection();
   if (state.connection && state.connection.origin === location.origin) state.connection = null;
+  // A connect link pasted into a tab that is already open changes only the fragment, which is
+  // not a page load: take the pair the same way, then load the page properly.
+  window.addEventListener("hashchange", () => {
+    const pasted = parseConnectFragment(location.hash);
+    if (pasted) { saveConnection(pasted); location.replace(location.pathname + location.search); }
+  });
 }
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -277,7 +283,7 @@ function applyAccessMode() {
   $("#selfhost-card")?.classList.remove("hidden");
   $("#cloud-card")?.classList.toggle("hidden", signedIn);
   const lead = $("#selfhost-lead");
-  if (lead && state.connectionLost) lead.innerHTML = `<strong>Your machine stopped answering at ${esc(state.connectionLost.origin)}.</strong> Start the runtime again and this page connects to it; or open the address the command prints if this browser will not reach your machine.`;
+  if (lead && state.connectionLost) lead.innerHTML = `<strong>This page could not reach your machine at ${esc(state.connectionLost.origin)}</strong> (${esc(state.connectionLost.reason)}). If Chrome asked to access devices on your local network, allow it and run the command again. Otherwise open the Studio directly on your machine — the same thing, served from there: <a href="${esc(state.connectionLost.launch)}">${esc(state.connectionLost.origin)}</a>.`;
   const input = $("#prompt-input");
   if (input && !accepts.has("path")) input.placeholder = "A business name or website URL…";
   // Everything that only means something against a source repository: a target to build, a
@@ -1405,17 +1411,21 @@ function renderProject() {
 
 async function refreshSession() {
   if (state.connection) {
-    try { state.session = await api("/api/session"); }
+    // Chrome asks the person before a page may reach their local network, and the fetch waits
+    // on their answer; give that long, then stop waiting rather than show a blank page.
+    const waited = new Promise((_, reject) => setTimeout(() => reject(new Error("this page was not allowed to reach your machine")), 25_000));
+    try { state.session = await Promise.race([api("/api/session"), waited]); }
     catch (error) {
-      // The machine stopped answering (the runtime was closed, or this browser will not reach
-      // loopback). Say so on the hosted page and carry on as a visitor; the saved connection is
-      // dropped so a reload does not loop on the same failure.
-      state.connectionLost = { origin: state.connection.origin, reason: error.message };
+      // The machine stopped answering (the runtime was closed, Chrome refused, or this browser
+      // will not reach loopback). Say so on the hosted page, with the way round it, and carry on
+      // as a visitor; the saved connection is dropped so a reload does not loop on the failure.
+      state.connectionLost = { origin: state.connection.origin, launch: `${state.connection.origin}/?token=${encodeURIComponent(state.connection.token)}`, reason: error.message };
       state.connection = null;
       saveConnection(null);
       state.session = await api("/api/session");
     }
   } else state.session = await api("/api/session");
+  $("#connecting-note")?.classList.add("hidden");
   state.csrf = state.session.csrfToken;
   const local = state.session.mode === "local";
   $("#mode-pill").textContent = local ? (state.connection ? "Connected · your machine" : "Self-host · this machine") : "Cloud · outbound runner";
@@ -1845,6 +1855,14 @@ function handoffTarget() {
 
 try {
   try { setChatCollapsed(localStorage.getItem("tapp:chat-collapsed") === "1"); } catch { /* storage may be unavailable */ }
+  if (state.connection) {
+    // Say what is happening before the machine answers: a blank page while Chrome asks for
+    // permission reads as broken.
+    showPrompt();
+    $("#onboarding-mode-pill").textContent = "Connecting · your machine";
+    const note = $("#connecting-note");
+    if (note) { note.textContent = `Connecting to your machine at ${state.connection.origin}… If Chrome asks whether this site may access devices on your local network, allow it — that is your own machine.`; note.classList.remove("hidden"); }
+  }
   await refreshSession();
   await refresh();
   if (state.project?.connected && !state.project?.state?.inspected) await runOperation("initialize", { write:true });

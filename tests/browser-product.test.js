@@ -1172,6 +1172,7 @@ test("a hosted page drives the runtime on the person's machine: one origin, a be
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers.get("access-control-allow-origin"), studio);
     assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
+    assert.equal(preflight.headers.get("access-control-allow-local-network"), "true", "Chrome's newer name for the same check");
     assert.match(preflight.headers.get("access-control-allow-headers"), /authorization/);
     const other = await fetch(`${product.origin}/api/session`, { method: "OPTIONS", headers: { origin: "https://evil.example", "access-control-request-method": "GET" } });
     assert.equal(other.headers.get("access-control-allow-origin"), null, "any other origin is told nothing");

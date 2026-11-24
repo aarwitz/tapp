@@ -477,6 +477,7 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .prompt-suggestions button:hover { background:var(--tapp-panel); }
 .prompt-suggestions button span { font-size:16px; text-align:center; } .prompt-suggestions button b { font-weight:600; font-family:var(--tapp-font-mono); font-size:12.5px; white-space:nowrap; } .prompt-suggestions button small { color:var(--tapp-text-faint); font-size:12.5px; }
 .prompt-note { text-align:center; color:var(--tapp-text-faint); font-size:12px; margin:8px 0 0; }
+.connecting-note { font-size:13px; color:var(--tapp-text-soft); margin:0 auto 14px; max-width:620px; }
 #business-results { display:grid; gap:10px; margin:12px 0; }
 #business-results p { margin:0; }
 .business-match { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; border-top:1px solid var(--tapp-border); padding:10px 0; }

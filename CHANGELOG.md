@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.35.10
+
+**Connecting is said while it happens.** On the live site, the hosted page's first call to the
+runtime on your machine waits on Chrome's permission prompt ("allow this site to access devices
+on your local network?"), and 0.35.9 showed a blank page while it waited. The page now opens on
+the prompt screen saying it is connecting and that the prompt is about your own machine, stops
+waiting after 25 seconds instead of never, and then says plainly what happened with a link to the
+runtime's own address — the same Studio, served from your machine. The runtime answers Chrome's
+newer `Access-Control-Allow-Local-Network` alongside the older private-network header, and a
+connect link pasted into an already-open tab is taken instead of ignored.
+
 ## 0.35.9
 
 **app.runtapp.com drives the runtime on your own machine.** The hosted page is the one UI; your

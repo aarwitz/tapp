@@ -63,6 +63,9 @@
       <ol class="setup-steps" id="setup-steps"><li class="empty">Checking this machine…</li></ol>
     </section>
     <section class="prompt-block">
+      <!-- The hosted page reaching the runtime on this person's machine (ADR-0011 §4): said while
+           it happens, because Chrome may be asking for permission and a blank page says nothing. -->
+      <p class="prompt-note connecting-note hidden" id="connecting-note"></p>
       <h1>What should tapp test?</h1>
       <form class="prompt-form" id="prompt-form" autocomplete="off">
         <label class="prompt-field"><span class="sr-only">Website, repository, folder, or build</span><input id="prompt-input" name="input" placeholder="A website URL, a GitHub repo, a folder on this Mac, a bundle id, an .app or .apk…" spellcheck="false" required></label>

@@ -986,7 +986,9 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
       }
       if (request.method === "OPTIONS") {
         if (connectedCaller) {
-          response.writeHead(204, { "access-control-allow-methods": "GET,POST,DELETE,OPTIONS", "access-control-allow-headers": "authorization,content-type,x-tapp-csrf", "access-control-allow-private-network": "true", "access-control-max-age": "600" });
+          // Chrome asked this as "private network" until 2025 and asks it as "local network"
+          // since; both answers are given, so either generation lets the page through.
+          response.writeHead(204, { "access-control-allow-methods": "GET,POST,DELETE,OPTIONS", "access-control-allow-headers": "authorization,content-type,x-tapp-csrf", "access-control-allow-private-network": "true", "access-control-allow-local-network": "true", "access-control-max-age": "600" });
         } else response.writeHead(204);
         response.end();
         return;

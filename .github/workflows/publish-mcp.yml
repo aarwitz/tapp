@@ -41,12 +41,14 @@ jobs:
           # workflow_run fires the instant publish-npm.yml's job reports success, but registry
           # indexing lags behind the publish by up to a few minutes (observed directly: two
           # runs 404'd here before the version was queryable). Poll instead of checking once.
-          for attempt in $(seq 1 10); do
+          # The registry document trails a publish by fifteen to twenty minutes lately, which
+          # five minutes of polling turned into a red run on every release. Wait up to thirty.
+          for attempt in $(seq 1 60); do
             if [[ "$(npm view "@aarwitz/tapp@$VERSION" version 2>/dev/null || true)" == "$VERSION" ]]; then
               break
             fi
-            if [[ "$attempt" == 10 ]]; then
-              echo "::error::@aarwitz/tapp@$VERSION never appeared on the npm registry after 10 attempts" >&2
+            if [[ "$attempt" == 60 ]]; then
+              echo "::error::@aarwitz/tapp@$VERSION never appeared on the npm registry after 30 minutes" >&2
               exit 1
             fi
             sleep 30
