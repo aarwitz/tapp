@@ -1098,7 +1098,7 @@ if (a[0] === "login" && a[1] === "--device-auth") {
     let setup = await (await call("/api/setup")).json();
     assert.equal(setup.runtime.version, "0.35.8");
     assert.equal(setup.runtime.node, "22.0.0");
-    assert.deepEqual(setup.targets.map((t) => t.id), ["web", "ios", "android", "macos", "windows"]);
+    assert.deepEqual(setup.targets.map((t) => t.id), ["web", "ios", "android", "macos"]);
     assert.equal(setup.targets[0].ready, true, "web needs nothing the person has to do");
     const android = setup.targets.find((t) => t.id === "android");
     assert.equal(android.ready, false);
@@ -1239,6 +1239,68 @@ test("the hosted page may reach a runtime on the viewer's machine, and a visitor
     assert.equal(lines[0].visitor, undefined, "an address and a date; nothing that identifies the browser");
   } finally {
     await product.close();
+    if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
+  }
+});
+
+test("a name or a website becomes a brand map — read-only, never signed in — for a visitor and for the owner (ADR-0013)", async () => {
+  const { publicGet } = await import("../mcp-server/src/public-network.js");
+  await assert.rejects(publicGet("http://127.0.0.1:8080/"), /standard port|Private and reserved/, "the hosted Studio's surface fetch never reaches this machine");
+  await assert.rejects(publicGet("http://localhost/"), /publicly reachable/);
+  const home = `<!doctype html><title>Acme Bakery</title><link rel="me" href="https://x.com/acmebakery"><a href="https://www.youtube.com/@acmebakery">YouTube</a><a href="https://apps.apple.com/us/app/id123456789">App</a><a href="https://www.tiktok.com/@acmebakery">TikTok</a>`;
+  const pages = {
+    "https://www.acme.test/": { status: 200, text: home },
+    "https://www.acme.test": { status: 200, text: home },
+    "https://www.youtube.com/@acmebakery": { status: 200, text: '<meta property="og:title" content="Acme Bakery">' },
+    "https://itunes.apple.com/lookup?id=123456789&country=us": { status: 200, text: JSON.stringify({ results: [{ trackName: "Acme Bakery", sellerName: "Acme Ltd" }] }) },
+    "https://www.tiktok.com/@acmebakery": { status: 200, text: "<title>Log in | TikTok</title>" },
+  };
+  const surfaceFetch = async (url) => { const page = pages[url]; if (!page) throw new Error(`no fixture for ${url}`); return { ...page, url }; };
+  const home1 = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-brand-home-"));
+  const previousHome = process.env.TAPP_HOME;
+  process.env.TAPP_HOME = home1;
+  const hosted = await startBrowserProduct({ port: 0, publicOrigin: "https://app.runtapp.com", publicAccess: true, workspaceRoot: fs.mkdtempSync(path.join(os.tmpdir(), "tapp-brand-ws-")), surfaceFetch });
+  try {
+    // A visitor: allowed, read-only, nothing kept.
+    const first = await fetch(`${hosted.origin}/`);
+    const cookie = first.headers.get("set-cookie").split(";")[0];
+    const session = await (await fetch(`${hosted.origin}/api/session`, { headers: { cookie } })).json();
+    const post = (body) => fetch(`${hosted.origin}/api/operations/brand`, { method: "POST", headers: { cookie, origin: "https://app.runtapp.com", "x-tapp-csrf": session.csrfToken, "content-type": "application/json" }, body: JSON.stringify(body) });
+    assert.equal((await post({ url: "not a url" })).status, 400);
+    const started = await post({ url: "https://www.acme.test/" });
+    assert.equal(started.status, 202);
+    let job;
+    for (;;) { job = await (await fetch(`${hosted.origin}/api/jobs/${(await started.clone().json().catch(() => null))?.job?.id || ""}`, { headers: { cookie } })).json().catch(() => null); if (job && job.status !== "running") break; await new Promise((r) => setTimeout(r, 50)); }
+    assert.equal(job.status, "completed", JSON.stringify(job.error));
+    const brand = job.result;
+    assert.equal(brand.kind, "brand");
+    assert.equal(brand.name, "Acme Bakery");
+    assert.deepEqual(brand.surfaces.map((s) => `${s.kind}:${s.check.status}`), ["app-store:ok", "youtube:ok", "x:not-checked", "tiktok:not-checked"]);
+    assert.match(brand.surfaces.find((s) => s.kind === "tiktok").check.note, /did not show the page to a visitor/);
+    assert.match(brand.surfaces.find((s) => s.kind === "x").check.note, /does not sign in/);
+    assert.deepEqual(brand.counts, { ok: 3, warning: 0, "not-checked": 2, unreachable: 0 });
+    const texts = job.progress.map((p) => p.text);
+    assert.ok(texts.some((t) => /^Found 4 surfaces linked from acme\.test/.test(t)));
+    assert.ok(texts.some((t) => /^App Store id123456789: Acme Bakery by Acme Ltd/.test(t)));
+    assert.equal(fs.existsSync(path.join(home1, "brands")), false, "a visitor's map is not kept");
+  } finally {
+    await hosted.close();
+  }
+  // The owner on their own machine: the same map, and it is kept to come back to.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tapp-brand-proj-"));
+  fs.writeFileSync(path.join(root, "index.html"), "<h1>x</h1>");
+  const local = await startBrowserProduct({ projectDir: root, port: 0, launch: false, surfaceFetch });
+  try {
+    const cookie = cookieFrom(await fetch(local.launchUrl, { redirect: "manual" }));
+    const session = await (await fetch(`${local.origin}/api/session`, { headers: { cookie } })).json();
+    const started = await (await fetch(`${local.origin}/api/operations/brand`, { method: "POST", headers: { cookie, origin: local.origin, "x-tapp-csrf": session.csrfToken, "content-type": "application/json" }, body: JSON.stringify({ url: "https://www.acme.test/" }) })).json();
+    let job; for (;;) { job = await (await fetch(`${local.origin}/api/jobs/${started.job.id}`, { headers: { cookie } })).json(); if (job.status !== "running") break; await new Promise((r) => setTimeout(r, 50)); }
+    assert.equal(job.status, "completed", JSON.stringify(job.error));
+    const kept = JSON.parse(fs.readFileSync(path.join(home1, "brands", "operator", "acme-test.json"), "utf8"));
+    assert.equal(kept.name, "Acme Bakery");
+    assert.equal(kept.surfaces.length, 4);
+  } finally {
+    await local.close();
     if (previousHome === undefined) delete process.env.TAPP_HOME; else process.env.TAPP_HOME = previousHome;
   }
 });
@@ -1482,11 +1544,10 @@ test("a hosted Studio tells a visitor what tapp drives, and where the rest runs"
     // A stranger may read the matrix: it is the answer to "does this do iOS?".
     const listed = await (await call("/api/platforms")).json();
     assert.equal(listed.hosted, true);
-    assert.deepEqual(listed.platforms.map((entry) => entry.id), ["web", "ios", "android", "macos", "windows"]);
+    assert.deepEqual(listed.platforms.map((entry) => entry.id), ["web", "ios", "android", "macos"]);
     const byId = Object.fromEntries(listed.platforms.map((entry) => [entry.id, entry]));
     assert.equal(byId.web.state, "ready");
-    assert.equal(byId.windows.state, "pilot");
-    assert.equal(byId.windows.command, "", "no command would make a missing driver work");
+    assert.equal(byId.windows, undefined, "Windows desktop is not a target (owner decision, 2026-11-25)");
 
     // The session carries the same matrix, so the first screen can show it without a second call.
     const session = await (await call("/api/session")).json();

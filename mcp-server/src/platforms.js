@@ -24,8 +24,9 @@ import { macAccessibilityTrusted } from "./macos-driver.js";
  *   ready         — this Studio can start a run now.
  *   needs-machine — tapp drives it, but not from this host. There is an exact command for the
  *                   machine that can, because self-hosting is the same product, not a lesser one.
- *   pilot         — tapp does NOT drive it yet. No driver exists. Early work is done with a
- *                   person while the driver lands (owner decision, 2026-09-14, for Windows).
+ *   pilot         — tapp does NOT drive it. No driver exists. Kept as a state for the next
+ *                   surface declared before its driver; no target uses it since Windows was
+ *                   dropped (owner decision, 2026-11-25: "windows is done").
  */
 export const PLATFORM_STATES = Object.freeze(["ready", "needs-machine", "pilot"]);
 
@@ -50,11 +51,6 @@ export const PLATFORM_TARGETS = Object.freeze([
     id: "macos", label: "macOS app", subject: "macOS apps", give: "A .app",
     driver: "accessibility", needs: "macOS, and the Accessibility permission",
     machine: "a Mac",
-  },
-  {
-    id: "windows", label: "Windows app", subject: "Windows apps", give: "A WPF, WinForms or WinUI app",
-    driver: null, needs: "Windows",
-    machine: "a Windows machine",
   },
 ]);
 

@@ -35,7 +35,7 @@ looping animation of a device being driven (launch, tap, tap, screenshot, ✓). 
 | `owner/repo`, `github.com/owner/repo` | Cloned with `gh` into an isolated workspace under `TAPP_HOME`, then the same. |
 | `com.company.app` | Explored on the booted iOS simulator as it is (no build). |
 | `/path/to/Demo.app`, `~/Downloads/app.apk` | Installed on the booted simulator / connected device, then explored. |
-| a business name | Searches Apple's US App Store. Choose a matching publisher's website to start a run, or supply a URL directly. The App Store link opens the listing. |
+| a business name | Apple's catalog is searched for the publisher; each match offers **Map** (its website's surfaces — stores, channels, handles — ADR-0013) and **Audit** (the website, read-only). The App Store link opens the listing. |
 
 The server classifies the input again (`classifyPrompt` in `browser/view-model.js` is shared) and
 refuses what the mode cannot do: a hosted Studio cannot open a path or a build on your machine.
@@ -120,6 +120,30 @@ owner (`TAPP_ADMIN_EMAILS`) is never gated and marks an account paid or extends 
 Admin view (`POST /api/admin/plan`). There is no payment step yet: "paid" is the owner's word.
 Nothing a local Studio does needs an account.
 
+**A brand map (ADR-0013).** `POST /api/operations/brand {url}` — allowed to a visitor like the
+audit — reads the website's homepage (pinned to public addresses on a hosted Studio, `publicGet`;
+plain on the person's own machine), takes every surface it claims (`rel="me"`, schema.org
+`sameAs`, then links; explicit claims first, once each: App Store and Google Play listings,
+YouTube, X, TikTok, Instagram, Facebook, Threads, LinkedIn, Google Business), and checks each
+the way it allows (`mcp-server/src/surfaces.js`): Apple's public catalog, Google Play's and
+YouTube's public pages, whatever a visitor is shown elsewhere; `not-checked` with the reason when
+a platform shows the page only to signed-in users (X, without even asking). Four statuses, each
+with a sentence: `ok`, `warning`, `not-checked`, `unreachable`. The Overview shows the **Brand**
+panel — one row per surface with its status, note and link, *Audit the website read-only* and
+*Map again* — and the chat narrates each surface as it is checked; after a URL audit the panel
+offers to map the rest of the brand. An owner's map is kept under `TAPP_HOME/brands/`; a
+visitor's is not. tapp never signs in to a social account.
+
+Each kind of surface has one small adapter (`SURFACE_CHECKERS` in `surfaces.js`), and what an
+adapter can see is set by the platform: YouTube has an official, free, read-only API for public
+data, so with `TAPP_YOUTUBE_API_KEY` set (a Google Cloud API key with the YouTube Data API v3
+enabled; `/etc/tapp-demo.env` on the hosted Studio) a channel is read through it — title,
+subscribers unless hidden, video count, last upload, whether the description links back — and
+through the public page otherwise, which YouTube often does not show to a visitor. The key goes
+to Google and nowhere else; it is scrubbed from any sentence an error could carry. Meta's API
+needs the business's own login and an app review, X's is paid, TikTok's is research-only: those
+rows stay "not checked" with the reason until there is an honest way.
+
 **Driven from app.runtapp.com (ADR-0011 §2/§4, join B).** `tapp app --connect` starts the runtime
 on this machine and opens the hosted page with `#connect=<loopback origin>&token=<launch secret>`
 — a fragment, so the hosted server never sees it. The page keeps the pair in this browser only
@@ -130,7 +154,13 @@ answers CORS for exactly that origin (`Access-Control-Allow-Origin`, the preflig
 `Access-Control-Allow-Private-Network: true` for Chrome's local-network check), accepts the
 bearer or the query token as the operator, still requires the CSRF token on mutations, and tells
 every other origin nothing. The hosted page's CSP allows `http://127.0.0.1:*` and
-`http://localhost:*` for `connect-src`, `img-src` and `media-src`; a local Studio's does not. The
+`http://localhost:*` for `connect-src`, `img-src` and `media-src`; a local Studio's does not.
+**Chrome asks once.** Verified on the live site (Chrome 157/158, 2026-11-24): the page's first
+call to the machine waits on Chrome's permission prompt — `navigator.permissions.query({ name:
+"local-network-access" })` reads `prompt` until the person allows it, `granted` after, per site
+— so the page says it is connecting and that the prompt is about their own machine, waits up to
+25 s, and otherwise offers the runtime's own address. The runtime answers both
+`Access-Control-Allow-Local-Network` (Chrome ≥ 138's name) and `Access-Control-Allow-Private-Network`. The
 header shows *Connected · your machine* with Disconnect, which forgets the pair. A runtime that
 stops answering is said on the first screen, the pair is dropped, and the page carries on as a
 visitor. A browser that refuses loopback from an https page (some do) is sent to the runtime's

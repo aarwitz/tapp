@@ -79,9 +79,7 @@ test("platform claims name the exact current target boundary", () => {
     assert.match(source, /iOS/);
     assert.match(source, /Android/);
     assert.match(source, /\bWeb\b/);
-    assert.match(source, /Windows desktop/);
-    assert.match(source, /WinForms/);
-    assert.match(source, /WPF/);
+    assert.doesNotMatch(source, /WinForms|WinUI|Windows UI Automation/, "Windows desktop is not a target (owner decision, 2026-11-25)");
     assert.doesNotMatch(source, /\(beta\)/i, "no platform is labelled beta (owner decision 2026-09-14)");
     assert.doesNotMatch(source, /not currently (?:Tapp )?(?:supported )?targets?/i);
   }

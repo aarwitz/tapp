@@ -185,6 +185,12 @@
           </aside>
         </section>
 
+        <!-- A brand's surfaces (ADR-0013): the website, its listings, channels and handles, each
+             with what a visitor could see of it. -->
+        <section class="panel section hidden" id="brand-panel">
+          <div class="section-heading compact"><div><p class="eyebrow">Brand</p><h2 id="brand-title">Surfaces</h2><p id="brand-sub"></p></div><div class="button-row" id="brand-actions"></div></div>
+          <div id="brand-list"></div>
+        </section>
         <section class="panel section" id="target-stage" data-repo-only>
           <div class="section-heading"><div><p class="eyebrow">Build & run</p><h2>Choose the product target</h2><p>Tapp detected these targets from source. With more than one, you choose; nothing builds until you do.</p></div><span class="status-chip" id="target-status">No target selected</span></div>
           <div class="target-choice-callout hidden" id="target-choice-callout"><span>1</span><div><strong>Choose what Tapp should test</strong><small>Nothing will build until you select a target. Tapp never guesses when a repository contains multiple applications.</small></div></div>

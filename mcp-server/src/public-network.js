@@ -34,6 +34,43 @@ export async function publicRequest(url, {method="POST",headers={},body,timeout=
   });
 }
 
+/**
+ * A read-only GET the hosted Studio may make on a visitor's behalf (a brand's surfaces, ADR-0013):
+ * every hop resolves to a public address and connects to that address — a name that answers
+ * public first and private on the real connection gets nowhere. Follows a few redirects, each
+ * resolved again; reads at most half a megabyte; never sends credentials.
+ */
+export async function publicGet(url, { timeout = 10_000, maxBytes = 512 * 1024, redirects = 3, headers = {} } = {}) {
+  let target = new URL(url);
+  for (let hop = 0; ; hop += 1) {
+    if (!/^https?:$/.test(target.protocol) || target.username || target.password) throw new Error("A public http(s) address is required");
+    if (target.port && target.port !== (target.protocol === "https:" ? "443" : "80")) throw new Error("Only the standard port is reachable from the hosted Studio");
+    const address = await resolvePublicHost(target.hostname);
+    const transport = target.protocol === "https:" ? https : http;
+    const answer = await new Promise((resolve, reject) => {
+      const req = transport.request(target, {
+        method: "GET", family: 4,
+        headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 tapp/1", accept: "text/html,application/json;q=0.9,*/*;q=0.8", "accept-language": "en-US,en;q=0.8", ...headers },
+        lookup: (_host, options, callback) => options.all ? callback(null, [{ address, family: 4 }]) : callback(null, address, 4),
+      }, (response) => {
+        let size = 0; const chunks = [];
+        response.on("data", (chunk) => { if (size >= maxBytes) return; size += chunk.length; chunks.push(chunk); if (size >= maxBytes) response.destroy(); });
+        response.on("error", reject);
+        response.on("end", () => resolve({ status: response.statusCode, headers: response.headers, text: Buffer.concat(chunks).toString("utf8") }));
+        response.on("close", () => resolve({ status: response.statusCode, headers: response.headers, text: Buffer.concat(chunks).toString("utf8") }));
+      });
+      req.on("error", reject);
+      req.setTimeout(timeout, () => req.destroy(new Error("The page did not answer in time")));
+      req.end();
+    });
+    if ([301, 302, 303, 307, 308].includes(answer.status) && answer.headers.location && hop < redirects) {
+      target = new URL(answer.headers.location, target);
+      continue;
+    }
+    return { status: answer.status, url: target.href, text: answer.text };
+  }
+}
+
 // Resolve and pin every TCP connection, including redirects and subresources.
 // This proxy is for URL-only work; it deliberately cannot reach local dev servers.
 export async function startPublicBrowserProxy() {

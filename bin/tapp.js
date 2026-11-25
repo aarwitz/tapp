@@ -290,8 +290,8 @@ function repeatedFlagValues(argv, name) {
 }
 
 // `--platform windows` used to be indistinguishable from `--platform wbe`: both got
-// "must be ios|android|web", which tells someone who read runtapp.com's Windows card that they
-// typed it wrong. They did not — tapp has no driver for it yet. Say which of the two it is.
+// "must be ios|android|web". Windows desktop is not a target (owner decision, 2026-11-25), and
+// somebody who asks for it deserves that sentence rather than "you typed it wrong".
 const DRIVEN_PLATFORMS = ["ios", "android", "web", "macos"];
 const DECLARED_WITHOUT_DRIVER = {
   windows: "Windows desktop applications (WPF, WinForms, WinUI)",
@@ -300,9 +300,8 @@ const DECLARED_WITHOUT_DRIVER = {
 function refusePlatform(platform) {
   const described = DECLARED_WITHOUT_DRIVER[String(platform || "").toLowerCase()];
   if (described) {
-    console.error(`❌ tapp has no driver for ${described} yet, so there is nothing to run here.`);
-    console.error("   Early runs are set up with us while the driver lands: hello@runtapp.com");
-    console.error("   Today tapp drives: web (anywhere), iOS and macOS apps (on a Mac), Android (adb).");
+    console.error(`❌ tapp does not drive ${described}, so there is nothing to run here.`);
+    console.error("   tapp drives: web (anywhere), iOS and macOS apps (on a Mac), Android (adb).");
   } else {
     console.error("❌ --platform must be ios|android|web|macos");
   }

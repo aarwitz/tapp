@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tapp — UI verification for coding agents</title>
-<meta name="description" content="Verify UI changes on real web, iOS, Android, macOS, and Windows desktop apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
+<meta name="description" content="Verify UI changes on real web, iOS, Android, and macOS apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
 <link rel="canonical" href="https://runtapp.com/">
 <meta property="og:title" content="tapp — UI verification for coding agents">
-<meta property="og:description" content="Verify UI changes on real web, iOS, Android, macOS, and Windows desktop apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
+<meta property="og:description" content="Verify UI changes on real web, iOS, Android, and macOS apps — a public website in the cloud, everything else on your own machine — then turn reviewed proof into deterministic CI checks.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://runtapp.com/">
 <meta property="og:image" content="https://runtapp.com/assets/tapp-social.png">
@@ -16,7 +16,7 @@
 <meta property="og:image:alt" content="tapp — let your coding agent prove the UI it changed">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="tapp — UI verification for coding agents">
-<meta name="twitter:description" content="Verify real web, iOS, Android, macOS, and Windows desktop UI changes — a public website in the cloud, the rest on your own machine — then enforce reviewed proof in CI.">
+<meta name="twitter:description" content="Verify real web, iOS, Android, and macOS UI changes — a public website in the cloud, the rest on your own machine — then enforce reviewed proof in CI.">
 <meta name="twitter:image" content="https://runtapp.com/assets/tapp-social.png">
 <meta name="theme-color" content="#2f6fed">
 <link rel="icon" href="/assets/tapp-mark.svg" type="image/svg+xml">
@@ -30,7 +30,7 @@
   "downloadUrl": "https://www.npmjs.com/package/@aarwitz/tapp",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Windows, Linux",
-  "description": "Let coding agents verify UI changes on real iOS, Android, web, and Windows desktop apps, then enforce reviewed proof in deterministic CI.",
+  "description": "Let coding agents verify UI changes on real iOS, Android, web, and macOS apps, then enforce reviewed proof in deterministic CI.",
   "sameAs": [
     "https://github.com/aarwitz/tapp",
     "https://www.npmjs.com/package/@aarwitz/tapp"
@@ -282,7 +282,7 @@
            aria-label="A public website to audit">
     <button type="submit" aria-label="Open this target in the tapp Studio">→</button>
   </form>
-  <p class="copy-note">A public website runs in the cloud, no account. Everything else — your repositories, iOS and Android builds, macOS apps, staging and localhost — runs on your own machine, and nothing leaves it:</p>
+  <p class="copy-note">A business name or a website finds the brand's surfaces — the site, its apps in the stores, its channels and handles — and checks each one read-only. A public website runs in the cloud, no account. Everything else — your repositories, iOS and Android builds, macOS apps, staging and localhost — runs on your own machine, and nothing leaves it:</p>
   <div class="copybox mono">
     <span id="install-command">npx -y @aarwitz/tapp@latest app</span>
     <button id="copy-install" type="button" aria-describedby="copy-status">copy</button>
@@ -347,8 +347,8 @@
     <span class="tag">Platforms</span>
     <h2>Works with the apps you actually ship.</h2>
     <p class="lead">
-      iOS, Android, web, macOS, and Windows desktop — tapp drives the real thing, not a mock.
-      Same commands, same evidence, same CI check on every platform. A public website runs in
+      iOS, Android, web, and macOS — tapp drives the real thing, not a mock. Same commands,
+      same evidence, same CI check on every platform. A public website runs in
       the cloud at app.runtapp.com; every other platform — and anything private, like staging
       or localhost — runs on your own machine with the same Studio, and nothing is uploaded.
     </p>
@@ -377,12 +377,6 @@
         <p>Drives a Mac app through Apple's Accessibility API on your own Mac — one permission,
         no Xcode, nothing added to the app. Destructive controls are refused and menus are
         inventoried, not pressed.</p>
-      </div>
-      <div class="card">
-        <div class="icon">🪟</div>
-        <h3>Windows desktop</h3>
-        <p>WPF, WinForms, and WinUI apps, driven through Windows UI Automation — the same
-        commands, evidence, and CI check. Early Windows runs are set up with us — write to hello@runtapp.com.</p>
       </div>
     </div>
     <p class="lead" style="margin-top:1.4rem">

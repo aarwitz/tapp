@@ -152,12 +152,14 @@ test("a hosted Studio is the front door: a website here, everything else on your
     } }));
     await page.locator("#prompt-input").fill("Sample");
     await page.locator("#prompt-start").click();
-    await page.getByRole("button", { name: "Audit sample.example" }).waitFor();
+    // A match offers the brand map first (ADR-0013), and the read-only audit beside it.
+    await page.getByRole("button", { name: "Map sample.example" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Audit it" }).count(), 1);
     await page.locator("#prompt-input").fill("different.example");
     assert.equal(await page.locator("#business-results").isHidden(), true);
     // What tapp drives is still all on the first screen (ADR-0010): chips for every platform.
     const chips = await page.locator("#platform-strip .platform-chip").allInnerTexts();
-    assert.deepEqual(chips.map((text) => text.trim()), ["Web", "iOS", "Android", "macOS app", "Windows app"]);
+    assert.deepEqual(chips.map((text) => text.trim()), ["Web", "iOS", "Android", "macOS app"]);
     // The cloud is coming soon, not sold: an address to tell, and a way in for an account that
     // already exists — opened only when asked for.
     const cloud = await page.locator("#cloud-card").innerText();

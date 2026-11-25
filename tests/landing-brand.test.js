@@ -20,8 +20,8 @@ test("landing page establishes runtapp.com and @aarwitz/tapp as canonical", () =
   assert.match(index, /"operatingSystem": "macOS, Windows, Linux"/);
   assert.match(index, /iOS simulator/);
   assert.match(index, /Android emulator or device/);
-  assert.match(index, /Windows desktop/);
-  assert.match(index, /WPF, WinForms, and WinUI/);
+  // Windows desktop is not a target (owner decision, 2026-11-25): no card, no claim.
+  assert.doesNotMatch(index, /Windows desktop|WinForms|WinUI/);
   assert.doesNotMatch(index, /\(beta\)|not currently supported/i);
   assert.match(index, /npx -y skills add aarwitz\/tapp --skill tapp/);
   assert.match(index, /npx -y @aarwitz\/tapp@latest init \. --explore/);

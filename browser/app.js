@@ -1312,7 +1312,7 @@ function syncTranscriptFromJob(name, job) {
 function startLine(name, job) {
   const raw = job.input || "";
   const input = /\.(app|apk)$/i.test(raw) ? raw.split("/").filter(Boolean).at(-1) : raw;
-  return { initialize: "Starting a release check — build, launch and explore the real app", gate: "Running the release gate", audit: `Opening ${input} read-only — nothing will be clicked`, "explore-build": `Exploring ${input} on the booted device`, open: `Opening ${input}`, "session-start": "Opening a live session", "session-act": "Acting in the live session", "session-save-flow": "Saving the journey as a Flow", "session-end": "Ending the live session" }[name] || `${pretty(name)} started`;
+  return { initialize: "Starting a release check — build, launch and explore the real app", gate: "Running the release gate", audit: `Opening ${input} read-only — nothing will be clicked`, "explore-build": `Exploring ${input} on the booted device`, open: `Opening ${input}`, "session-start": "Opening a live session", "session-act": "Acting in the live session", "session-save-flow": "Saving the journey as a Flow", "session-end": "Ending the live session", brand: `Mapping the brand from ${input} — its stores, channels and handles, read-only` }[name] || `${pretty(name)} started`;
 }
 
 async function finishTranscript(name, job) {
@@ -1567,8 +1567,49 @@ async function searchBusiness(name) {
   }));
   if (request !== businessRequest) return;
   panel.innerHTML = `<p>${esc(result.message)}</p>` + (result.matches || []).map(app =>
-    `<div class="business-match"><strong>${esc(app.name)}<small>${esc(app.publisher)}</small></strong><a href="${esc(app.listing)}" target="_blank" rel="noreferrer">App Store listing</a>${app.website ? `<button type="button" class="secondary" data-business-site="${esc(app.website)}">Audit ${esc(new URL(app.website).host)}</button>` : "<small>Publisher has no website listed.</small>"}</div>`
+    `<div class="business-match"><strong>${esc(app.name)}<small>${esc(app.publisher)}</small></strong><a href="${esc(app.listing)}" target="_blank" rel="noreferrer">App Store listing</a>${app.website ? `<button type="button" class="primary" data-brand-site="${esc(app.website)}">Map ${esc(new URL(app.website).host)}</button><button type="button" class="secondary" data-business-site="${esc(app.website)}">Audit it</button>` : "<small>Publisher has no website listed.</small>"}</div>`
   ).join("");
+}
+
+// ——— A brand's surfaces (ADR-0013) ———————————————————————————————————————————————————————————
+// A name or a website becomes the business: its website, its listings in the stores, its
+// channels and handles, each with what a visitor could see of it — read-only, never signed in.
+const SURFACE_ICONS = { website: "🌐", "app-store": "🍎", "play-store": "🤖", youtube: "▶️", x: "✕", tiktok: "🎵", instagram: "📷", facebook: "📘", threads: "🧵", linkedin: "💼", "google-business": "📍" };
+async function mapBrand(url) {
+  clearBusinessResults();
+  state.brand = null; state.brandOffer = null;
+  state.promptRun = true; state.promptPlatform = "web";
+  showProduct(); activateView("overview"); renderDeviceChrome(); renderChat(); renderBrand();
+  document.querySelector(".device-stage")?.classList.add("hidden");
+  setHeading("Mapping the brand", "Finding its surfaces from the website — nothing is clicked, nobody is signed in.", { owned: true });
+  let result;
+  try { result = await runOperation("brand", { url }, { input: url }); }
+  catch (error) { setHeading("Not mapped", error.message, { owned: true }); throw error; }
+  state.brand = result;
+  setHeading(result.name || "Brand", `${result.surfaces.length} surface${result.surfaces.length === 1 ? "" : "s"} found from ${new URL(result.url).host}.`, { owned: true });
+  renderBrand();
+}
+
+function renderBrand() {
+  const panel = $("#brand-panel");
+  if (!panel) return;
+  const brand = state.brand;
+  const offer = state.brandOffer;
+  panel.classList.toggle("hidden", !brand && !offer);
+  if (!brand && !offer) return;
+  if (!brand) {
+    $("#brand-title").textContent = "The rest of this brand";
+    $("#brand-sub").textContent = "Its apps in the stores, its channels and handles — found from the website and checked read-only.";
+    $("#brand-actions").innerHTML = `<button class="primary" type="button" data-brand-site="${esc(offer)}">Map ${esc(new URL(offer).host)}</button>`;
+    $("#brand-list").innerHTML = "";
+    return;
+  }
+  const pill = (status) => status === "ok" ? `<span class="journey-status passing">seen</span>` : status === "warning" ? `<span class="journey-status warning">missing</span>` : status === "unreachable" ? `<span class="journey-status failing">unreachable</span>` : `<span class="journey-status never">not checked</span>`;
+  $("#brand-title").textContent = brand.name || new URL(brand.url).host;
+  $("#brand-sub").textContent = `${brand.surfaces.length} surface${brand.surfaces.length === 1 ? "" : "s"} found from ${new URL(brand.url).host} · ${brand.counts?.ok || 0} seen${brand.counts?.["not-checked"] ? ` · ${brand.counts["not-checked"]} could not be checked` : ""}${brand.counts?.warning ? ` · ${brand.counts.warning} missing` : ""}. tapp reads what a visitor is shown and never signs in to a social account.`;
+  $("#brand-actions").innerHTML = `<button class="secondary" type="button" data-brand-audit="${esc(brand.url)}">Audit the website read-only</button><button class="quiet" type="button" data-brand-site="${esc(brand.url)}">Map again</button>`;
+  const row = (surface) => `<div class="surface-row"><span class="surface-icon">${SURFACE_ICONS[surface.kind] || "•"}</span><span><strong>${esc(surface.label)}</strong>${surface.kind !== "website" && surface.handle ? ` <small style="display:inline">${esc(surface.handle)}</small>` : ""}<small>${esc(surface.check?.note || "")}</small></span>${pill(surface.check?.status)}<a href="${esc(surface.url)}" target="_blank" rel="noreferrer">Open</a></div>`;
+  $("#brand-list").innerHTML = [brand.website, ...brand.surfaces].map(row).join("");
 }
 
 async function startFromPrompt(raw, { readOnly = false } = {}) {
@@ -1576,6 +1617,7 @@ async function startFromPrompt(raw, { readOnly = false } = {}) {
   if (prompt.kind === "empty") return;
   if (prompt.kind === "business") return searchBusiness(prompt.value);
   clearBusinessResults();
+  state.brand = null; state.brandOffer = null; renderBrand();
   if (prompt.kind === "url") {
     // On your own machine, or signed in to a public Studio, a website is explored for real — it
     // can stop at a sign-in and ask you. A visitor only ever reads.
@@ -1605,6 +1647,8 @@ async function startFromPrompt(raw, { readOnly = false } = {}) {
     setHeading("Website audit", "Read-only. Nothing on the page is clicked.", { owned: true });
     const result = await runOperation("audit", { url: prompt.value }, { input: prompt.value });
     state.selectedRunId = result?.capture?.id || state.selectedRunId;
+    // The website is one surface; the brand has more (ADR-0013).
+    state.brandOffer = prompt.value; renderBrand();
     return;
   }
   if (["bundle", "app", "apk"].includes(prompt.kind)) {
@@ -1634,6 +1678,10 @@ async function auditWebsite(url) {
 }
 
 document.addEventListener("click", (event) => {
+  const brandSite = event.target.closest("[data-brand-site]");
+  if (brandSite) { mapBrand(brandSite.dataset.brandSite).catch((error) => toast(error.message, true)); return; }
+  const brandAudit = event.target.closest("[data-brand-audit]");
+  if (brandAudit) { startFromPrompt(brandAudit.dataset.brandAudit, { readOnly: true }).catch((error) => toast(error.message, true)); return; }
   const site = event.target.closest("[data-business-site]");
   if (site) {
     $("#prompt-input").value = site.dataset.businessSite;

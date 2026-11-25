@@ -62,3 +62,13 @@ test("the runtime's address and secret arrive in the fragment, and only a loopba
   assert.equal(parseConnectFragment("#connect=http://127.0.0.1:4317&token=short"), null);
   assert.equal(parseConnectFragment(""), null);
 });
+
+test("a brand map narrates each surface and sums up without claiming to have seen what it could not (ADR-0013)", () => {
+  assert.deepEqual(narrate({ phase: "brand", text: "YouTube @acme: Channel: Acme" }), { kind: "step", icon: "🧭", text: "YouTube @acme: Channel: Acme" });
+  const summary = summarize("brand", { name: "Acme Bakery", surfaces: [{}, {}, {}], counts: { ok: 2, "not-checked": 2 } });
+  assert.equal(summary.pill, "2 of 4 seen");
+  assert.match(summary.text, /3 surfaces found from the website/);
+  assert.match(summary.text, /2 could not be checked/);
+  assert.match(summary.text, /never signs in to a social account/);
+  assert.equal(summarize("brand", { name: "Acme", surfaces: [{}], counts: { ok: 1, warning: 1 } }).tone, "caution");
+});

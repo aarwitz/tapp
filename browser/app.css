@@ -596,6 +596,15 @@ dialog::backdrop { background:rgba(0,0,0,.6); }
 .selfhost-row input { flex:1 1 220px; min-width:0; font:inherit; font-size:13px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:rgba(0,0,0,.15); color:inherit; }
 .linklike { font:inherit; font-size:inherit; background:none; border:0; padding:0; color:var(--tapp-accent, #4f6cf7); cursor:pointer; text-decoration:underline; }
 .cloud-sent { margin:8px 0 0; }
+/* A brand's surfaces (ADR-0013). */
+.surface-row { display:grid; grid-template-columns:28px 1fr auto auto; gap:10px; align-items:center; padding:9px 10px; border-bottom:1px solid var(--tapp-border); font-size:13px; }
+.surface-row:last-child { border-bottom:0; }
+.surface-row .surface-icon { font-size:16px; text-align:center; }
+.surface-row small { color:var(--muted); display:block; }
+.surface-row a { color:inherit; }
+.surface-row .journey-status.warning { background:rgba(210,153,34,.18); color:var(--tapp-amber-soft, #e3b341); }
+.brand-offer { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; }
+
 /* Setting this machine up (ADR-0012). */
 .setup-card { max-width:760px; margin:18px auto 0; padding:16px 18px; border-radius:var(--tapp-radius-lg, 14px); border:1px solid var(--line); background:var(--control); font-size:13px; line-height:1.5; text-align:left; }
 .setup-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }

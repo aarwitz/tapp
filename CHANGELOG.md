@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.35.11
+
+**A name or a website becomes a brand map.** A business has surfaces — a website, a listing in
+each store, a YouTube channel, an X handle, a TikTok, a Google listing — and a platform is only
+how tapp reaches one of them. Type a business name and each App Store match now leads with
+*Map*; type a website and, after its read-only audit, the Studio offers to map the rest. The map
+reads the homepage, takes every surface it claims (`rel="me"`, schema.org `sameAs`, then links —
+explicit claims first, once each; a share link, a post or a login page is not a surface), and
+checks each one the way it allows, read-only, narrating as it goes: Apple's public catalog for a
+listing (name, seller, rating, last update, whether it links back), Google Play's and YouTube's
+public pages, whatever a visitor is shown on Instagram, TikTok, Facebook, Threads and LinkedIn —
+and *not checked*, with the reason, when a platform shows the page only to signed-in users. X is
+not even asked. tapp never signs in to a social account: doing that by automation is against
+every one of those platforms' terms and gets the brand banned. The Overview shows the brand —
+one row per surface with its status, its sentence and a link — and the chat sums it up without
+claiming to have seen what it could not. On the hosted Studio every fetch is pinned to a public
+address; on your own machine it reads what you can reach. An owner's map is kept; a visitor's
+is not.
+
+**YouTube through its official API.** One small adapter per kind of surface, each seeing what
+its platform lets a visitor or an official read-only API see. YouTube's Data API is free for
+public data: with `TAPP_YOUTUBE_API_KEY` set, a channel is read through it — title, subscribers
+unless hidden, video count, last upload, whether the description links back to the site — by
+handle or by channel id; without a key, or when the API refuses, the public page is read and the
+fallback says so. The key goes to Google and nowhere else.
+
+**Windows desktop is not a target.** The card and the claims are gone from runtapp.com and the
+README, the platform entry and the chip with them; `--platform windows` says tapp does not drive
+it instead of promising a driver.
+
 ## 0.35.10
 
 **Connecting is said while it happens.** On the live site, the hosted page's first call to the

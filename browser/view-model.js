@@ -70,6 +70,8 @@ export function narrate(entry = {}, { platform = "" } = {}) {
   if (entry.phase === "agent-tool") return { kind: "step", icon: "🛠️", text };
   if (entry.phase === "agent-warning") return { kind: "warning", icon: "⚠️", text };
   if (entry.phase === "agent-done") return { kind: "agent", icon: "✅", text };
+  // Mapping a brand's surfaces (ADR-0013): each line is one surface and what was seen of it.
+  if (entry.phase === "brand") return { kind: "step", icon: "🧭", text };
   const progress = text.match(/^(\d+)\/(\d+) actions(?: · (\d+) (?:states?|pages?|screens?)[^·]*)?/i);
   if (progress) return { kind: "progress", icon: "⏳", text, current: Number(progress[1]), total: Number(progress[2]), states: progress[3] ? Number(progress[3]) : null };
   for (const [pattern, icon] of RULES) {
@@ -104,6 +106,16 @@ export function summarize(name, result = {}, { access = "" } = {}) {
     const pill = issues ? `${issues} issue${issues === 1 ? "" : "s"}${noticed ? ` · ${noticed} to notice` : ""}` : noticed ? `${noticed} thing${noticed === 1 ? "" : "s"} a person would notice` : "✓ Nothing broken observed";
     const noticedText = noticed ? ` It also found ${noticed} thing${noticed === 1 ? "" : "s"} a person would notice — faint text, controls too small to tap on a phone, copy nobody finished — listed under “Worth a look”.` : "";
     return { tone: issues ? "caution" : noticed ? "caution" : "ready", pill, text: `${result.pagesAudited || 0} page(s) rendered read-only — nothing was clicked. ${issues ? "Each issue is listed in the run detail with the pages it appears on." : "Nothing is broken."}${noticedText}${next}` };
+  }
+  // A brand map: how many surfaces, how many could be seen, how many could not — with the
+  // reasons in the rows. Never "all good" about a page that was not shown.
+  if (name === "brand") {
+    const counts = result?.counts || {};
+    const total = (result?.surfaces || []).length + 1;
+    const unseen = (counts["not-checked"] || 0) + (counts.unreachable || 0);
+    const pill = `${counts.ok || 0} of ${total} seen${counts.warning ? ` · ${counts.warning} missing` : ""}`;
+    const text = `${result?.name || "This brand"}: ${(result?.surfaces || []).length} surface${(result?.surfaces || []).length === 1 ? "" : "s"} found from the website.${unseen ? ` ${unseen} could not be checked — each row says why; tapp never signs in to a social account.` : ""}`;
+    return { tone: counts.warning ? "caution" : "neutral", pill, text };
   }
   // A chat turn with the agent: what it said last, and how many turns it took. Never a verdict.
   if (name === "agent") {

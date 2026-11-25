@@ -25,6 +25,8 @@ import { oauthProviders, oauthAuthorizeUrl, oauthEmailFromCode, isOauthProvider 
 import { journeyFromCapture, JourneyStore, slugify } from "./journeys.js";
 import { AlertStore, alertForChange, alertMessage, deliverAlert } from "./alerts.js";
 import { ENGINES, detectEngines, claudeArguments, agentLines, runClaude, tappMcpConfig } from "./engines.js";
+import { mapBrand, fetchPublicPage } from "./surfaces.js";
+import { publicGet } from "./public-network.js";
 import { platformStates, selfHostAnswer, PLATFORM_TARGETS, hostToolchain } from "./platforms.js";
 import { isMacosAppBundle } from "./macos-driver.js";
 import { discoverApps } from "./app-store-discovery.js";
@@ -184,7 +186,9 @@ function anonymousAllows(method, pathname) {
   // Saying "I would use this for Android" is the one piece of demand a stranger can give us,
   // and the reason to ask is strongest exactly when the answer was "not from here".
   if (method === "POST" && pathname === "/api/platforms/interest") return true;
-  return method === "POST" && ["/api/operations/audit", "/api/operations/open", "/api/operations/explore-build", "/api/operations/explore"].includes(pathname);
+  // A brand map is read-only on public pages, like the audit, and is what a name or a website
+  // typed on the first screen becomes (ADR-0013).
+  return method === "POST" && ["/api/operations/audit", "/api/operations/brand", "/api/operations/open", "/api/operations/explore-build", "/api/operations/explore"].includes(pathname);
 }
 
 // A signed-in account may do what a visitor may, plus: start a real exploration (which can stop
@@ -508,7 +512,6 @@ function setupTargets(report, platform = process.platform) {
     { id: "macos", label: "macOS app", items: mac ? [
       item(p.macos?.accessibility, p.macos?.accessibility ? "Accessibility permission granted" : "Accessibility permission not granted", "System Settings → Privacy & Security → Accessibility: allow the app that runs tapp (your terminal, or Node)."),
     ] : [item(false, "macOS apps run on a Mac", "A Mac runs macOS apps; this machine cannot.")] },
-    { id: "windows", label: "Windows app", items: [item(false, "No Windows driver yet", "It is being built; early Windows runs are set up with us — hello@runtapp.com.")] },
   ];
   // A target is ready when nothing on its list is missing — web counts as ready because the one
   // thing it needs arrives by itself.
@@ -742,7 +745,7 @@ function serveLoginPage(response, { failed = false, next = "" } = {}) {
   response.end(html);
 }
 
-export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined, oauthExchange = null, doctor = null, apiKeyVerifier = null, connectOrigin = "" } = {}) {
+export async function startBrowserProduct({ projectDir, port = 0, launch = false, workspaceRoot, githubProvider, publicOrigin = "", trustedProxyToken = "", directLogin = null, publicEgressOnly = null, publicAccess = false, accessVerifier = undefined, oauthExchange = null, doctor = null, apiKeyVerifier = null, connectOrigin = "", surfaceFetch = null } = {}) {
   const hosted = !!trustedProxyToken || !!directLogin || !!publicAccess;
   // publicOrigin accepts a comma-separated allowlist; the first entry is canonical.
   const publicOrigins = String(publicOrigin || "").split(",").map((value) => value.trim().replace(/\/$/, "")).filter(Boolean);
@@ -2036,6 +2039,41 @@ export async function startBrowserProduct({ projectDir, port = 0, launch = false
             } catch (error) { progress({ phase: "replay", text: `Could not report to ${link.origin}: ${error.message}` }); }
           }
           return result;
+        }, null, { lane: ownerKey || OPERATOR_LANE });
+        job.ownerKey = ownerKey;
+        json(response, 202, { job: publicJob(job, { hosted }) });
+        return;
+      }
+      // A brand map (ADR-0013): the website's surfaces — stores, channels, handles — found from
+      // its homepage and each checked the way it allows, read-only, never signed in. For a
+      // visitor on the hosted Studio every fetch is pinned to a public address, as the audit's
+      // browser is; on the person's own machine it reads what that machine can reach.
+      if (operation === "brand") {
+        let site;
+        try { site = new URL(String(body.url || "")); } catch { throw Object.assign(new Error("A brand map starts from a website: give its http(s) URL"), { statusCode: 400 }); }
+        if (!/^https?:$/.test(site.protocol)) throw Object.assign(new Error("A brand map starts from a website: give its http(s) URL"), { statusCode: 400 });
+        const fetchPage = surfaceFetch || (enforcePublicEgress ? publicGet : fetchPublicPage);
+        const brandHost = site.hostname.replace(/^www\./, "");
+        logUsage("brand.start", { visitor: (visitorId || "operator").slice(0, 8), host: safeHost(site.href) });
+        const job = startJob(operation, async (progress) => {
+          progress({ phase: "brand", text: `Reading ${brandHost} — nothing will be clicked.` });
+          let home;
+          try { home = await fetchPage(site.href); } catch (error) { throw new Error(`Could not read ${brandHost}: ${error.message}`); }
+          if (home.status < 200 || home.status >= 400) throw new Error(`${brandHost} answered ${home.status}.`);
+          // YouTube through its official API when this deployment has a key (TAPP_YOUTUBE_API_KEY);
+          // through the public page otherwise, which YouTube often does not show to a visitor.
+          const brand = await mapBrand({ baseUrl: home.url || site.href, html: home.text, fetchPage, youtubeKey: String(process.env.TAPP_YOUTUBE_API_KEY || "").trim(), onProgress: (text) => progress({ phase: "brand", text }) });
+          const counts = { ok: 0, warning: 0, "not-checked": 0, unreachable: 0 };
+          for (const surface of [brand.website, ...brand.surfaces]) counts[surface.check.status] = (counts[surface.check.status] || 0) + 1;
+          // A visitor's map is theirs for the page; an owner's is kept to come back to.
+          if (!anonymous) {
+            const owner = ownerKey ? ownerKey.replace(/[^A-Za-z0-9]/g, "_") : "operator";
+            const file = path.join(process.env.TAPP_HOME || path.join(os.homedir(), ".tapp"), "brands", owner, `${slugify(brandHost)}.json`);
+            fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+            fs.writeFileSync(file, JSON.stringify({ ...brand, url: site.href }), { mode: 0o600 });
+          }
+          logUsage("brand.mapped", { visitor: (visitorId || "operator").slice(0, 8), host: safeHost(site.href), surfaces: brand.surfaces.length, ...counts });
+          return { kind: "brand", url: site.href, counts, ...brand };
         }, null, { lane: ownerKey || OPERATOR_LANE });
         job.ownerKey = ownerKey;
         json(response, 202, { job: publicJob(job, { hosted }) });

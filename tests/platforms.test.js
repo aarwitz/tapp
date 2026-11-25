@@ -11,7 +11,7 @@ const LAPTOP = { hosted: false, platform: "darwin", toolchain: { web: true, ios:
 
 test("the hosted Studio says what tapp drives, not only what it can start", () => {
   const states = Object.fromEntries(platformStates(CLOUD).map((entry) => [entry.id, entry.state]));
-  assert.deepEqual(states, { web: "ready", ios: "needs-machine", android: "needs-machine", macos: "needs-machine", windows: "pilot" });
+  assert.deepEqual(states, { web: "ready", ios: "needs-machine", android: "needs-machine", macos: "needs-machine" });
   assert.deepEqual(readyPlatforms(CLOUD), ["web"], "only web can actually start there");
   // The whole point: iOS is present and described, not deleted. Erasing it is what made a
   // cross-platform product read as a website checker.
@@ -24,23 +24,9 @@ test("the hosted Studio says what tapp drives, not only what it can start", () =
 
 test("a laptop runs almost all of it, and says so", () => {
   const states = Object.fromEntries(platformStates(LAPTOP).map((entry) => [entry.id, entry.state]));
-  assert.deepEqual(states, { web: "ready", ios: "ready", android: "ready", macos: "ready", windows: "pilot" });
+  assert.deepEqual(states, { web: "ready", ios: "ready", android: "ready", macos: "ready" });
   assert.deepEqual(readyPlatforms(LAPTOP), ["web", "ios", "android", "macos"]);
   assert.equal(platformState("ios", LAPTOP).command, "", "nothing to go and do");
-});
-
-test("a platform with no driver never reads as a hardware problem the reader could fix", () => {
-  // Buying a Windows machine would not help: there is no driver. Saying "needs your machine"
-  // here would be a lie that costs somebody a laptop.
-  for (const id of ["windows"]) {
-    const entry = platformState(id, LAPTOP);
-    assert.equal(entry.state, "pilot");
-    assert.match(entry.summary, /no .* driver yet/i);
-    assert.equal(entry.command, "", "there is no command that would make it work");
-    assert.doesNotMatch(`${entry.summary} ${entry.how}`, /install|needs a Mac|needs a machine with/i);
-  }
-  // And it stays "pilot" on a Mac and on Windows alike, because the host is not the problem.
-  assert.equal(platformState("windows", { hosted: false, platform: "win32", toolchain: { web: true, ios: false, android: true, macos: false } }).state, "pilot");
 });
 
 test("every platform tapp has a driver for is one the contract declares, and vice versa", () => {
@@ -58,10 +44,7 @@ test("the answer to a target this Studio cannot start says where it runs", () =>
   assert.match(ios.message, /App\.app/);
   assert.match(ios.message, /a Mac with Xcode/);
   assert.match(ios.message, /npx -y @aarwitz\/tapp@latest app/);
-  // A pilot platform is answered differently: no command, because none would work.
-  const windows = selfHostAnswer("windows", "Ledger.exe", CLOUD);
-  assert.equal(windows.command, "");
-  assert.match(windows.message, /no Windows app driver yet/i);
+  assert.equal(selfHostAnswer("windows", "Ledger.exe", CLOUD), null, "Windows is not a target (owner decision, 2026-11-25)");
   assert.equal(selfHostAnswer("nonsense", "", CLOUD), null);
 });
 
